@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Env - KHÔNG commit secrets
+.env
+.env.*
+!.env.example
+
+# Build / output
+dist/
+build/
+coverage/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Office lock files
+~$*
