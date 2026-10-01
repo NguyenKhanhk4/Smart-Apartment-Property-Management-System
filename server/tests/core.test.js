@@ -15,15 +15,19 @@ import { ok } from '../src/utils/response.js';
 const sign = (payload, secret = env.jwt.accessSecret, options = { expiresIn: '5m' }) =>
   jwt.sign(payload, secret, options);
 
-const tokenOf = (role, roleTitle = null) => sign({ sub: 'user-1', role, roleTitle });
+const tokenOf = (role, roleTitle = null, boardTitle = null) =>
+  sign({ sub: 'user-1', role, roleTitle, boardTitle });
 
 // App nhỏ chỉ để test middleware, không cần database
 function buildTestApp() {
   const app = express();
   app.use(express.json());
   app.get('/me', authenticate, (req, res) => ok(res, req.user));
-  app.get('/accountant', authenticate, authorize('STAFF:ACCOUNTANT'), (_req, res) => ok(res));
+  app.get('/technician', authenticate, authorize('STAFF:TECHNICIAN', 'MANAGER'), (_req, res) =>
+    ok(res),
+  );
   app.get('/board', authenticate, authorize('BOARD'), (_req, res) => ok(res));
+  app.get('/chairman', authenticate, authorize('BOARD:CHAIRMAN'), (_req, res) => ok(res));
   app.post(
     '/items',
     validate({ body: Joi.object({ name: Joi.string().required(), qty: Joi.number().min(1) }) }),
@@ -95,7 +99,12 @@ describe('authenticate', () => {
       .get('/me')
       .set('Authorization', `Bearer ${tokenOf('STAFF', 'TECHNICIAN')}`);
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ id: 'user-1', role: 'STAFF', roleTitle: 'TECHNICIAN' });
+    expect(res.body.data).toEqual({
+      id: 'user-1',
+      role: 'STAFF',
+      roleTitle: 'TECHNICIAN',
+      boardTitle: null,
+    });
   });
 });
 
@@ -104,31 +113,38 @@ describe('authorize', () => {
   const call = (path, token) => request(app).get(path).set('Authorization', `Bearer ${token}`);
 
   it.each([
-    ['STAFF:ACCOUNTANT', tokenOf('STAFF', 'ACCOUNTANT'), 200],
-    ['STAFF:ACCOUNTANT', tokenOf('ADMIN'), 200],
-    ['STAFF:ACCOUNTANT', tokenOf('STAFF', 'TECHNICIAN'), 403],
-    ['STAFF:ACCOUNTANT', tokenOf('RESIDENT'), 403],
-  ])('/accountant với %s: token → %i', async (_spec, token, status) => {
-    const res = await call('/accountant', token);
+    ['technician', tokenOf('STAFF', 'TECHNICIAN'), 200],
+    ['manager', tokenOf('MANAGER'), 200],
+    ['admin', tokenOf('ADMIN'), 403],
+    ['receptionist', tokenOf('STAFF', 'RECEPTIONIST'), 403],
+    ['resident', tokenOf('RESIDENT'), 403],
+  ])('/technician với %s → %i', async (_name, token, status) => {
+    const res = await call('/technician', token);
     expect(res.status).toBe(status);
     if (status === 403) expect(res.body.errorCode).toBe('FORBIDDEN_ROLE');
   });
 
-  it('ADMIN không tự có quyền của BOARD (duyệt chi quỹ)', async () => {
+  it('ADMIN không tự có quyền nghiệp vụ của BOARD (BR-R3)', async () => {
     expect((await call('/board', tokenOf('ADMIN'))).status).toBe(403);
-    expect((await call('/board', tokenOf('BOARD'))).status).toBe(200);
+    expect((await call('/board', tokenOf('BOARD', null, 'MEMBER'))).status).toBe(200);
   });
 
-  it('hasPermission: STAFF chung cho mọi chức danh + ADMIN', () => {
+  it('BOARD:CHAIRMAN chỉ cho Trưởng BQT', async () => {
+    expect((await call('/chairman', tokenOf('BOARD', null, 'MEMBER'))).status).toBe(403);
+    expect((await call('/chairman', tokenOf('BOARD', null, 'CHAIRMAN'))).status).toBe(200);
+  });
+
+  it('hasPermission: STAFF chung cho mọi chức danh', () => {
     expect(hasPermission({ role: 'STAFF', roleTitle: 'SECURITY' }, ['STAFF'])).toBe(true);
-    expect(hasPermission({ role: 'ADMIN' }, ['STAFF'])).toBe(true);
+    expect(hasPermission({ role: 'ADMIN' }, ['STAFF'])).toBe(false);
     expect(hasPermission({ role: 'BOARD' }, ['STAFF'])).toBe(false);
   });
 
   it('spec gõ sai → lỗi ngay khi khai báo route', () => {
     expect(() => authorize('ADMINN')).toThrow();
     expect(() => authorize('STAFF:DRIVER')).toThrow();
-    expect(() => authorize('BOARD:ACCOUNTANT')).toThrow();
+    expect(() => authorize('BOARD:TECHNICIAN')).toThrow();
+    expect(() => authorize('MANAGER:CHAIRMAN')).toThrow();
   });
 });
 

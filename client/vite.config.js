@@ -5,9 +5,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // Cho phép mở dev server qua tunnel ngrok để demo/review từ xa
+    allowedHosts: ['.ngrok-free.app', '.ngrok-free.dev', '.ngrok.app'],
     // Dev: gọi /api cùng origin, Vite chuyển tiếp sang backend nên không vướng CORS
     proxy: {
-      '/api': { target: 'http://localhost:5000', changeOrigin: true },
+      // Đổi port backend khi 5000 bị chiếm: VITE_PROXY_TARGET=http://localhost:5050 npm run dev
+      '/api': { target: process.env.VITE_PROXY_TARGET || 'http://localhost:5000', changeOrigin: true },
     },
   },
   build: {

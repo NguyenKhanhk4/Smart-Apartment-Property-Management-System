@@ -1,10 +1,11 @@
 import { Suspense } from 'react';
 import { NavLink, Outlet } from 'react-router';
-import { Layout, Typography, theme } from 'antd';
+import { Flex, Layout, Typography, theme } from 'antd';
 import { residentMenu } from '../config/menu';
 import { useAuth } from '../hooks/useAuth';
 import UserMenu from '../components/UserMenu';
 import PageLoader from '../components/PageLoader';
+import NotificationBell from '../features/notifications/NotificationBell';
 
 const { Header, Content } = Layout;
 const MAX_WIDTH = 720;
@@ -34,7 +35,10 @@ export default function ResidentLayout() {
         <Typography.Title level={4} style={{ margin: 0 }}>
           SAPMS
         </Typography.Title>
-        <UserMenu compact />
+        <Flex align="center" gap={8}>
+          <NotificationBell area="r" />
+          <UserMenu compact />
+        </Flex>
       </Header>
 
       <Content

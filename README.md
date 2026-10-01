@@ -63,6 +63,8 @@ SAPMS là một ứng dụng web tập trung dành cho **đơn vị vận hành*
 
 ## 3. Actor & phân quyền
 
+> ⚠️ **Đã đổi theo `doc/srs_final.md` (v3.1):** hệ thống có 6 role `RESIDENT, STAFF (RECEPTIONIST/SECURITY/TECHNICIAN), ACCOUNTANT, MANAGER, BOARD (CHAIRMAN/MEMBER), ADMIN`. ADMIN **không** có quyền nghiệp vụ (BR-R3). Code (`server/src/constants/enums.js`, `middlewares/authorize.js`) đã theo mô hình mới. Bảng bên dưới là bản cũ, giữ lại để tham khảo. Thiết kế DB: `doc/database_design.md`.
+
 | Role | Là ai | Ghi chú |
 |------|-------|---------|
 | `RESIDENT` | Cư dân | `relationType`: `OWNER` (chủ sở hữu, chịu trách nhiệm hóa đơn, được đăng ký xe), `TENANT` (người thuê, hợp đồng có hạn), `FAMILY_MEMBER` (chỉ xem, phản ánh, đặt tiện ích) |
