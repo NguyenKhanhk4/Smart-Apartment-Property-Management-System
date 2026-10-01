@@ -1,9 +1,12 @@
 import { env } from './config/env.js';
 import { connectDB, disconnectDB } from './config/db.js';
 import { createApp } from './app.js';
+import { startJobs } from './jobs/index.js';
 
 async function start() {
   await connectDB();
+
+  startJobs();
 
   const app = createApp();
   const server = app.listen(env.port, () => {

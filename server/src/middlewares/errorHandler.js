@@ -16,6 +16,9 @@ function toApiError(err) {
     return ApiError.badRequest(details[0]?.message, details);
   }
 
+  // Ghi đè đồng thời trên document bật optimisticConcurrency (Ticket, GuestLog...)
+  if (err instanceof mongoose.Error.VersionError) return new ApiError('CONCURRENT_UPDATE');
+
   if (err instanceof mongoose.Error.CastError) {
     return ApiError.badRequest(`Giá trị không hợp lệ cho trường "${err.path}"`, [
       { field: err.path, message: 'Giá trị không hợp lệ' },

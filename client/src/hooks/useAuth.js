@@ -3,7 +3,7 @@ import { AuthContext } from '../contexts/AuthContext';
 
 /**
  * { user, isAuthenticated, startSession, updateUser, logout, hasRole }
- * hasRole('STAFF:ACCOUNTANT', 'ADMIN') cùng ngữ nghĩa với authorize() ở backend.
+ * hasRole('MANAGER', 'STAFF:RECEPTIONIST') cùng ngữ nghĩa với authorize() ở backend.
  */
 export function useAuth() {
   const ctx = useContext(AuthContext);

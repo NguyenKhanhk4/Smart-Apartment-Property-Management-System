@@ -3,13 +3,23 @@ import Joi from 'joi';
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 100;
 
+/**
+ * Rule cho ?sort= — chỉ nhận field trong danh sách cho phép (dạng `field` hoặc `-field`),
+ * tránh sort theo field tuỳ ý (field nhạy cảm / không có index).
+ * @example Joi.object({ ...paginationQuery, sort: sortable('createdAt', 'dueDate') })
+ */
+export const sortable = (...fields) =>
+  Joi.string()
+    .valid(...fields.flatMap((f) => [f, `-${f}`]))
+    .default('-createdAt')
+    .messages({ 'any.only': `{{#label}} chỉ nhận: ${fields.join(', ')} (thêm "-" để giảm dần)` });
+
 // Dùng trong Joi schema của query: Joi.object({ ...paginationQuery, status: ... })
+// Mặc định chỉ sort theo createdAt; module cần thêm field thì ghi đè `sort: sortable(...)`.
 export const paginationQuery = {
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-  sort: Joi.string()
-    .pattern(/^-?[A-Za-z0-9_.]+$/)
-    .default('-createdAt'),
+  sort: sortable('createdAt'),
 };
 
 export function getPagination(query = {}) {

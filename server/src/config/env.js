@@ -20,6 +20,17 @@ const schema = Joi.object({
   JWT_REFRESH_SECRET: isTest
     ? Joi.string().default('test-refresh-secret')
     : Joi.string().min(16).required(),
+  // Tuỳ chọn — thiếu thì tính năng tương ứng tự tắt (email chỉ ghi log, upload ảnh báo lỗi rõ ràng)
+  CLOUDINARY_CLOUD_NAME: Joi.string().allow('').default(''),
+  CLOUDINARY_API_KEY: Joi.string().allow('').default(''),
+  CLOUDINARY_API_SECRET: Joi.string().allow('').default(''),
+  SMTP_HOST: Joi.string().allow('').default('smtp.gmail.com'),
+  SMTP_PORT: Joi.number().port().default(587),
+  SMTP_USER: Joi.string().allow('').default(''),
+  SMTP_PASS: Joi.string().allow('').default(''),
+  MAIL_FROM: Joi.string().allow('').default(''),
+  // false = không chạy node-cron trong process này (vd chạy nhiều instance)
+  ENABLE_CRON: Joi.boolean().default(true),
 }).unknown(true);
 
 const { value, error } = schema.validate(process.env, { abortEarly: false, convert: true });
@@ -43,4 +54,22 @@ export const env = {
     accessSecret: value.JWT_ACCESS_SECRET,
     refreshSecret: value.JWT_REFRESH_SECRET,
   },
+  cloudinary: {
+    cloudName: value.CLOUDINARY_CLOUD_NAME,
+    apiKey: value.CLOUDINARY_API_KEY,
+    apiSecret: value.CLOUDINARY_API_SECRET,
+    enabled: Boolean(
+      value.CLOUDINARY_CLOUD_NAME && value.CLOUDINARY_API_KEY && value.CLOUDINARY_API_SECRET,
+    ),
+  },
+  smtp: {
+    host: value.SMTP_HOST,
+    port: value.SMTP_PORT,
+    user: value.SMTP_USER,
+    pass: value.SMTP_PASS,
+    from: value.MAIL_FROM || value.SMTP_USER,
+    enabled: Boolean(value.SMTP_USER && value.SMTP_PASS),
+  },
+  enableCron: value.ENABLE_CRON && value.NODE_ENV !== 'test',
+  timezone: 'Asia/Ho_Chi_Minh',
 };

@@ -1,13 +1,12 @@
 import { Avatar, Dropdown, Flex, Tag, Typography } from 'antd';
 import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import { useAuth } from '../hooks/useAuth';
-import { ROLES, ROLE_TITLES } from '../constants/enums';
+import { roleLabelOf } from '../constants/enums';
 
 // Avatar + tên + role ở góc phải header, click để đăng xuất
 export default function UserMenu({ compact = false }) {
   const { user, logout } = useAuth();
-  const role =
-    user.role === 'STAFF' && user.roleTitle ? ROLE_TITLES[user.roleTitle] : ROLES[user.role];
+  const role = roleLabelOf(user);
 
   const items = [{ key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất', danger: true }];
 

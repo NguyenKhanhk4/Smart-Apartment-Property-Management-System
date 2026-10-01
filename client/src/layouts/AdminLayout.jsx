@@ -6,10 +6,11 @@ import { adminMenu } from '../config/menu';
 import { useAuth } from '../hooks/useAuth';
 import UserMenu from '../components/UserMenu';
 import PageLoader from '../components/PageLoader';
+import NotificationBell from '../features/notifications/NotificationBell';
 
 const { Header, Sider, Content } = Layout;
 
-// Layout cho ADMIN / STAFF / BOARD: sidebar sinh từ config/menu.js, lọc theo quyền
+// Layout nội bộ (STAFF / ACCOUNTANT / MANAGER / BOARD / ADMIN): sidebar sinh từ config/menu.js, lọc theo quyền
 export default function AdminLayout() {
   const { hasRole } = useAuth();
   const { pathname } = useLocation();
@@ -35,6 +36,7 @@ export default function AdminLayout() {
         collapsible
         collapsed={collapsed}
         breakpoint="lg"
+        width={232}
         collapsedWidth={isMobile ? 0 : 80}
         onBreakpoint={(broken) => {
           setIsMobile(broken);
@@ -82,7 +84,10 @@ export default function AdminLayout() {
             />
             <Typography.Text strong>{activeItem?.label}</Typography.Text>
           </Flex>
-          <UserMenu compact={isMobile} />
+          <Flex align="center" gap={8}>
+            <NotificationBell area="app" />
+            <UserMenu compact={isMobile} />
+          </Flex>
         </Header>
 
         <Content style={{ padding: isMobile ? 12 : 24 }}>
