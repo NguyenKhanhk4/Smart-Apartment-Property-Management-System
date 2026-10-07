@@ -9,6 +9,7 @@ import {
   HomeOutlined,
   NotificationOutlined,
   PieChartOutlined,
+  ScheduleOutlined,
   SettingOutlined,
   ToolOutlined,
   UsergroupAddOutlined,
@@ -42,6 +43,7 @@ const HomePage = lazy(() => import('../features/home/HomePage'));
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
 const AssetDetailPage = lazy(() => import('../features/assets/AssetDetailPage'));
+const WorkOrdersPage = lazy(() => import('../features/workOrders/WorkOrdersPage'));
 
 // ===== Module E (Phạm Lượng) =====
 const TicketsPage = lazy(() => import('../features/tickets/TicketsPage'));
@@ -105,6 +107,16 @@ export const adminMenu = [
     roles: ['MANAGER', 'STAFF:TECHNICIAN'],
     component: AssetDetailPage,
     hideInMenu: true,
+  },
+  // Work order: danh sách + phân công (UC-D03)
+  {
+    key: 'work-orders',
+    group: 'Kỹ thuật & vận hành',
+    label: 'Work order',
+    icon: ScheduleOutlined,
+    path: 'work-orders',
+    roles: ['MANAGER'],
+    component: WorkOrdersPage,
   },
   // Sổ khách (UC-E08)
   {

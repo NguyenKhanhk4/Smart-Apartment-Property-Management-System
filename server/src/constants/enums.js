@@ -237,6 +237,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   TICKET_ESCALATED: 'TICKET_ESCALATED',
   TICKET_CLOSED: 'TICKET_CLOSED',
   ANNOUNCEMENT_PUBLISHED: 'ANNOUNCEMENT_PUBLISHED',
+  WORKORDER_ASSIGNED: 'WORKORDER_ASSIGNED',
 });
 
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
