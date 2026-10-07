@@ -20,6 +20,7 @@ import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
 import { PRIORITIES, TICKET_STATUS } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
+import EvidencePhotos from '../../components/EvidencePhotos';
 import { AssignModal, ConfirmModal, ProgressModal, RejectModal } from './TicketActionModals';
 
 const HISTORY_LABEL = {
@@ -146,6 +147,11 @@ export default function TicketDetailPage() {
                     {h.by?.fullName ? ` — ${h.by.fullName}` : h.by ? '' : ' — Hệ thống'}
                   </Typography.Text>
                   {h.note && <Typography.Text>{h.note}</Typography.Text>}
+                  {h.imageUrls?.length > 0 && (
+                    <div style={{ margin: '6px 0' }}>
+                      <EvidencePhotos urls={h.imageUrls} size={72} />
+                    </div>
+                  )}
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                     {formatDateTime(h.at)}
                   </Typography.Text>

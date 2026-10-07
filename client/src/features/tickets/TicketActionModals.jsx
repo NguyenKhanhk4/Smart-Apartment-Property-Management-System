@@ -2,10 +2,13 @@ import { Form, Input, Modal, Radio, Rate, Select } from 'antd';
 import { ticketApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
 import { PRIORITIES, enumOptions } from '../../constants/enums';
+import EvidencePhotosField from '../../components/EvidencePhotosField';
+import { toFiles } from '../../utils/upload';
 
 // Modal dùng chung: form + submit qua useAction
-function ActionModal({ title, open, onClose, onDone, action, success, okText, children, initialValues }) {
-  const [form] = Form.useForm();
+function ActionModal({ title, open, onClose, onDone, action, success, okText, children, initialValues, form: outerForm }) {
+  const [innerForm] = Form.useForm();
+  const form = outerForm ?? innerForm;
   const [run, loading] = useAction(action, {
     success,
     onDone: () => {
@@ -93,6 +96,8 @@ export function RejectModal({ ticket, open, onClose, onDone }) {
 
 // UC-E04 — KTV cập nhật tiến độ
 export function ProgressModal({ ticket, open, onClose, onDone }) {
+  const [form] = Form.useForm();
+  const resolved = Form.useWatch('status', form) === 'WAITING_CONFIRM';
   const options = [
     { value: 'IN_PROGRESS', label: 'Đang xử lý (cập nhật tiến độ)' },
     { value: 'WAITING_CONFIRM', label: 'Đã xử lý xong — chờ cư dân xác nhận' },
@@ -105,15 +110,18 @@ export function ProgressModal({ ticket, open, onClose, onDone }) {
       onDone={onDone}
       okText="Cập nhật"
       success="Đã cập nhật tiến độ"
+      form={form}
       initialValues={{ status: 'IN_PROGRESS' }}
-      action={(v) => ticketApi.progress(ticket._id, v)}
+      // "Đã xử lý xong" bắt buộc kèm ảnh kết quả làm bằng chứng cho Manager/Lễ tân
+      action={({ images, ...v }) => ticketApi.progress(ticket._id, v, v.status === 'WAITING_CONFIRM' ? toFiles(images) : [])}
     >
       <Form.Item name="status" label="Trạng thái">
         <Radio.Group options={options} style={{ display: 'flex', flexDirection: 'column', gap: 8 }} />
       </Form.Item>
-      <Form.Item name="note" label="Ghi chú tiến độ">
-        <Input.TextArea rows={3} maxLength={1000} />
+      <Form.Item name="note" label={resolved ? 'Ghi chú kết quả' : 'Ghi chú tiến độ'}>
+        <Input.TextArea rows={3} maxLength={1000} showCount />
       </Form.Item>
+      {resolved && <EvidencePhotosField name="images" label="Ảnh kết quả" />}
     </ActionModal>
   );
 }

@@ -21,6 +21,8 @@ vi.mock('../src/services/upload.service.js', async (importOriginal) => {
 });
 
 const { createApp } = await import('../src/app.js');
+// Ảnh kết quả KTV đính kèm khi báo đã xử lý xong (bắt buộc ≥ 1)
+const RESULT_PHOTO = { originalname: 'ket-qua.jpg', buffer: Buffer.from([0xff, 0xd8, 0xff]) };
 const service = await import('../src/modules/tickets/tickets.service.js');
 const { Notification, SystemConfig, AuditLog, Ticket } = await import('../src/models/index.js');
 
@@ -221,7 +223,7 @@ describe('tickets.service', () => {
       expect(t1.status).toBe('IN_PROGRESS');
       expect(t1.resolvedAt).toBeUndefined();
 
-      const t2 = await service.updateProgress(asUser(tech), ticket._id, { status: 'WAITING_CONFIRM' });
+      const t2 = await service.updateProgress(asUser(tech), ticket._id, { status: 'WAITING_CONFIRM' }, [RESULT_PHOTO]);
       expect(t2.status).toBe('WAITING_CONFIRM');
       expect(t2.resolvedAt).toBeInstanceOf(Date);
       const notified = (await Notification.find().lean()).map((n) => String(n.userId)).sort();
@@ -320,7 +322,7 @@ describe('tickets.service', () => {
       const ticket = await createTicket({ apartment: h.apartment, createdBy: h.user, status: 'ASSIGNED', assignedTo: tech._id });
 
       const results = await Promise.allSettled([
-        service.updateProgress(asUser(tech), ticket._id, { status: 'WAITING_CONFIRM' }),
+        service.updateProgress(asUser(tech), ticket._id, { status: 'WAITING_CONFIRM' }, [RESULT_PHOTO]),
         service.assignTicket(asUser(manager), ticket._id, { assignedTo: String(tech2._id) }),
       ]);
       expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
