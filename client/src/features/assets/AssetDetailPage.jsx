@@ -4,10 +4,12 @@ import { Button, Card, Descriptions, Flex, Skeleton, Table, Tag, Typography } fr
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { assetApi } from '../../api/moduleD.api';
 import { useApi } from '../../hooks/useApi';
+import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
 import { ASSET_CATEGORIES, WORK_ORDER_STATUS } from '../../constants/enums';
 import { formatDate, formatDateTime } from '../../utils/format';
 import PageHeader from '../../components/PageHeader';
+import AssignWorkOrderModal from '../workOrders/AssignWorkOrderModal';
 
 // UC-D01 — Chi tiết tài sản: work order đang mở + lịch sử bảo trì (đúng hạn / trễ hạn)
 export default function AssetDetailPage() {
@@ -15,7 +17,9 @@ export default function AssetDetailPage() {
   const navigate = useNavigate();
   // Tên truyền từ danh sách → hiện ngay để tiêu đề morph từ dòng trong bảng (không chờ API)
   const passedName = useLocation().state?.name;
+  const { hasRole } = useAuth();
   const [page, setPage] = useState(1);
+  const [assigning, setAssigning] = useState(false);
   const asset = useApi(() => assetApi.get(id), [id]);
   const history = useApi(() => assetApi.history(id, { page, limit: 10 }), [id, page]);
   const a = asset.data;
@@ -55,7 +59,18 @@ export default function AssetDetailPage() {
           </Descriptions>
         )}
       </Card>
-      <Card title="Work order đang mở" size="small" loading={asset.loading}>
+      <Card
+        title="Work order đang mở"
+        size="small"
+        loading={asset.loading}
+        extra={
+          wo && hasRole('MANAGER') && (
+            <Button size="small" type={wo.assignedTo ? 'default' : 'primary'} onClick={() => setAssigning(true)}>
+              {wo.assignedTo ? 'Giao lại' : 'Phân công'}
+            </Button>
+          )
+        }
+      >
         {wo ? (
           <Descriptions column={{ xs: 1, md: 3 }} size="small">
             <Descriptions.Item label="Trạng thái"><EnumTag map={WORK_ORDER_STATUS} value={wo.status} /></Descriptions.Item>
@@ -83,6 +98,9 @@ export default function AssetDetailPage() {
           ]}
         />
       </Card>
+      {assigning && wo && (
+        <AssignWorkOrderModal workOrder={wo} open onClose={() => setAssigning(false)} onDone={asset.reload} />
+      )}
     </Flex>
   );
 }

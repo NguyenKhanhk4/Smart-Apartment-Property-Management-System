@@ -90,6 +90,11 @@ export const WORK_ORDER_STATUS = {
   DONE: { label: 'Hoàn thành', color: 'success' },
 };
 
+export const WORK_ORDER_TYPES = {
+  SCHEDULED: { label: 'Bảo trì định kỳ', color: 'geekblue' },
+  TICKET_LINKED: { label: 'Theo phản ánh', color: 'orange' },
+};
+
 // ===== Module D =====
 export const ASSET_CATEGORIES = {
   ELEVATOR: { label: 'Thang máy', color: 'blue' },
