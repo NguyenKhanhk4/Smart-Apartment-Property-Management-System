@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { App, Button, Card, DatePicker, Flex, Form, Input, InputNumber, Modal, Popconfirm, Select, Switch, Table, Tag, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -9,6 +10,8 @@ import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
 import { ASSET_CATEGORIES, WORK_ORDER_STATUS, enumOptions } from '../../constants/enums';
 import { formatDate } from '../../utils/format';
+import PageHeader from '../../components/PageHeader';
+import { vtName } from '../../motion/viewTransition';
 
 // Form thêm/sửa tài sản (UC-D01)
 function AssetFormModal({ asset, buildings, open, onClose, onDone }) {
@@ -77,6 +80,7 @@ function AssetFormModal({ asset, buildings, open, onClose, onDone }) {
 
 // UC-D01 — Danh mục tài sản chung (Manager thêm/sửa/ngừng; KTV chỉ xem)
 export default function AssetsPage() {
+  const navigate = useNavigate();
   const { hasRole } = useAuth();
   const { message } = App.useApp();
   const canEdit = hasRole('MANAGER');
@@ -101,9 +105,11 @@ export default function AssetsPage() {
     {
       title: 'Tài sản',
       dataIndex: 'name',
+      width: 260,
+      fixed: 'left',
       render: (v, r) => (
         <Flex vertical>
-          <Typography.Text strong>{v}</Typography.Text>
+          <Typography.Text strong style={vtName('asset', r._id)}>{v}</Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {r.buildingId?.name}{r.location ? ` · ${r.location}` : ''}
           </Typography.Text>
@@ -130,9 +136,10 @@ export default function AssetsPage() {
       ? [
           {
             title: '',
-            width: 170,
+            width: 180,
+            fixed: 'right',
             render: (_, r) => (
-              <Flex gap={4}>
+              <Flex gap={4} onClick={(e) => e.stopPropagation()}>
                 <Button size="small" onClick={() => setEditing(r)}>Sửa</Button>
                 <Popconfirm
                   title={r.isActive ? 'Ngừng theo dõi tài sản này?' : 'Kích hoạt lại tài sản này?'}
@@ -150,10 +157,14 @@ export default function AssetsPage() {
   ];
 
   return (
-    <Card
+    <>
+    <PageHeader
       title="Tài sản chung"
+      subtitle="Thiết bị dùng chung của tòa nhà và lịch bảo trì định kỳ."
+      breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Tài sản' }]}
       extra={canEdit && <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditing({})}>Thêm tài sản</Button>}
-    >
+    />
+    <Card>
       <Flex gap={8} wrap style={{ marginBottom: 12 }}>
         <Input.Search placeholder="Tên tài sản" allowClear style={{ width: 200 }} onSearch={(q) => set({ q: q || undefined })} />
         <Select allowClear placeholder="Tòa" style={{ width: 140 }} options={buildings.map((b) => ({ value: b._id, label: b.name }))} onChange={(buildingId) => set({ buildingId })} />
@@ -170,12 +181,14 @@ export default function AssetsPage() {
         loading={loading}
         dataSource={data}
         columns={columns}
-        scroll={{ x: 1000 }}
+        scroll={{ x: 1180 }}
+        onRow={(r) => ({ onClick: () => navigate(`/app/assets/${r._id}`, { viewTransition: true, state: { name: r.name } }), style: { cursor: 'pointer' } })}
         pagination={{ current: filters.page, pageSize: filters.limit, total: pagination?.total, showSizeChanger: true, onChange: (page, limit) => setFilters((f) => ({ ...f, page, limit })) }}
       />
       {editing && (
         <AssetFormModal asset={editing._id ? editing : null} buildings={buildings} open onClose={() => setEditing(null)} onDone={reload} />
       )}
     </Card>
+    </>
   );
 }

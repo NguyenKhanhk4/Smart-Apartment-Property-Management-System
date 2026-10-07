@@ -8,6 +8,11 @@ export const OPEN_WO_STATUSES = [WORK_ORDER_STATUS.PENDING, WORK_ORDER_STATUS.IN
 
 const LIST_POPULATE = [{ path: 'buildingId', select: 'code name' }];
 
+/** Work order đúng hạn = hoàn thành không muộn hơn 1 ngày sau ngày lên lịch (khớp báo cáo UC-E12) */
+export const isOnTime = (wo) =>
+  Boolean(wo.completedAt) &&
+  new Date(wo.completedAt).getTime() <= new Date(wo.scheduledDate ?? wo.createdAt).getTime() + DAY_MS;
+
 /** BR-O18: ngày bảo trì tiếp theo = ngày gần nhất (hoặc `fallback`) + chu kỳ */
 export function computeNextMaintenance(lastMaintenanceDate, cycleDays, fallback = new Date()) {
   const base = startOfVnDay(lastMaintenanceDate ?? fallback);
@@ -72,6 +77,45 @@ export async function listAssets(query) {
     openWorkOrder: byAsset[String(a._id)] ?? null,
     isDue: a.isActive && a.nextMaintenanceDate <= endOfVnDay(today),
   }));
+  return result;
+}
+
+// ===== UC-D01 bước 6: chi tiết + work order đang mở =====
+export async function getAsset(id) {
+  const asset = await Asset.findById(id)
+    .populate(LIST_POPULATE)
+    .populate('createdBy', 'fullName')
+    .lean();
+  if (!asset) throw ApiError.notFound('Không tìm thấy tài sản');
+  const [openWorkOrder, doneCount] = await Promise.all([
+    WorkOrder.findOne({ assetId: id, status: { $in: OPEN_WO_STATUSES } })
+      .populate('assignedTo', 'fullName phone')
+      .lean(),
+    WorkOrder.countDocuments({ assetId: id, status: WORK_ORDER_STATUS.DONE }),
+  ]);
+  return {
+    ...asset,
+    openWorkOrder,
+    doneCount,
+    isDue: asset.isActive && asset.nextMaintenanceDate <= endOfVnDay(),
+  };
+}
+
+// ===== UC-D01 bước 6: lịch sử bảo trì (work order DONE, mới nhất trước, đúng hạn/trễ hạn) =====
+export async function getAssetHistory(id, query) {
+  if (!(await Asset.exists({ _id: id }))) throw ApiError.notFound('Không tìm thấy tài sản');
+  const result = await paginate(
+    WorkOrder,
+    { assetId: id, status: WORK_ORDER_STATUS.DONE },
+    { ...query, sort: '-completedAt' },
+    {
+      populate: [
+        { path: 'assignedTo', select: 'fullName' },
+        { path: 'assignedBy', select: 'fullName' },
+      ],
+    },
+  );
+  result.items = result.items.map((w) => ({ ...w, onTime: isOnTime(w) }));
   return result;
 }
 

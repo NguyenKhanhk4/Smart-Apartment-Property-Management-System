@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import request from 'supertest';
 import { connectTestDB, clearTestDB, closeTestDB } from './helpers/db.js';
-import { asUser, createBuilding, createManager, createTechnician, tokenFor } from './helpers/fixtures.js';
+import { asUser, createBuilding, createManager, createReceptionist, createTechnician, tokenFor } from './helpers/fixtures.js';
 
 const { createApp } = await import('../src/app.js');
 const assets = await import('../src/modules/assets/assets.service.js');
@@ -139,6 +139,38 @@ describe('assets (UC-D01)', () => {
     expect(row.openWorkOrder).toMatchObject({ status: 'PENDING' });
   });
 
+  it('chi tiết: kèm work order đang mở, số lần đã bảo trì, cờ isDue; id lạ → NOT_FOUND', async () => {
+    const manager = asUser(await createManager());
+    const tech = await createTechnician();
+    const b = await createBuilding();
+    const asset = await assets.createAsset(manager, body(b, 'Thang máy D', { lastMaintenanceDate: new Date(Date.now() - 31 * DAY) }));
+    await WorkOrder.create([
+      { assetId: asset._id, type: 'SCHEDULED', status: 'DONE', scheduledDate: new Date(Date.now() - 61 * DAY), completedAt: new Date(Date.now() - 60 * DAY) },
+      { assetId: asset._id, type: 'SCHEDULED', status: 'PENDING', scheduledDate: new Date(), assignedTo: tech._id },
+    ]);
+    const detail = await assets.getAsset(asset._id);
+    expect(detail).toMatchObject({ name: 'Thang máy D', doneCount: 1, isDue: true });
+    expect(detail.buildingId.name).toBe(b.name);
+    expect(detail.openWorkOrder).toMatchObject({ status: 'PENDING' });
+    expect(detail.openWorkOrder.assignedTo.fullName).toBe(tech.fullName);
+    await expect(assets.getAsset('0123456789abcdef01234567')).rejects.toMatchObject({ errorCode: 'NOT_FOUND' });
+  });
+
+  it('lịch sử bảo trì: chỉ work order DONE, mới nhất trước, cờ đúng hạn/trễ hạn', async () => {
+    const manager = asUser(await createManager());
+    const asset = await assets.createAsset(manager, body(await createBuilding(), 'Máy bơm E', { category: 'PUMP' }));
+    const sched = new Date(Date.now() - 40 * DAY);
+    await WorkOrder.create([
+      { assetId: asset._id, type: 'SCHEDULED', status: 'DONE', scheduledDate: sched, completedAt: new Date(sched.getTime() + 3600e3), note: 'Đúng hạn' },
+      { assetId: asset._id, type: 'SCHEDULED', status: 'DONE', scheduledDate: sched, completedAt: new Date(sched.getTime() + 3 * DAY), note: 'Trễ hạn' },
+      { assetId: asset._id, type: 'SCHEDULED', status: 'PENDING', scheduledDate: new Date() },
+    ]);
+    const { items, pagination } = await assets.getAssetHistory(asset._id, { page: 1, limit: 20 });
+    expect(pagination.total).toBe(2);
+    expect(items.map((i) => [i.note, i.onTime])).toEqual([['Trễ hạn', false], ['Đúng hạn', true]]);
+    await expect(assets.getAssetHistory('0123456789abcdef01234567', { page: 1, limit: 20 })).rejects.toMatchObject({ errorCode: 'NOT_FOUND' });
+  });
+
   describe('routes — phân quyền & validate', () => {
     const app = createApp();
 
@@ -198,6 +230,23 @@ describe('assets (UC-D01)', () => {
 
       const missing = await request(app).put('/api/assets/0123456789abcdef01234567').set(as(manager)).send({ name: 'Không tồn tại' });
       expect(missing.status).toBe(404);
+    });
+
+    it('GET chi tiết / lịch sử: Manager và KTV xem được; Lễ tân 403; id sai định dạng 400', async () => {
+      const manager = await createManager();
+      const tech = await createTechnician();
+      const rec = await createReceptionist();
+      const asset = await assets.createAsset(asUser(manager), body(await createBuilding(), 'Thang máy F'));
+      const as = (u) => ({ Authorization: `Bearer ${tokenFor(u)}` });
+
+      const d = await request(app).get(`/api/assets/${asset._id}`).set(as(tech));
+      expect(d.status).toBe(200);
+      expect(d.body.data).toMatchObject({ name: 'Thang máy F', doneCount: 0, openWorkOrder: null });
+      const h = await request(app).get(`/api/assets/${asset._id}/history`).set(as(manager));
+      expect(h.status).toBe(200);
+      expect(h.body.pagination.total).toBe(0);
+      expect((await request(app).get(`/api/assets/${asset._id}`).set(as(rec))).status).toBe(403);
+      expect((await request(app).get('/api/assets/abc').set(as(manager))).status).toBe(400);
     });
   });
 });

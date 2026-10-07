@@ -96,6 +96,10 @@ router.post(
 /**
  * @openapi
  * /assets/{id}:
+ *   get:
+ *     tags: [Tài sản & bảo trì]
+ *     summary: Chi tiết tài sản + work order đang mở + số lần đã bảo trì (UC-D01 bước 6)
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  *   put:
  *     tags: [Tài sản & bảo trì]
  *     summary: Sửa tài sản; đổi chu kỳ/ngày gần nhất → tính lại ngày bảo trì kế tiếp
@@ -115,6 +119,14 @@ router.post(
  *               lastMaintenanceDate: { type: string, format: date, nullable: true }
  *               note: { type: string }
  */
+router.get(
+  '/:id',
+  authenticate,
+  authorize(...VIEWERS),
+  validate({ params: idParams }),
+  async (req, res) => ok(res, await service.getAsset(req.params.id)),
+);
+
 router.put(
   '/:id',
   authenticate,
@@ -146,6 +158,28 @@ router.patch(
       await service.setAssetStatus(req.params.id, req.body.isActive),
       req.body.isActive ? 'Đã kích hoạt lại tài sản' : 'Đã ngừng theo dõi tài sản',
     ),
+);
+
+/**
+ * @openapi
+ * /assets/{id}/history:
+ *   get:
+ *     tags: [Tài sản & bảo trì]
+ *     summary: Lịch sử bảo trì — work order DONE, mới nhất trước, có cờ đúng hạn/trễ hạn
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *       - $ref: '#/components/parameters/page'
+ *       - $ref: '#/components/parameters/limit'
+ */
+router.get(
+  '/:id/history',
+  authenticate,
+  authorize(...VIEWERS),
+  validate({ params: idParams, query: Joi.object(paginationQuery) }),
+  async (req, res) => {
+    const { items, pagination } = await service.getAssetHistory(req.params.id, req.validated.query);
+    paginated(res, items, pagination);
+  },
 );
 
 export default router;
