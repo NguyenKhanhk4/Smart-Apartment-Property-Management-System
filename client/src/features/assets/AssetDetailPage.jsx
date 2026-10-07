@@ -10,6 +10,7 @@ import { ASSET_CATEGORIES, WORK_ORDER_STATUS } from '../../constants/enums';
 import { formatDate, formatDateTime } from '../../utils/format';
 import PageHeader from '../../components/PageHeader';
 import AssignWorkOrderModal from '../workOrders/AssignWorkOrderModal';
+import WorkOrderReportModal from '../workOrders/WorkOrderReportModal';
 
 // UC-D01 — Chi tiết tài sản: work order đang mở + lịch sử bảo trì (đúng hạn / trễ hạn)
 export default function AssetDetailPage() {
@@ -20,6 +21,7 @@ export default function AssetDetailPage() {
   const { hasRole } = useAuth();
   const [page, setPage] = useState(1);
   const [assigning, setAssigning] = useState(false);
+  const [viewing, setViewing] = useState(null);
   const asset = useApi(() => assetApi.get(id), [id]);
   const history = useApi(() => assetApi.history(id, { page, limit: 10 }), [id, page]);
   const a = asset.data;
@@ -95,9 +97,19 @@ export default function AssetDetailPage() {
             { title: 'Kỹ thuật viên', dataIndex: ['assignedTo', 'fullName'], width: 150, render: (v) => v ?? '—' },
             { title: 'Đúng hạn', dataIndex: 'onTime', width: 100, render: (v) => (v ? <Tag color="green">Đúng hạn</Tag> : <Tag color="red">Trễ hạn</Tag>) },
             { title: 'Kết quả', dataIndex: 'note' },
+            {
+              title: '',
+              width: 120,
+              render: (_, r) => (
+                <Button size="small" onClick={() => setViewing(r)}>
+                  {r.completionImages?.length ? `Xem ${r.completionImages.length} ảnh` : 'Xem báo cáo'}
+                </Button>
+              ),
+            },
           ]}
         />
       </Card>
+      {viewing && <WorkOrderReportModal workOrder={viewing} open onClose={() => setViewing(null)} />}
       {assigning && wo && (
         <AssignWorkOrderModal workOrder={wo} open onClose={() => setAssigning(false)} onDone={asset.reload} />
       )}
