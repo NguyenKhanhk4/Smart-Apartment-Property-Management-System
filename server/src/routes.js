@@ -9,6 +9,7 @@ import announcementRoutes from './modules/announcements/announcements.routes.js'
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import reportRoutes from './modules/reports/reports.routes.js';
 import lookupRoutes from './modules/lookups/lookups.routes.js';
+import assetRoutes from './modules/assets/assets.routes.js';
 
 const router = Router();
 
@@ -40,5 +41,8 @@ router.use('/announcements', announcementRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/reports', reportRoutes);
 router.use('/lookups', lookupRoutes);
+
+// Module D — Thanh Bình (Tài sản & bảo trì, Tiện ích & đặt chỗ)
+router.use('/assets', assetRoutes);
 
 export default router;

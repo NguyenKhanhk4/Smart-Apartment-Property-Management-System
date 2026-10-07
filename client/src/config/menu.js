@@ -3,6 +3,7 @@ import {
   AppstoreOutlined,
   BarChartOutlined,
   BellOutlined,
+  ClusterOutlined,
   DashboardOutlined,
   FundOutlined,
   HomeOutlined,
@@ -25,6 +26,9 @@ import {
 //   }
 
 const HomePage = lazy(() => import('../features/home/HomePage'));
+
+// ===== Module D (Thanh Bình) =====
+const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
 
 // ===== Module E (Phạm Lượng) =====
 const TicketsPage = lazy(() => import('../features/tickets/TicketsPage'));
@@ -68,6 +72,15 @@ export const adminMenu = [
     path: 'complaint-settings',
     roles: ['MANAGER'],
     component: ComplaintSettingsPage,
+  },
+  // Tài sản & bảo trì (UC-D01)
+  {
+    key: 'assets',
+    label: 'Tài sản',
+    icon: ClusterOutlined,
+    path: 'assets',
+    roles: ['MANAGER', 'STAFF:TECHNICIAN'],
+    component: AssetsPage,
   },
   // Sổ khách (UC-E08)
   {

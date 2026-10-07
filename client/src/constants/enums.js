@@ -89,6 +89,14 @@ export const WORK_ORDER_STATUS = {
   DONE: { label: 'Hoàn thành', color: 'success' },
 };
 
+// ===== Module D =====
+export const ASSET_CATEGORIES = {
+  ELEVATOR: { label: 'Thang máy', color: 'blue' },
+  PUMP: { label: 'Máy bơm', color: 'cyan' },
+  FIRE_SYSTEM: { label: 'PCCC', color: 'red' },
+  OTHER: { label: 'Khác', color: 'default' },
+};
+
 // Dùng cho <Select options={enumOptions(ROLES)} />
 export const enumOptions = (enumObj) =>
   Object.entries(enumObj).map(([value, { label }]) => ({ value, label }));

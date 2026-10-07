@@ -37,6 +37,8 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Tài sản đang có work order chưa hoàn thành',
   },
+  ASSET_NAME_EXISTS: { status: 409, message: 'Tên tài sản đã tồn tại trong tòa này' },
+  ASSET_HAS_OPEN_WORKORDER: { status: 409, message: 'Tài sản còn work order chưa hoàn thành' },
   SERVER_ERROR: { status: 500, message: 'Lỗi hệ thống, vui lòng thử lại sau' },
 
   // Bổ sung ngoài SRS: lỗi trùng unique index chưa được module ánh xạ sang mã riêng

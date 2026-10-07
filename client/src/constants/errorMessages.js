@@ -27,6 +27,8 @@ export const ERROR_MESSAGES = {
   RESIDENCY_DATE_OVERLAP: 'Thời gian khai báo bị chồng lấn với khai báo khác.',
   TICKET_ALREADY_CLOSED: 'Phản ánh đã đóng, không thể cập nhật.',
   WORKORDER_DUPLICATE: 'Tài sản này đang có lệnh bảo trì chưa hoàn thành.',
+  ASSET_NAME_EXISTS: 'Tên tài sản đã tồn tại trong tòa này.',
+  ASSET_HAS_OPEN_WORKORDER: 'Tài sản còn work order chưa hoàn thành.',
   DUPLICATE_VALUE: 'Dữ liệu bị trùng.',
   CONCURRENT_UPDATE: 'Dữ liệu vừa được người khác cập nhật, vui lòng tải lại trang.',
   SERVER_ERROR: 'Có lỗi xảy ra phía máy chủ, vui lòng thử lại sau.',
