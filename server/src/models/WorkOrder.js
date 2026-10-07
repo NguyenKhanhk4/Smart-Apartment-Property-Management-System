@@ -21,6 +21,8 @@ const workOrderSchema = new Schema(
     scheduledDate: Date,
     completedAt: Date,
     note: String,
+    // Ảnh bằng chứng KTV chụp khi hoàn thành (UC-D04), bắt buộc ≥ 1 ảnh khi DONE
+    completionImages: { type: [String], default: [], validate: [(v) => v.length <= 5, 'Tối đa 5 ảnh'] },
   },
   schemaOptions('work_orders'),
 );

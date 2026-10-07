@@ -3,6 +3,7 @@ import {
   AppstoreOutlined,
   BarChartOutlined,
   BellOutlined,
+  CheckSquareOutlined,
   ClusterOutlined,
   DashboardOutlined,
   FundOutlined,
@@ -116,6 +117,16 @@ export const adminMenu = [
     icon: ScheduleOutlined,
     path: 'work-orders',
     roles: ['MANAGER'],
+    component: WorkOrdersPage,
+  },
+  // Work order của tôi: KTV bắt đầu / hoàn thành (UC-D04) — dùng lại WorkOrdersPage ở chế độ KTV
+  {
+    key: 'my-work-orders',
+    group: 'Kỹ thuật & vận hành',
+    label: 'Work order của tôi',
+    icon: CheckSquareOutlined,
+    path: 'my-work-orders',
+    roles: ['STAFF:TECHNICIAN'],
     component: WorkOrdersPage,
   },
   // Sổ khách (UC-E08)

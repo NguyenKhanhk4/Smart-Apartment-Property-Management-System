@@ -5,6 +5,7 @@ import { runTrackedJob } from '../../jobs/cronRunner.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
+import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId } from '../../utils/validators.js';
@@ -18,7 +19,7 @@ const VIEWERS = ['MANAGER', 'STAFF:TECHNICIAN'];
 
 const listQuery = Joi.object({
   ...paginationQuery,
-  sort: sortable('createdAt', 'scheduledDate', 'status'),
+  sort: sortable('createdAt', 'scheduledDate', 'completedAt', 'status'),
   status: csvEnum(values(WORK_ORDER_STATUS)),
   type: Joi.string().valid(...values(WORK_ORDER_TYPES)),
   buildingId: objectId(),
@@ -26,6 +27,16 @@ const listQuery = Joi.object({
   unassigned: Joi.boolean(),
   overdue: Joi.boolean(),
   q: Joi.string().trim().max(100),
+});
+
+// Hoàn thành bắt buộc ghi chú kết quả ≥ 5 ký tự; bắt đầu thì không cần ghi chú
+const statusBody = Joi.object({
+  status: Joi.string().valid(WORK_ORDER_STATUS.IN_PROGRESS, WORK_ORDER_STATUS.DONE).required(),
+  note: Joi.when('status', {
+    is: WORK_ORDER_STATUS.DONE,
+    then: Joi.string().trim().min(5).max(1000).required(),
+    otherwise: Joi.string().trim().max(1000).allow(''),
+  }),
 });
 
 const assignBody = Joi.object({
@@ -135,6 +146,42 @@ router.patch(
     const { workOrder, changed } = await service.assignWorkOrder(req.user, req.params.id, req.body);
     ok(res, workOrder, changed ? 'Đã phân công kỹ thuật viên' : 'Work order đã được giao cho người này');
   },
+);
+
+/**
+ * @openapi
+ * /work-orders/{id}/status:
+ *   patch:
+ *     tags: [Tài sản & bảo trì]
+ *     summary: Kỹ thuật viên bắt đầu (PENDING → IN_PROGRESS) hoặc hoàn thành (IN_PROGRESS → DONE) work order (UC-D04)
+ *     description: |
+ *       Hoàn thành: bắt buộc `note` (≥ 5 ký tự) và ít nhất 1 ảnh bằng chứng (tối đa 5); trong 1 transaction đặt DONE + completedAt và cập nhật
+ *       lastMaintenanceDate / nextMaintenanceDate của tài sản (BR-O18), sau đó báo Trưởng BQL.
+ *       Lỗi: FORBIDDEN_ROLE (403) không phải việc của mình; WORKORDER_INVALID_STATUS (409) sai thứ tự.
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status: { type: string, enum: [IN_PROGRESS, DONE] }
+ *               note: { type: string, minLength: 5, maxLength: 1000, description: 'Bắt buộc khi DONE' }
+ *               images: { type: array, maxItems: 5, items: { type: string, format: binary }, description: 'Ảnh bằng chứng jpg/png ≤ 5MB, bắt buộc ≥ 1 ảnh khi DONE' }
+ */
+router.patch(
+  '/:id/status',
+  authenticate,
+  authorize('STAFF:TECHNICIAN'),
+  uploadImages('images', 5),
+  validate({ params: idParams, body: statusBody }),
+  async (req, res) =>
+    ok(
+      res,
+      await service.updateWorkOrderStatus(req.user, req.params.id, req.body, req.files),
+      req.body.status === WORK_ORDER_STATUS.DONE ? 'Đã hoàn thành work order' : 'Đã bắt đầu xử lý',
+    ),
 );
 
 export default router;

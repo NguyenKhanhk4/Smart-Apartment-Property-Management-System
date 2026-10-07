@@ -1,16 +1,25 @@
 // MongoDB trong RAM cho test (mongodb-memory-server) — KHÔNG BAO GIỜ kết nối MONGODB_URI thật.
 // Dùng: beforeAll(connectTestDB); afterEach(clearTestDB); afterAll(closeTestDB);
+// Test cần MongoDB transaction: beforeAll(() => connectTestDB({ replSet: true }), 120000);
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet, MongoMemoryServer } from 'mongodb-memory-server';
 
 let mongo = null;
 
+/**
+ * Không tham số: MongoDB standalone (như cũ). `{ replSet: true }`: replica set 1 node, hỗ trợ transaction.
+ * Không khai báo tham số: `beforeAll(connectTestDB)` truyền thẳng hàm này, vitest sẽ coi tham số đầu là fixture (kể cả `...args`).
+ */
 export async function connectTestDB() {
+  const options = arguments[0]?.replSet === true ? arguments[0] : undefined;
   if (process.env.NODE_ENV !== 'test') {
     throw new Error('Test helper chỉ chạy khi NODE_ENV=test');
   }
   if (mongoose.connection.readyState === 1) return mongoose.connection;
-  mongo = await MongoMemoryServer.create();
+  mongo =
+    options?.replSet === true
+      ? await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } })
+      : await MongoMemoryServer.create();
   const uri = mongo.getUri();
   if (!/^mongodb:\/\/(127\.0\.0\.1|localhost)/.test(uri)) {
     throw new Error(`URI test không phải máy cục bộ: ${uri}`);

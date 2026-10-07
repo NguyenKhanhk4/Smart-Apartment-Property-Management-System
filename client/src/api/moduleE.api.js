@@ -29,7 +29,14 @@ export const ticketApi = {
   assignees: () => http.get('/tickets/assignees'),
   assign: (id, body) => http.patch(`/tickets/${id}/assign`, body),
   reject: (id, reason) => http.patch(`/tickets/${id}/reject`, { reason }),
-  progress: (id, body) => http.patch(`/tickets/${id}/progress`, body),
+  /** files: ảnh kết quả, bắt buộc khi status = WAITING_CONFIRM (gửi multipart) */
+  progress: (id, body, files = []) => {
+    if (!files.length) return http.patch(`/tickets/${id}/progress`, body);
+    const form = new FormData();
+    Object.entries(body).forEach(([k, v]) => v != null && v !== '' && form.append(k, v));
+    files.forEach((f) => form.append('images', f));
+    return http.patch(`/tickets/${id}/progress`, form);
+  },
   confirm: (id, body) => http.patch(`/tickets/${id}/confirm`, body),
   runJob: (job) => http.post(`/tickets/jobs/${job}/run`),
 };

@@ -76,7 +76,7 @@ export async function generateMaintenanceWorkOrders(now = new Date()) {
         type: NOTIFICATION_TYPES.MAINTENANCE,
         title: 'Có tài sản đến hạn bảo trì',
         content: `Hệ thống vừa tạo ${created} work order bảo trì định kỳ cần phân công kỹ thuật viên.`,
-        link: '/app/assets',
+        link: '/app/work-orders',
       });
     } catch (err) {
       console.error('[UC-D02] Lỗi gửi thông báo cho Trưởng BQL:', err);
