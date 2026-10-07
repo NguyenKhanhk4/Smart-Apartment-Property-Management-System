@@ -55,6 +55,7 @@ export const NOTIFICATION_TYPES = {
   DEBT_REMINDER: { label: 'Nhắc nợ', color: 'red' },
   TICKET: { label: 'Phản ánh', color: 'orange' },
   BOOKING: { label: 'Tiện ích', color: 'cyan' },
+  MAINTENANCE: { label: 'Bảo trì', color: 'volcano' },
   FUND_APPROVAL: { label: 'Quỹ bảo trì', color: 'purple' },
   INVOICE_ADJUSTMENT: { label: 'Điều chỉnh HĐ', color: 'gold' },
   ANNOUNCEMENT: { label: 'Bảng tin', color: 'blue' },

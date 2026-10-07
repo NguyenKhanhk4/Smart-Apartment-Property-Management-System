@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { App, Button, Card, DatePicker, Flex, Form, Input, InputNumber, Modal, Popconfirm, Select, Switch, Table, Tag, Typography } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, ScanOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { assetApi } from '../../api/moduleD.api';
+import { assetApi, workOrderApi } from '../../api/moduleD.api';
 import { lookupApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
@@ -91,6 +91,14 @@ export default function AssetsPage() {
   const { data = [], pagination, loading, reload } = useApi(() => assetApi.list(filters), [filters]);
   const { data: buildings = [] } = useApi(() => lookupApi.buildings(), []);
 
+  const [runScan, scanning] = useAction(() => workOrderApi.runGenerate(), {
+    success: (res) =>
+      res.data?.status === 'FAILED'
+        ? undefined
+        : `Đã tạo ${res.data?.affectedCount ?? 0} work order`,
+    onDone: (res) => (res.data?.status === 'FAILED' ? message.error(res.data.errorMessage || 'Quét tài sản đến hạn thất bại') : reload()),
+  });
+
   const toggle = async (asset) => {
     try {
       await assetApi.setStatus(asset._id, !asset.isActive);
@@ -162,7 +170,22 @@ export default function AssetsPage() {
       title="Tài sản chung"
       subtitle="Thiết bị dùng chung của tòa nhà và lịch bảo trì định kỳ."
       breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Tài sản' }]}
-      extra={canEdit && <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditing({})}>Thêm tài sản</Button>}
+      extra={
+        canEdit && (
+          <>
+            <Popconfirm
+              title="Quét tài sản đến hạn?"
+              description="Tạo work order bảo trì định kỳ cho các tài sản đã đến hạn mà chưa có work order đang mở."
+              onConfirm={() => runScan().catch(() => {})}
+              okText="Quét"
+              cancelText="Hủy"
+            >
+              <Button icon={<ScanOutlined />} loading={scanning}>Quét tài sản đến hạn</Button>
+            </Popconfirm>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setEditing({})}>Thêm tài sản</Button>
+          </>
+        )
+      }
     />
     <Card>
       <Flex gap={8} wrap style={{ marginBottom: 12 }}>

@@ -171,5 +171,12 @@ export async function setAssetStatus(id, isActive) {
     throw new ApiError('ASSET_HAS_OPEN_WORKORDER');
   }
   asset.isActive = isActive;
-  return asset.save();
+  await asset.save();
+  // Job UC-D02 có thể vừa tạo work order xen giữa lúc kiểm tra và lúc ghi → kiểm tra lại sau khi ghi.
+  // Job cũng đọc lại isActive sau khi tạo, nên ít nhất một bên thấy bên kia (không còn tài sản ngừng mà có WO mở).
+  if (!isActive && (await WorkOrder.exists({ assetId: id, status: { $in: OPEN_WO_STATUSES } }))) {
+    await Asset.updateOne({ _id: id }, { isActive: true });
+    throw new ApiError('ASSET_HAS_OPEN_WORKORDER');
+  }
+  return asset;
 }

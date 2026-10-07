@@ -11,6 +11,7 @@ import notificationRoutes from './modules/notifications/notifications.routes.js'
 import reportRoutes from './modules/reports/reports.routes.js';
 import lookupRoutes from './modules/lookups/lookups.routes.js';
 import assetRoutes from './modules/assets/assets.routes.js';
+import workOrderRoutes from './modules/workOrders/workOrders.routes.js';
 import devAuthRoutes from './modules/devAuth/devAuth.routes.js';
 
 const router = Router();
@@ -46,6 +47,7 @@ router.use('/lookups', lookupRoutes);
 
 // Module D — Thanh Bình (Tài sản & bảo trì, Tiện ích & đặt chỗ)
 router.use('/assets', assetRoutes);
+router.use('/work-orders', workOrderRoutes);
 
 // Chỉ môi trường dev: đăng nhập nhanh bằng tài khoản seed (xem modules/devAuth). Xóa khi Module A có /auth/login.
 if (env.isDev) router.use('/dev', devAuthRoutes);

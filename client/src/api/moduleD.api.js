@@ -11,3 +11,9 @@ export const assetApi = {
   update: (id, body) => http.put(`/assets/${id}`, body),
   setStatus: (id, isActive) => http.patch(`/assets/${id}/status`, { isActive }),
 };
+
+// ===== UC-D02: Work order =====
+export const workOrderApi = {
+  // Chạy thủ công cron quét tài sản đến hạn; trả bản ghi cron_runs (affectedCount = số work order mới)
+  runGenerate: () => http.post('/work-orders/jobs/generate/run'),
+};
