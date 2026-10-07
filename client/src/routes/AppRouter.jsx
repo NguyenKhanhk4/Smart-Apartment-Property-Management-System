@@ -5,7 +5,7 @@ import { ADMIN_AREA_ROLES, RESIDENT_AREA_ROLES } from './roleHome';
 import AuthLayout from '../layouts/AuthLayout';
 import AdminLayout from '../layouts/AdminLayout';
 import ResidentLayout from '../layouts/ResidentLayout';
-import PlaceholderPage from '../components/PlaceholderPage';
+import LoginPage from '../features/auth/LoginPage';
 import NotFoundPage from '../features/errors/NotFoundPage';
 
 // Mỗi mục trong config/menu.js thành một route con, có kiểm tra quyền riêng
@@ -30,12 +30,8 @@ const router = createBrowserRouter([
     children: [
       {
         path: '/login',
-        element: (
-          <PlaceholderPage
-            title="Đăng nhập"
-            description="Module 1 (thành viên A) triển khai trang đăng nhập tại đây, sau đó gọi startSession() của useAuth."
-          />
-        ),
+        // Giao diện chung; Module A (thành viên A) làm API POST /auth/login
+        element: <LoginPage />,
       },
     ],
   },

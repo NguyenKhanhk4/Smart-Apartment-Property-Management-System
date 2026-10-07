@@ -41,7 +41,7 @@ export default function HomePage() {
               onClick={() => navigate(`/${area}/${m.path}`)}
               style={{ flex: '1 1 150px', maxWidth: 220, textAlign: 'center' }}
             >
-              {m.icon && <div style={{ fontSize: 24, color: '#1677ff' }}>{createElement(m.icon)}</div>}
+              {m.icon && <div style={{ fontSize: 24, color: '#1E3A5F' }}>{createElement(m.icon)}</div>}
               <Typography.Text>{m.label}</Typography.Text>
             </Card>
           ))}

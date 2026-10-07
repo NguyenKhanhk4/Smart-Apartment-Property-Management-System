@@ -23,12 +23,25 @@ import {
 //     roles: ['ADMIN', 'MANAGER'],      // spec như authorize() backend; bỏ trống = ai đăng nhập cũng xem được
 //     component: lazy(() => import('../features/buildings/BuildingListPage')),
 //     hideInMenu: true,                 // (tuỳ chọn) có route nhưng không hiện trên menu, vd trang chi tiết
+//     group: 'Tài chính',               // (tuỳ chọn, chỉ /app) nhóm hiển thị trên sidebar — dùng 1 trong MENU_GROUPS
 //   }
+
+// Thứ tự các nhóm trên sidebar /app. Mục không khai báo group rơi vào 'Tổng quan'.
+export const MENU_GROUPS = [
+  'Tổng quan',
+  'Cư dân & dịch vụ',
+  'Tài chính',
+  'Kỹ thuật & vận hành',
+  'Tiện ích & khách',
+  'Báo cáo',
+  'Cấu hình',
+];
 
 const HomePage = lazy(() => import('../features/home/HomePage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
+const AssetDetailPage = lazy(() => import('../features/assets/AssetDetailPage'));
 
 // ===== Module E (Phạm Lượng) =====
 const TicketsPage = lazy(() => import('../features/tickets/TicketsPage'));
@@ -51,6 +64,7 @@ export const adminMenu = [
   // Ticket (UC-E01..E04)
   {
     key: 'tickets',
+    group: 'Cư dân & dịch vụ',
     label: 'Phản ánh',
     icon: ToolOutlined,
     path: 'tickets',
@@ -67,6 +81,7 @@ export const adminMenu = [
   },
   {
     key: 'complaint-settings',
+    group: 'Cấu hình',
     label: 'Danh mục & tham số',
     icon: SettingOutlined,
     path: 'complaint-settings',
@@ -76,15 +91,25 @@ export const adminMenu = [
   // Tài sản & bảo trì (UC-D01)
   {
     key: 'assets',
+    group: 'Kỹ thuật & vận hành',
     label: 'Tài sản',
     icon: ClusterOutlined,
     path: 'assets',
     roles: ['MANAGER', 'STAFF:TECHNICIAN'],
     component: AssetsPage,
   },
+  {
+    key: 'asset-detail',
+    label: 'Chi tiết tài sản',
+    path: 'assets/:id',
+    roles: ['MANAGER', 'STAFF:TECHNICIAN'],
+    component: AssetDetailPage,
+    hideInMenu: true,
+  },
   // Sổ khách (UC-E08)
   {
     key: 'guests',
+    group: 'Tiện ích & khách',
     label: 'Sổ khách',
     icon: UsergroupAddOutlined,
     path: 'guests',
@@ -94,6 +119,7 @@ export const adminMenu = [
   // Bảng tin & thông báo (UC-E09)
   {
     key: 'announcements',
+    group: 'Cư dân & dịch vụ',
     label: 'Bảng tin',
     icon: NotificationOutlined,
     path: 'announcements',
@@ -110,6 +136,7 @@ export const adminMenu = [
   // Báo cáo (UC-E10..E14)
   {
     key: 'report-billing',
+    group: 'Báo cáo',
     label: 'Báo cáo thu phí',
     icon: BarChartOutlined,
     path: 'report-billing',
@@ -118,6 +145,7 @@ export const adminMenu = [
   },
   {
     key: 'report-fund',
+    group: 'Báo cáo',
     label: 'Dashboard quỹ',
     icon: FundOutlined,
     path: 'report-fund',
@@ -126,6 +154,7 @@ export const adminMenu = [
   },
   {
     key: 'report-operations',
+    group: 'Báo cáo',
     label: 'Dashboard vận hành',
     icon: DashboardOutlined,
     path: 'report-operations',
@@ -134,6 +163,7 @@ export const adminMenu = [
   },
   {
     key: 'report-amenity',
+    group: 'Báo cáo',
     label: 'Thống kê tiện ích',
     icon: PieChartOutlined,
     path: 'report-amenity',
