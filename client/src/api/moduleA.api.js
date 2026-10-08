@@ -17,3 +17,21 @@ export const usersApi = {
   updateInternal: (id, body) => http.patch(`/users/internal/${id}`, body),
   setStatus: (id, isActive) => http.patch(`/users/${id}/status`, { isActive }),
 };
+
+// ===== UC-A05: Tòa nhà & Căn hộ =====
+export const buildingsApi = {
+  list: () => http.get('/buildings'),
+  getById: (id) => http.get(`/buildings/${id}`),
+  create: (body) => http.post('/buildings', body),
+  update: (id, body) => http.put(`/buildings/${id}`, body),
+  delete: (id) => http.delete(`/buildings/${id}`),
+};
+
+export const apartmentsApi = {
+  list: (params) => http.get('/apartments', { params }),
+  getById: (id) => http.get(`/apartments/${id}`),
+  create: (body) => http.post('/apartments', body),
+  update: (id, body) => http.put(`/apartments/${id}`, body),
+  delete: (id) => http.delete(`/apartments/${id}`),
+};
+

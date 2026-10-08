@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import {
   AppstoreOutlined,
+  BankOutlined,
   CoffeeOutlined,
   BarChartOutlined,
   BellOutlined,
@@ -49,6 +50,7 @@ const HomePage = lazy(() => import('../features/home/HomePage'));
 // ===== Module A (Vũ Việt) =====
 const ProfilePage = lazy(() => import('../features/profile/ProfilePage'));
 const InternalAccountsPage = lazy(() => import('../features/users/InternalAccountsPage'));
+const BuildingsPage = lazy(() => import('../features/buildings/BuildingsPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -232,6 +234,15 @@ export const adminMenu = [
   },
 
   // ===== Module A (Vũ Việt) =====
+  {
+    key: 'buildings',
+    group: 'Cấu hình',
+    label: 'Tòa nhà & Căn hộ',
+    icon: BankOutlined,
+    path: 'buildings',
+    roles: ['ADMIN', 'MANAGER', 'STAFF:RECEPTIONIST'],
+    component: BuildingsPage,
+  },
   {
     key: 'internal-accounts',
     group: 'Cấu hình',

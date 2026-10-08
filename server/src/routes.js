@@ -19,6 +19,8 @@ import bookingRoutes from './modules/bookings/bookings.routes.js';
 import devAuthRoutes from './modules/devAuth/devAuth.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import userRoutes from './modules/users/users.routes.js';
+import buildingRoutes from './modules/buildings/buildings.routes.js';
+import apartmentRoutes from './modules/apartments/apartments.routes.js';
 
 const router = Router();
 
@@ -62,6 +64,8 @@ router.use('/bookings', bookingRoutes);
 // Module A — Vũ Việt (Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện)
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
+router.use('/buildings', buildingRoutes);
+router.use('/apartments', apartmentRoutes);
 
 // Chỉ phục vụ đăng nhập nhanh khi dev (xem modules/devAuth).
 if (env.isDev) router.use('/dev', devAuthRoutes);
