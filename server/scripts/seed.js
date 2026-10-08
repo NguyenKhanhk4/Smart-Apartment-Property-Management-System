@@ -417,7 +417,7 @@ for (let i = 0; i < 160; i += 1) {
   usedSlots.add(slotKey);
   const toMin = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
   bookings.push({
-    amenityId: a._id, apartmentId: apt._id, requestedBy: residentUsers[apartments.indexOf(apt)]?._id,
+    amenityId: a._id, apartmentId: apt._id, requestedBy: residentUsers[apartments.indexOf(apt)]?._id, bookedBy: residentUsers[apartments.indexOf(apt)]?._id,
     date, slotStart, slotEnd, fee: a.feePerBooking, status,
     startAt: new Date(date.getTime() + toMin(slotStart) * 60000),
     endAt: new Date(date.getTime() + toMin(slotEnd) * 60000),

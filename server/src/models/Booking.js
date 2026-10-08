@@ -6,7 +6,10 @@ const bookingSchema = new Schema(
   {
     amenityId: { type: ObjectId, ref: 'Amenity', required: true },
     apartmentId: { type: ObjectId, ref: 'Apartment', required: true },
-    requestedBy: { type: ObjectId, ref: 'User' },
+    requestedBy: { type: ObjectId, ref: 'User' }, // dữ liệu cũ (luồng duyệt / seed); booking mới dùng bookedBy
+    bookedBy: { type: ObjectId, ref: 'User' }, // người đặt (UC-D06); phí > 0 chỉ khi là chủ hộ hoặc được bật canIncurCharges
+    passId: { type: ObjectId, ref: 'AmenityPass', default: null }, // gói tháng đã dùng để đặt phí 0 (UC-D09)
+    createdByStaff: { type: ObjectId, ref: 'User', default: null }, // Lễ tân đặt hộ tại quầy (UC-D07, bước 10)
     date: { type: Date, required: true }, // 00:00 ngày đặt (giờ VN)
     slotStart: { type: String, required: true }, // HH:mm
     slotEnd: { type: String, required: true },
