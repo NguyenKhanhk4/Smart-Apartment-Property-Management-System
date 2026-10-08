@@ -127,6 +127,11 @@ export const RELATION_TYPES = {
   FAMILY_MEMBER: { label: 'Thành viên', color: 'default' },
 };
 
+export const AMENITY_PASS_STATUS = {
+  ACTIVE: { label: 'Đang hiệu lực', color: 'green' },
+  CANCELLED: { label: 'Đã hủy', color: 'default' },
+};
+
 export const ASSET_CATEGORIES = {
   ELEVATOR: { label: 'Thang máy', color: 'blue' },
   PUMP: { label: 'Máy bơm', color: 'cyan' },

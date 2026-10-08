@@ -51,6 +51,15 @@ export const ERROR_CODES = Object.freeze({
   },
   MEMBER_CODE_NOT_FOUND: { status: 404, message: 'Không tìm thấy mã cư dân hoặc mã đã hết hiệu lực' },
   HOUSEHOLD_HEAD_REQUIRED: { status: 403, message: 'Chỉ chủ hộ mới thực hiện được thao tác này' },
+  PASS_NOT_REQUIRED: { status: 400, message: 'Trẻ nhỏ được miễn phí nên không cần mua gói tháng' },
+  PASS_NOT_SOLD: { status: 400, message: 'Tiện ích này không bán gói tháng' },
+  PASS_ALREADY_EXISTS: { status: 409, message: 'Người này đã có gói tháng của tiện ích này trong tháng đã chọn' },
+  PASS_ALREADY_BILLED: { status: 409, message: 'Gói tháng đã được gộp vào hóa đơn, không thể hủy' },
+  PASS_ALREADY_CANCELLED: { status: 409, message: 'Gói tháng đã được hủy trước đó' },
+  PASS_CANCEL_NOT_ALLOWED: {
+    status: 409,
+    message: 'Chủ hộ chỉ hủy được gói của tháng sau; gói của tháng này vui lòng liên hệ Trưởng BQL',
+  },
   SERVER_ERROR: { status: 500, message: 'Lỗi hệ thống, vui lòng thử lại sau' },
 
   // Bổ sung ngoài SRS: lỗi trùng unique index chưa được module ánh xạ sang mã riêng

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Alert, App, Avatar, Button, Card, DatePicker, Empty, Flex, Modal, Result, Segmented, Spin, Switch, Tag, Typography } from 'antd';
-import { ArrowLeftOutlined, IdcardOutlined, UserOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, IdcardOutlined, TagsOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { memberCodeApi } from '../../api/moduleD.api';
 import EnumTag from '../../components/EnumTag';
@@ -78,6 +78,12 @@ export default function FamilyPage() {
               message="Thêm hoặc xóa thành viên do Lễ tân thực hiện tại quầy."
               description="Ngày sinh dùng để tính giá vé: trẻ nhỏ được miễn phí, trẻ em có giá riêng. Chưa có ngày sinh được tính như người lớn; Lễ tân có thể đối chiếu lại với giấy tờ."
             />
+            <Button
+              icon={<TagsOutlined />}
+              onClick={() => navigate(`/r/my-code/passes?apartmentId=${apartmentId}`, { viewTransition: true })}
+            >
+              Mua / quản lý gói tháng
+            </Button>
             {data && !data.members.length && <Empty description="Chưa có thành viên" />}
             {data?.members.map((m) => (
               <Card key={m.userId} size="small">
@@ -113,6 +119,21 @@ export default function FamilyPage() {
                       disabledDate={(d) => d.isAfter(dayjs(), 'day')}
                       onChange={(d) => update(m, { dateOfBirth: d ? d.format('YYYY-MM-DD') : null })}
                     />
+                  </Flex>
+
+                  <Flex justify="space-between" align="center" gap={8} wrap>
+                    <Typography.Text>Gói tháng</Typography.Text>
+                    <Flex gap={4} wrap justify="end">
+                      {m.passes.length ? (
+                        m.passes.map((p) => (
+                          <Tag key={p._id} color={p.isCurrent ? 'green' : 'blue'}>
+                            {p.amenityName} · {p.month.slice(5)}/{p.month.slice(0, 4)}
+                          </Tag>
+                        ))
+                      ) : (
+                        <Typography.Text type="secondary">Chưa có</Typography.Text>
+                      )}
+                    </Flex>
                   </Flex>
 
                   <Flex justify="space-between" align="center" gap={8}>

@@ -61,3 +61,17 @@ export const memberCodeApi = {
   /** Lễ tân sửa ngày sinh khi đối chiếu giấy tờ */
   setDateOfBirth: (userId, dateOfBirth) => http.patch(`/member-codes/${userId}/date-of-birth`, { dateOfBirth }),
 };
+
+// ===== UC-D09: Gói tháng tiện ích =====
+export const amenityPassApi = {
+  /** Cư dân: chủ hộ thấy cả hộ, thành viên thấy gói của mình. params: { apartmentId?, month?, status? } */
+  mine: (params) => http.get('/amenity-passes/mine', { params }),
+  /** Chủ hộ: tiện ích có bán gói + giá theo nhóm tuổi của từng thành viên (params: { apartmentId?, month? }) */
+  options: (params) => http.get('/amenity-passes/options', { params }),
+  /** body: { apartmentId, userId, amenityId, month: 'YYYY-MM' } */
+  purchase: (body) => http.post('/amenity-passes', body),
+  /** Chủ hộ: gói tháng sau (không cần lý do). Trưởng BQL: gói bất kỳ chưa gộp hóa đơn, bắt buộc reason */
+  cancel: (id, reason) => http.patch(`/amenity-passes/${id}/cancel`, reason ? { reason } : {}),
+  /** Trưởng BQL / Lễ tân. params: { page, limit, sort, month, amenityId, apartmentId, userId, status, invoiced } */
+  list: (params) => http.get('/amenity-passes', { params }),
+};
