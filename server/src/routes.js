@@ -18,6 +18,7 @@ import amenityPassRoutes from './modules/amenityPasses/amenityPasses.routes.js';
 import bookingRoutes from './modules/bookings/bookings.routes.js';
 import devAuthRoutes from './modules/devAuth/devAuth.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
+import userRoutes from './modules/users/users.routes.js';
 
 const router = Router();
 
@@ -60,6 +61,7 @@ router.use('/bookings', bookingRoutes);
 
 // Module A — Vũ Việt (Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện)
 router.use('/auth', authRoutes);
+router.use('/users', userRoutes);
 
 // Chỉ phục vụ đăng nhập nhanh khi dev (xem modules/devAuth).
 if (env.isDev) router.use('/dev', devAuthRoutes);

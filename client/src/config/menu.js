@@ -15,8 +15,10 @@ import {
   PieChartOutlined,
   ScheduleOutlined,
   SettingOutlined,
+  TeamOutlined,
   ToolOutlined,
   UsergroupAddOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
 
 // Route + menu sinh ra từ đây, KHÔNG sửa file router. Thêm trang mới = thêm một phần tử:
@@ -43,6 +45,10 @@ export const MENU_GROUPS = [
 ];
 
 const HomePage = lazy(() => import('../features/home/HomePage'));
+
+// ===== Module A (Vũ Việt) =====
+const ProfilePage = lazy(() => import('../features/profile/ProfilePage'));
+const InternalAccountsPage = lazy(() => import('../features/users/InternalAccountsPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -224,6 +230,26 @@ export const adminMenu = [
     roles: ['MANAGER', 'ACCOUNTANT'],
     component: AmenityUsagePage,
   },
+
+  // ===== Module A (Vũ Việt) =====
+  {
+    key: 'internal-accounts',
+    group: 'Cấu hình',
+    label: 'Tài khoản nội bộ',
+    icon: TeamOutlined,
+    path: 'internal-accounts',
+    roles: ['ADMIN'],
+    component: InternalAccountsPage,
+  },
+  {
+    key: 'profile',
+    group: 'Tổng quan',
+    label: 'Hồ sơ cá nhân',
+    icon: UserOutlined,
+    path: 'profile',
+    component: ProfilePage,
+    hideInMenu: true,
+  },
 ];
 
 // Giao diện cư dân (/r/*) — hiện ở thanh điều hướng dưới cùng, nên giữ tối đa 5 mục.
@@ -261,6 +287,15 @@ export const residentMenu = [
     icon: BellOutlined,
     path: 'notifications',
     component: NotificationsPage,
+    hideInMenu: true,
+  },
+  // ===== Module A (Vũ Việt) =====
+  {
+    key: 'profile',
+    label: 'Hồ sơ cá nhân',
+    icon: UserOutlined,
+    path: 'profile',
+    component: ProfilePage,
     hideInMenu: true,
   },
 ];
