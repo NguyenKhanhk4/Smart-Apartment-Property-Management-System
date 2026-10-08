@@ -6,6 +6,7 @@ import AuthLayout from '../layouts/AuthLayout';
 import AdminLayout from '../layouts/AdminLayout';
 import ResidentLayout from '../layouts/ResidentLayout';
 import LoginPage from '../features/auth/LoginPage';
+import RegisterPage from '../features/auth/RegisterPage';
 import NotFoundPage from '../features/errors/NotFoundPage';
 
 // Mỗi mục trong config/menu.js thành một route con, có kiểm tra quyền riêng
@@ -30,8 +31,11 @@ const router = createBrowserRouter([
     children: [
       {
         path: '/login',
-        // Giao diện chung; Module A (thành viên A) làm API POST /auth/login
         element: <LoginPage />,
+      },
+      {
+        path: '/register',
+        element: <RegisterPage />,
       },
     ],
   },

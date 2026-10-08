@@ -1,17 +1,43 @@
+import { useNavigate } from 'react-router';
 import { Avatar, Dropdown } from 'antd';
-import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { CarOutlined, HomeOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import { useAuth } from '../hooks/useAuth';
 import { roleLabelOf } from '../constants/enums';
 
-// Avatar + tên + chức danh ở góc phải header; bấm để đăng xuất
+// Avatar + tên + chức danh ở góc phải header; xem hồ sơ và đăng xuất
 export default function UserMenu({ compact = false }) {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const role = roleLabelOf(user);
 
-  const items = [{ key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất', danger: true }];
+  const profilePath = user?.role === 'RESIDENT' ? '/r/profile' : '/app/profile';
+
+  const items = [
+    { key: 'profile', icon: <UserOutlined />, label: 'Hồ sơ cá nhân' },
+    ...(user?.role === 'RESIDENT'
+      ? [
+          { key: 'my-apartment', icon: <HomeOutlined />, label: 'Căn hộ của tôi' },
+          { key: 'my-vehicles', icon: <CarOutlined />, label: 'Xe của tôi' },
+        ]
+      : []),
+    { type: 'divider' },
+    { key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất', danger: true },
+  ];
+
+  const handleMenuClick = ({ key }) => {
+    if (key === 'profile') {
+      navigate(profilePath, { viewTransition: true });
+    } else if (key === 'my-apartment') {
+      navigate('/r/my-apartment', { viewTransition: true });
+    } else if (key === 'my-vehicles') {
+      navigate('/r/my-vehicles', { viewTransition: true });
+    } else if (key === 'logout') {
+      logout();
+    }
+  };
 
   return (
-    <Dropdown menu={{ items, onClick: ({ key }) => key === 'logout' && logout() }} trigger={['click']}>
+    <Dropdown menu={{ items, onClick: handleMenuClick }} trigger={['click']}>
       <button type="button" className="flex items-center gap-2.5 pl-1 cursor-pointer bg-transparent border-0">
         <Avatar size={32} src={user.avatarUrl} icon={<UserOutlined />} className="border border-gold/40" />
         {!compact && (

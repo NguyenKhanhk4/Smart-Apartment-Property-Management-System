@@ -18,6 +18,7 @@ const contractSchema = new Schema(
       default: CONTRACT_STATUS.ACTIVE,
     },
     fileUrl: { type: String, default: null },
+    terminatedAt: { type: Date, default: null }, // UC-A06.3: thời điểm chấm dứt sớm
     createdBy: { type: ObjectId, ref: 'User' },
   },
   schemaOptions('contracts'),

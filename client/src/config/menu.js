@@ -1,12 +1,15 @@
 import { lazy } from 'react';
 import {
   AppstoreOutlined,
+  BankOutlined,
+  CarOutlined,
   CoffeeOutlined,
   BarChartOutlined,
   BellOutlined,
   CheckSquareOutlined,
   ClusterOutlined,
   DashboardOutlined,
+  FileTextOutlined,
   FundOutlined,
   HomeOutlined,
   NotificationOutlined,
@@ -15,8 +18,10 @@ import {
   PieChartOutlined,
   ScheduleOutlined,
   SettingOutlined,
+  TeamOutlined,
   ToolOutlined,
   UsergroupAddOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
 
 // Route + menu sinh ra từ đây, KHÔNG sửa file router. Thêm trang mới = thêm một phần tử:
@@ -43,6 +48,17 @@ export const MENU_GROUPS = [
 ];
 
 const HomePage = lazy(() => import('../features/home/HomePage'));
+
+// ===== Module A (Vũ Việt) =====
+const ProfilePage = lazy(() => import('../features/profile/ProfilePage'));
+const InternalAccountsPage = lazy(() => import('../features/users/InternalAccountsPage'));
+const BuildingsPage = lazy(() => import('../features/buildings/BuildingsPage'));
+const ContractsPage = lazy(() => import('../features/contracts/ContractsPage'));
+const ApartmentDetailPage = lazy(() => import('../features/apartments/ApartmentDetailPage'));
+const MyApartmentPage = lazy(() => import('../features/residents/MyApartmentPage'));
+const VehicleRequestsPage = lazy(() => import('../features/vehicles/VehicleRequestsPage'));
+const MyVehiclesPage = lazy(() => import('../features/vehicles/MyVehiclesPage'));
+const SystemDashboardPage = lazy(() => import('../features/adminDashboard/SystemDashboardPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -224,6 +240,70 @@ export const adminMenu = [
     roles: ['MANAGER', 'ACCOUNTANT'],
     component: AmenityUsagePage,
   },
+
+  // ===== Module A (Vũ Việt) =====
+  {
+    key: 'contracts',
+    group: 'Cư dân & dịch vụ',
+    label: 'Hợp đồng',
+    icon: FileTextOutlined,
+    path: 'contracts',
+    roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
+    component: ContractsPage,
+  },
+  {
+    key: 'vehicle-requests',
+    group: 'Cư dân & dịch vụ',
+    label: 'Yêu cầu gửi xe',
+    icon: CarOutlined,
+    path: 'vehicle-requests',
+    roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
+    component: VehicleRequestsPage,
+  },
+  {
+    key: 'buildings',
+    group: 'Cấu hình',
+    label: 'Tòa nhà & Căn hộ',
+    icon: BankOutlined,
+    path: 'buildings',
+    roles: ['ADMIN', 'MANAGER', 'STAFF:RECEPTIONIST'],
+    component: BuildingsPage,
+  },
+  {
+    key: 'internal-accounts',
+    group: 'Cấu hình',
+    label: 'Tài khoản nội bộ',
+    icon: TeamOutlined,
+    path: 'internal-accounts',
+    roles: ['ADMIN'],
+    component: InternalAccountsPage,
+  },
+  {
+    key: 'apartment-detail',
+    label: 'Chi tiết căn hộ',
+    path: 'apartments/:id',
+    roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
+    component: ApartmentDetailPage,
+    hideInMenu: true,
+  },
+  {
+    key: 'profile',
+    group: 'Tổng quan',
+    label: 'Hồ sơ cá nhân',
+    icon: UserOutlined,
+    path: 'profile',
+    component: ProfilePage,
+    hideInMenu: true,
+  },
+  {
+    key: 'system-dashboard',
+    group: 'Tổng quan',
+    label: 'Dashboard hệ thống',
+    icon: DashboardOutlined,
+    path: 'system-dashboard',
+    roles: ['ADMIN'],
+    component: SystemDashboardPage,
+  },
 ];
 
 // Giao diện cư dân (/r/*) — hiện ở thanh điều hướng dưới cùng, nên giữ tối đa 5 mục.
@@ -261,6 +341,31 @@ export const residentMenu = [
     icon: BellOutlined,
     path: 'notifications',
     component: NotificationsPage,
+    hideInMenu: true,
+  },
+  // ===== Module A (Vũ Việt) =====
+  {
+    key: 'my-apartment',
+    label: 'Căn hộ của tôi',
+    icon: HomeOutlined,
+    path: 'my-apartment',
+    component: MyApartmentPage,
+    hideInMenu: true,
+  },
+  {
+    key: 'my-vehicles',
+    label: 'Xe của tôi',
+    icon: CarOutlined,
+    path: 'my-vehicles',
+    component: MyVehiclesPage,
+    hideInMenu: true,
+  },
+  {
+    key: 'profile',
+    label: 'Hồ sơ cá nhân',
+    icon: UserOutlined,
+    path: 'profile',
+    component: ProfilePage,
     hideInMenu: true,
   },
 ];

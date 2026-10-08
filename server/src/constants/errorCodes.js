@@ -76,4 +76,9 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Dữ liệu vừa được cập nhật bởi thao tác khác, vui lòng tải lại và thử lại',
   },
+  // Module A (Vũ Việt): trạng thái nghiệp vụ xung đột (hợp đồng, xe...)
+  STATUS_CONFLICT: {
+    status: 409,
+    message: 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại',
+  },
 });

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate, Link } from 'react-router';
 import { Alert, Button, Form, Input } from 'antd';
 import { ArrowRightOutlined, LockOutlined, ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
 import { authApi } from '../../api/auth.api';
@@ -8,19 +8,16 @@ import { useApi } from '../../hooks/useApi';
 import { roleLabelOf } from '../../constants/enums';
 import { roleHome } from '../../routes/roleHome';
 
-// Dev: Module A chưa xong nên bấm "Đăng nhập" là vào luôn (không kiểm tra mật khẩu).
-// Để trống email → vào bằng DEV_DEFAULT_EMAIL; nhập email seed khác → vào bằng tài khoản đó.
-// Khi Module A có POST /auth/login, đặt DEV_SKIP_LOGIN = false để dùng đăng nhập thật.
-const DEV_SKIP_LOGIN = import.meta.env.DEV;
-const DEV_DEFAULT_EMAIL = 'manager@sapms.vn';
-
-// Trang đăng nhập (giao diện chung). Gọi POST /auth/login của Module A.
-// Khi chạy dev, có thêm "Đăng nhập nhanh" bằng tài khoản seed để test giao diện trước khi Module A xong.
+// Trang đăng nhập (Module A — Vũ Việt). Gọi POST /auth/login thật.
+// Khi chạy dev, có thêm "Đăng nhập nhanh" bằng tài khoản seed để tiện kiểm thử.
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { startSession } = useAuth();
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const registeredSuccess = location.state?.registered;
 
   const enter = (session) => {
     startSession(session);
@@ -31,12 +28,13 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const { data } = DEV_SKIP_LOGIN
-        ? await authApi.devLogin(values.email?.trim() || DEV_DEFAULT_EMAIL)
-        : await authApi.login(values);
+      const { data } = await authApi.login({
+        email: values.email?.trim(),
+        password: values.password,
+      });
       enter(data);
     } catch (e) {
-      setError(e.status === 404 ? 'Chức năng đăng nhập (Module A) chưa sẵn sàng. Dùng "Đăng nhập nhanh" bên dưới khi đang dev.' : e.message);
+      setError(e.message || 'Đăng nhập không thành công');
     } finally {
       setLoading(false);
     }
@@ -46,21 +44,49 @@ export default function LoginPage() {
     <>
       <h2 className="m-0 text-2xl font-semibold tracking-tight text-ink">Đăng nhập</h2>
       <div className="w-8 h-0.5 bg-gold mt-2 mb-2" />
-      <p className="m-0 mb-6 text-[13px] text-ink-2">Dùng tài khoản do Ban quản lý cấp.</p>
+      <p className="m-0 mb-6 text-[13px] text-ink-2">Nhập thông tin tài khoản để truy cập hệ thống.</p>
+
+      {registeredSuccess && (
+        <Alert
+          type="success"
+          showIcon
+          message="Đăng ký tài khoản thành công! Vui lòng đăng nhập."
+          className="mb-4"
+          closable
+        />
+      )}
 
       {error && <Alert type="error" showIcon message={error} className="mb-4" closable onClose={() => setError(null)} />}
 
       <Form layout="vertical" requiredMark={false} onFinish={submit} disabled={loading}>
-        <Form.Item name="email" label="Email" rules={[{ required: !DEV_SKIP_LOGIN, type: 'email', message: 'Nhập email hợp lệ' }]}>
-          <Input size="large" prefix={<UserOutlined className="text-ink-3" />} placeholder="vd: manager@sapms.vn" autoComplete="username" />
+        <Form.Item
+          name="email"
+          label="Email"
+          rules={[
+            { required: true, message: 'Vui lòng nhập email' },
+            { type: 'email', message: 'Email không đúng định dạng' },
+          ]}
+        >
+          <Input size="large" prefix={<UserOutlined className="text-ink-3" />} placeholder="vd: cudan1@sapms.vn" autoComplete="username" />
         </Form.Item>
-        <Form.Item name="password" label="Mật khẩu" rules={[{ required: !DEV_SKIP_LOGIN, message: 'Nhập mật khẩu' }]}>
-          <Input.Password size="large" prefix={<LockOutlined className="text-ink-3" />} autoComplete="current-password" />
+        <Form.Item
+          name="password"
+          label="Mật khẩu"
+          rules={[{ required: true, message: 'Vui lòng nhập mật khẩu' }]}
+        >
+          <Input.Password size="large" prefix={<LockOutlined className="text-ink-3" />} autoComplete="current-password" placeholder="Mật khẩu của bạn" />
         </Form.Item>
         <Button type="primary" htmlType="submit" size="large" block loading={loading}>
           Đăng nhập <ArrowRightOutlined />
         </Button>
       </Form>
+
+      <div className="mt-4 text-center text-[13px] text-ink-2">
+        Chưa có tài khoản?{' '}
+        <Link to="/register" className="font-semibold text-navy hover:text-gold transition-colors">
+          Đăng ký
+        </Link>
+      </div>
 
       {import.meta.env.DEV && <DevQuickLogin onEnter={enter} />}
     </>
