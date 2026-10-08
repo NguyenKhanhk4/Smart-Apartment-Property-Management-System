@@ -49,6 +49,8 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Tiện ích còn lượt đặt sắp tới, cần hủy các lượt đặt đó trước khi ngừng',
   },
+  MEMBER_CODE_NOT_FOUND: { status: 404, message: 'Không tìm thấy mã cư dân hoặc mã đã hết hiệu lực' },
+  HOUSEHOLD_HEAD_REQUIRED: { status: 403, message: 'Chỉ chủ hộ mới thực hiện được thao tác này' },
   SERVER_ERROR: { status: 500, message: 'Lỗi hệ thống, vui lòng thử lại sau' },
 
   // Bổ sung ngoài SRS: lỗi trùng unique index chưa được module ánh xạ sang mã riêng

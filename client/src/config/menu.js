@@ -10,6 +10,7 @@ import {
   FundOutlined,
   HomeOutlined,
   NotificationOutlined,
+  IdcardOutlined,
   PieChartOutlined,
   ScheduleOutlined,
   SettingOutlined,
@@ -47,6 +48,8 @@ const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
 const AssetDetailPage = lazy(() => import('../features/assets/AssetDetailPage'));
 const WorkOrdersPage = lazy(() => import('../features/workOrders/WorkOrdersPage'));
 const AmenitiesPage = lazy(() => import('../features/amenities/AmenitiesPage'));
+const MyCodePage = lazy(() => import('../features/memberCodes/MyCodePage'));
+const FamilyPage = lazy(() => import('../features/memberCodes/FamilyPage'));
 
 // ===== Module E (Phạm Lượng) =====
 const TicketsPage = lazy(() => import('../features/tickets/TicketsPage'));
@@ -220,6 +223,9 @@ export const residentMenu = [
     hideInMenu: true,
   },
   { key: 'guests', label: 'Khách', icon: UsergroupAddOutlined, path: 'guests', component: ResidentGuestsPage },
+  // Thẻ cư dân (UC-D11): mã chữ; trang Gia đình chỉ chủ hộ, mở từ nút trong "Mã của tôi"
+  { key: 'my-code', label: 'Mã của tôi', icon: IdcardOutlined, path: 'my-code', component: MyCodePage },
+  { key: 'family', label: 'Gia đình', path: 'my-code/family', component: FamilyPage, hideInMenu: true },
   {
     key: 'announcements',
     label: 'Bảng tin',
