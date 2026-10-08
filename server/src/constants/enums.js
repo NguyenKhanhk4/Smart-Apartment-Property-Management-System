@@ -146,12 +146,32 @@ export const WORK_ORDER_STATUS = Object.freeze({
   DONE: 'DONE',
 });
 
+// BR-O12: booking tự xác nhận APPROVED khi đặt → CHECKED_IN (lễ tân) → COMPLETED (hết giờ, tính phí BR-O5);
+// hoặc CANCELLED / NO_SHOW (không tính phí).
+// PENDING, REJECTED: luồng duyệt cũ, Module D KHÔNG còn tạo mới — giữ để dữ liệu & báo cáo UC-E14 cũ không lỗi.
 export const BOOKING_STATUS = Object.freeze({
-  PENDING: 'PENDING',
   APPROVED: 'APPROVED',
-  REJECTED: 'REJECTED',
-  CANCELLED: 'CANCELLED',
+  CHECKED_IN: 'CHECKED_IN',
   COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+  NO_SHOW: 'NO_SHOW',
+  PENDING: 'PENDING',
+  REJECTED: 'REJECTED',
+});
+
+// Kiểu tiện ích (BR-O15, BR-O22..O24): FREE = đi vào tự do, không đặt/không phí; WALK_IN = đến thẳng, lễ tân tra mã
+// (gói tháng / vé lẻ / miễn phí trẻ nhỏ); BOOKING = đặt slot độc quyền. Bản ghi cũ không có accessMode coi là BOOKING.
+export const AMENITY_ACCESS_MODES = Object.freeze({
+  FREE: 'FREE',
+  WALK_IN: 'WALK_IN',
+  BOOKING: 'BOOKING',
+});
+
+// Nhóm tuổi tính giá (BR-O24)
+export const AGE_GROUPS = Object.freeze({
+  CHILD_FREE: 'CHILD_FREE',
+  CHILD: 'CHILD',
+  ADULT: 'ADULT',
 });
 
 // ===== Ticket, sổ khách, bảng tin, thông báo (Module E) =====
@@ -238,6 +258,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   TICKET_CLOSED: 'TICKET_CLOSED',
   ANNOUNCEMENT_PUBLISHED: 'ANNOUNCEMENT_PUBLISHED',
   WORKORDER_ASSIGNED: 'WORKORDER_ASSIGNED',
+  AMENITY_FEE_CHANGED: 'AMENITY_FEE_CHANGED',
 });
 
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
@@ -251,8 +272,16 @@ export const CONFIG_KEYS = Object.freeze({
   DEBT_REMINDER_DAYS: 'DEBT_REMINDER_DAYS',
   FUND_LOW_BALANCE_THRESHOLD: 'FUND_LOW_BALANCE_THRESHOLD',
   FUND_APPROVAL_RATIO: 'FUND_APPROVAL_RATIO',
-  BOOKING_CANCEL_HOURS: 'BOOKING_CANCEL_HOURS',
   BOOKING_MAX_ACTIVE_PER_APARTMENT: 'BOOKING_MAX_ACTIVE_PER_APARTMENT',
+  BOOKING_ADVANCE_DAYS: 'BOOKING_ADVANCE_DAYS',
+  CHECKIN_EARLY_MINUTES: 'CHECKIN_EARLY_MINUTES',
+  NO_SHOW_GRACE_MINUTES: 'NO_SHOW_GRACE_MINUTES',
+  RECEPTION_OPEN_TIME: 'RECEPTION_OPEN_TIME',
+  RECEPTION_CLOSE_TIME: 'RECEPTION_CLOSE_TIME',
+  CHILD_FREE_AGE: 'CHILD_FREE_AGE',
+  CHILD_ADULT_AGE: 'CHILD_ADULT_AGE',
+  WALK_IN_VISIT_MINUTES: 'WALK_IN_VISIT_MINUTES',
+  PASS_EXPIRY_REMIND_DAYS: 'PASS_EXPIRY_REMIND_DAYS',
   PARKING_CAPACITY_MOTORBIKE: 'PARKING_CAPACITY_MOTORBIKE',
   PARKING_CAPACITY_CAR: 'PARKING_CAPACITY_CAR',
   UPLOAD_MAX_SIZE_MB: 'UPLOAD_MAX_SIZE_MB',
@@ -269,8 +298,16 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.DEBT_REMINDER_DAYS, value: [1, 7, 15], scope: 'BUSINESS', description: 'Ngày quá hạn gửi nhắc nợ — BR-D4' },
   { key: CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, value: 50000000, scope: 'BUSINESS', description: 'Ngưỡng cảnh báo số dư quỹ (VNĐ) — UC-C06' },
   { key: CONFIG_KEYS.FUND_APPROVAL_RATIO, value: 0.5, scope: 'BUSINESS', description: 'Tỷ lệ đồng ý tối thiểu (> giá trị) — BR-M2' },
-  { key: CONFIG_KEYS.BOOKING_CANCEL_HOURS, value: 2, scope: 'BUSINESS', description: 'Hủy booking trước giờ bắt đầu tối thiểu (giờ) — BR-O4' },
   { key: CONFIG_KEYS.BOOKING_MAX_ACTIVE_PER_APARTMENT, value: 2, scope: 'BUSINESS', description: 'Số booking chưa dùng tối đa/căn — BR-O3' },
+  { key: CONFIG_KEYS.BOOKING_ADVANCE_DAYS, value: 14, scope: 'BUSINESS', description: 'Đặt tiện ích trước tối đa N ngày — BR-O3' },
+  { key: CONFIG_KEYS.CHECKIN_EARLY_MINUTES, value: 15, scope: 'BUSINESS', description: 'Check-in sớm nhất trước giờ bắt đầu (phút) — BR-O14' },
+  { key: CONFIG_KEYS.NO_SHOW_GRACE_MINUTES, value: 15, scope: 'BUSINESS', description: 'Quá giờ bắt đầu N phút chưa check-in → không đến — BR-O14' },
+  { key: CONFIG_KEYS.RECEPTION_OPEN_TIME, value: '05:00', scope: 'BUSINESS', description: 'Giờ lễ tân bắt đầu làm việc (HH:mm) — BR-O15' },
+  { key: CONFIG_KEYS.RECEPTION_CLOSE_TIME, value: '22:00', scope: 'BUSINESS', description: 'Giờ lễ tân kết thúc (HH:mm) — BR-O15' },
+  { key: CONFIG_KEYS.CHILD_FREE_AGE, value: 6, scope: 'BUSINESS', description: 'Dưới số tuổi này được vào tiện ích miễn phí, cần người lớn đi kèm — BR-O24' },
+  { key: CONFIG_KEYS.CHILD_ADULT_AGE, value: 12, scope: 'BUSINESS', description: 'Từ số tuổi này tính giá người lớn; từ CHILD_FREE_AGE đến dưới mốc này tính giá trẻ em — BR-O24' },
+  { key: CONFIG_KEYS.WALK_IN_VISIT_MINUTES, value: 120, scope: 'BUSINESS', description: 'Thời lượng 1 lượt vào tiện ích vào cửa (phút), dùng đếm số người đang ở trong — BR-O23' },
+  { key: CONFIG_KEYS.PASS_EXPIRY_REMIND_DAYS, value: 3, scope: 'BUSINESS', description: 'Nhắc gia hạn gói tháng trong N ngày cuối tháng — BR-O22' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, value: 500, scope: 'BUSINESS', description: 'Sức chứa bãi xe máy' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_CAR, value: 100, scope: 'BUSINESS', description: 'Sức chứa bãi ô tô' },
   // TECHNICAL — Admin sửa

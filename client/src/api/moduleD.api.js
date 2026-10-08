@@ -29,3 +29,20 @@ export const workOrderApi = {
   // Chạy thủ công cron quét tài sản đến hạn; trả bản ghi cron_runs (affectedCount = số work order mới)
   runGenerate: () => http.post('/work-orders/jobs/generate/run'),
 };
+
+// ===== UC-D05: Tiện ích =====
+// body: các field tiện ích; image: File (tùy chọn) — luôn gửi multipart (field "image")
+const amenityForm = (body, image) => {
+  const form = new FormData();
+  Object.entries(body).forEach(([k, v]) => v !== undefined && v !== null && form.append(k, v));
+  if (image) form.append('image', image);
+  return form;
+};
+
+export const amenityApi = {
+  list: (params) => http.get('/amenities', { params }),
+  get: (id) => http.get(`/amenities/${id}`),
+  create: (body, image) => http.post('/amenities', amenityForm(body, image)),
+  update: (id, body, image) => http.put(`/amenities/${id}`, amenityForm(body, image)),
+  setStatus: (id, isActive) => http.patch(`/amenities/${id}/status`, { isActive }),
+};

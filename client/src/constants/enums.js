@@ -96,6 +96,24 @@ export const WORK_ORDER_TYPES = {
 };
 
 // ===== Module D =====
+// PENDING, REJECTED: dữ liệu luồng duyệt cũ (không còn tạo mới — BR-O12)
+export const BOOKING_STATUS = {
+  APPROVED: { label: 'Đã xác nhận', color: 'blue' },
+  CHECKED_IN: { label: 'Đã check-in', color: 'processing' },
+  COMPLETED: { label: 'Hoàn tất', color: 'success' },
+  CANCELLED: { label: 'Đã hủy', color: 'default' },
+  NO_SHOW: { label: 'Không đến', color: 'warning' },
+  PENDING: { label: 'Chờ duyệt', color: 'gold' },
+  REJECTED: { label: 'Từ chối', color: 'red' },
+};
+
+// Kiểu tiện ích (accessMode). Bản ghi cũ không có accessMode coi là BOOKING
+export const AMENITY_ACCESS_MODES = {
+  FREE: { label: 'Tự do', color: 'green', hint: 'Công viên, đường dạo, sân chơi ngoài trời: không đặt chỗ, không phí, chỉ hiển thị giờ và vị trí.' },
+  WALK_IN: { label: 'Vào cửa', color: 'cyan', hint: 'Gym, yoga, hồ bơi: cư dân đến thẳng, lễ tân tra mã; vào bằng gói tháng, vé lẻ hoặc miễn phí (trẻ nhỏ).' },
+  BOOKING: { label: 'Đặt chỗ', color: 'blue', hint: 'Sân tennis, cầu lông, khu BBQ: cư dân đặt slot độc quyền, lễ tân hoặc bảo vệ check-in.' },
+};
+
 export const ASSET_CATEGORIES = {
   ELEVATOR: { label: 'Thang máy', color: 'blue' },
   PUMP: { label: 'Máy bơm', color: 'cyan' },

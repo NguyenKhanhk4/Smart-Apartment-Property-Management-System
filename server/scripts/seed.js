@@ -354,12 +354,19 @@ for (const status of scenarios) {
 await M.Ticket.insertMany(tickets);
 
 // ===== Tiện ích & booking =====
+// 3 kiểu: FREE (chỉ hiển thị) · WALK_IN (gói tháng / vé lẻ, lễ tân tra mã) · BOOKING (đặt slot).
+// WALK_IN và BOOKING có giờ mở cửa nằm trong giờ lễ tân 05:00–22:00 (BR-O15). Giá theo nhóm tuổi: người lớn / trẻ em (BR-O24).
 const amenities = await M.Amenity.insertMany([
-  { name: 'Hồ bơi', openTime: '06:00', closeTime: '21:00', slotDurationMinutes: 60, capacityPerSlot: 20, feePerBooking: 50000 },
-  { name: 'Phòng gym', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 15, feePerBooking: 0 },
-  { name: 'Sân tennis', openTime: '06:00', closeTime: '20:00', slotDurationMinutes: 90, capacityPerSlot: 4, feePerBooking: 100000 },
-  { name: 'Khu BBQ', buildingId: buildings[0]._id, openTime: '16:00', closeTime: '22:00', slotDurationMinutes: 120, capacityPerSlot: 2, feePerBooking: 200000 },
+  { name: 'Công viên nội khu', accessMode: 'FREE', location: 'Trung tâm khu căn hộ', openTime: '05:00', closeTime: '22:00', description: 'Thảm cỏ, ghế đá và khu vui chơi ngoài trời cho cư dân.' },
+  { name: 'Đường dạo bộ', accessMode: 'FREE', location: 'Vòng quanh khu căn hộ' },
+  { name: 'Phòng gym', accessMode: 'WALK_IN', location: 'Tầng 3 khối đế', openTime: '05:00', closeTime: '22:00', perVisitFeeAdult: 50000, perVisitFeeChild: 30000, monthlyPassFeeAdult: 400000, monthlyPassFeeChild: 250000 },
+  { name: 'Phòng yoga', accessMode: 'WALK_IN', location: 'Tầng 3 khối đế', openTime: '06:00', closeTime: '21:00', perVisitFeeAdult: 60000, perVisitFeeChild: 40000, monthlyPassFeeAdult: 500000, monthlyPassFeeChild: 300000 },
+  { name: 'Hồ bơi', accessMode: 'WALK_IN', location: 'Tầng 5 khối đế', openTime: '05:00', closeTime: '21:00', perVisitFeeAdult: 40000, perVisitFeeChild: 25000, maxConcurrent: 40, monthlyPassFeeAdult: 450000, monthlyPassFeeChild: 280000 },
+  { name: 'Sân tennis', accessMode: 'BOOKING', location: 'Sân sau', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 100000, monthlyPassFeeAdult: 600000, monthlyPassFeeChild: 350000 },
+  { name: 'Sân cầu lông', accessMode: 'BOOKING', location: 'Tầng 2 khối đế', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 60000, monthlyPassFeeAdult: 350000, monthlyPassFeeChild: 200000 },
+  { name: 'Khu BBQ Block A', accessMode: 'BOOKING', location: 'Sân thượng Block A', buildingId: buildings[0]._id, openTime: '10:00', closeTime: '22:00', slotDurationMinutes: 180, capacityPerSlot: 1, feePerBooking: 150000 },
 ]);
+const bookable = amenities.filter((a) => a.accessMode === 'BOOKING'); // chỉ tiện ích BOOKING mới có booking
 const slotsOf = (a) => {
   const [oh, om] = a.openTime.split(':').map(Number);
   const [ch, cm] = a.closeTime.split(':').map(Number);
@@ -371,18 +378,27 @@ const slotsOf = (a) => {
   return out;
 };
 const bookings = [];
+const usedSlots = new Set(); // sức chứa 1 căn/slot: không tạo 2 booking trùng slot
 for (let i = 0; i < 160; i += 1) {
-  const a = pick(amenities);
+  const a = pick(bookable);
   const offset = between(-12, 250); // vài booking tương lai
   const [slotStart, slotEnd] = rand() < 0.5 ? pick(slotsOf(a).slice(-3)) : pick(slotsOf(a));
   const apt = pick(occupied);
   const r = rand();
   const future = offset < 0;
-  const status = future ? (r < 0.6 ? 'APPROVED' : 'PENDING') : r < 0.75 ? 'COMPLETED' : r < 0.9 ? 'CANCELLED' : 'REJECTED';
+  // Booking tương lai: tự xác nhận APPROVED (BR-O12). Quá khứ: COMPLETED / CANCELLED / NO_SHOW; REJECTED là dữ liệu luồng duyệt cũ
+  const status = future ? 'APPROVED' : r < 0.75 ? 'COMPLETED' : r < 0.85 ? 'CANCELLED' : r < 0.95 ? 'NO_SHOW' : 'REJECTED';
+  const date = startOfVnDay(new Date(now.getTime() - offset * DAY_MS));
+  const slotKey = `${a._id}|${date.getTime()}|${slotStart}`;
+  if (usedSlots.has(slotKey)) continue;
+  usedSlots.add(slotKey);
+  const toMin = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
   bookings.push({
     amenityId: a._id, apartmentId: apt._id, requestedBy: residentUsers[apartments.indexOf(apt)]?._id,
-    date: startOfVnDay(new Date(now.getTime() - offset * DAY_MS)), slotStart, slotEnd, fee: a.feePerBooking, status,
-    reviewedBy: ['APPROVED', 'COMPLETED', 'REJECTED'].includes(status) ? U.letan._id : undefined,
+    date, slotStart, slotEnd, fee: a.feePerBooking, status,
+    startAt: new Date(date.getTime() + toMin(slotStart) * 60000),
+    endAt: new Date(date.getTime() + toMin(slotEnd) * 60000),
+    reviewedBy: status === 'REJECTED' ? U.letan._id : undefined,
   });
 }
 await M.Booking.insertMany(bookings);
