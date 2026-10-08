@@ -44,4 +44,14 @@ export const contractsApi = {
   terminate: (id) => http.patch(`/contracts/${id}/terminate`),
 };
 
+// ===== UC-A07 & UC-A08: Cư dân & Căn hộ của tôi =====
+export const residentsApi = {
+  listByApartment: (apartmentId) => http.get(`/apartments/${apartmentId}/residents`),
+  addMember: (body) => http.post('/residents', body),
+  updateMember: (id, body) => http.patch(`/residents/${id}`, body),
+  removeMember: (id) => http.patch(`/residents/${id}/remove`),
+  myApartments: () => http.get('/residents/me/apartments'),
+};
+
+
 

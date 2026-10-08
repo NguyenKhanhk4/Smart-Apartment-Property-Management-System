@@ -8,8 +8,9 @@ import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { idParams, objectId } from '../../utils/validators.js';
 import * as service from './apartments.service.js';
+import { listApartmentResidents } from '../residents/residents.service.js';
 
-// Module A — Vũ Việt. UC-A05: Quản lý căn hộ
+// Module A — Vũ Việt. UC-A05, UC-A07: Quản lý căn hộ & Cư dân
 const router = Router();
 const VIEWERS = ['ADMIN', 'MANAGER', 'STAFF:RECEPTIONIST'];
 
@@ -62,6 +63,26 @@ router.get('/', authenticate, authorize(...VIEWERS), validate({ query: listQuery
   const { items, pagination } = await service.listApartments(req.validated.query);
   paginated(res, items, pagination);
 });
+
+/**
+ * @openapi
+ * /apartments/{id}/residents:
+ *   get:
+ *     tags: [Tòa nhà & Căn hộ, Cư dân]
+ *     summary: Danh sách thành viên đang ở trong căn hộ — UC-A07, UC-A08
+ *     parameters:
+ *       - $ref: '#/components/parameters/id'
+ */
+router.get(
+  '/:id/residents',
+  authenticate,
+  authorize('STAFF:RECEPTIONIST', 'MANAGER', 'RESIDENT'),
+  validate({ params: idParams }),
+  async (req, res) => {
+    const residents = await listApartmentResidents(req.validated.params.id, req.user);
+    ok(res, residents);
+  },
+);
 
 /**
  * @openapi

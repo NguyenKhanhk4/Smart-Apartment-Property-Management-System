@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router';
 import {
   Table,
   Card,
@@ -41,6 +42,7 @@ import { useApi, useAction } from '../../hooks/useApi';
 import { buildingsApi, apartmentsApi } from '../../api/moduleA.api';
 
 export default function BuildingsPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { message } = App.useApp();
   const isAdmin = user?.role === 'ADMIN';
@@ -307,7 +309,15 @@ export default function BuildingsPage() {
       dataIndex: 'code',
       key: 'code',
       width: 120,
-      render: (code) => <span className="font-semibold text-blue-600 dark:text-blue-400">{code}</span>,
+      render: (code, record) => (
+        <button
+          type="button"
+          onClick={() => navigate(`/app/apartments/${record._id}`)}
+          className="font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer bg-transparent border-0 p-0 text-left"
+        >
+          {code}
+        </button>
+      ),
     },
     {
       title: 'Tòa nhà',
@@ -703,7 +713,18 @@ export default function BuildingsPage() {
         open={detailModalOpen}
         onCancel={() => setDetailModalOpen(false)}
         footer={[
-          <Button key="close" type="primary" onClick={() => setDetailModalOpen(false)}>
+          <Button
+            key="manage"
+            type="primary"
+            icon={<TeamOutlined />}
+            onClick={() => {
+              setDetailModalOpen(false);
+              navigate(`/app/apartments/${selectedApartment?._id}`);
+            }}
+          >
+            Quản lý nhân khẩu & Hợp đồng
+          </Button>,
+          <Button key="close" onClick={() => setDetailModalOpen(false)}>
             Đóng
           </Button>,
         ]}

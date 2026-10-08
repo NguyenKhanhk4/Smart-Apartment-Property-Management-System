@@ -53,6 +53,8 @@ const ProfilePage = lazy(() => import('../features/profile/ProfilePage'));
 const InternalAccountsPage = lazy(() => import('../features/users/InternalAccountsPage'));
 const BuildingsPage = lazy(() => import('../features/buildings/BuildingsPage'));
 const ContractsPage = lazy(() => import('../features/contracts/ContractsPage'));
+const ApartmentDetailPage = lazy(() => import('../features/apartments/ApartmentDetailPage'));
+const MyApartmentPage = lazy(() => import('../features/residents/MyApartmentPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -264,6 +266,14 @@ export const adminMenu = [
     component: InternalAccountsPage,
   },
   {
+    key: 'apartment-detail',
+    label: 'Chi tiết căn hộ',
+    path: 'apartments/:id',
+    roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
+    component: ApartmentDetailPage,
+    hideInMenu: true,
+  },
+  {
     key: 'profile',
     group: 'Tổng quan',
     label: 'Hồ sơ cá nhân',
@@ -312,6 +322,14 @@ export const residentMenu = [
     hideInMenu: true,
   },
   // ===== Module A (Vũ Việt) =====
+  {
+    key: 'my-apartment',
+    label: 'Căn hộ của tôi',
+    icon: HomeOutlined,
+    path: 'my-apartment',
+    component: MyApartmentPage,
+    hideInMenu: true,
+  },
   {
     key: 'profile',
     label: 'Hồ sơ cá nhân',
