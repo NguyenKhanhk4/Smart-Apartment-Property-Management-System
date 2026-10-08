@@ -90,22 +90,23 @@ const apartments = await M.Apartment.insertMany(apartmentDocs);
 const occupied = apartments.filter((a) => a.status !== 'VACANT');
 
 // ===== Cư dân, hợp đồng, xe =====
-await M.Resident.insertMany(
-  residentUsers.map((u, i) => ({
-    userId: u._id,
-    apartmentId: apartments[i]._id,
-    relationType: 'OWNER',
-    idNumber: `0790${between(10000000, 99999999)}`,
-    moveInDate: daysAgo(400),
-  })),
-);
-await M.Contract.insertMany(
+const contracts = await M.Contract.insertMany(
   residentUsers.map((u, i) => ({
     apartmentId: apartments[i]._id,
     type: 'SALE',
     ownerId: u._id,
     startDate: daysAgo(400),
     createdBy: U.letan._id,
+  })),
+);
+await M.Resident.insertMany(
+  residentUsers.map((u, i) => ({
+    userId: u._id,
+    apartmentId: apartments[i]._id,
+    relationType: 'OWNER',
+    contractId: contracts[i]._id,
+    idNumber: `0790${between(10000000, 99999999)}`,
+    moveInDate: daysAgo(400),
   })),
 );
 
@@ -124,17 +125,41 @@ const householdUsers = await M.User.insertMany([
 ]);
 const rentedApartment = apartments[6];
 await M.Apartment.updateOne({ _id: rentedApartment._id }, { status: 'RENTED' });
+
+// Hợp đồng căn 7: SALE cho cusohuu7 + LEASE cho nguoithue7 (BR-A5: LEASE cần SALE ACTIVE)
+const leaseStartDate = daysAgo(120);
+const leaseEndDate = new Date(leaseStartDate.getFullYear() + 1, leaseStartDate.getMonth(), leaseStartDate.getDate(), leaseStartDate.getHours());
+const [rentedSaleContract, rentedLeaseContract] = await M.Contract.insertMany([
+  {
+    apartmentId: rentedApartment._id,
+    type: 'SALE',
+    ownerId: householdUsers[2]._id,
+    startDate: daysAgo(900),
+    createdBy: U.letan._id,
+  },
+  {
+    apartmentId: rentedApartment._id,
+    type: 'LEASE',
+    ownerId: householdUsers[2]._id,
+    tenantId: householdUsers[3]._id,
+    tenantPaysFees: true,
+    startDate: leaseStartDate,
+    endDate: leaseEndDate,
+    createdBy: U.letan._id,
+  },
+]);
+
 await M.Resident.insertMany([
-  { userId: householdUsers[0]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', moveInDate: daysAgo(380) },
-  { userId: householdUsers[1]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', moveInDate: daysAgo(360) },
-  { userId: householdUsers[2]._id, apartmentId: rentedApartment._id, relationType: 'OWNER', moveInDate: daysAgo(900) },
-  { userId: householdUsers[3]._id, apartmentId: rentedApartment._id, relationType: 'TENANT', moveInDate: daysAgo(120) },
-  { userId: householdUsers[4]._id, apartmentId: apartments[2]._id, relationType: 'FAMILY_MEMBER', moveInDate: daysAgo(300) },
+  { userId: householdUsers[0]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[0]._id, moveInDate: daysAgo(380) },
+  { userId: householdUsers[1]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[0]._id, moveInDate: daysAgo(360) },
+  { userId: householdUsers[2]._id, apartmentId: rentedApartment._id, relationType: 'OWNER', contractId: rentedSaleContract._id, moveInDate: daysAgo(900) },
+  { userId: householdUsers[3]._id, apartmentId: rentedApartment._id, relationType: 'TENANT', contractId: rentedLeaseContract._id, moveInDate: daysAgo(120) },
+  { userId: householdUsers[4]._id, apartmentId: apartments[2]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[2]._id, moveInDate: daysAgo(300) },
 ]);
 const vehicles = await M.Vehicle.insertMany(
   occupied.slice(0, 20).map((a, i) => ({
     apartmentId: a._id,
-    ownerUserId: residentUsers[i]?._id,
+    registeredBy: residentUsers[i]?._id,
     type: i % 4 === 0 ? 'CAR' : 'MOTORBIKE',
     plateNumber: `${between(50, 79)}${i % 4 === 0 ? 'A' : 'H1'}-${between(10000, 99999)}`,
     status: 'APPROVED',

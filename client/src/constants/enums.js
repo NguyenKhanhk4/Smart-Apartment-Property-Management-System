@@ -21,6 +21,37 @@ export const BOARD_TITLES = {
   MEMBER: { label: 'Thành viên BQT', color: 'purple' },
 };
 
+// ===== Module A =====
+export const APARTMENT_STATUS = {
+  VACANT: { label: 'Trống', color: 'default' },
+  OWNED: { label: 'Đã sở hữu', color: 'blue' },
+  RENTED: { label: 'Đang cho thuê', color: 'green' },
+};
+
+export const CONTRACT_TYPES = {
+  SALE: { label: 'Mua bán', color: 'blue' },
+  LEASE: { label: 'Cho thuê', color: 'green' },
+};
+
+export const CONTRACT_STATUS = {
+  ACTIVE: { label: 'Đang hiệu lực', color: 'green' },
+  EXPIRED: { label: 'Hết hạn', color: 'default' },
+  TERMINATED: { label: 'Đã chấm dứt', color: 'red' },
+};
+
+export const VEHICLE_TYPES = {
+  BICYCLE: { label: 'Xe đạp', color: 'green' },
+  MOTORBIKE: { label: 'Xe máy', color: 'blue' },
+  CAR: { label: 'Ô tô', color: 'purple' },
+};
+
+export const VEHICLE_STATUS = {
+  PENDING: { label: 'Chờ duyệt', color: 'gold' },
+  APPROVED: { label: 'Đã duyệt', color: 'green' },
+  REJECTED: { label: 'Từ chối', color: 'red' },
+  CANCELLED: { label: 'Đã hủy', color: 'default' },
+};
+
 // ===== Module E =====
 export const PRIORITIES = {
   LOW: { label: 'Thấp', color: 'default' },
