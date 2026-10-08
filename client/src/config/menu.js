@@ -8,6 +8,7 @@ import {
   CheckSquareOutlined,
   ClusterOutlined,
   DashboardOutlined,
+  FileTextOutlined,
   FundOutlined,
   HomeOutlined,
   NotificationOutlined,
@@ -51,6 +52,7 @@ const HomePage = lazy(() => import('../features/home/HomePage'));
 const ProfilePage = lazy(() => import('../features/profile/ProfilePage'));
 const InternalAccountsPage = lazy(() => import('../features/users/InternalAccountsPage'));
 const BuildingsPage = lazy(() => import('../features/buildings/BuildingsPage'));
+const ContractsPage = lazy(() => import('../features/contracts/ContractsPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -234,6 +236,15 @@ export const adminMenu = [
   },
 
   // ===== Module A (Vũ Việt) =====
+  {
+    key: 'contracts',
+    group: 'Cư dân & dịch vụ',
+    label: 'Hợp đồng',
+    icon: FileTextOutlined,
+    path: 'contracts',
+    roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
+    component: ContractsPage,
+  },
   {
     key: 'buildings',
     group: 'Cấu hình',

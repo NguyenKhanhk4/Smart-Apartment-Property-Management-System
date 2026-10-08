@@ -21,6 +21,7 @@ import authRoutes from './modules/auth/auth.routes.js';
 import userRoutes from './modules/users/users.routes.js';
 import buildingRoutes from './modules/buildings/buildings.routes.js';
 import apartmentRoutes from './modules/apartments/apartments.routes.js';
+import contractRoutes from './modules/contracts/contracts.routes.js';
 
 const router = Router();
 
@@ -66,6 +67,7 @@ router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/buildings', buildingRoutes);
 router.use('/apartments', apartmentRoutes);
+router.use('/contracts', contractRoutes);
 
 // Chỉ phục vụ đăng nhập nhanh khi dev (xem modules/devAuth).
 if (env.isDev) router.use('/dev', devAuthRoutes);

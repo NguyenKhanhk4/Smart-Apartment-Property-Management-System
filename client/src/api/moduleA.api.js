@@ -35,3 +35,13 @@ export const apartmentsApi = {
   delete: (id) => http.delete(`/apartments/${id}`),
 };
 
+// ===== UC-A06: Hợp đồng =====
+export const contractsApi = {
+  list: (params) => http.get('/contracts', { params }),
+  getById: (id) => http.get(`/contracts/${id}`),
+  create: (body) => http.post('/contracts', body),
+  update: (id, body) => http.patch(`/contracts/${id}`, body),
+  terminate: (id) => http.patch(`/contracts/${id}/terminate`),
+};
+
+
