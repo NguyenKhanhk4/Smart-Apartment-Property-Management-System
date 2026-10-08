@@ -44,6 +44,11 @@ export const ERROR_CODES = Object.freeze({
     status: 400,
     message: 'Người được giao phải là kỹ thuật viên đang hoạt động',
   },
+  AMENITY_INACTIVE: { status: 409, message: 'Tiện ích đang ngừng hoạt động' },
+  AMENITY_HAS_ACTIVE_BOOKINGS: {
+    status: 409,
+    message: 'Tiện ích còn lượt đặt sắp tới, cần hủy các lượt đặt đó trước khi ngừng',
+  },
   SERVER_ERROR: { status: 500, message: 'Lỗi hệ thống, vui lòng thử lại sau' },
 
   // Bổ sung ngoài SRS: lỗi trùng unique index chưa được module ánh xạ sang mã riêng

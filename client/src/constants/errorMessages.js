@@ -29,6 +29,8 @@ export const ERROR_MESSAGES = {
   WORKORDER_DUPLICATE: 'Tài sản này đang có lệnh bảo trì chưa hoàn thành.',
   ASSET_NAME_EXISTS: 'Tên tài sản đã tồn tại trong tòa này.',
   ASSET_HAS_OPEN_WORKORDER: 'Tài sản còn work order chưa hoàn thành.',
+  AMENITY_INACTIVE: 'Tiện ích đang ngừng hoạt động.',
+  AMENITY_HAS_ACTIVE_BOOKINGS: 'Tiện ích còn lượt đặt sắp tới, cần hủy các lượt đặt đó trước khi ngừng.',
   WORKORDER_INVALID_STATUS: 'Work order đã hoàn thành, không thể thao tác.',
   WORKORDER_INVALID_ASSIGNEE: 'Người được giao phải là kỹ thuật viên đang hoạt động.',
   DUPLICATE_VALUE: 'Dữ liệu bị trùng.',

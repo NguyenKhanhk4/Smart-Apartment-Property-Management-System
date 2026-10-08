@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import {
   AppstoreOutlined,
+  CoffeeOutlined,
   BarChartOutlined,
   BellOutlined,
   CheckSquareOutlined,
@@ -45,6 +46,7 @@ const HomePage = lazy(() => import('../features/home/HomePage'));
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
 const AssetDetailPage = lazy(() => import('../features/assets/AssetDetailPage'));
 const WorkOrdersPage = lazy(() => import('../features/workOrders/WorkOrdersPage'));
+const AmenitiesPage = lazy(() => import('../features/amenities/AmenitiesPage'));
 
 // ===== Module E (Phạm Lượng) =====
 const TicketsPage = lazy(() => import('../features/tickets/TicketsPage'));
@@ -128,6 +130,16 @@ export const adminMenu = [
     path: 'my-work-orders',
     roles: ['STAFF:TECHNICIAN'],
     component: WorkOrdersPage,
+  },
+  // Tiện ích (UC-D05)
+  {
+    key: 'amenities',
+    group: 'Tiện ích & khách',
+    label: 'Tiện ích',
+    icon: CoffeeOutlined,
+    path: 'amenities',
+    roles: ['MANAGER'],
+    component: AmenitiesPage,
   },
   // Sổ khách (UC-E08)
   {
