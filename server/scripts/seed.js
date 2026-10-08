@@ -108,6 +108,26 @@ await M.Contract.insertMany(
     createdBy: U.letan._id,
   })),
 );
+
+// ===== Hộ gia đình demo cho thẻ cư dân (UC-D11) — chỉ THÊM, không đổi dữ liệu sẵn có =====
+// cudan1 (căn đầu) là chủ hộ có vợ và con nhỏ (chưa có ngày sinh: chủ hộ tự nhập ở mục Gia đình).
+// Căn thứ 7 đang cho thuê: chủ sở hữu "không ở" (cusohuu7) không có quyền tiện ích, người thuê (nguoithue7) là chủ hộ.
+// Tạo trực tiếp (không qua mkUser) để không tiêu thụ bộ sinh số ngẫu nhiên → dữ liệu demo phía sau giữ nguyên
+const demoUser = (email, fullName, phone) => ({ email, fullName, role: 'RESIDENT', passwordHash, phone });
+const householdUsers = await M.User.insertMany([
+  demoUser('vo.cudan1@sapms.vn', 'Vợ cư dân An', '0900000001'),
+  demoUser('con.cudan1@sapms.vn', 'Bé An', '0900000002'),
+  demoUser('cusohuu7@sapms.vn', 'Chủ sở hữu căn cho thuê', '0900000003'),
+  demoUser('nguoithue7@sapms.vn', 'Người thuê căn 7', '0900000004'),
+]);
+const rentedApartment = apartments[6];
+await M.Apartment.updateOne({ _id: rentedApartment._id }, { status: 'RENTED' });
+await M.Resident.insertMany([
+  { userId: householdUsers[0]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', moveInDate: daysAgo(380) },
+  { userId: householdUsers[1]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', moveInDate: daysAgo(360) },
+  { userId: householdUsers[2]._id, apartmentId: rentedApartment._id, relationType: 'OWNER', moveInDate: daysAgo(900) },
+  { userId: householdUsers[3]._id, apartmentId: rentedApartment._id, relationType: 'TENANT', moveInDate: daysAgo(120) },
+]);
 const vehicles = await M.Vehicle.insertMany(
   occupied.slice(0, 20).map((a, i) => ({
     apartmentId: a._id,

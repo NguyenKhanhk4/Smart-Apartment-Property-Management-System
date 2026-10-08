@@ -13,6 +13,7 @@ import lookupRoutes from './modules/lookups/lookups.routes.js';
 import assetRoutes from './modules/assets/assets.routes.js';
 import workOrderRoutes from './modules/workOrders/workOrders.routes.js';
 import amenityRoutes from './modules/amenities/amenities.routes.js';
+import memberCodeRoutes from './modules/memberCodes/memberCodes.routes.js';
 import devAuthRoutes from './modules/devAuth/devAuth.routes.js';
 
 const router = Router();
@@ -50,6 +51,7 @@ router.use('/lookups', lookupRoutes);
 router.use('/assets', assetRoutes);
 router.use('/work-orders', workOrderRoutes);
 router.use('/amenities', amenityRoutes);
+router.use('/member-codes', memberCodeRoutes);
 
 // Chỉ môi trường dev: đăng nhập nhanh bằng tài khoản seed (xem modules/devAuth). Xóa khi Module A có /auth/login.
 if (env.isDev) router.use('/dev', devAuthRoutes);

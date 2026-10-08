@@ -46,3 +46,18 @@ export const amenityApi = {
   update: (id, body, image) => http.put(`/amenities/${id}`, amenityForm(body, image)),
   setStatus: (id, isActive) => http.patch(`/amenities/${id}/status`, { isActive }),
 };
+
+// ===== UC-D11: Thẻ cư dân (mã chữ), gia đình, tra mã =====
+// apartmentId có thể bỏ trống khi chỉ ở một căn
+const withApartment = (apartmentId) => (apartmentId ? { params: { apartmentId } } : undefined);
+
+export const memberCodeApi = {
+  mine: () => http.get('/member-codes/mine'),
+  household: (apartmentId) => http.get('/member-codes/household', withApartment(apartmentId)),
+  /** body: { canIncurCharges?, dateOfBirth?: 'YYYY-MM-DD' | null } */
+  updateMember: (userId, body, apartmentId) => http.patch(`/member-codes/household/${userId}`, body, withApartment(apartmentId)),
+  /** Lễ tân / Bảo vệ / Trưởng BQL tra mã chữ */
+  lookup: (q) => http.get('/member-codes/lookup', { params: { q } }),
+  /** Lễ tân sửa ngày sinh khi đối chiếu giấy tờ */
+  setDateOfBirth: (userId, dateOfBirth) => http.patch(`/member-codes/${userId}/date-of-birth`, { dateOfBirth }),
+};

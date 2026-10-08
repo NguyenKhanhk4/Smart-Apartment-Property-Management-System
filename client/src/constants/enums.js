@@ -114,6 +114,19 @@ export const AMENITY_ACCESS_MODES = {
   BOOKING: { label: 'Đặt chỗ', color: 'blue', hint: 'Sân tennis, cầu lông, khu BBQ: cư dân đặt slot độc quyền, lễ tân hoặc bảo vệ check-in.' },
 };
 
+// Nhóm tuổi tính giá tiện ích (BR-O24); mốc tuổi lấy từ tham số CHILD_FREE_AGE / CHILD_ADULT_AGE
+export const AGE_GROUPS = {
+  CHILD_FREE: { label: 'Trẻ nhỏ (miễn phí)', color: 'green' },
+  CHILD: { label: 'Trẻ em', color: 'cyan' },
+  ADULT: { label: 'Người lớn', color: 'default' },
+};
+
+export const RELATION_TYPES = {
+  OWNER: { label: 'Chủ sở hữu', color: 'blue' },
+  TENANT: { label: 'Người thuê', color: 'geekblue' },
+  FAMILY_MEMBER: { label: 'Thành viên', color: 'default' },
+};
+
 export const ASSET_CATEGORIES = {
   ELEVATOR: { label: 'Thang máy', color: 'blue' },
   PUMP: { label: 'Máy bơm', color: 'cyan' },
