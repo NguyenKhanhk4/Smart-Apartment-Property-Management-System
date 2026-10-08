@@ -63,6 +63,7 @@ export const vehicleApi = {
   reject: (id, body) => http.patch(`/vehicles/${id}/reject`, body),
   confirmCancel: (id) => http.patch(`/vehicles/${id}/confirm-cancel`),
 };
-
-
-
+// ===== UC-A11: Dashboard thống kê hệ thống dành cho Admin =====
+export const adminApi = {
+  getDashboard: () => http.get('/admin/dashboard'),
+};

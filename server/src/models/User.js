@@ -15,7 +15,7 @@ const userSchema = new Schema(
     isActive: { type: Boolean, required: true, default: true },
     lastLoginAt: Date,
     dateOfBirth: { type: Date, default: null }, // BR-O24: ngày sinh (lưu 00:00 giờ VN)
-    tokenVersion: { type: Number, default: 0 }, // BR-A3: thu hồi refresh token khi khóa/đổi mật khẩu
+    tokenVersion: { type: Number, default: 0, select: false }, // BR-A3: thu hồi refresh token khi khóa/đổi mật khẩu
   },
   schemaOptions('users'),
 );

@@ -58,6 +58,7 @@ const ApartmentDetailPage = lazy(() => import('../features/apartments/ApartmentD
 const MyApartmentPage = lazy(() => import('../features/residents/MyApartmentPage'));
 const VehicleRequestsPage = lazy(() => import('../features/vehicles/VehicleRequestsPage'));
 const MyVehiclesPage = lazy(() => import('../features/vehicles/MyVehiclesPage'));
+const SystemDashboardPage = lazy(() => import('../features/adminDashboard/SystemDashboardPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -293,6 +294,15 @@ export const adminMenu = [
     path: 'profile',
     component: ProfilePage,
     hideInMenu: true,
+  },
+  {
+    key: 'system-dashboard',
+    group: 'Tổng quan',
+    label: 'Dashboard hệ thống',
+    icon: DashboardOutlined,
+    path: 'system-dashboard',
+    roles: ['ADMIN'],
+    component: SystemDashboardPage,
   },
 ];
 

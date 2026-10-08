@@ -289,7 +289,7 @@ export async function setStatus(adminUser, targetId, { isActive }, { ip } = {}) 
     throw ApiError.badRequest('Không thể tự khóa tài khoản của chính mình');
   }
 
-  const target = await User.findById(targetId);
+  const target = await User.findById(targetId).select('+tokenVersion');
   if (!target) throw ApiError.notFound('Không tìm thấy tài khoản');
 
   // Mở khóa: Kiểm tra BR-R1/R2 nếu tài khoản được mở là MANAGER hoặc CHAIRMAN
