@@ -7,7 +7,7 @@ import { connectDB, disconnectDB } from '../src/config/db.js';
 import { env } from '../src/config/env.js';
 import * as M from '../src/models/index.js';
 import { ensureDefaultConfigs } from '../src/services/systemConfig.service.js';
-import { DAY_MS, HOUR_MS, periodRange, startOfVnDay, vnPeriod } from '../src/utils/time.js';
+import { DAY_MS, HOUR_MS, periodEnd, periodRange, startOfVnDay, vnPeriod } from '../src/utils/time.js';
 
 const RESET = process.argv.includes('--reset');
 const PASSWORD = 'Sapms@123';
@@ -119,6 +119,8 @@ const householdUsers = await M.User.insertMany([
   demoUser('con.cudan1@sapms.vn', 'Bé An', '0900000002'),
   demoUser('cusohuu7@sapms.vn', 'Chủ sở hữu căn cho thuê', '0900000003'),
   demoUser('nguoithue7@sapms.vn', 'Người thuê căn 7', '0900000004'),
+  // Căn của cudan3 không có hóa đơn quá hạn → dùng để thử mua gói tháng cho con (UC-D09)
+  demoUser('con.cudan3@sapms.vn', 'Bé Cường', '0900000005'),
 ]);
 const rentedApartment = apartments[6];
 await M.Apartment.updateOne({ _id: rentedApartment._id }, { status: 'RENTED' });
@@ -127,6 +129,7 @@ await M.Resident.insertMany([
   { userId: householdUsers[1]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', moveInDate: daysAgo(360) },
   { userId: householdUsers[2]._id, apartmentId: rentedApartment._id, relationType: 'OWNER', moveInDate: daysAgo(900) },
   { userId: householdUsers[3]._id, apartmentId: rentedApartment._id, relationType: 'TENANT', moveInDate: daysAgo(120) },
+  { userId: householdUsers[4]._id, apartmentId: apartments[2]._id, relationType: 'FAMILY_MEMBER', moveInDate: daysAgo(300) },
 ]);
 const vehicles = await M.Vehicle.insertMany(
   occupied.slice(0, 20).map((a, i) => ({
@@ -422,6 +425,25 @@ for (let i = 0; i < 160; i += 1) {
   });
 }
 await M.Booking.insertMany(bookings);
+
+// ===== Gói tháng tiện ích demo (UC-D09): chủ hộ cudan1 có gói gym tháng này, vợ có gói tháng sau, cudan2 có gói sân tennis =====
+const amenityByName = Object.fromEntries(amenities.map((a) => [a.name, a]));
+const thisMonth = vnPeriod(now);
+const nextMonth = vnPeriod(periodEnd(thisMonth));
+const mkPass = (user, apartment, amenity, month, purchasedBy = user) => ({
+  userId: user._id,
+  apartmentId: apartment._id,
+  amenityId: amenity._id,
+  month,
+  ageGroup: 'ADULT',
+  fee: amenity.monthlyPassFeeAdult,
+  purchasedBy: purchasedBy._id,
+});
+await M.AmenityPass.insertMany([
+  mkPass(residentUsers[0], apartments[0], amenityByName['Phòng gym'], thisMonth),
+  mkPass(householdUsers[0], apartments[0], amenityByName['Phòng gym'], nextMonth, residentUsers[0]),
+  mkPass(residentUsers[1], apartments[1], amenityByName['Sân tennis'], thisMonth),
+]);
 
 // ===== Sổ khách, bảng tin, thông báo =====
 await M.GuestLog.insertMany([

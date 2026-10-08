@@ -66,7 +66,9 @@ export function passFee(amenity, group) {
   return group === AGE_GROUPS.CHILD ? child : adult;
 }
 
-const money = (n) => `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')} đ`;
+/** 1250000 → "1.250.000 đ" */
+export const formatVnd = (n) => `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')} đ`;
+const money = formatVnd;
 
 /** Dòng giá hiển thị sẵn cho FE: "Người lớn 50.000 đ · Trẻ em 30.000 đ / lượt · Gói 400.000 đ/tháng" */
 export function priceSummaryOf(amenity) {

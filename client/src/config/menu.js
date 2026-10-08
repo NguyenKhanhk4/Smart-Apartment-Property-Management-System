@@ -11,6 +11,7 @@ import {
   HomeOutlined,
   NotificationOutlined,
   IdcardOutlined,
+  TagsOutlined,
   PieChartOutlined,
   ScheduleOutlined,
   SettingOutlined,
@@ -50,6 +51,8 @@ const WorkOrdersPage = lazy(() => import('../features/workOrders/WorkOrdersPage'
 const AmenitiesPage = lazy(() => import('../features/amenities/AmenitiesPage'));
 const MyCodePage = lazy(() => import('../features/memberCodes/MyCodePage'));
 const FamilyPage = lazy(() => import('../features/memberCodes/FamilyPage'));
+const MyPassesPage = lazy(() => import('../features/amenityPasses/MyPassesPage'));
+const AmenityPassesPage = lazy(() => import('../features/amenityPasses/AmenityPassesPage'));
 
 // ===== Module E (Phạm Lượng) =====
 const TicketsPage = lazy(() => import('../features/tickets/TicketsPage'));
@@ -144,6 +147,16 @@ export const adminMenu = [
     roles: ['MANAGER'],
     component: AmenitiesPage,
   },
+  // Gói tháng tiện ích (UC-D09): Trưởng BQL hủy được, Lễ tân chỉ xem
+  {
+    key: 'amenity-passes',
+    group: 'Tiện ích & khách',
+    label: 'Gói tháng',
+    icon: TagsOutlined,
+    path: 'amenity-passes',
+    roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
+    component: AmenityPassesPage,
+  },
   // Sổ khách (UC-E08)
   {
     key: 'guests',
@@ -226,6 +239,8 @@ export const residentMenu = [
   // Thẻ cư dân (UC-D11): mã chữ; trang Gia đình chỉ chủ hộ, mở từ nút trong "Mã của tôi"
   { key: 'my-code', label: 'Mã của tôi', icon: IdcardOutlined, path: 'my-code', component: MyCodePage },
   { key: 'family', label: 'Gia đình', path: 'my-code/family', component: FamilyPage, hideInMenu: true },
+  // Gói tháng tiện ích (UC-D09): mở từ "Mã của tôi" / "Gia đình" (thanh dưới đã đủ 5 mục)
+  { key: 'my-passes', label: 'Gói tháng', path: 'my-code/passes', component: MyPassesPage, hideInMenu: true },
   {
     key: 'announcements',
     label: 'Bảng tin',

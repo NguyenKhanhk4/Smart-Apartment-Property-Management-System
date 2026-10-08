@@ -3,9 +3,11 @@
 import { Apartment, Building, MemberCode, User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { retryOnDuplicate } from '../../utils/codeGenerator.js';
+import { periodEnd, vnPeriod } from '../../utils/time.js';
 import { escapeRegex } from '../../utils/pagination.js';
 import { ageAt, ageGroupOf } from '../amenities/pricing.js';
 import { getBookingConfig, toVnYmd, vnDayStart } from '../amenities/slot.utils.js';
+import { activePassesByUser } from '../amenityPasses/passes.queries.js';
 import { assertHead, getHousehold, getMyHouseholds } from '../household/household.service.js';
 
 // ===== Mã chữ =====
@@ -160,6 +162,13 @@ export async function getHouseholdView(userId, apartmentId) {
   await assertHead(userId, id);
   const [{ household, byUser }, cfg] = await Promise.all([activeCodesOf(id), getBookingConfig()]);
   const now = new Date();
+  // Gói tháng đang có (tháng này và tháng sau) của từng người — UC-D09
+  const current = vnPeriod(now);
+  const passes = await activePassesByUser(household.members.map((m) => m.userId), {
+    apartmentId: id,
+    fromMonth: current,
+    toMonth: vnPeriod(periodEnd(current)),
+  });
   return {
     apartment: apartmentView(household.apartment),
     ownerResiding: household.ownerResiding,
@@ -172,8 +181,7 @@ export async function getHouseholdView(userId, apartmentId) {
         seq: c?.seq ?? null,
         canIncurCharges: m.isHead || Boolean(c?.canIncurCharges),
         ...ageInfo(m.dateOfBirth, now, cfg),
-        // Bước 8 (UC-D09) điền: gói tháng đang dùng của thành viên và số chỗ còn trống
-        passes: [],
+        passes: (passes.get(m.userId) ?? []).map((p) => ({ ...p, isCurrent: p.month === current })),
       };
     }),
   };
@@ -273,6 +281,8 @@ export async function lookup(q) {
     apartment: apartmentView(household.apartment),
     isHead: me.isHead,
     canIncurCharges: me.isHead || current.canIncurCharges,
+    // Gói tháng đang có hiệu lực (tháng hiện tại giờ VN) của người này — UC-D09
+    passes: (await activePassesByUser([me.userId], { fromMonth: vnPeriod(), toMonth: vnPeriod() })).get(me.userId) ?? [],
     household: household.members.map((m) => ({
       userId: m.userId,
       fullName: m.fullName,

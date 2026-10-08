@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Alert, Button, Empty, Flex, Segmented, Spin, Typography } from 'antd';
-import { TeamOutlined } from '@ant-design/icons';
+import { TagsOutlined, TeamOutlined } from '@ant-design/icons';
 import { memberCodeApi } from '../../api/moduleD.api';
 import { useApi } from '../../hooks/useApi';
 import { vtName } from '../../motion/viewTransition';
@@ -46,6 +46,13 @@ export default function MyCodePage() {
                 }
               />
             )}
+            <Button
+              block
+              icon={<TagsOutlined />}
+              onClick={() => navigate(`/r/my-code/passes?apartmentId=${apartmentId}`, { viewTransition: true })}
+            >
+              {card.isHead ? 'Gói tháng tiện ích' : 'Gói tháng của tôi'}
+            </Button>
             {card.isHead && (
               <Button
                 block

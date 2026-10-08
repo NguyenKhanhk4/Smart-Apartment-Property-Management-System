@@ -174,6 +174,12 @@ export const AGE_GROUPS = Object.freeze({
   ADULT: 'ADULT',
 });
 
+// Gói tháng tiện ích (UC-D09, BR-O22): theo người, theo tháng dương lịch, hiệu lực ngay khi mua
+export const AMENITY_PASS_STATUS = Object.freeze({
+  ACTIVE: 'ACTIVE',
+  CANCELLED: 'CANCELLED',
+});
+
 // ===== Ticket, sổ khách, bảng tin, thông báo (Module E) =====
 // Thứ tự trong mảng = thứ tự leo thang (BR-O8)
 export const PRIORITIES = Object.freeze({
@@ -259,6 +265,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   ANNOUNCEMENT_PUBLISHED: 'ANNOUNCEMENT_PUBLISHED',
   WORKORDER_ASSIGNED: 'WORKORDER_ASSIGNED',
   AMENITY_FEE_CHANGED: 'AMENITY_FEE_CHANGED',
+  AMENITY_PASS_CANCELLED: 'AMENITY_PASS_CANCELLED',
 });
 
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
