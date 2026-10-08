@@ -15,6 +15,7 @@ import workOrderRoutes from './modules/workOrders/workOrders.routes.js';
 import amenityRoutes from './modules/amenities/amenities.routes.js';
 import memberCodeRoutes from './modules/memberCodes/memberCodes.routes.js';
 import amenityPassRoutes from './modules/amenityPasses/amenityPasses.routes.js';
+import bookingRoutes from './modules/bookings/bookings.routes.js';
 import devAuthRoutes from './modules/devAuth/devAuth.routes.js';
 
 const router = Router();
@@ -54,6 +55,7 @@ router.use('/work-orders', workOrderRoutes);
 router.use('/amenities', amenityRoutes);
 router.use('/member-codes', memberCodeRoutes);
 router.use('/amenity-passes', amenityPassRoutes);
+router.use('/bookings', bookingRoutes);
 
 // Chỉ môi trường dev: đăng nhập nhanh bằng tài khoản seed (xem modules/devAuth). Xóa khi Module A có /auth/login.
 if (env.isDev) router.use('/dev', devAuthRoutes);

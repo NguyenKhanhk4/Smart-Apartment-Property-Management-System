@@ -45,6 +45,17 @@ export const amenityApi = {
   create: (body, image) => http.post('/amenities', amenityForm(body, image)),
   update: (id, body, image) => http.put(`/amenities/${id}`, amenityForm(body, image)),
   setStatus: (id, isActive) => http.patch(`/amenities/${id}/status`, { isActive }),
+  /** UC-D06: lưới slot của tiện ích BOOKING trong 1 ngày. params: { date: 'YYYY-MM-DD', apartmentId? } */
+  slots: (id, params) => http.get(`/amenities/${id}/slots`, { params }),
+};
+
+// ===== UC-D06: Đặt tiện ích =====
+export const bookingApi = {
+  /** body: { apartmentId, amenityId, date: 'YYYY-MM-DD', slotStart: 'HH:mm' } */
+  create: (body) => http.post('/bookings', body),
+  /** params: { scope: 'upcoming' | 'past', apartmentId?, page?, limit? } */
+  mine: (params) => http.get('/bookings/mine', { params }),
+  cancel: (id) => http.patch(`/bookings/${id}/cancel`, {}),
 };
 
 // ===== UC-D11: Thẻ cư dân (mã chữ), gia đình, tra mã =====

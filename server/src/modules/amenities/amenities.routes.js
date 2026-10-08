@@ -8,6 +8,7 @@ import { uploadImages } from '../../services/upload.service.js';
 import { MAX_LIMIT, paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { idParams, objectId } from '../../utils/validators.js';
+import * as bookings from '../bookings/bookings.service.js';
 import * as service from './amenities.service.js';
 import { HHMM } from './slot.utils.js';
 
@@ -123,6 +124,27 @@ router.post(
   uploadImages('image', 1),
   validate({ body: createBody }),
   async (req, res) => created(res, await service.createAmenity(req.user, req.body, req.files), 'Đã thêm tiện ích'),
+);
+
+const SLOT_VIEWERS = ['MANAGER', 'STAFF:RECEPTIONIST', 'STAFF:SECURITY', 'RESIDENT'];
+const slotsQuery = Joi.object({
+  date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required().messages({ 'string.pattern.base': '{{#label}} phải có dạng YYYY-MM-DD' }),
+  apartmentId: objectId(),
+});
+
+/**
+ * @openapi
+ * /amenities/{id}/slots:
+ *   get:
+ *     tags: [Tiện ích & đặt chỗ]
+ *     summary: Lưới slot của tiện ích BOOKING trong một ngày (UC-D06) — sức chứa / đã đặt / còn lại, phí áp cho người xem (0 nếu có gói tháng), lý do khóa slot. Tiện ích khác BOOKING → AMENITY_NOT_BOOKABLE
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *       - { in: query, name: date, required: true, schema: { type: string, example: '2026-10-09' } }
+ *       - { in: query, name: apartmentId, schema: { type: string }, description: 'Cư dân ở nhiều căn phải chọn' }
+ */
+router.get('/:id/slots', authenticate, authorize(...SLOT_VIEWERS), validate({ params: idParams, query: slotsQuery }), async (req, res) =>
+  ok(res, await bookings.getSlots(req.user, req.params.id, req.validated.query)),
 );
 
 /**

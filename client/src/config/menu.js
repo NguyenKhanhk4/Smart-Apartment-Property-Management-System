@@ -53,6 +53,9 @@ const MyCodePage = lazy(() => import('../features/memberCodes/MyCodePage'));
 const FamilyPage = lazy(() => import('../features/memberCodes/FamilyPage'));
 const MyPassesPage = lazy(() => import('../features/amenityPasses/MyPassesPage'));
 const AmenityPassesPage = lazy(() => import('../features/amenityPasses/AmenityPassesPage'));
+const AmenityListPage = lazy(() => import('../features/bookings/AmenityListPage'));
+const AmenityBookingPage = lazy(() => import('../features/bookings/AmenityBookingPage'));
+const MyBookingsPage = lazy(() => import('../features/bookings/MyBookingsPage'));
 
 // ===== Module E (Phạm Lượng) =====
 const TicketsPage = lazy(() => import('../features/tickets/TicketsPage'));
@@ -239,8 +242,12 @@ export const residentMenu = [
   // Thẻ cư dân (UC-D11): mã chữ; trang Gia đình chỉ chủ hộ, mở từ nút trong "Mã của tôi"
   { key: 'my-code', label: 'Mã của tôi', icon: IdcardOutlined, path: 'my-code', component: MyCodePage },
   { key: 'family', label: 'Gia đình', path: 'my-code/family', component: FamilyPage, hideInMenu: true },
-  // Gói tháng tiện ích (UC-D09): mở từ "Mã của tôi" / "Gia đình" (thanh dưới đã đủ 5 mục)
+  // Gói tháng tiện ích (UC-D09): mở từ "Mã của tôi" / "Gia đình" (thanh dưới đã khá chật)
   { key: 'my-passes', label: 'Gói tháng', path: 'my-code/passes', component: MyPassesPage, hideInMenu: true },
+  // Đặt tiện ích (UC-D06). 'amenities/bookings' (đường dẫn tĩnh) được ưu tiên hơn 'amenities/:id'
+  { key: 'amenities', label: 'Tiện ích', icon: CoffeeOutlined, path: 'amenities', component: AmenityListPage },
+  { key: 'my-bookings', label: 'Lịch sử đặt', path: 'amenities/bookings', component: MyBookingsPage, hideInMenu: true },
+  { key: 'amenity-booking', label: 'Đặt tiện ích', path: 'amenities/:id', component: AmenityBookingPage, hideInMenu: true },
   {
     key: 'announcements',
     label: 'Bảng tin',
