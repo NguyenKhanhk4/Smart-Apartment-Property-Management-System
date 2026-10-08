@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router';
 import { Avatar, Dropdown } from 'antd';
-import { HomeOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { CarOutlined, HomeOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import { useAuth } from '../hooks/useAuth';
 import { roleLabelOf } from '../constants/enums';
 
@@ -15,7 +15,10 @@ export default function UserMenu({ compact = false }) {
   const items = [
     { key: 'profile', icon: <UserOutlined />, label: 'Hồ sơ cá nhân' },
     ...(user?.role === 'RESIDENT'
-      ? [{ key: 'my-apartment', icon: <HomeOutlined />, label: 'Căn hộ của tôi' }]
+      ? [
+          { key: 'my-apartment', icon: <HomeOutlined />, label: 'Căn hộ của tôi' },
+          { key: 'my-vehicles', icon: <CarOutlined />, label: 'Xe của tôi' },
+        ]
       : []),
     { type: 'divider' },
     { key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất', danger: true },
@@ -26,6 +29,8 @@ export default function UserMenu({ compact = false }) {
       navigate(profilePath, { viewTransition: true });
     } else if (key === 'my-apartment') {
       navigate('/r/my-apartment', { viewTransition: true });
+    } else if (key === 'my-vehicles') {
+      navigate('/r/my-vehicles', { viewTransition: true });
     } else if (key === 'logout') {
       logout();
     }

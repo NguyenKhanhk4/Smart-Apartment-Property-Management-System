@@ -53,5 +53,16 @@ export const residentsApi = {
   myApartments: () => http.get('/residents/me/apartments'),
 };
 
+// ===== UC-A09 & UC-A10: Phương tiện =====
+export const vehicleApi = {
+  listMine: (params) => http.get('/vehicles/mine', { params }),
+  register: (body) => http.post('/vehicles', body),
+  requestCancel: (id) => http.patch(`/vehicles/${id}/cancel-request`),
+  list: (params) => http.get('/vehicles', { params }),
+  approve: (id) => http.patch(`/vehicles/${id}/approve`),
+  reject: (id, body) => http.patch(`/vehicles/${id}/reject`, body),
+  confirmCancel: (id) => http.patch(`/vehicles/${id}/confirm-cancel`),
+};
+
 
 

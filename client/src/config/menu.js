@@ -2,6 +2,7 @@ import { lazy } from 'react';
 import {
   AppstoreOutlined,
   BankOutlined,
+  CarOutlined,
   CoffeeOutlined,
   BarChartOutlined,
   BellOutlined,
@@ -55,6 +56,8 @@ const BuildingsPage = lazy(() => import('../features/buildings/BuildingsPage'));
 const ContractsPage = lazy(() => import('../features/contracts/ContractsPage'));
 const ApartmentDetailPage = lazy(() => import('../features/apartments/ApartmentDetailPage'));
 const MyApartmentPage = lazy(() => import('../features/residents/MyApartmentPage'));
+const VehicleRequestsPage = lazy(() => import('../features/vehicles/VehicleRequestsPage'));
+const MyVehiclesPage = lazy(() => import('../features/vehicles/MyVehiclesPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -248,6 +251,15 @@ export const adminMenu = [
     component: ContractsPage,
   },
   {
+    key: 'vehicle-requests',
+    group: 'Cư dân & dịch vụ',
+    label: 'Yêu cầu gửi xe',
+    icon: CarOutlined,
+    path: 'vehicle-requests',
+    roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
+    component: VehicleRequestsPage,
+  },
+  {
     key: 'buildings',
     group: 'Cấu hình',
     label: 'Tòa nhà & Căn hộ',
@@ -328,6 +340,14 @@ export const residentMenu = [
     icon: HomeOutlined,
     path: 'my-apartment',
     component: MyApartmentPage,
+    hideInMenu: true,
+  },
+  {
+    key: 'my-vehicles',
+    label: 'Xe của tôi',
+    icon: CarOutlined,
+    path: 'my-vehicles',
+    component: MyVehiclesPage,
     hideInMenu: true,
   },
   {

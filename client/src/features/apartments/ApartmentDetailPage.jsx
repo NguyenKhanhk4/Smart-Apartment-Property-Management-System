@@ -40,11 +40,13 @@ import {
   CONTRACT_TYPES,
   CONTRACT_STATUS,
   RELATION_TYPES,
+  VEHICLE_STATUS,
+  VEHICLE_TYPES,
 } from '../../constants/enums';
 import { formatDate } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi, useAction } from '../../hooks/useApi';
-import { apartmentsApi, contractsApi, residentsApi } from '../../api/moduleA.api';
+import { apartmentsApi, contractsApi, residentsApi, vehicleApi } from '../../api/moduleA.api';
 
 export default function ApartmentDetailPage() {
   const { id } = useParams();
@@ -74,6 +76,14 @@ export default function ApartmentDetailPage() {
     reload: reloadContracts,
   } = useApi(() => contractsApi.list({ apartmentId: id, limit: 50 }), [id]);
   const contracts = contractsData || [];
+
+  // Load vehicles list
+  const {
+    data: vehiclesData,
+    loading: loadingVehicles,
+    reload: reloadVehicles,
+  } = useApi(() => vehicleApi.list({ apartmentId: id, limit: 100 }), [id]);
+  const vehicles = vehiclesData?.items || vehiclesData || [];
 
   // Modal Thêm thành viên
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -302,6 +312,53 @@ export default function ApartmentDetailPage() {
     },
   ];
 
+  // Cột bảng phương tiện
+  const vehicleColumns = [
+    {
+      title: 'Loại xe',
+      dataIndex: 'type',
+      key: 'type',
+      width: 120,
+      render: (val) => <EnumTag map={VEHICLE_TYPES} value={val} />,
+    },
+    {
+      title: 'Biển số xe',
+      dataIndex: 'plateNumber',
+      key: 'plateNumber',
+      width: 150,
+      render: (val, r) => (
+        <span className="font-semibold text-gray-800 dark:text-gray-100">
+          {val || (r.type === 'BICYCLE' ? <i className="text-gray-400 font-normal">Không biển số</i> : '—')}
+        </span>
+      ),
+    },
+    {
+      title: 'Hãng / Màu',
+      key: 'details',
+      width: 150,
+      render: (_, r) => [r.brand, r.color].filter(Boolean).join(' • ') || '—',
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      key: 'status',
+      width: 130,
+      render: (val) => <EnumTag map={VEHICLE_STATUS} value={val} />,
+    },
+    {
+      title: 'Người đăng ký',
+      key: 'registeredBy',
+      render: (_, r) => r.registeredBy?.fullName || '—',
+    },
+    {
+      title: 'Ngày duyệt',
+      dataIndex: 'approvedAt',
+      key: 'approvedAt',
+      width: 140,
+      render: (val) => (val ? formatDate(val) : '—'),
+    },
+  ];
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div className="mb-4">
@@ -317,7 +374,15 @@ export default function ApartmentDetailPage() {
           subtitle={`${apartment?.building?.name || ''} • Tầng ${apartment?.floor || ''} • ${apartment?.area || 0} m²`}
           extra={
             <Space>
-              <Button icon={<ReloadOutlined />} onClick={() => { reloadApt(); reloadResidents(); reloadContracts(); }}>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => {
+                  reloadApt();
+                  reloadResidents();
+                  reloadContracts();
+                  reloadVehicles();
+                }}
+              >
                 Làm mới
               </Button>
             </Space>
@@ -328,7 +393,7 @@ export default function ApartmentDetailPage() {
       {/* Thông tin tổng quan căn hộ */}
       <Card loading={loadingApt} className="mb-6 shadow-sm border border-gray-100 dark:border-gray-800">
         <Row gutter={[24, 16]} align="middle">
-          <Col xs={24} sm={12} md={6}>
+          <Col xs={24} sm={12} md={5}>
             <Statistic
               title="Trạng thái căn"
               valueRender={() => (
@@ -338,7 +403,7 @@ export default function ApartmentDetailPage() {
               )}
             />
           </Col>
-          <Col xs={12} sm={6} md={6}>
+          <Col xs={12} sm={6} md={5}>
             <Statistic
               title="Cư dân đang ở"
               value={residents.length}
@@ -346,15 +411,23 @@ export default function ApartmentDetailPage() {
               suffix="người"
             />
           </Col>
-          <Col xs={12} sm={6} md={6}>
+          <Col xs={12} sm={6} md={5}>
             <Statistic
-              title="Hợp đồng đang có"
+              title="Hợp đồng"
               value={contracts.length}
               prefix={<FileTextOutlined className="text-gold mr-1" />}
               suffix="HĐ"
             />
           </Col>
-          <Col xs={12} sm={6} md={6}>
+          <Col xs={12} sm={6} md={5}>
+            <Statistic
+              title="Phương tiện"
+              value={vehicles.length}
+              prefix={<CarOutlined className="text-green-500 mr-1" />}
+              suffix="xe"
+            />
+          </Col>
+          <Col xs={12} sm={6} md={4}>
             <Statistic
               title="Diện tích"
               value={apartment?.area || 0}
@@ -427,23 +500,20 @@ export default function ApartmentDetailPage() {
               key: 'vehicles',
               label: (
                 <span>
-                  <CarOutlined /> Phương tiện
+                  <CarOutlined /> Phương tiện ({vehicles.length})
                 </span>
               ),
               children: (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={
-                    <div>
-                      <div className="font-medium text-gray-600 dark:text-gray-300">
-                        Quản lý phương tiện căn hộ
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        Tính năng quản lý phương tiện đang được hoàn thiện ở Giai đoạn tiếp theo (UC-A09, UC-A10)
-                      </div>
-                    </div>
-                  }
-                />
+                <div>
+                  <Table
+                    columns={vehicleColumns}
+                    dataSource={vehicles}
+                    rowKey="_id"
+                    loading={loadingVehicles}
+                    pagination={false}
+                    locale={{ emptyText: 'Chưa có phương tiện nào đăng ký cho căn hộ này' }}
+                  />
+                </div>
               ),
             },
           ]}
