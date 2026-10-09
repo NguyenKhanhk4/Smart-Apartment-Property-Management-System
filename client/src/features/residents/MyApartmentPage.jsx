@@ -262,6 +262,18 @@ export default function MyApartmentPage() {
           Dịch vụ & Tiện ích căn hộ
         </div>
         <Row gutter={[12, 12]}>
+          {/* Gia đình (cấp quyền phát sinh phí, ngày sinh) — chỉ chủ hộ; không còn nút ở "Mã của tôi" */}
+          {currentApartment?.isHead && (
+            <Col xs={12} sm={6}>
+              <Button
+                block
+                icon={<TeamOutlined className="text-emerald-500" />}
+                onClick={() => navigate(`/r/my-code/family?apartmentId=${activeAptId}`)}
+              >
+                Quản lý gia đình
+              </Button>
+            </Col>
+          )}
           <Col xs={12} sm={6}>
             <Button
               block

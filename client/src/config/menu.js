@@ -48,6 +48,7 @@ export const MENU_GROUPS = [
 ];
 
 const HomePage = lazy(() => import('../features/home/HomePage'));
+const ResidentHomePage = lazy(() => import('../features/home/ResidentHomePage'));
 
 // ===== Module A (Vũ Việt) =====
 const ProfilePage = lazy(() => import('../features/profile/ProfilePage'));
@@ -69,7 +70,7 @@ const MyCodePage = lazy(() => import('../features/memberCodes/MyCodePage'));
 const FamilyPage = lazy(() => import('../features/memberCodes/FamilyPage'));
 const MyPassesPage = lazy(() => import('../features/amenityPasses/MyPassesPage'));
 const AmenityPassesPage = lazy(() => import('../features/amenityPasses/AmenityPassesPage'));
-const AmenityListPage = lazy(() => import('../features/bookings/AmenityListPage'));
+const UtilitiesPage = lazy(() => import('../features/bookings/UtilitiesPage'));
 const AmenityBookingPage = lazy(() => import('../features/bookings/AmenityBookingPage'));
 const MyBookingsPage = lazy(() => import('../features/bookings/MyBookingsPage'));
 
@@ -306,10 +307,10 @@ export const adminMenu = [
   },
 ];
 
-// Giao diện cư dân (/r/*) — hiện ở thanh điều hướng dưới cùng, nên giữ tối đa 5 mục.
-// Thông báo vào qua chuông trên header nên ẩn khỏi thanh dưới.
+// Giao diện cư dân (/r/*). Mục nào hiện ở đâu do residentBottomNav / residentWebNav bên dưới quyết định
+// (theo `key`), không còn do hideInMenu. Thông báo vào qua chuông trên header.
 export const residentMenu = [
-  { key: 'home', label: 'Trang chủ', icon: HomeOutlined, path: 'home', component: HomePage },
+  { key: 'home', label: 'Trang chủ', icon: HomeOutlined, path: 'home', component: ResidentHomePage },
   { key: 'tickets', label: 'Phản ánh', icon: ToolOutlined, path: 'tickets', component: ResidentTicketsPage },
   {
     key: 'ticket-detail',
@@ -325,7 +326,7 @@ export const residentMenu = [
   // Gói tháng tiện ích (UC-D09): mở từ "Mã của tôi" / "Gia đình" (thanh dưới đã khá chật)
   { key: 'my-passes', label: 'Gói tháng', path: 'my-code/passes', component: MyPassesPage, hideInMenu: true },
   // Đặt tiện ích (UC-D06). 'amenities/bookings' (đường dẫn tĩnh) được ưu tiên hơn 'amenities/:id'
-  { key: 'amenities', label: 'Tiện ích', icon: CoffeeOutlined, path: 'amenities', component: AmenityListPage },
+  { key: 'amenities', label: 'Tiện ích', icon: CoffeeOutlined, path: 'amenities', component: UtilitiesPage },
   { key: 'my-bookings', label: 'Lịch sử đặt', path: 'amenities/bookings', component: MyBookingsPage, hideInMenu: true },
   { key: 'amenity-booking', label: 'Đặt tiện ích', path: 'amenities/:id', component: AmenityBookingPage, hideInMenu: true },
   {
@@ -369,3 +370,8 @@ export const residentMenu = [
     hideInMenu: true,
   },
 ];
+
+// Thanh điều hướng dưới (mobile): 5 mục, mục giữa là nút nổi "Mã của tôi". Bảng tin vào qua "Xem tất cả" ở trang chủ.
+export const residentBottomNav = ['home', 'amenities', 'my-code', 'tickets', 'guests'];
+// Thanh điều hướng ngang (web ≥768px). "Mã của tôi" là nút riêng bên phải nên không nằm trong danh sách này.
+export const residentWebNav = ['home', 'amenities', 'tickets', 'guests', 'announcements'];
