@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { Avatar, Button, Card, DatePicker, Flex, Form, Input, Modal, Select, Table, Tag, Tooltip, Typography } from 'antd';
 import { LoginOutlined, PlusOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -35,7 +36,8 @@ export default function BookingSchedulePage() {
   const canCheckIn = hasRole('STAFF:RECEPTIONIST', 'STAFF:SECURITY');
   const [date, setDate] = useState(() => dayjs());
   const [amenityId, setAmenityId] = useState();
-  const [q, setQ] = useState();
+  const [searchParams] = useSearchParams();
+  const [q, setQ] = useState(() => searchParams.get('q') || undefined); // từ trang chủ lễ tân (tra mã cư dân)
   const [silent, setSilent] = useState(false); // tự làm mới: không hiện vòng xoay trên bảng
   const [clock, setClock] = useState(0);
   const [checkingIn, setCheckingIn] = useState(null);
@@ -217,7 +219,7 @@ export default function BookingSchedulePage() {
             onChange={setAmenityId}
             options={(data?.amenities ?? []).map((a) => ({ value: a._id, label: a.name }))}
           />
-          <Input.Search placeholder="Mã căn / mã cư dân / tên / SĐT" allowClear style={{ width: 280 }} onSearch={(v) => setQ(v.trim() || undefined)} />
+          <Input.Search placeholder="Mã căn / mã cư dân / tên / SĐT" allowClear defaultValue={q} style={{ width: 280 }} onSearch={(v) => setQ(v.trim() || undefined)} />
         </Flex>
         <Table
           rowKey="_id"

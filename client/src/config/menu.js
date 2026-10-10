@@ -319,6 +319,23 @@ export const adminMenu = [
   },
 ];
 
+// Sidebar riêng của Lễ tân (trang chủ mới): nhóm lại các mục có sẵn trong adminMenu theo `key`, kèm khóa badge số việc chờ.
+// Chỉ đổi cách sắp xếp hiển thị; route và quyền vẫn lấy từ adminMenu.
+export const receptionNav = [
+  { items: [{ key: 'home' }] },
+  {
+    group: 'Vận hành hằng ngày',
+    items: [
+      { key: 'guests', badge: 'guestsPending', badgeTone: 'neutral' },
+      { key: 'booking-schedule', badge: 'bookingsWaiting' },
+      { key: 'tickets', badge: 'ticketsNew' },
+      { key: 'vehicle-requests', badge: 'vehiclesPending' },
+    ],
+  },
+  { group: 'Cư dân và dịch vụ', items: [{ key: 'amenity-passes' }, { key: 'announcements' }] },
+  { group: 'Cấu hình', items: [{ key: 'buildings' }] },
+];
+
 // Giao diện cư dân (/r/*). Mục nào hiện ở đâu do residentBottomNav / residentWebNav bên dưới quyết định
 // (theo `key`), không còn do hideInMenu. Thông báo vào qua chuông trên header.
 export const residentMenu = [

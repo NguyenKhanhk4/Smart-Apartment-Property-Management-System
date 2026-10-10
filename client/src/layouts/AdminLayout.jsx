@@ -11,12 +11,16 @@ import PageLoader from '../components/PageLoader';
 import BrandLogo from '../components/BrandLogo';
 import CommandPalette from '../components/CommandPalette';
 import NotificationBell from '../features/notifications/NotificationBell';
+import ReceptionSidebarNav from './ReceptionSidebarNav';
+import { useReceptionPolling } from '../features/home/reception/receptionDashboard';
 import SlidingIndicator from '../motion/SlidingIndicator';
 import PageTransition from '../motion/PageTransition';
 import { springConfig } from '../motion/presets';
 
 const WIDE = 248;
+const WIDE_RECEPTION = 260;
 const NARROW = 72;
+const RECEPTION_NAVY = '#1A2440';
 
 /** Gom mục menu được phép xem theo nhóm, giữ thứ tự MENU_GROUPS */
 function useGroupedMenu() {
@@ -114,6 +118,11 @@ export default function AdminLayout() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { isDark, toggle } = useThemeMode();
   const { pathname } = useLocation();
+  // Lễ tân có giao diện riêng (trang chủ mới, sidebar nhóm lại + badge, header cao hơn); các vai trò khác giữ nguyên
+  const { hasRole } = useAuth();
+  const isReception = hasRole('STAFF:RECEPTIONIST');
+  const wide = isReception ? WIDE_RECEPTION : WIDE;
+  useReceptionPolling(isReception);
 
   // Ctrl+K / ⌘K mở tìm kiếm nhanh
   useEffect(() => {
@@ -129,7 +138,7 @@ export default function AdminLayout() {
 
   const sidebarInner = (narrow) => (
     <>
-      <div className="h-16 flex items-center justify-between px-4 border-b border-side-line shrink-0">
+      <div className={`${isReception ? "h-[68px]" : "h-16"} flex items-center justify-between px-4 border-b border-side-line shrink-0`}>
         <SidebarBrand collapsed={narrow} />
         {!isMobile && (
           <button
@@ -142,36 +151,45 @@ export default function AdminLayout() {
           </button>
         )}
       </div>
-      <SidebarNav collapsed={narrow} onNavigate={() => setDrawerOpen(false)} />
+      {isReception ? (
+        <ReceptionSidebarNav collapsed={narrow} onNavigate={() => setDrawerOpen(false)} />
+      ) : (
+        <SidebarNav collapsed={narrow} onNavigate={() => setDrawerOpen(false)} />
+      )}
     </>
   );
 
   return (
-    <div className="min-h-screen flex bg-ivory dark:bg-[#0B1422]">
+    <div className={`min-h-screen flex dark:bg-[#0B1422] ${isReception ? 'bg-r-bg' : 'bg-ivory'}`}>
       {isMobile ? (
         <Drawer
           placement="left"
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
-          size={WIDE}
+          size={wide}
           closable={false}
-          styles={{ body: { padding: 0, background: '#0F1B2D', display: 'flex', flexDirection: 'column' } }}
+          styles={{ body: { padding: 0, background: isReception ? RECEPTION_NAVY : '#0F1B2D', display: 'flex', flexDirection: 'column' } }}
         >
           {sidebarInner(false)}
         </Drawer>
       ) : (
         <motion.aside
-          animate={{ width: collapsed ? NARROW : WIDE }}
+          animate={{ width: collapsed ? NARROW : wide }}
           transition={springConfig}
-          className="h-screen sticky top-0 flex flex-col bg-midnight border-r border-side-line shrink-0 select-none z-30"
+          style={isReception ? { background: RECEPTION_NAVY } : undefined}
+          className={`h-screen sticky top-0 flex flex-col border-r border-side-line shrink-0 select-none z-30 ${isReception ? '' : 'bg-midnight'}`}
         >
           {sidebarInner(collapsed)}
         </motion.aside>
       )}
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 sticky top-0 z-20 border-b px-4 md:px-6 flex items-center justify-between gap-3 bg-white/95 border-line dark:bg-[#121E31]/95 dark:border-[#24344D] backdrop-blur-sm">
-          <div className="flex items-center gap-2 min-w-0">
+        <header
+          className={`sticky top-0 z-20 border-b px-4 md:px-8 flex items-center justify-between gap-3 bg-white/95 dark:bg-[#121E31]/95 dark:border-[#24344D] backdrop-blur-sm ${
+            isReception ? 'h-[68px] border-r-border' : 'h-16 border-line md:px-6'
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {isMobile && (
               <button
                 type="button"
@@ -185,10 +203,17 @@ export default function AdminLayout() {
             <button
               type="button"
               onClick={() => setPaletteOpen(true)}
-              className="flex items-center gap-2.5 px-3 py-1.5 rounded-md border text-xs cursor-pointer transition-colors bg-ivory border-line text-ink-2 hover:bg-surface-alt dark:bg-[#18263D] dark:border-[#24344D] dark:text-[#A7B0BF]"
+              aria-label={isReception ? 'Tìm chức năng, cư dân, căn hộ' : 'Tìm chức năng'}
+              className={`flex items-center gap-2.5 px-3 border cursor-pointer transition-colors dark:bg-[#18263D] dark:border-[#24344D] dark:text-[#A7B0BF] ${
+                isReception
+                  ? 'h-11 w-full max-w-[620px] rounded-[10px] text-sm bg-white border-r-border-control text-r-subtle hover:border-r-muted'
+                  : 'py-1.5 rounded-md text-xs bg-ivory border-line text-ink-2 hover:bg-surface-alt'
+              }`}
             >
               <SearchOutlined className="text-ink-3" />
-              <span className="hidden sm:inline">Tìm chức năng…</span>
+              <span className={`hidden sm:inline ${isReception ? 'flex-1 text-left' : ''}`}>
+                {isReception ? 'Tìm chức năng, cư dân, căn hộ' : 'Tìm chức năng…'}
+              </span>
               <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-white border border-line-strong rounded text-ink-3 dark:bg-transparent">
                 Ctrl K
               </kbd>
@@ -206,9 +231,9 @@ export default function AdminLayout() {
                 {isDark ? <SunOutlined className="text-gold" /> : <MoonOutlined />}
               </button>
             </Tooltip>
-            <NotificationBell area="app" />
+            <NotificationBell area="app" variant={isReception ? 'resident' : undefined} />
             <span className="h-5 w-px bg-line dark:bg-[#24344D]" />
-            <UserMenu compact={isMobile} />
+            <UserMenu compact={isMobile} variant={isReception ? 'reception' : undefined} />
           </div>
         </header>
 

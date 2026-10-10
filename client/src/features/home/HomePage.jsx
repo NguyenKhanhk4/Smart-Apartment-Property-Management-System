@@ -8,10 +8,11 @@ import { announcementApi } from '../../api/moduleE.api';
 import { adminMenu, residentMenu } from '../../config/menu';
 import { roleLabelOf } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
+import ReceptionHomePage from './reception/ReceptionHomePage';
 
 // Trang chủ cho cả hai giao diện: lối tắt tới các chức năng được phép + bảng tin mới nhất.
 // Dashboard số liệu chi tiết nằm ở mục Báo cáo (UC-E10..E14).
-export default function HomePage() {
+function DefaultHome() {
   const { user, hasRole } = useAuth();
   const navigate = useNavigate();
   const area = useLocation().pathname.startsWith('/r') ? 'r' : 'app';
@@ -74,4 +75,10 @@ export default function HomePage() {
       </Card>
     </Flex>
   );
+}
+
+// Lễ tân có trang chủ riêng (tra mã, việc cần xử lý); các vai trò khác dùng trang chung ở trên
+export default function HomePage() {
+  const { hasRole } = useAuth();
+  return hasRole('STAFF:RECEPTIONIST') ? <ReceptionHomePage /> : <DefaultHome />;
 }
