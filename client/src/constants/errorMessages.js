@@ -31,6 +31,8 @@ export const ERROR_MESSAGES = {
   ASSET_HAS_OPEN_WORKORDER: 'Tài sản còn work order chưa hoàn thành.',
   BOOKING_LIMIT_EXCEEDED: 'Căn hộ đã đạt số lượng booking chưa dùng tối đa.',
   BOOKING_INVALID_STATUS: 'Trạng thái booking hiện tại không cho phép thao tác này.',
+  BOOKING_CHECKIN_OUT_OF_WINDOW: 'Chưa đến hoặc đã quá thời gian check-in của booking này.',
+  BOOKING_WRONG_HOUSEHOLD: 'Người đến không thuộc căn hộ đã đặt booking này.',
   AMENITY_NOT_BOOKABLE: 'Tiện ích này không áp dụng đặt chỗ.',
   CHARGE_NOT_ALLOWED: 'Bạn chưa được chủ hộ cho phép phát sinh phí tiện ích. Hãy nhờ chủ hộ bật quyền hoặc chọn khung giờ miễn phí.',
   AMENITY_INACTIVE: 'Tiện ích đang ngừng hoạt động.',

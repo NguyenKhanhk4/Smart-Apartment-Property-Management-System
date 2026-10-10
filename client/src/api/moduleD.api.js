@@ -55,7 +55,16 @@ export const bookingApi = {
   create: (body) => http.post('/bookings', body),
   /** params: { scope: 'upcoming' | 'past', apartmentId?, page?, limit? } */
   mine: (params) => http.get('/bookings/mine', { params }),
-  cancel: (id) => http.patch(`/bookings/${id}/cancel`, {}),
+  /** Cư dân hủy: không cần lý do. Lễ tân hủy: bắt buộc reason (UC-D07) */
+  cancel: (id, reason) => http.patch(`/bookings/${id}/cancel`, reason ? { reason } : {}),
+
+  // ----- UC-D07: lịch trong ngày, check-in, đặt hộ (Lễ tân, Bảo vệ, Trưởng BQL) -----
+  /** params: { date?: 'YYYY-MM-DD' (mặc định hôm nay), amenityId?, q? } → { date, serverTime, rules, bookings[] } */
+  schedule: (params) => http.get('/bookings/schedule', { params }),
+  /** Lễ tân / Bảo vệ. code: mã cư dân của người đến (tùy chọn) để kiểm tra đúng căn */
+  checkIn: (id, code) => http.patch(`/bookings/${id}/check-in`, code ? { code } : {}),
+  /** Lễ tân. body: { memberCode, amenityId, date, slotStart, payerCode?, checkInNow? } */
+  counter: (body) => http.post('/bookings/counter', body),
 };
 
 // ===== UC-D11: Thẻ cư dân (mã chữ), gia đình, tra mã =====

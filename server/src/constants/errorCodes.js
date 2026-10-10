@@ -32,6 +32,8 @@ export const ERROR_CODES = Object.freeze({
   BOOKING_CANCEL_TOO_LATE: { status: 409, message: 'Đã đến giờ bắt đầu, không thể hủy booking' },
   BOOKING_LIMIT_EXCEEDED: { status: 409, message: 'Căn hộ đã đạt số lượng booking chưa dùng tối đa' },
   BOOKING_INVALID_STATUS: { status: 409, message: 'Trạng thái booking hiện tại không cho phép thao tác này' },
+  BOOKING_CHECKIN_OUT_OF_WINDOW: { status: 409, message: 'Chưa đến hoặc đã quá thời gian check-in của booking này' },
+  BOOKING_WRONG_HOUSEHOLD: { status: 409, message: 'Người đến không thuộc căn hộ đã đặt booking này' },
   AMENITY_NOT_BOOKABLE: { status: 409, message: 'Tiện ích này không áp dụng đặt chỗ' },
   CHARGE_NOT_ALLOWED: {
     status: 403,

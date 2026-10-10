@@ -1,11 +1,12 @@
 // UC-D06 — Xem lịch trống, đặt tiện ích (tự xác nhận APPROVED, BR-O12), xem lịch sử và hủy. CHỈ tiện ích accessMode = BOOKING.
 // Quyền đặt lấy từ household.service (thành viên CÓ QUYỀN của căn): chủ sở hữu "không ở" không đặt được.
-// Lễ tân đặt hộ / hủy hộ làm ở bước 10 (UC-D07).
-import { AMENITY_ACCESS_MODES, BOOKING_STATUS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
+// UC-D07 (cùng file): lịch trong ngày, check-in (lễ tân / bảo vệ), lễ tân hủy kèm lý do, lễ tân đặt hộ tại quầy.
+import { AMENITY_ACCESS_MODES, AUDIT_ACTIONS, BOOKING_STATUS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
 import { Amenity, Apartment, Booking, MemberCode } from '../../models/index.js';
+import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { paginate } from '../../utils/pagination.js';
+import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { DAY_MS } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { getAmenity, ACTIVE_BOOKING_STATUSES as ACTIVE } from '../amenities/amenities.service.js';
@@ -14,7 +15,8 @@ import { accessModeOf, formatVnd } from '../amenities/pricing.js';
 import { atTime, buildSlotGrid, getBookingConfig, toVnYmd, vnDayStart } from '../amenities/slot.utils.js';
 import { getActivePass } from '../amenityPasses/passes.queries.js';
 import { assertMember, getMyHouseholds } from '../household/household.service.js';
-import { resolveApartmentId } from '../memberCodes/memberCodes.service.js';
+import { ensureCodes, resolveApartmentId, resolveMemberCode } from '../memberCodes/memberCodes.service.js';
+import { checkInWindow, findDayBookings, isInCheckInWindow, loadBookingView, presentDayBookings, vnHHmm } from './bookings.queries.js';
 
 const MINUTE_MS = 60 * 1000;
 const LINK = '/r/amenities/bookings';
@@ -173,9 +175,27 @@ export async function getSlots(user, amenityId, { date, apartmentId }, { now = n
 // ===================================================================================================
 // Đặt chỗ
 // ===================================================================================================
-export async function createBooking(user, { apartmentId, amenityId, date, slotStart }, { now = new Date() } = {}) {
+/** Cư dân tự đặt */
+export const createBooking = (user, body, opts) => placeBooking({ ...body, bookerId: user.id }, opts);
+
+/** Người chịu phí thay (đặt hộ tại quầy): phải cùng căn; có quyền phát sinh phí thì mới đỡ được cho người đặt */
+async function resolvePayer(payerCode, apartmentId) {
+  const record = await resolveMemberCode(payerCode);
+  if (String(record.apartmentId) !== String(apartmentId)) {
+    throw new ApiError('BOOKING_WRONG_HOUSEHOLD', 'Người chịu phí phải thuộc cùng căn hộ với người được đặt hộ');
+  }
+  const { me } = await assertMember(record.userId, apartmentId);
+  return { userId: record.userId, canCharge: await canIncurCharges(record.userId, apartmentId, me.isHead) };
+}
+
+/**
+ * Lõi đặt chỗ, dùng cho cả cư dân tự đặt và lễ tân đặt hộ — mọi kiểm tra áp cho `bookerId` (người được đặt).
+ * `staff` có = lễ tân đặt hộ (createdByStaff); `payer` = người chịu phí thay khi `bookerId` không có quyền phí;
+ * `checkInNow` + đang trong khung check-in → tạo luôn ở trạng thái CHECKED_IN.
+ */
+async function placeBooking({ bookerId, apartmentId, amenityId, date, slotStart }, { now = new Date(), staff = null, payer = null, checkInNow = false } = {}) {
   // Thành viên CÓ QUYỀN của căn (chủ sở hữu "không ở" bị từ chối ở đây → 403)
-  const { me } = await assertMember(user.id, apartmentId);
+  const { me } = await assertMember(bookerId, apartmentId);
   const cfg = await getBookingConfig();
   let usedPass = null;
 
@@ -219,12 +239,32 @@ export async function createBooking(user, { apartmentId, amenityId, date, slotSt
     if ((await Booking.countDocuments(sameSlot).session(session)) >= amenity.capacityPerSlot) throw new ApiError('BOOKING_SLOT_CONFLICT');
 
     // 7. Phí snapshot: có gói tháng còn hiệu lực → 0, ngược lại phí/lượt (BR-O13). Phí > 0 phải là chủ hộ hoặc được bật quyền (BR-O26)
-    usedPass = await getActivePass(user.id, amenityId, startAt);
+    usedPass = await getActivePass(bookerId, amenityId, startAt);
     const fee = usedPass ? 0 : amenity.feePerBooking;
-    if (fee > 0 && !(await canIncurCharges(user.id, apartmentId, me.isHead))) throw new ApiError('CHARGE_NOT_ALLOWED');
+    let chargedTo = null;
+    if (fee > 0) {
+      if (await canIncurCharges(bookerId, apartmentId, me.isHead)) chargedTo = bookerId;
+      else if (payer?.canCharge) chargedTo = payer.userId;
+      else throw new ApiError('CHARGE_NOT_ALLOWED');
+    }
 
+    // Lễ tân đặt hộ + "check-in ngay": trong khung thì vào thẳng CHECKED_IN, ngoài khung vẫn đặt bình thường (APPROVED)
+    const draft = { date: dayStart, slotStart: slot.slotStart, slotEnd: slot.slotEnd, startAt, endAt };
+    const immediate = Boolean(staff) && checkInNow && isInCheckInWindow(draft, cfg, now);
     const [doc] = await Booking.create(
-      [{ amenityId, apartmentId, bookedBy: user.id, date: dayStart, slotStart: slot.slotStart, slotEnd: slot.slotEnd, startAt, endAt, fee, passId: usedPass?._id ?? null }],
+      [
+        {
+          amenityId,
+          apartmentId,
+          bookedBy: bookerId,
+          ...draft,
+          fee,
+          passId: usedPass?._id ?? null,
+          chargedTo,
+          createdByStaff: staff?.id ?? null,
+          ...(immediate && { status: BOOKING_STATUS.CHECKED_IN, checkedInAt: now, checkedInBy: staff.id }),
+        },
+      ],
       { session },
     );
 
@@ -249,14 +289,27 @@ export async function createBooking(user, { apartmentId, amenityId, date, slotSt
 
   const { booking, amenity } = created;
   const feeText = booking.fee > 0 ? `Phí ${formatVnd(booking.fee)}` : usedPass ? 'Miễn phí theo gói tháng' : 'Miễn phí';
-  await notify(user.id, {
+  const checkedIn = booking.status === BOOKING_STATUS.CHECKED_IN;
+  await notify(bookerId, {
     type: NOTIFICATION_TYPES.BOOKING,
-    title: 'Đặt tiện ích thành công',
-    content: `${amenity.name} · ${dateVn(booking.date)} ${booking.slotStart}–${booking.slotEnd}. ${feeText}.`,
+    title: staff ? 'Lễ tân đã đặt tiện ích giúp bạn' : 'Đặt tiện ích thành công',
+    content: `${amenity.name} · ${dateVn(booking.date)} ${booking.slotStart}–${booking.slotEnd}. ${feeText}.${checkedIn ? ' Đã check-in.' : ''}`,
     refId: booking._id,
     link: LINK,
   });
-  return presentBooking(booking, amenity);
+  return { ...presentBooking(booking, amenity), ...(staff && { checkedIn }) };
+}
+
+// ===================================================================================================
+// Đặt hộ tại quầy (UC-D07): lễ tân nhập mã cư dân của người đến
+// ===================================================================================================
+export async function createCounterBooking(staff, { memberCode, payerCode, amenityId, date, slotStart, checkInNow = false }, { now = new Date() } = {}) {
+  const record = await resolveMemberCode(memberCode);
+  const payer = payerCode ? await resolvePayer(payerCode, record.apartmentId) : null;
+  return placeBooking(
+    { bookerId: record.userId, apartmentId: record.apartmentId, amenityId, date, slotStart },
+    { now, staff, payer, checkInNow },
+  );
 }
 
 const presentBooking = (booking, amenity) => ({
@@ -268,6 +321,7 @@ const presentBooking = (booking, amenity) => ({
 // Hủy (cư dân): miễn phí trước giờ bắt đầu (BR-O4)
 // ===================================================================================================
 export async function cancelBooking(user, id, { reason } = {}, { now = new Date() } = {}) {
+  if (user.role === ROLES.STAFF) return cancelByStaff(user, id, { reason }, { now });
   const booking = await Booking.findById(id).lean();
   const mine = booking ? await getMyHouseholds(user.id) : [];
   // Căn khác (hoặc không có quyền trong căn đó) → coi như không tồn tại
@@ -333,5 +387,165 @@ export async function listMyBookings(user, { apartmentId, scope = 'upcoming', pa
       isMine: String(b.bookedBy?._id ?? b.bookedBy) === String(user.id),
     })),
     pagination,
+  };
+}
+
+// ===================================================================================================
+// Lễ tân hủy: bắt buộc lý do, chỉ booking APPROVED, người đặt không bị tính phí (BR-O16)
+// ===================================================================================================
+const MIN_STAFF_REASON = 5;
+
+async function cancelByStaff(user, id, { reason } = {}, { now }) {
+  const text = reason?.trim();
+  if (!text || text.length < MIN_STAFF_REASON) throw badRequest('reason', `Lý do hủy là bắt buộc (tối thiểu ${MIN_STAFF_REASON} ký tự)`);
+  const booking = await Booking.findById(id).lean();
+  if (!booking) throw ApiError.notFound('Không tìm thấy booking');
+  if (booking.status !== BOOKING_STATUS.APPROVED) throw new ApiError('BOOKING_INVALID_STATUS');
+
+  // Điều kiện trạng thái hiện tại + ghi audit cùng giao dịch: hủy và check-in đồng thời chỉ một bên thắng
+  const cancelled = await withTransaction(async (session) => {
+    const doc = await Booking.findOneAndUpdate(
+      { _id: id, status: BOOKING_STATUS.APPROVED },
+      { $set: { status: BOOKING_STATUS.CANCELLED, cancelledAt: now, cancelledBy: user.id, cancelReason: text } },
+      { returnDocument: 'after', session },
+    ).lean();
+    if (!doc) throw new ApiError('BOOKING_INVALID_STATUS');
+    await logAudit(
+      {
+        action: AUDIT_ACTIONS.BOOKING_CANCELLED_BY_STAFF,
+        user,
+        targetType: 'bookings',
+        targetId: doc._id,
+        metadata: {
+          amenityId: doc.amenityId,
+          apartmentId: doc.apartmentId,
+          bookedBy: doc.bookedBy ?? doc.requestedBy ?? null,
+          date: toVnYmd(doc.date),
+          slot: `${doc.slotStart}–${doc.slotEnd}`,
+          fee: doc.fee,
+          reason: text,
+        },
+      },
+      { session },
+    );
+    return doc;
+  });
+
+  const amenity = await Amenity.findById(cancelled.amenityId).select('name').lean();
+  const recipient = cancelled.bookedBy ?? cancelled.requestedBy;
+  if (recipient) {
+    await notify(recipient, {
+      type: NOTIFICATION_TYPES.BOOKING,
+      title: 'Lễ tân đã hủy booking của bạn',
+      content: `${amenity?.name ?? 'Tiện ích'} · ${dateVn(cancelled.date)} ${cancelled.slotStart}–${cancelled.slotEnd}. Lý do: ${text}. Bạn không bị tính phí.`,
+      refId: cancelled._id,
+      link: LINK,
+    });
+  }
+  return loadBookingView(cancelled._id, await getBookingConfig());
+}
+
+// ===================================================================================================
+// Check-in (lễ tân / bảo vệ): BR-O14
+// ===================================================================================================
+/**
+ * APPROVED và now ∈ [max(startAt − CHECKIN_EARLY_MINUTES, giờ lễ tân mở cửa), startAt + NO_SHOW_GRACE_MINUTES] → CHECKED_IN.
+ * `code` (tùy chọn): mã cư dân của người đến — phải thuộc đúng căn đã đặt, khác căn → BOOKING_WRONG_HOUSEHOLD.
+ */
+export async function checkInBooking(user, id, { code } = {}, { now = new Date() } = {}) {
+  const booking = await Booking.findById(id).lean();
+  if (!booking) throw ApiError.notFound('Không tìm thấy booking');
+  if (booking.status !== BOOKING_STATUS.APPROVED) throw new ApiError('BOOKING_INVALID_STATUS');
+
+  if (code) {
+    const record = await resolveMemberCode(code);
+    if (String(record.apartmentId) !== String(booking.apartmentId)) throw new ApiError('BOOKING_WRONG_HOUSEHOLD');
+  }
+
+  const cfg = await getBookingConfig();
+  const { opensAt, closesAt } = checkInWindow(booking, cfg);
+  if (now.getTime() < opensAt.getTime()) {
+    throw new ApiError('BOOKING_CHECKIN_OUT_OF_WINDOW', `Chưa đến giờ check-in, mở lúc ${vnHHmm(opensAt)}`);
+  }
+  if (now.getTime() > closesAt.getTime()) {
+    throw new ApiError('BOOKING_CHECKIN_OUT_OF_WINDOW', `Đã quá hạn check-in (hạn chót ${vnHHmm(closesAt)})`);
+  }
+
+  // Điều kiện trạng thái: check-in 2 lần / vừa bị hủy chỉ một bên thắng
+  const updated = await Booking.findOneAndUpdate(
+    { _id: id, status: BOOKING_STATUS.APPROVED },
+    { $set: { status: BOOKING_STATUS.CHECKED_IN, checkedInAt: now, checkedInBy: user.id } },
+    { returnDocument: 'after' },
+  ).lean();
+  if (!updated) throw new ApiError('BOOKING_INVALID_STATUS');
+  return loadBookingView(updated._id, cfg);
+}
+
+// ===================================================================================================
+// Lịch trong ngày (lễ tân, bảo vệ, Trưởng BQL)
+// ===================================================================================================
+/** Bỏ dấu + hạ chữ thường để tìm "nguyen van" ra "Nguyễn Văn" */
+const fold = (text) =>
+  String(text ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase();
+
+const idOf = (ref) => String(ref?._id ?? ref);
+
+/**
+ * Booking của một ngày (mặc định hôm nay, giờ VN), mọi trạng thái, sắp theo giờ.
+ * q: mã căn / mã cư dân / tên người đặt / SĐT. Mã cư dân khớp thì lấy booking của CẢ căn đó
+ * (người đi cùng gia đình thường là người đến check-in).
+ */
+export async function getSchedule(user, { date, amenityId, q } = {}, { now = new Date() } = {}) {
+  const ymd = date ?? toVnYmd(now);
+  parseDay(ymd);
+  const cfg = await getBookingConfig();
+
+  const rows = await findDayBookings(ymd, amenityId ? { amenityId } : {});
+  // Mã cư dân sinh lười theo hộ → đồng bộ cho các căn có booking hôm đó để cột "Mã" và ô tìm kiếm có dữ liệu
+  const apartmentIds = [...new Set(rows.map((b) => idOf(b.apartmentId)))];
+  await Promise.all(apartmentIds.map((id) => ensureCodes(id)));
+
+  let matched = rows;
+  const text = String(q ?? '').trim();
+  if (text) {
+    const needle = fold(text);
+    const byCode = new Set(
+      (await MemberCode.find({ apartmentId: { $in: apartmentIds }, isActive: true, code: new RegExp(escapeRegex(text), 'i') }).select('apartmentId').lean()).map((c) =>
+        String(c.apartmentId),
+      ),
+    );
+    matched = rows.filter((b) => {
+      const apt = b.apartmentId;
+      const aptText = `${apt?.code ?? ''} ${apt?.buildingId?.code ?? ''}-${apt?.code ?? ''}`;
+      return (
+        byCode.has(idOf(apt)) ||
+        fold(aptText).includes(needle) ||
+        fold(b.bookedBy?.fullName).includes(needle) ||
+        fold(b.bookedBy?.phone).includes(needle)
+      );
+    });
+  }
+
+  // Danh sách tiện ích đặt chỗ cho ô lọc (Bảo vệ không có quyền gọi /amenities)
+  const amenities = await Amenity.find({ isActive: true, accessMode: { $in: [AMENITY_ACCESS_MODES.BOOKING, null] } })
+    .select('name')
+    .sort({ name: 1 })
+    .lean();
+
+  return {
+    date: ymd,
+    serverTime: now,
+    amenities,
+    rules: {
+      checkinEarlyMinutes: cfg.checkinEarlyMinutes,
+      noShowGraceMinutes: cfg.noShowGraceMinutes,
+      receptionOpen: cfg.receptionOpen,
+      receptionClose: cfg.receptionClose,
+    },
+    bookings: await presentDayBookings(matched, cfg),
   };
 }
