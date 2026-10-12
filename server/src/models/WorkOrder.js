@@ -10,6 +10,8 @@ const workOrderSchema = new Schema(
     title: String,
     assignedTo: { type: ObjectId, ref: 'User', default: null }, // Kỹ thuật viên
     assignedBy: { type: ObjectId, ref: 'User', default: null },
+    assignedAt: { type: Date, default: null },
+    startedAt: { type: Date, default: null },
     status: {
       type: String,
       enum: values(WORK_ORDER_STATUS),
@@ -19,6 +21,8 @@ const workOrderSchema = new Schema(
     scheduledDate: Date,
     completedAt: Date,
     note: String,
+    // Ảnh bằng chứng KTV chụp khi hoàn thành (UC-D04), bắt buộc ≥ 1 ảnh khi DONE
+    completionImages: { type: [String], default: [], validate: [(v) => v.length <= 5, 'Tối đa 5 ảnh'] },
   },
   schemaOptions('work_orders'),
 );
@@ -37,5 +41,6 @@ workOrderSchema.index(
 );
 workOrderSchema.index({ assignedTo: 1, status: 1 });
 workOrderSchema.index({ status: 1, scheduledDate: 1 });
+workOrderSchema.index({ assetId: 1, completedAt: -1 }); // lịch sử bảo trì của tài sản
 
 export const WorkOrder = model('WorkOrder', workOrderSchema);

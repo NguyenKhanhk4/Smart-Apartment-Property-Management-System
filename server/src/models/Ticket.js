@@ -10,6 +10,7 @@ const ticketHistorySchema = new Schema(
     fromStatus: String,
     toStatus: String,
     note: String,
+    imageUrls: { type: [String], default: undefined }, // ảnh bằng chứng KTV đính kèm khi báo đã xử lý xong (RESOLVED)
   },
   { _id: false },
 );

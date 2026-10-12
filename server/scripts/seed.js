@@ -7,7 +7,7 @@ import { connectDB, disconnectDB } from '../src/config/db.js';
 import { env } from '../src/config/env.js';
 import * as M from '../src/models/index.js';
 import { ensureDefaultConfigs } from '../src/services/systemConfig.service.js';
-import { DAY_MS, HOUR_MS, periodRange, startOfVnDay, vnPeriod } from '../src/utils/time.js';
+import { DAY_MS, HOUR_MS, periodEnd, periodRange, startOfVnDay, vnPeriod } from '../src/utils/time.js';
 
 const RESET = process.argv.includes('--reset');
 const PASSWORD = 'Sapms@123';
@@ -90,16 +90,7 @@ const apartments = await M.Apartment.insertMany(apartmentDocs);
 const occupied = apartments.filter((a) => a.status !== 'VACANT');
 
 // ===== Cư dân, hợp đồng, xe =====
-await M.Resident.insertMany(
-  residentUsers.map((u, i) => ({
-    userId: u._id,
-    apartmentId: apartments[i]._id,
-    relationType: 'OWNER',
-    idNumber: `0790${between(10000000, 99999999)}`,
-    moveInDate: daysAgo(400),
-  })),
-);
-await M.Contract.insertMany(
+const contracts = await M.Contract.insertMany(
   residentUsers.map((u, i) => ({
     apartmentId: apartments[i]._id,
     type: 'SALE',
@@ -108,10 +99,67 @@ await M.Contract.insertMany(
     createdBy: U.letan._id,
   })),
 );
+await M.Resident.insertMany(
+  residentUsers.map((u, i) => ({
+    userId: u._id,
+    apartmentId: apartments[i]._id,
+    relationType: 'OWNER',
+    contractId: contracts[i]._id,
+    idNumber: `0790${between(10000000, 99999999)}`,
+    moveInDate: daysAgo(400),
+  })),
+);
+
+// ===== Hộ gia đình demo cho thẻ cư dân (UC-D11) — chỉ THÊM, không đổi dữ liệu sẵn có =====
+// cudan1 (căn đầu) là chủ hộ có vợ và con nhỏ (chưa có ngày sinh: chủ hộ tự nhập ở mục Gia đình).
+// Căn thứ 7 đang cho thuê: chủ sở hữu "không ở" (cusohuu7) không có quyền tiện ích, người thuê (nguoithue7) là chủ hộ.
+// Tạo trực tiếp (không qua mkUser) để không tiêu thụ bộ sinh số ngẫu nhiên → dữ liệu demo phía sau giữ nguyên
+const demoUser = (email, fullName, phone) => ({ email, fullName, role: 'RESIDENT', passwordHash, phone });
+const householdUsers = await M.User.insertMany([
+  demoUser('vo.cudan1@sapms.vn', 'Vợ cư dân An', '0900000001'),
+  demoUser('con.cudan1@sapms.vn', 'Bé An', '0900000002'),
+  demoUser('cusohuu7@sapms.vn', 'Chủ sở hữu căn cho thuê', '0900000003'),
+  demoUser('nguoithue7@sapms.vn', 'Người thuê căn 7', '0900000004'),
+  // Căn của cudan3 không có hóa đơn quá hạn → dùng để thử mua gói tháng cho con (UC-D09)
+  demoUser('con.cudan3@sapms.vn', 'Bé Cường', '0900000005'),
+]);
+const rentedApartment = apartments[6];
+await M.Apartment.updateOne({ _id: rentedApartment._id }, { status: 'RENTED' });
+
+// Hợp đồng căn 7: SALE cho cusohuu7 + LEASE cho nguoithue7 (BR-A5: LEASE cần SALE ACTIVE)
+const leaseStartDate = daysAgo(120);
+const leaseEndDate = new Date(leaseStartDate.getFullYear() + 1, leaseStartDate.getMonth(), leaseStartDate.getDate(), leaseStartDate.getHours());
+const [rentedSaleContract, rentedLeaseContract] = await M.Contract.insertMany([
+  {
+    apartmentId: rentedApartment._id,
+    type: 'SALE',
+    ownerId: householdUsers[2]._id,
+    startDate: daysAgo(900),
+    createdBy: U.letan._id,
+  },
+  {
+    apartmentId: rentedApartment._id,
+    type: 'LEASE',
+    ownerId: householdUsers[2]._id,
+    tenantId: householdUsers[3]._id,
+    tenantPaysFees: true,
+    startDate: leaseStartDate,
+    endDate: leaseEndDate,
+    createdBy: U.letan._id,
+  },
+]);
+
+await M.Resident.insertMany([
+  { userId: householdUsers[0]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[0]._id, moveInDate: daysAgo(380) },
+  { userId: householdUsers[1]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[0]._id, moveInDate: daysAgo(360) },
+  { userId: householdUsers[2]._id, apartmentId: rentedApartment._id, relationType: 'OWNER', contractId: rentedSaleContract._id, moveInDate: daysAgo(900) },
+  { userId: householdUsers[3]._id, apartmentId: rentedApartment._id, relationType: 'TENANT', contractId: rentedLeaseContract._id, moveInDate: daysAgo(120) },
+  { userId: householdUsers[4]._id, apartmentId: apartments[2]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[2]._id, moveInDate: daysAgo(300) },
+]);
 const vehicles = await M.Vehicle.insertMany(
   occupied.slice(0, 20).map((a, i) => ({
     apartmentId: a._id,
-    ownerUserId: residentUsers[i]?._id,
+    registeredBy: residentUsers[i]?._id,
     type: i % 4 === 0 ? 'CAR' : 'MOTORBIKE',
     plateNumber: `${between(50, 79)}${i % 4 === 0 ? 'A' : 'H1'}-${between(10000, 99999)}`,
     status: 'APPROVED',
@@ -354,12 +402,19 @@ for (const status of scenarios) {
 await M.Ticket.insertMany(tickets);
 
 // ===== Tiện ích & booking =====
+// 3 kiểu: FREE (chỉ hiển thị) · WALK_IN (gói tháng / vé lẻ, lễ tân tra mã) · BOOKING (đặt slot).
+// WALK_IN và BOOKING có giờ mở cửa nằm trong giờ lễ tân 05:00–22:00 (BR-O15). Giá theo nhóm tuổi: người lớn / trẻ em (BR-O24).
 const amenities = await M.Amenity.insertMany([
-  { name: 'Hồ bơi', openTime: '06:00', closeTime: '21:00', slotDurationMinutes: 60, capacityPerSlot: 20, feePerBooking: 50000 },
-  { name: 'Phòng gym', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 15, feePerBooking: 0 },
-  { name: 'Sân tennis', openTime: '06:00', closeTime: '20:00', slotDurationMinutes: 90, capacityPerSlot: 4, feePerBooking: 100000 },
-  { name: 'Khu BBQ', buildingId: buildings[0]._id, openTime: '16:00', closeTime: '22:00', slotDurationMinutes: 120, capacityPerSlot: 2, feePerBooking: 200000 },
+  { name: 'Công viên nội khu', accessMode: 'FREE', location: 'Trung tâm khu căn hộ', openTime: '05:00', closeTime: '22:00', description: 'Thảm cỏ, ghế đá và khu vui chơi ngoài trời cho cư dân.' },
+  { name: 'Đường dạo bộ', accessMode: 'FREE', location: 'Vòng quanh khu căn hộ' },
+  { name: 'Phòng gym', accessMode: 'WALK_IN', location: 'Tầng 3 khối đế', openTime: '05:00', closeTime: '22:00', perVisitFeeAdult: 50000, perVisitFeeChild: 30000, monthlyPassFeeAdult: 400000, monthlyPassFeeChild: 250000 },
+  { name: 'Phòng yoga', accessMode: 'WALK_IN', location: 'Tầng 3 khối đế', openTime: '06:00', closeTime: '21:00', perVisitFeeAdult: 60000, perVisitFeeChild: 40000, monthlyPassFeeAdult: 500000, monthlyPassFeeChild: 300000 },
+  { name: 'Hồ bơi', accessMode: 'WALK_IN', location: 'Tầng 5 khối đế', openTime: '05:00', closeTime: '21:00', perVisitFeeAdult: 40000, perVisitFeeChild: 25000, maxConcurrent: 40, monthlyPassFeeAdult: 450000, monthlyPassFeeChild: 280000 },
+  { name: 'Sân tennis', accessMode: 'BOOKING', location: 'Sân sau', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 100000, monthlyPassFeeAdult: 600000, monthlyPassFeeChild: 350000 },
+  { name: 'Sân cầu lông', accessMode: 'BOOKING', location: 'Tầng 2 khối đế', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 60000, monthlyPassFeeAdult: 350000, monthlyPassFeeChild: 200000 },
+  { name: 'Khu BBQ Block A', accessMode: 'BOOKING', location: 'Sân thượng Block A', buildingId: buildings[0]._id, openTime: '10:00', closeTime: '22:00', slotDurationMinutes: 180, capacityPerSlot: 1, feePerBooking: 150000 },
 ]);
+const bookable = amenities.filter((a) => a.accessMode === 'BOOKING'); // chỉ tiện ích BOOKING mới có booking
 const slotsOf = (a) => {
   const [oh, om] = a.openTime.split(':').map(Number);
   const [ch, cm] = a.closeTime.split(':').map(Number);
@@ -371,21 +426,49 @@ const slotsOf = (a) => {
   return out;
 };
 const bookings = [];
+const usedSlots = new Set(); // sức chứa 1 căn/slot: không tạo 2 booking trùng slot
 for (let i = 0; i < 160; i += 1) {
-  const a = pick(amenities);
+  const a = pick(bookable);
   const offset = between(-12, 250); // vài booking tương lai
   const [slotStart, slotEnd] = rand() < 0.5 ? pick(slotsOf(a).slice(-3)) : pick(slotsOf(a));
   const apt = pick(occupied);
   const r = rand();
   const future = offset < 0;
-  const status = future ? (r < 0.6 ? 'APPROVED' : 'PENDING') : r < 0.75 ? 'COMPLETED' : r < 0.9 ? 'CANCELLED' : 'REJECTED';
+  // Booking tương lai: tự xác nhận APPROVED (BR-O12). Quá khứ: COMPLETED / CANCELLED / NO_SHOW; REJECTED là dữ liệu luồng duyệt cũ
+  const status = future ? 'APPROVED' : r < 0.75 ? 'COMPLETED' : r < 0.85 ? 'CANCELLED' : r < 0.95 ? 'NO_SHOW' : 'REJECTED';
+  const date = startOfVnDay(new Date(now.getTime() - offset * DAY_MS));
+  const slotKey = `${a._id}|${date.getTime()}|${slotStart}`;
+  if (usedSlots.has(slotKey)) continue;
+  usedSlots.add(slotKey);
+  const toMin = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
   bookings.push({
-    amenityId: a._id, apartmentId: apt._id, requestedBy: residentUsers[apartments.indexOf(apt)]?._id,
-    date: startOfVnDay(new Date(now.getTime() - offset * DAY_MS)), slotStart, slotEnd, fee: a.feePerBooking, status,
-    reviewedBy: ['APPROVED', 'COMPLETED', 'REJECTED'].includes(status) ? U.letan._id : undefined,
+    amenityId: a._id, apartmentId: apt._id, requestedBy: residentUsers[apartments.indexOf(apt)]?._id, bookedBy: residentUsers[apartments.indexOf(apt)]?._id,
+    date, slotStart, slotEnd, fee: a.feePerBooking, status,
+    startAt: new Date(date.getTime() + toMin(slotStart) * 60000),
+    endAt: new Date(date.getTime() + toMin(slotEnd) * 60000),
+    reviewedBy: status === 'REJECTED' ? U.letan._id : undefined,
   });
 }
 await M.Booking.insertMany(bookings);
+
+// ===== Gói tháng tiện ích demo (UC-D09): chủ hộ cudan1 có gói gym tháng này, vợ có gói tháng sau, cudan2 có gói sân tennis =====
+const amenityByName = Object.fromEntries(amenities.map((a) => [a.name, a]));
+const thisMonth = vnPeriod(now);
+const nextMonth = vnPeriod(periodEnd(thisMonth));
+const mkPass = (user, apartment, amenity, month, purchasedBy = user) => ({
+  userId: user._id,
+  apartmentId: apartment._id,
+  amenityId: amenity._id,
+  month,
+  ageGroup: 'ADULT',
+  fee: amenity.monthlyPassFeeAdult,
+  purchasedBy: purchasedBy._id,
+});
+await M.AmenityPass.insertMany([
+  mkPass(residentUsers[0], apartments[0], amenityByName['Phòng gym'], thisMonth),
+  mkPass(householdUsers[0], apartments[0], amenityByName['Phòng gym'], nextMonth, residentUsers[0]),
+  mkPass(residentUsers[1], apartments[1], amenityByName['Sân tennis'], thisMonth),
+]);
 
 // ===== Sổ khách, bảng tin, thông báo =====
 await M.GuestLog.insertMany([

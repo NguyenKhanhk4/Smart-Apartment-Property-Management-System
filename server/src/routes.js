@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { dbStatus } from './config/db.js';
+import { env } from './config/env.js';
 import { ok } from './utils/response.js';
 import complaintCategoryRoutes from './modules/complaintCategories/complaintCategories.routes.js';
 import systemConfigRoutes from './modules/systemConfigs/systemConfigs.routes.js';
@@ -9,6 +10,21 @@ import announcementRoutes from './modules/announcements/announcements.routes.js'
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import reportRoutes from './modules/reports/reports.routes.js';
 import lookupRoutes from './modules/lookups/lookups.routes.js';
+import assetRoutes from './modules/assets/assets.routes.js';
+import workOrderRoutes from './modules/workOrders/workOrders.routes.js';
+import amenityRoutes from './modules/amenities/amenities.routes.js';
+import memberCodeRoutes from './modules/memberCodes/memberCodes.routes.js';
+import amenityPassRoutes from './modules/amenityPasses/amenityPasses.routes.js';
+import bookingRoutes from './modules/bookings/bookings.routes.js';
+import devAuthRoutes from './modules/devAuth/devAuth.routes.js';
+import authRoutes from './modules/auth/auth.routes.js';
+import userRoutes from './modules/users/users.routes.js';
+import buildingRoutes from './modules/buildings/buildings.routes.js';
+import apartmentRoutes from './modules/apartments/apartments.routes.js';
+import contractRoutes from './modules/contracts/contracts.routes.js';
+import residentRoutes from './modules/residents/residents.routes.js';
+import vehicleRoutes from './modules/vehicles/vehicles.routes.js';
+import adminDashboardRoutes from './modules/adminDashboard/adminDashboard.routes.js';
 
 const router = Router();
 
@@ -40,5 +56,26 @@ router.use('/announcements', announcementRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/reports', reportRoutes);
 router.use('/lookups', lookupRoutes);
+
+// Module D — Thanh Bình (Tài sản & bảo trì, Tiện ích & đặt chỗ)
+router.use('/assets', assetRoutes);
+router.use('/work-orders', workOrderRoutes);
+router.use('/amenities', amenityRoutes);
+router.use('/member-codes', memberCodeRoutes);
+router.use('/amenity-passes', amenityPassRoutes);
+router.use('/bookings', bookingRoutes);
+
+// Module A — Vũ Việt (Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện)
+router.use('/auth', authRoutes);
+router.use('/users', userRoutes);
+router.use('/buildings', buildingRoutes);
+router.use('/apartments', apartmentRoutes);
+router.use('/contracts', contractRoutes);
+router.use('/residents', residentRoutes);
+router.use('/vehicles', vehicleRoutes);
+router.use('/admin', adminDashboardRoutes);
+
+// Chỉ phục vụ đăng nhập nhanh khi dev (xem modules/devAuth).
+if (env.isDev) router.use('/dev', devAuthRoutes);
 
 export default router;

@@ -282,7 +282,7 @@ const PROGRESS_TRANSITIONS = {
   [IN_PROGRESS]: [IN_PROGRESS, WAITING_CONFIRM],
 };
 
-export async function updateProgress(user, id, { status, note }) {
+export async function updateProgress(user, id, { status, note }, files = []) {
   const ticket = await findTicketOr404(id);
   // Kiểm tra quyền trước khi kiểm tra trạng thái để không lộ trạng thái ticket của người khác
   if (String(ticket.assignedTo) !== user.id) {
@@ -293,6 +293,14 @@ export async function updateProgress(user, id, { status, note }) {
     throw ApiError.badRequest(`Không thể chuyển từ ${ticket.status} sang ${status}`);
   }
 
+  // Báo đã xử lý xong phải có ảnh bằng chứng để Manager/Lễ tân kiểm tra
+  if (status === WAITING_CONFIRM && !files.length) {
+    throw ApiError.badRequest('Cần chụp hoặc đính kèm ít nhất 1 ảnh kết quả xử lý', [
+      { field: 'images', message: 'Bắt buộc có ít nhất 1 ảnh' },
+    ]);
+  }
+  const imageUrls = status === WAITING_CONFIRM ? await uploadToCloudinary(files, 'ticket-results') : undefined;
+
   const fromStatus = ticket.status;
   ticket.status = status;
   if (status === WAITING_CONFIRM) ticket.resolvedAt = new Date();
@@ -302,6 +310,7 @@ export async function updateProgress(user, id, { status, note }) {
     fromStatus,
     toStatus: status,
     note,
+    imageUrls,
   });
   await saveChecked(ticket);
 

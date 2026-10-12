@@ -1,62 +1,50 @@
-import { Suspense } from 'react';
-import { NavLink, Outlet } from 'react-router';
-import { Flex, Layout, Typography, theme } from 'antd';
-import { residentMenu } from '../config/menu';
-import { useAuth } from '../hooks/useAuth';
-import UserMenu from '../components/UserMenu';
+import { Suspense, useLayoutEffect } from 'react';
+import { Outlet, useLocation } from 'react-router';
+import { ConfigProvider } from 'antd';
+import { getAntdTheme } from '../config/theme';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useThemeMode } from '../hooks/useThemeMode';
 import PageLoader from '../components/PageLoader';
-import NotificationBell from '../features/notifications/NotificationBell';
+import PageTransition from '../motion/PageTransition';
+import { ResidentProvider } from './resident/ResidentProvider';
+import { MobileHeader, WebHeader } from './resident/ResidentHeader';
+import BottomNav from './resident/BottomNav';
 
-const { Header, Content } = Layout;
-const MAX_WIDTH = 720;
+// Khu cư dân chỉ có bản sáng theo thiết kế: bỏ class `dark` trên <html> khi ở đây (các trang cũ còn dùng `dark:`),
+// rời khu thì trả lại theo lựa chọn của người dùng.
+const lightTheme = { ...getAntdTheme(false), inherit: false };
 
-// Layout cư dân, mobile-first: header gọn + thanh điều hướng dưới cùng sinh từ config/menu.js
+// Trang mobile dùng tiêu đề thay cho lời chào ở header (đường dẫn khớp tuyệt đối)
+const HEADER_TITLES = { '/r/amenities': 'Tiện ích', '/r/my-code': 'Mã của tôi' };
+
+// Layout cư dân, responsive: <768px = header gọn + thanh dưới 5 mục; ≥768px = nav ngang, nội dung tối đa 1200px.
 export default function ResidentLayout() {
-  const { hasRole } = useAuth();
-  const { token } = theme.useToken();
+  const isWide = useMediaQuery('(min-width: 768px)');
+  const { isDark } = useThemeMode();
+  const { pathname } = useLocation();
 
-  const visible = residentMenu.filter((item) => !item.hideInMenu && hasRole(...(item.roles ?? [])));
+  useLayoutEffect(() => {
+    document.documentElement.classList.remove('dark');
+    return () => document.documentElement.classList.toggle('dark', isDark);
+  }, [isDark]);
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Header
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 16px',
-          background: token.colorBgContainer,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
-        }}
-      >
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          SAPMS
-        </Typography.Title>
-        <Flex align="center" gap={8}>
-          <NotificationBell area="r" />
-          <UserMenu compact />
-        </Flex>
-      </Header>
+    <ConfigProvider theme={lightTheme}>
+      <ResidentProvider>
+        <div className="min-h-screen bg-r-bg text-r-text font-sans">
+          {isWide ? <WebHeader /> : <MobileHeader title={HEADER_TITLES[pathname.replace(/\/$/, '')]} />}
 
-      <Content
-        style={{ width: '100%', maxWidth: MAX_WIDTH, margin: '0 auto', padding: '16px 16px 76px' }}
-      >
-        <Suspense fallback={<PageLoader />}>
-          <Outlet />
-        </Suspense>
-      </Content>
+          <main className={isWide ? 'max-w-[1200px] mx-auto px-6 pt-8 pb-12' : 'px-5 pt-5 pb-28'}>
+            <Suspense fallback={<PageLoader />}>
+              <PageTransition key={pathname}>
+                <Outlet />
+              </PageTransition>
+            </Suspense>
+          </main>
 
-      <nav className="resident-bottom-nav" aria-label="Điều hướng chính">
-        {visible.map(({ key, path, label, icon: Icon }) => (
-          <NavLink key={key} to={`/r/${path}`}>
-            {Icon && <Icon />}
-            <span>{label}</span>
-          </NavLink>
-        ))}
-      </nav>
-    </Layout>
+          {!isWide && <BottomNav />}
+        </div>
+      </ResidentProvider>
+    </ConfigProvider>
   );
 }

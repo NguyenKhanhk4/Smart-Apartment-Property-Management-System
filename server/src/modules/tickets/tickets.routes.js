@@ -193,13 +193,14 @@ router.patch(
  * /tickets/{id}/progress:
  *   patch:
  *     tags: [Ticket]
- *     summary: KTV cập nhật tiến độ IN_PROGRESS / WAITING_CONFIRM (UC-E04)
+ *     summary: KTV cập nhật tiến độ IN_PROGRESS / WAITING_CONFIRM (UC-E04). WAITING_CONFIRM bắt buộc kèm ≥ 1 ảnh kết quả (field images, multipart)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
 router.patch(
   '/:id/progress',
   authenticate,
   authorize('STAFF:TECHNICIAN'),
+  uploadImages('images', 5),
   validate({
     params: idParams,
     body: Joi.object({
@@ -208,7 +209,7 @@ router.patch(
     }),
   }),
   async (req, res) =>
-    ok(res, await service.updateProgress(req.user, req.params.id, req.body), 'Đã cập nhật tiến độ'),
+    ok(res, await service.updateProgress(req.user, req.params.id, req.body, req.files), 'Đã cập nhật tiến độ'),
 );
 
 /**

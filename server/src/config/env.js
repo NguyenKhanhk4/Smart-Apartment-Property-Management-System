@@ -20,6 +20,8 @@ const schema = Joi.object({
   JWT_REFRESH_SECRET: isTest
     ? Joi.string().default('test-refresh-secret')
     : Joi.string().min(16).required(),
+  JWT_ACCESS_EXPIRES_IN: Joi.string().default('15m'),
+  JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
   // Tuỳ chọn — thiếu thì tính năng tương ứng tự tắt (email chỉ ghi log, upload ảnh báo lỗi rõ ràng)
   CLOUDINARY_CLOUD_NAME: Joi.string().allow('').default(''),
   CLOUDINARY_API_KEY: Joi.string().allow('').default(''),
@@ -53,6 +55,8 @@ export const env = {
   jwt: {
     accessSecret: value.JWT_ACCESS_SECRET,
     refreshSecret: value.JWT_REFRESH_SECRET,
+    accessExpiresIn: value.JWT_ACCESS_EXPIRES_IN,
+    refreshExpiresIn: value.JWT_REFRESH_EXPIRES_IN,
   },
   cloudinary: {
     cloudName: value.CLOUDINARY_CLOUD_NAME,

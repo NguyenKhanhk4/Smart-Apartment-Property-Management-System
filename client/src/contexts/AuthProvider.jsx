@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from './AuthContext';
+import { authApi } from '../api/auth.api';
 import { SESSION_EXPIRED_EVENT } from '../api/axiosClient';
 import { authStorage } from '../utils/authStorage';
 import { hasRole as matchRoles } from '../utils/permission';
 
 /**
- * Giữ phiên đăng nhập phía client. Chưa gọi API nào — module Auth (thành viên A) sẽ:
+ * Giữ phiên đăng nhập phía client. Module Auth (Module A — Vũ Việt):
  *   - gọi POST /auth/login rồi `startSession({ user, accessToken, refreshToken })`
- *   - gọi POST /auth/logout trước khi `logout()`
+ *   - gọi POST /auth/logout (fire-and-forget) khi `logout()`
  */
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => authStorage.getUser());
@@ -31,6 +32,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
+    authApi.logout().catch(() => {});
     authStorage.clear();
     setUser(null);
   }, []);
