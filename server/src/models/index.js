@@ -31,6 +31,7 @@ export { Amenity } from './Amenity.js';
 export { Booking } from './Booking.js';
 export { MemberCode } from './MemberCode.js';
 export { AmenityPass } from './AmenityPass.js';
+export { AmenityVisit } from './AmenityVisit.js';
 
 // Module E — Ticket, sổ khách, bảng tin, thông báo, tham số hệ thống
 export { ComplaintCategory } from './ComplaintCategory.js';

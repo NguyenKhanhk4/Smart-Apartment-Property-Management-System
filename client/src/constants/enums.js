@@ -138,6 +138,17 @@ export const BOOKING_STATUS = {
   REJECTED: { label: 'Từ chối', color: 'red' },
 };
 
+// Lượt vào tiện ích WALK_IN (UC-D10)
+export const VISIT_CHARGE_TYPES = {
+  PASS: { label: 'Gói tháng', color: 'cyan' },
+  SINGLE: { label: 'Vé lẻ', color: 'blue' },
+  FREE: { label: 'Miễn phí', color: 'green' },
+};
+export const VISIT_STATUS = {
+  VALID: { label: 'Hợp lệ', color: 'success' },
+  CANCELLED: { label: 'Đã hủy', color: 'default' },
+};
+
 // Kiểu tiện ích (accessMode). Bản ghi cũ không có accessMode coi là BOOKING
 export const AMENITY_ACCESS_MODES = {
   FREE: { label: 'Tự do', color: 'green', hint: 'Công viên, đường dạo, sân chơi ngoài trời: không đặt chỗ, không phí, chỉ hiển thị giờ và vị trí.' },

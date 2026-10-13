@@ -34,6 +34,13 @@ export const ERROR_CODES = Object.freeze({
   BOOKING_INVALID_STATUS: { status: 409, message: 'Trạng thái booking hiện tại không cho phép thao tác này' },
   BOOKING_CHECKIN_OUT_OF_WINDOW: { status: 409, message: 'Chưa đến hoặc đã quá thời gian check-in của booking này' },
   BOOKING_WRONG_HOUSEHOLD: { status: 409, message: 'Người đến không thuộc căn hộ đã đặt booking này' },
+  AMENITY_NOT_WALK_IN: { status: 409, message: 'Tiện ích này không áp dụng ghi lượt vào (không phải kiểu Vào cửa)' },
+  AMENITY_CLOSED: { status: 409, message: 'Tiện ích đang ngoài giờ mở cửa' },
+  AMENITY_FULL: { status: 409, message: 'Tiện ích đã đủ số người tối đa cùng lúc' },
+  ESCORT_REQUIRED: { status: 409, message: 'Cần người lớn đi kèm' },
+  VISIT_DUPLICATE: { status: 409, message: 'Người này vừa được ghi lượt vào tiện ích này, không ghi trùng' },
+  VISIT_ALREADY_BILLED: { status: 409, message: 'Lượt vào đã được gộp vào hóa đơn, không thể hủy' },
+  VISIT_ALREADY_CANCELLED: { status: 409, message: 'Lượt vào đã được hủy trước đó' },
   AMENITY_NOT_BOOKABLE: { status: 409, message: 'Tiện ích này không áp dụng đặt chỗ' },
   CHARGE_NOT_ALLOWED: {
     status: 403,

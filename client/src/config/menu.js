@@ -7,6 +7,7 @@ import {
   BarChartOutlined,
   BellOutlined,
   CalendarOutlined,
+  ScanOutlined,
   CheckSquareOutlined,
   ClusterOutlined,
   DashboardOutlined,
@@ -71,6 +72,7 @@ const MyCodePage = lazy(() => import('../features/memberCodes/MyCodePage'));
 const FamilyPage = lazy(() => import('../features/memberCodes/FamilyPage'));
 const MyPassesPage = lazy(() => import('../features/amenityPasses/MyPassesPage'));
 const AmenityPassesPage = lazy(() => import('../features/amenityPasses/AmenityPassesPage'));
+const AmenityDeskPage = lazy(() => import('../features/amenityVisits/AmenityDeskPage'));
 const BookingSchedulePage = lazy(() => import('../features/bookings/BookingSchedulePage'));
 const UtilitiesPage = lazy(() => import('../features/bookings/UtilitiesPage'));
 const AmenityBookingPage = lazy(() => import('../features/bookings/AmenityBookingPage'));
@@ -178,6 +180,16 @@ export const adminMenu = [
     path: 'amenity-passes',
     roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
     component: AmenityPassesPage,
+  },
+  // Quầy tiện ích (UC-D10): lễ tân tra mã, ghi lượt vào; Trưởng BQL chỉ xem. Bảo vệ dùng phần check-in ở Lịch đặt tiện ích
+  {
+    key: 'amenity-desk',
+    group: 'Tiện ích & khách',
+    label: 'Quầy tiện ích',
+    icon: ScanOutlined,
+    path: 'amenity-desk',
+    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
+    component: AmenityDeskPage,
   },
   // Lịch đặt tiện ích trong ngày (UC-D07): lễ tân mọi thao tác, bảo vệ check-in, Trưởng BQL chỉ xem
   {
@@ -328,6 +340,7 @@ export const receptionNav = [
     items: [
       { key: 'guests', badge: 'guestsPending', badgeTone: 'neutral' },
       { key: 'booking-schedule', badge: 'bookingsWaiting' },
+      { key: 'amenity-desk' },
       { key: 'tickets', badge: 'ticketsNew' },
       { key: 'vehicle-requests', badge: 'vehiclesPending' },
     ],

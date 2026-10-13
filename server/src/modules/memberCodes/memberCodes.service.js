@@ -8,6 +8,7 @@ import { escapeRegex } from '../../utils/pagination.js';
 import { ageAt, ageGroupOf } from '../amenities/pricing.js';
 import { getBookingConfig, toVnYmd, vnDayStart } from '../amenities/slot.utils.js';
 import { activePassesByUser } from '../amenityPasses/passes.queries.js';
+import { listVisitsToday } from '../amenityVisits/visits.queries.js';
 import { listApartmentBookingsToday } from '../bookings/bookings.queries.js';
 import { assertHead, getHousehold, getMyHouseholds } from '../household/household.service.js';
 
@@ -258,7 +259,8 @@ async function findActiveByText(text) {
 
 /**
  * Mã chữ → bản ghi member_codes đang hiệu lực (không phân biệt hoa thường), hoặc MEMBER_CODE_NOT_FOUND.
- * Điểm vào duy nhất để các màn hình quầy (tra mã, đặt hộ, check-in) đổi "mã người đến" thành người + căn.
+ * Điểm vào duy nhất để các màn hình quầy (tra mã, đặt hộ, check-in, ghi lượt vào) đổi "mã người đến" thành người + căn.
+ * Mã in trên thẻ (kể cả dạng QR) chỉ là chính mã chữ này; nhân viên luôn đối chiếu ảnh với người đến.
  */
 export async function resolveMemberCode(text) {
   const record = await findActiveByText(String(text ?? '').trim().toUpperCase());
@@ -280,6 +282,8 @@ export async function lookup(q) {
   const cfg = await getBookingConfig();
   const now = new Date();
 
+  const ageGroup = ageGroupOf(me.dateOfBirth, now, cfg);
+
   return {
     serverTime: now,
     code: current.code,
@@ -293,6 +297,10 @@ export async function lookup(q) {
     apartment: apartmentView(household.apartment),
     isHead: me.isHead,
     canIncurCharges: me.isHead || current.canIncurCharges,
+    // Trẻ dưới CHILD_ADULT_AGE phải có người lớn đi kèm (BR-O24) — UC-D10
+    needsEscort: ageGroup !== 'ADULT',
+    // Lượt vào tiện ích hôm nay (giờ VN) của người này, mọi trạng thái — UC-D10
+    visitsToday: await listVisitsToday(me.userId, now),
     // Gói tháng đang có hiệu lực (tháng hiện tại giờ VN) của người này — UC-D09
     passes: (await activePassesByUser([me.userId], { fromMonth: vnPeriod(), toMonth: vnPeriod() })).get(me.userId) ?? [],
     // Booking hôm nay (giờ VN) của cả căn, mọi trạng thái; isMine = do chính người này đặt — UC-D07

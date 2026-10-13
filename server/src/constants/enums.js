@@ -180,6 +180,18 @@ export const AMENITY_PASS_STATUS = Object.freeze({
   CANCELLED: 'CANCELLED',
 });
 
+// Lượt vào tiện ích WALK_IN (UC-D10, BR-O23): PASS = dùng gói tháng (0đ), SINGLE = vé lẻ (có phí), FREE = vé lẻ giá 0
+export const VISIT_CHARGE_TYPES = Object.freeze({
+  PASS: 'PASS',
+  SINGLE: 'SINGLE',
+  FREE: 'FREE',
+});
+
+export const VISIT_STATUS = Object.freeze({
+  VALID: 'VALID',
+  CANCELLED: 'CANCELLED',
+});
+
 // ===== Ticket, sổ khách, bảng tin, thông báo (Module E) =====
 // Thứ tự trong mảng = thứ tự leo thang (BR-O8)
 export const PRIORITIES = Object.freeze({
@@ -267,6 +279,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   AMENITY_FEE_CHANGED: 'AMENITY_FEE_CHANGED',
   AMENITY_PASS_CANCELLED: 'AMENITY_PASS_CANCELLED',
   BOOKING_CANCELLED_BY_STAFF: 'BOOKING_CANCELLED_BY_STAFF',
+  AMENITY_VISIT_CANCELLED: 'AMENITY_VISIT_CANCELLED',
   // Module A (Vũ Việt)
   ACCOUNT_LOCKED: 'ACCOUNT_LOCKED',
   ACCOUNT_UNLOCKED: 'ACCOUNT_UNLOCKED',

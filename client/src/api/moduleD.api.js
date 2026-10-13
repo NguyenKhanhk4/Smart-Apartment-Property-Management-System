@@ -67,6 +67,18 @@ export const bookingApi = {
   counter: (body) => http.post('/bookings/counter', body),
 };
 
+// ===== UC-D10: Quầy tiện ích (lượt vào tiện ích WALK_IN) =====
+export const amenityVisitApi = {
+  /** Lễ tân / Trưởng BQL. params: { date?, amenityId?, apartmentId?, chargeType?, status?, page?, limit? } */
+  list: (params) => http.get('/amenity-visits', { params }),
+  /** Số người đang trong từng tiện ích WALK_IN: { serverTime, windowMinutes, items: [{ amenityId, name, current, max }] } */
+  occupancy: () => http.get('/amenity-visits/occupancy'),
+  /** Lễ tân. body: { amenityId, code (mã cư dân), escortCode?, accompaniedChildren? } */
+  create: (body) => http.post('/amenity-visits', body),
+  /** Lễ tân / Trưởng BQL — bắt buộc lý do */
+  cancel: (id, reason) => http.patch(`/amenity-visits/${id}/cancel`, { reason }),
+};
+
 // ===== UC-D11: Thẻ cư dân (mã chữ), gia đình, tra mã =====
 // apartmentId có thể bỏ trống khi chỉ ở một căn
 const withApartment = (apartmentId) => (apartmentId ? { params: { apartmentId } } : undefined);

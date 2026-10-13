@@ -79,7 +79,7 @@ router.patch(
  * /member-codes/lookup:
  *   get:
  *     tags: [Thẻ cư dân]
- *     summary: Tra mã chữ tại quầy; luôn trả ảnh đại diện để nhân viên đối chiếu với người đến
+ *     summary: Tra mã cư dân tại quầy; luôn trả ảnh đại diện để nhân viên đối chiếu. Kèm needsEscort, gói tháng, booking và lượt vào hôm nay
  *     parameters: [{ in: query, name: q, required: true, schema: { type: string }, description: 'Vd A-0501-01' }]
  */
 router.get(
