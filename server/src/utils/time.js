@@ -32,6 +32,13 @@ export function periodEnd(period) {
   return new Date(Date.UTC(y, m, 1) - VN_OFFSET_MS);
 }
 
+/** Cộng/trừ `n` tháng cho "YYYY-MM": shiftPeriod('2026-01', -1) → '2025-12' */
+export function shiftPeriod(period, n) {
+  const [y, m] = period.split('-').map(Number);
+  const total = y * 12 + (m - 1) + n;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`;
+}
+
 /** Danh sách "YYYY-MM" từ `from` tới `to` (bao gồm) */
 export function periodRange(from, to) {
   const out = [];
