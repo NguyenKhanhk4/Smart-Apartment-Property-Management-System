@@ -85,6 +85,15 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Dữ liệu vừa được cập nhật bởi thao tác khác, vui lòng tải lại và thử lại',
   },
+  // Module B: mức giá đã dùng lập hóa đơn thì giữ nguyên để hóa đơn cũ giải trình được (BR-F3)
+  FEE_TYPE_IN_USE: {
+    status: 409,
+    message: 'Mức giá đã được dùng để lập hóa đơn, không thể sửa/xóa. Hãy tạo mức giá mới từ kỳ sau',
+  },
+  FEE_PERIOD_BILLED: {
+    status: 409,
+    message: 'Kỳ này đã lập hóa đơn với loại phí này, chỉ áp dụng được giá mới từ kỳ chưa lập hóa đơn',
+  },
   // Module A (Vũ Việt): trạng thái nghiệp vụ xung đột (hợp đồng, xe...)
   STATUS_CONFLICT: {
     status: 409,

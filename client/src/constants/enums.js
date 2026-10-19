@@ -102,6 +102,19 @@ export const FEE_CATEGORIES = {
   ADJUSTMENT: { label: 'Điều chỉnh', color: 'gold' },
 };
 
+// ===== Module B — Phí & đơn giá (UC-B01) =====
+export const FEE_CALC_METHODS = {
+  PER_M2: { label: 'Theo m²', color: 'green', unit: 'm²' },
+  PER_APARTMENT: { label: 'Theo căn', color: 'cyan', unit: 'căn' },
+  PER_VEHICLE: { label: 'Theo xe', color: 'blue', unit: 'xe' },
+};
+
+export const FEE_TYPE_STATES = {
+  ACTIVE: { label: 'Đang áp dụng', color: 'green' },
+  UPCOMING: { label: 'Sắp áp dụng', color: 'gold' },
+  ENDED: { label: 'Đã kết thúc', color: 'default' },
+};
+
 export const PAYMENT_METHODS = {
   VNPAY: { label: 'VNPay', color: 'blue' },
   CASH: { label: 'Tiền mặt', color: 'green' },

@@ -25,3 +25,6 @@ Thumbs.db
 
 # Office lock files
 ~$*
+
+# Tài liệu cá nhân, không push
+/doc/

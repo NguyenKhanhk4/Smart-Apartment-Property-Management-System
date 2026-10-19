@@ -26,6 +26,7 @@ import contractRoutes from './modules/contracts/contracts.routes.js';
 import residentRoutes from './modules/residents/residents.routes.js';
 import vehicleRoutes from './modules/vehicles/vehicles.routes.js';
 import adminDashboardRoutes from './modules/adminDashboard/adminDashboard.routes.js';
+import feeTypeRoutes from './modules/feeTypes/feeTypes.routes.js';
 
 const router = Router();
 
@@ -76,6 +77,9 @@ router.use('/contracts', contractRoutes);
 router.use('/residents', residentRoutes);
 router.use('/vehicles', vehicleRoutes);
 router.use('/admin', adminDashboardRoutes);
+
+// Module B — Phí, Hóa đơn, Thanh toán, Công nợ
+router.use('/fee-types', feeTypeRoutes);
 
 // Chỉ phục vụ đăng nhập nhanh khi dev (xem modules/devAuth).
 if (env.isDev) router.use('/dev', devAuthRoutes);

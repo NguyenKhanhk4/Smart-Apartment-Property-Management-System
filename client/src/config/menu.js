@@ -11,6 +11,7 @@ import {
   CheckSquareOutlined,
   ClusterOutlined,
   DashboardOutlined,
+  DollarOutlined,
   FileTextOutlined,
   FundOutlined,
   HomeOutlined,
@@ -62,6 +63,9 @@ const MyApartmentPage = lazy(() => import('../features/residents/MyApartmentPage
 const VehicleRequestsPage = lazy(() => import('../features/vehicles/VehicleRequestsPage'));
 const MyVehiclesPage = lazy(() => import('../features/vehicles/MyVehiclesPage'));
 const SystemDashboardPage = lazy(() => import('../features/adminDashboard/SystemDashboardPage'));
+
+// ===== Module B =====
+const FeeTypesPage = lazy(() => import('../features/feeTypes/FeeTypesPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -264,6 +268,17 @@ export const adminMenu = [
     path: 'report-amenity',
     roles: ['MANAGER', 'ACCOUNTANT'],
     component: AmenityUsagePage,
+  },
+
+  // ===== Module B — Phí & hóa đơn (UC-B01) =====
+  {
+    key: 'fee-types',
+    group: 'Tài chính',
+    label: 'Bảng phí',
+    icon: DollarOutlined,
+    path: 'fee-types',
+    roles: ['MANAGER', 'ACCOUNTANT'],
+    component: FeeTypesPage,
   },
 
   // ===== Module A (Vũ Việt) =====
