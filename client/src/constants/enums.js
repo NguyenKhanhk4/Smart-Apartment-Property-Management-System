@@ -115,6 +115,19 @@ export const FEE_TYPE_STATES = {
   ENDED: { label: 'Đã kết thúc', color: 'default' },
 };
 
+// Kết quả xem trước khi sinh hóa đơn (UC-B02)
+export const INVOICE_PREVIEW_STATUS = {
+  NEW: { label: 'Sẽ lập', color: 'blue' },
+  EXISTS: { label: 'Đã có hóa đơn', color: 'green' },
+  NO_PAYER: { label: 'Chưa có HĐ mua bán', color: 'default' },
+  ERROR: { label: 'Lỗi', color: 'red' },
+};
+
+export const PAYER_SOURCES = {
+  OWNER: { label: 'Chủ sở hữu', color: 'geekblue' },
+  TENANT: { label: 'Người thuê', color: 'purple' },
+};
+
 export const PAYMENT_METHODS = {
   VNPAY: { label: 'VNPay', color: 'blue' },
   CASH: { label: 'Tiền mặt', color: 'green' },

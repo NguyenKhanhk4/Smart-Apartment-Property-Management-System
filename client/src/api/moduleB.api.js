@@ -15,3 +15,11 @@ export const feeTypeApi = {
   end: (id, effectiveTo) => http.patch(`/fee-types/${id}/end`, { effectiveTo }),
   remove: (id) => http.delete(`/fee-types/${id}`),
 };
+
+// ===== UC-B02: Sinh hóa đơn tháng =====
+export const invoiceApi = {
+  /** params: { period: 'YYYY-MM', apartmentId?, buildingId? } — tính thử, không ghi */
+  preview: (params) => http.get('/invoices/preview', { params }),
+  /** body: { period, apartmentId? } — có apartmentId: lập 1 căn; không có: chạy cả đợt */
+  generate: (body) => http.post('/invoices/generate', body),
+};

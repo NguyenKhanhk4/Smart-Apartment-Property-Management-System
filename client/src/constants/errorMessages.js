@@ -16,6 +16,7 @@ export const ERROR_MESSAGES = {
   FEE_TYPE_OVERLAP: 'Đơn giá cùng loại phí trùng khoảng hiệu lực.',
   FEE_TYPE_IN_USE: 'Mức giá đã được dùng để lập hóa đơn, không thể sửa/xóa.',
   FEE_PERIOD_BILLED: 'Kỳ này đã lập hóa đơn với loại phí này, hãy áp dụng giá mới từ kỳ sau.',
+  FEE_PRICE_MISSING: 'Chưa có đơn giá áp dụng cho kỳ này, hãy bổ sung trong Bảng phí.',
   DEBT_FOLLOWUP_NOT_ASSIGNED: 'Hồ sơ đòi nợ không được giao cho bạn.',
   PROPOSAL_ALREADY_VOTED: 'Bạn đã biểu quyết đề xuất này.',
   PROPOSAL_QUORUM_NOT_MET: 'Chưa đủ tỷ lệ biểu quyết để chốt.',

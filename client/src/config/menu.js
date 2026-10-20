@@ -66,6 +66,7 @@ const SystemDashboardPage = lazy(() => import('../features/adminDashboard/System
 
 // ===== Module B =====
 const FeeTypesPage = lazy(() => import('../features/feeTypes/FeeTypesPage'));
+const InvoiceGeneratePage = lazy(() => import('../features/invoices/InvoiceGeneratePage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -270,7 +271,7 @@ export const adminMenu = [
     component: AmenityUsagePage,
   },
 
-  // ===== Module B — Phí & hóa đơn (UC-B01) =====
+  // ===== Module B — Phí & hóa đơn (UC-B01, UC-B02) =====
   {
     key: 'fee-types',
     group: 'Tài chính',
@@ -279,6 +280,15 @@ export const adminMenu = [
     path: 'fee-types',
     roles: ['MANAGER', 'ACCOUNTANT'],
     component: FeeTypesPage,
+  },
+  {
+    key: 'invoice-generate',
+    group: 'Tài chính',
+    label: 'Lập hóa đơn',
+    icon: FileTextOutlined,
+    path: 'invoices/generate',
+    roles: ['ACCOUNTANT', 'MANAGER'],
+    component: InvoiceGeneratePage,
   },
 
   // ===== Module A (Vũ Việt) =====
