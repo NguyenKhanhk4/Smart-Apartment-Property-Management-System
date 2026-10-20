@@ -5,6 +5,7 @@ import { runTrackedJob } from './cronRunner.js';
 import { generateMaintenanceWorkOrders } from '../modules/workOrders/workOrders.jobs.js';
 import { autoCloseTickets, escalateOverdueTickets } from '../modules/tickets/tickets.jobs.js';
 import { expireLeases } from '../modules/contracts/contracts.jobs.js';
+import { generateMonthlyInvoices } from '../modules/invoices/invoices.jobs.js';
 
 /**
  * Đăng ký mọi cron job (node-cron, múi giờ Asia/Ho_Chi_Minh — srs_final.md §2.4).
@@ -20,6 +21,8 @@ export const JOBS = [
   { name: CRON_JOBS.WORK_ORDER_GENERATE, schedule: '0 2 * * *', handler: generateMaintenanceWorkOrders },
   // UC-A06 / BR-O2 — 00:00 hằng ngày kiểm tra và chuyển hợp đồng thuê hết hạn
   { name: CRON_JOBS.CONTRACT_EXPIRE, schedule: '0 0 * * *', handler: expireLeases },
+  // UC-B02 — 00:30 ngày 1 hằng tháng sinh hóa đơn kỳ mới
+  { name: CRON_JOBS.INVOICE_GENERATE, schedule: '30 0 1 * *', handler: generateMonthlyInvoices },
 ];
 
 export function startJobs() {

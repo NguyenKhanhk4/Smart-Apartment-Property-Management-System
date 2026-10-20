@@ -94,6 +94,8 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Kỳ này đã lập hóa đơn với loại phí này, chỉ áp dụng được giá mới từ kỳ chưa lập hóa đơn',
   },
+  // Module B: sinh hóa đơn mà bảng giá kỳ đó thiếu mức giá cần dùng (vd chưa khai giá gửi xe đạp) — không tính 0đ âm thầm
+  FEE_PRICE_MISSING: { status: 422, message: 'Chưa có đơn giá áp dụng cho kỳ này, hãy bổ sung trong Bảng phí' },
   // Module A (Vũ Việt): trạng thái nghiệp vụ xung đột (hợp đồng, xe...)
   STATUS_CONFLICT: {
     status: 409,
