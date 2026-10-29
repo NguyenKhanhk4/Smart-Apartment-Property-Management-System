@@ -28,6 +28,8 @@ import vehicleRoutes from './modules/vehicles/vehicles.routes.js';
 import adminDashboardRoutes from './modules/adminDashboard/adminDashboard.routes.js';
 import feeTypeRoutes from './modules/feeTypes/feeTypes.routes.js';
 import invoiceRoutes from './modules/invoices/invoices.routes.js';
+import gatePassRoutes, { platesRouter } from './modules/gatePasses/gatePasses.routes.js';
+import parkingCardRoutes from './modules/parkingCards/parkingCards.routes.js';
 
 const router = Router();
 
@@ -78,6 +80,9 @@ router.use('/contracts', contractRoutes);
 router.use('/residents', residentRoutes);
 router.use('/vehicles', vehicleRoutes);
 router.use('/admin', adminDashboardRoutes);
+router.use('/gate-passes', gatePassRoutes);
+router.use('/plates', platesRouter);
+router.use('/parking-cards', parkingCardRoutes);
 
 // Module B — Phí, Hóa đơn, Thanh toán, Công nợ
 router.use('/fee-types', feeTypeRoutes);

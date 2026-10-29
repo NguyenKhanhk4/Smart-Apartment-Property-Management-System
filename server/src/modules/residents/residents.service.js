@@ -22,6 +22,11 @@ import { withTransaction } from '../../utils/transaction.js';
 import { getHousehold } from '../household/household.service.js';
 import { ensureCodes, parseDateOfBirth } from '../memberCodes/memberCodes.service.js';
 import { generateTemporaryPassword } from '../users/password.utils.js';
+import {
+  buildIdNumberFields,
+  decryptIdNumber,
+  maskIdNumber,
+} from './idCrypto.js';
 
 /**
  * Gắn hoặc kích hoạt lại bản ghi cư dân trong căn hộ (BR-A5, BR-O1)
@@ -41,7 +46,12 @@ export async function linkResident(
     existing.isActive = true;
     existing.moveInDate = moveInDate || existing.moveInDate || new Date();
     existing.moveOutDate = null;
-    if (idNumber) existing.idNumber = idNumber;
+    if (idNumber) {
+      const idFields = buildIdNumberFields(idNumber);
+      existing.idNumber = idFields.idNumber;
+      existing.idNumberEnc = idFields.idNumberEnc;
+      existing.idNumberHash = idFields.idNumberHash;
+    }
     await existing.save({ session });
     return existing;
   }
@@ -55,7 +65,7 @@ export async function linkResident(
         contractId: contractId || null,
         isActive: true,
         moveInDate: moveInDate || new Date(),
-        idNumber: idNumber || null,
+        ...buildIdNumberFields(idNumber),
       },
     ],
     { session },
@@ -65,9 +75,8 @@ export async function linkResident(
 
 /**
  * Danh sách thành viên đang hoạt động trong căn hộ (UC-A07, BR-A8)
- * - RESIDENT chỉ xem căn mình đang ở (BR-A8) và bị ẩn idNumber (CCCD).
- * - Trưởng BQL / Lễ tân xem được đầy đủ CCCD.
- * - isHead lấy từ getHousehold (chỉ đọc).
+ * - Trả CCCD dạng che (********1234) cho mọi vai trò.
+ * - Muốn xem đầy đủ CCCD dùng endpoint riêng GET /residents/:id/id-number (STAFF:RECEPTIONIST, MANAGER).
  */
 export async function listApartmentResidents(apartmentId, viewer) {
   const apartment = await Apartment.findById(apartmentId)
@@ -98,11 +107,11 @@ export async function listApartmentResidents(apartmentId, viewer) {
   // Xác định chủ hộ từ getHousehold()
   const household = await getHousehold(apartmentId).catch(() => null);
   const headUserId = household?.head?.userId ? String(household.head.userId) : null;
-  const isResidentViewer = viewer.role === ROLES.RESIDENT;
 
   const results = rows.map((r) => {
     const u = r.userId || {};
     const isHead = headUserId ? String(u._id) === headUserId : false;
+    const plainId = decryptIdNumber(r.idNumberEnc);
 
     return {
       _id: r._id,
@@ -115,7 +124,8 @@ export async function listApartmentResidents(apartmentId, viewer) {
       relationType: r.relationType,
       contractId: r.contractId,
       moveInDate: r.moveInDate,
-      idNumber: isResidentViewer ? undefined : r.idNumber,
+      idNumber: maskIdNumber(plainId),
+      hasIdNumber: Boolean(plainId),
       isHead,
     };
   });
@@ -134,83 +144,91 @@ export async function listApartmentResidents(apartmentId, viewer) {
  */
 export async function addMember(receptionistUser, data, ip) {
   const { apartmentId, email, fullName, phone, idNumber, dateOfBirth } = data;
-
-  const apartment = await Apartment.findById(apartmentId);
-  if (!apartment) {
-    throw ApiError.notFound('Không tìm thấy căn hộ');
-  }
-
-  if (apartment.status === APARTMENT_STATUS.VACANT) {
-    throw ApiError.badRequest('Căn hộ chưa có người ở');
-  }
-
-  // Xác định hợp đồng ACTIVE để gắn contractId
-  let contractId = null;
-  if (apartment.status === APARTMENT_STATUS.RENTED) {
-    const activeLease = await Contract.findOne({
-      apartmentId,
-      type: CONTRACT_TYPES.LEASE,
-      status: CONTRACT_STATUS.ACTIVE,
-    });
-    if (!activeLease) {
-      throw ApiError.badRequest('Căn hộ đang cho thuê nhưng không có hợp đồng thuê hiệu lực');
-    }
-    contractId = activeLease._id;
-  } else {
-    const activeSale = await Contract.findOne({
-      apartmentId,
-      type: CONTRACT_TYPES.SALE,
-      status: CONTRACT_STATUS.ACTIVE,
-    });
-    if (!activeSale) {
-      throw ApiError.badRequest('Căn hộ chưa có hợp đồng mua bán hiệu lực');
-    }
-    contractId = activeSale._id;
-  }
-
-  // Kiểm tra tài khoản User
   const normEmail = email.trim().toLowerCase();
-  let user = await User.findOne({ email: normEmail });
+
+  let apartment = null;
+  let user = null;
   let createdNewUser = null;
-
-  if (user) {
-    if (user.role !== ROLES.RESIDENT) {
-      throw ApiError.badRequest('Email của tài khoản nội bộ không được gắn làm cư dân');
-    }
-
-    const alreadyActive = await Resident.findOne({
-      apartmentId,
-      userId: user._id,
-      isActive: true,
-    });
-    if (alreadyActive) {
-      throw ApiError.badRequest('Cư dân đã là thành viên đang ở của căn hộ này');
-    }
-
-    if (dateOfBirth) {
-      user.dateOfBirth = parseDateOfBirth(dateOfBirth);
-      await user.save();
-    }
-  } else {
-    const tempPass = generateTemporaryPassword(10);
-    const passwordHash = await bcrypt.hash(tempPass, 10);
-    const parsedDob = dateOfBirth ? parseDateOfBirth(dateOfBirth) : null;
-
-    user = await User.create({
-      fullName: fullName.trim(),
-      email: normEmail,
-      phone: phone?.trim() || null,
-      dateOfBirth: parsedDob,
-      passwordHash,
-      role: ROLES.RESIDENT,
-      isActive: true,
-    });
-    createdNewUser = { user, tempPass };
-    if (!env.isProd) console.log('[module-a] mật khẩu tạm', user.email, tempPass);
-  }
-
   let savedResident = null;
+
   await withTransaction(async (session) => {
+    apartment = await Apartment.findById(apartmentId).session(session);
+    if (!apartment) {
+      throw ApiError.notFound('Không tìm thấy căn hộ');
+    }
+
+    if (apartment.status === APARTMENT_STATUS.VACANT) {
+      throw ApiError.badRequest('Căn hộ chưa có người ở');
+    }
+
+    // Xác định hợp đồng ACTIVE để gắn contractId
+    let contractId;
+    if (apartment.status === APARTMENT_STATUS.RENTED) {
+      const activeLease = await Contract.findOne({
+        apartmentId,
+        type: CONTRACT_TYPES.LEASE,
+        status: CONTRACT_STATUS.ACTIVE,
+      }).session(session);
+      if (!activeLease) {
+        throw ApiError.badRequest('Căn hộ đang cho thuê nhưng không có hợp đồng thuê hiệu lực');
+      }
+      contractId = activeLease._id;
+    } else {
+      const activeSale = await Contract.findOne({
+        apartmentId,
+        type: CONTRACT_TYPES.SALE,
+        status: CONTRACT_STATUS.ACTIVE,
+      }).session(session);
+      if (!activeSale) {
+        throw ApiError.badRequest('Căn hộ chưa có hợp đồng mua bán hiệu lực');
+      }
+      contractId = activeSale._id;
+    }
+
+    // Kiểm tra tài khoản User trong cùng transaction
+    user = await User.findOne({ email: normEmail }).session(session);
+
+    if (user) {
+      if (user.role !== ROLES.RESIDENT) {
+        throw ApiError.badRequest('Email của tài khoản nội bộ không được gắn làm cư dân');
+      }
+
+      const alreadyActive = await Resident.findOne({
+        apartmentId,
+        userId: user._id,
+        isActive: true,
+      }).session(session);
+      if (alreadyActive) {
+        throw ApiError.badRequest('Cư dân đã là thành viên đang ở của căn hộ này');
+      }
+
+      if (dateOfBirth) {
+        user.dateOfBirth = parseDateOfBirth(dateOfBirth);
+        await user.save({ session });
+      }
+    } else {
+      const tempPass = generateTemporaryPassword(10);
+      const passwordHash = await bcrypt.hash(tempPass, 10);
+      const parsedDob = dateOfBirth ? parseDateOfBirth(dateOfBirth) : null;
+
+      [user] = await User.create(
+        [
+          {
+            fullName: fullName.trim(),
+            email: normEmail,
+            phone: phone?.trim() || null,
+            dateOfBirth: parsedDob,
+            passwordHash,
+            role: ROLES.RESIDENT,
+            isActive: true,
+          },
+        ],
+        { session },
+      );
+      createdNewUser = { user, tempPass };
+      if (!env.isProd) console.log('[module-a] mật khẩu tạm', user.email, tempPass);
+    }
+
     savedResident = await linkResident(
       {
         userId: user._id,
@@ -223,19 +241,21 @@ export async function addMember(receptionistUser, data, ip) {
       session,
     );
 
-    await logAudit({
-      action: AUDIT_ACTIONS.RESIDENT_ASSIGNED,
-      user: receptionistUser,
-      targetType: 'Resident',
-      targetId: savedResident._id,
-      metadata: {
-        apartmentId,
-        userId: user._id,
-        relationType: RELATION_TYPES.FAMILY_MEMBER,
+    await logAudit(
+      {
+        action: AUDIT_ACTIONS.RESIDENT_ASSIGNED,
+        user: receptionistUser,
+        targetType: 'Resident',
+        targetId: savedResident._id,
+        metadata: {
+          apartmentId,
+          userId: user._id,
+          relationType: RELATION_TYPES.FAMILY_MEMBER,
+        },
+        ip,
       },
-      session,
-      ip,
-    });
+      { session },
+    );
   });
 
   // Sau commit:
@@ -285,9 +305,16 @@ export async function updateMember(residentId, data, receptionistUser, ip) {
 
   if (idNumber !== undefined) {
     const val = idNumber ? idNumber.trim() : null;
-    if (val !== resident.idNumber) {
-      changes.idNumber = { from: resident.idNumber, to: val };
-      resident.idNumber = val;
+    const oldPlain = decryptIdNumber(resident.idNumberEnc);
+    if (val !== oldPlain) {
+      changes.idNumber = {
+        from: maskIdNumber(oldPlain),
+        to: maskIdNumber(val),
+      };
+      const idFields = buildIdNumberFields(val);
+      resident.idNumber = idFields.idNumber;
+      resident.idNumberEnc = idFields.idNumberEnc;
+      resident.idNumberHash = idFields.idNumberHash;
     }
   }
 
@@ -326,7 +353,41 @@ export async function updateMember(residentId, data, receptionistUser, ip) {
     }
   }
 
-  return resident;
+  const obj = resident.toObject();
+  const plainId = decryptIdNumber(resident.idNumberEnc);
+  obj.idNumber = maskIdNumber(plainId);
+  delete obj.idNumberEnc;
+  delete obj.idNumberHash;
+  return obj;
+}
+
+/**
+ * Xem đầy đủ CCCD của cư dân — chỉ STAFF:RECEPTIONIST và MANAGER, có ghi audit (Task 5)
+ */
+export async function revealResidentIdNumber(residentId, actorUser, ip) {
+  const resident = await Resident.findById(residentId).lean();
+  if (!resident) {
+    throw ApiError.notFound('Không tìm thấy thông tin cư dân');
+  }
+
+  const plainId = decryptIdNumber(resident.idNumberEnc);
+
+  await logAudit({
+    action: AUDIT_ACTIONS.RESIDENT_ID_VIEWED,
+    user: actorUser,
+    targetType: 'Resident',
+    targetId: resident._id,
+    metadata: {
+      apartmentId: resident.apartmentId,
+      userId: resident.userId,
+    },
+    ip,
+  });
+
+  return {
+    residentId: resident._id,
+    idNumber: plainId,
+  };
 }
 
 /**

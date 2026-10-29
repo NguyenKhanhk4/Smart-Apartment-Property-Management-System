@@ -19,6 +19,7 @@ const contractSchema = new Schema(
     },
     fileUrl: { type: String, default: null },
     terminatedAt: { type: Date, default: null }, // UC-A06.3: thời điểm chấm dứt sớm
+    remindedAt: { type: Date, default: null }, // UC19: thời điểm đã gửi nhắc hết hạn trước 15 ngày
     createdBy: { type: ObjectId, ref: 'User' },
   },
   schemaOptions('contracts'),

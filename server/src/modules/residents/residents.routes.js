@@ -5,6 +5,7 @@ import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { created, ok } from '../../utils/response.js';
 import { idParams, objectId } from '../../utils/validators.js';
+import * as occupantReportsService from '../occupantReports/occupantReports.service.js';
 import * as service from './residents.service.js';
 
 // Module A — Vũ Việt. UC-A07, UC-A08: Quản lý cư dân & Căn hộ của tôi
@@ -23,6 +24,62 @@ const updateMemberBody = Joi.object({
   idNumber: Joi.string().trim().allow('', null),
   dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
 }).min(1);
+
+const changesQuerySchema = Joi.object({
+  from: Joi.date().iso().optional(),
+  to: Joi.date().iso().optional(),
+  format: Joi.string().valid('json', 'xlsx').optional(),
+});
+
+/**
+ * GET /residents/changes — UC21: Xem trước hoặc xuất Excel biến động nhân khẩu
+ */
+router.get(
+  '/changes',
+  authenticate,
+  authorize('STAFF:RECEPTIONIST', 'MANAGER'),
+  validate({ query: changesQuerySchema }),
+  async (req, res) => {
+    if (req.validated.query.format === 'xlsx') {
+      const { buffer, filename } = await occupantReportsService.exportResidentChangesExcel(
+        req.validated.query,
+        req.user,
+        req.ip,
+      );
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(Buffer.from(buffer));
+    }
+    const list = await occupantReportsService.listResidentChanges(req.validated.query);
+    return ok(res, list);
+  },
+);
+
+/**
+ * GET /residents/changes/export — UC21: Xuất Excel biến động nhân khẩu
+ */
+router.get(
+  '/changes/export',
+  authenticate,
+  authorize('STAFF:RECEPTIONIST', 'MANAGER'),
+  validate({ query: changesQuerySchema }),
+  async (req, res) => {
+    const { buffer, filename } = await occupantReportsService.exportResidentChangesExcel(
+      req.validated.query,
+      req.user,
+      req.ip,
+    );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(Buffer.from(buffer));
+  },
+);
 
 /**
  * @openapi
@@ -105,6 +162,24 @@ router.patch(
       req.ip,
     );
     ok(res, result);
+  },
+);
+
+/**
+ * GET /residents/:id/id-number — Xem đầy đủ CCCD (chỉ STAFF:RECEPTIONIST và MANAGER, ghi audit)
+ */
+router.get(
+  '/:id/id-number',
+  authenticate,
+  authorize('STAFF:RECEPTIONIST', 'MANAGER'),
+  validate({ params: idParams }),
+  async (req, res) => {
+    const result = await service.revealResidentIdNumber(
+      req.validated.params.id,
+      req.user,
+      req.ip,
+    );
+    return ok(res, result);
   },
 );
 

@@ -101,6 +101,11 @@ export default function VehicleRequestsPage() {
     ? allData
     : allData?.items || [];
 
+  // Modal Duyệt (bắt buộc nhập số thẻ gửi xe — UC66)
+  const [approveModalOpen, setApproveModalOpen] = useState(false);
+  const [approvingItem, setApprovingItem] = useState(null);
+  const [approveForm] = Form.useForm();
+
   // Modal Từ chối
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectingItem, setRejectingItem] = useState(null);
@@ -109,19 +114,28 @@ export default function VehicleRequestsPage() {
   // Đang thao tác duyệt/hủy
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
-  // Hành động Duyệt
-  const handleApprove = async (id) => {
-    setActionLoadingId(id);
-    try {
-      await vehicleApi.approve(id);
-      message.success('Đã duyệt đăng ký xe thành công!');
-      reloadPending();
-    } catch (err) {
-      message.error(err.response?.data?.message || 'Duyệt phương tiện thất bại');
-    } finally {
-      setActionLoadingId(null);
-    }
+  const openApproveModal = (item) => {
+    setApprovingItem(item);
+    approveForm.resetFields();
+    setApproveModalOpen(true);
   };
+
+  // Action Duyệt kèm cấp thẻ gửi xe
+  const [approveAction, approveSubmitting] = useAction(
+    async (values) => {
+      if (!approvingItem) return null;
+      return vehicleApi.approve(approvingItem._id, {
+        cardNumber: values.cardNumber.trim().toUpperCase(),
+      });
+    },
+    {
+      success: 'Đã duyệt đăng ký xe và cấp thẻ gửi xe thành công!',
+      onDone: () => {
+        setApproveModalOpen(false);
+        reloadPending();
+      },
+    },
+  );
 
   // Mở modal Từ chối
   const openRejectModal = (item) => {
@@ -225,18 +239,14 @@ export default function VehicleRequestsPage() {
       render: (_, r) =>
         isReceptionist ? (
           <Space>
-            <Popconfirm
-              title="Duyệt đăng ký xe"
-              description="Xác nhận duyệt phương tiện này vào bãi gửi xe?"
-              okText="Duyệt"
-              cancelText="Hủy"
-              onConfirm={() => handleApprove(r._id)}
-              okButtonProps={{ loading: actionLoadingId === r._id }}
+            <Button
+              type="primary"
+              size="small"
+              icon={<CheckOutlined />}
+              onClick={() => openApproveModal(r)}
             >
-              <Button type="primary" size="small" icon={<CheckOutlined />}>
-                Duyệt
-              </Button>
-            </Popconfirm>
+              Duyệt & Cấp thẻ
+            </Button>
 
             <Button
               size="small"
@@ -564,6 +574,37 @@ export default function VehicleRequestsPage() {
           ]}
         />
       </Card>
+
+      {/* Modal Duyệt & Cấp số thẻ gửi xe (UC66) */}
+      <Modal
+        title={`Duyệt phương tiện & Cấp thẻ gửi xe: ${approvingItem?.plateNumber || approvingItem?.type || ''}`}
+        open={approveModalOpen}
+        onCancel={() => setApproveModalOpen(false)}
+        onOk={() => approveForm.submit()}
+        confirmLoading={approveSubmitting}
+        okText="Xác nhận duyệt & cấp thẻ"
+        cancelText="Hủy"
+        destroyOnClose
+      >
+        <Form
+          form={approveForm}
+          layout="vertical"
+          onFinish={approveAction}
+          className="mt-4"
+        >
+          <Form.Item
+            name="cardNumber"
+            label="Số thẻ gửi xe (bắt buộc)"
+            rules={[{ required: true, message: 'Vui lòng nhập số thẻ gửi xe' }]}
+            extra="Thẻ gửi xe sẽ được kích hoạt (ACTIVE) ngay khi duyệt phương tiện."
+          >
+            <Input
+              placeholder="Ví dụ: PC-A101-01"
+              className="uppercase font-semibold"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* Modal Nhập lý do từ chối */}
       <Modal

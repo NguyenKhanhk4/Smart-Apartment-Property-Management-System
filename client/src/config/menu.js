@@ -97,6 +97,13 @@ const FundDashboardPage = lazy(() => import('../features/reports/FundDashboardPa
 const OperationsDashboardPage = lazy(() => import('../features/reports/OperationsDashboardPage'));
 const AmenityUsagePage = lazy(() => import('../features/reports/AmenityUsagePage'));
 
+// ===== Gate Pass & Kiểm soát xe (Người 2) =====
+const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
+const ResidentGatePassesPage = lazy(() => import('../features/gatePasses/ResidentGatePassesPage'));
+const SecurityGatePage = lazy(() => import('../features/security-gate/SecurityGatePage'));
+const ParkingCardsPage = lazy(() => import('../features/vehicles/ParkingCardsPage'));
+const OccupantChangesPage = lazy(() => import('../features/residents/OccupantChangesPage'));
+
 // Giao diện nội bộ (/app/*) — hiện ở sidebar
 export const adminMenu = [
   { key: 'home', label: 'Trang chủ', icon: HomeOutlined, path: 'home', component: HomePage },
@@ -354,6 +361,43 @@ export const adminMenu = [
     roles: ['ADMIN'],
     component: SystemDashboardPage,
   },
+  // ===== Gate Pass & Kiểm soát xe (Người 2) =====
+  {
+    key: 'gate-passes',
+    group: 'Cư dân & dịch vụ',
+    label: 'Duyệt Gate Pass',
+    icon: FileTextOutlined,
+    path: 'gate-passes',
+    roles: ['MANAGER'],
+    component: ManagerGatePassesPage,
+  },
+  {
+    key: 'security-gate',
+    group: 'Tiện ích & khách',
+    label: 'Gate Pass & Tra biển số',
+    icon: ScanOutlined,
+    path: 'security-gate',
+    roles: ['STAFF:SECURITY', 'MANAGER'],
+    component: SecurityGatePage,
+  },
+  {
+    key: 'parking-cards',
+    group: 'Cư dân & dịch vụ',
+    label: 'Thẻ cần thu hồi',
+    icon: IdcardOutlined,
+    path: 'parking-cards',
+    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
+    component: ParkingCardsPage,
+  },
+  {
+    key: 'resident-changes',
+    group: 'Cư dân & dịch vụ',
+    label: 'Biến động nhân khẩu',
+    icon: TeamOutlined,
+    path: 'resident-changes',
+    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
+    component: OccupantChangesPage,
+  },
 ];
 
 // Sidebar riêng của Lễ tân (trang chủ mới): nhóm lại các mục có sẵn trong adminMenu theo `key`, kèm khóa badge số việc chờ.
@@ -368,6 +412,9 @@ export const receptionNav = [
       { key: 'amenity-desk' },
       { key: 'tickets', badge: 'ticketsNew' },
       { key: 'vehicle-requests', badge: 'vehiclesPending' },
+      { key: 'parking-cards' },
+      { key: 'resident-changes' },
+      { key: 'contracts' },
     ],
   },
   { group: 'Cư dân và dịch vụ', items: [{ key: 'amenity-passes' }, { key: 'announcements' }] },
@@ -435,6 +482,13 @@ export const residentMenu = [
     path: 'profile',
     component: ProfilePage,
     hideInMenu: true,
+  },
+  {
+    key: 'gate-passes',
+    label: 'Đơn chuyển đồ',
+    icon: FileTextOutlined,
+    path: 'gate-passes',
+    component: ResidentGatePassesPage,
   },
 ];
 

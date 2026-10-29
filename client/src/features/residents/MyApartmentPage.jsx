@@ -22,6 +22,7 @@ import {
   ToolOutlined,
   CoffeeOutlined,
   IdcardOutlined,
+  FileTextOutlined,
   UsergroupAddOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -243,6 +244,7 @@ export default function MyApartmentPage() {
                 description={
                   <div className="text-xs text-gray-400 space-x-3 mt-0.5">
                     {m.phone && <span>SĐT: {m.phone}</span>}
+                    {m.idNumber && <span>CCCD: {m.idNumber}</span>}
                     {m.dateOfBirth && <span>Ngày sinh: {formatDate(m.dateOfBirth)}</span>}
                     <span>Ngày dọn vào: {formatDate(m.moveInDate)}</span>
                   </div>
@@ -308,6 +310,15 @@ export default function MyApartmentPage() {
               onClick={() => navigate('/r/guests')}
             >
               Sổ khách
+            </Button>
+          </Col>
+          <Col xs={12} sm={6}>
+            <Button
+              block
+              icon={<FileTextOutlined className="text-cyan-600" />}
+              onClick={() => navigate('/r/gate-passes')}
+            >
+              Đơn chuyển đồ
             </Button>
           </Col>
         </Row>
