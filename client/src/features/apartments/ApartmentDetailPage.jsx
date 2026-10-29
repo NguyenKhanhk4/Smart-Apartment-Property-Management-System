@@ -30,6 +30,7 @@ import {
   DeleteOutlined,
   CrownOutlined,
   BankOutlined,
+  EyeOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -54,6 +55,20 @@ export default function ApartmentDetailPage() {
   const { user } = useAuth();
 
   const isReceptionist = user?.role === 'STAFF' && user?.roleTitle === 'RECEPTIONIST';
+  const canRevealIdNumber = isReceptionist || user?.role === 'MANAGER';
+  const [revealedIds, setRevealedIds] = useState({});
+
+  const handleRevealIdNumber = async (residentId) => {
+    try {
+      const res = await residentsApi.revealIdNumber(residentId);
+      const plain = res?.data?.idNumber || null;
+      if (plain) {
+        setRevealedIds((prev) => ({ ...prev, [residentId]: plain }));
+      }
+    } catch {
+      // handled by axiosClient
+    }
+  };
 
   // Load apartment details
   const {
@@ -206,8 +221,26 @@ export default function ApartmentDetailPage() {
       title: 'Số CCCD',
       dataIndex: 'idNumber',
       key: 'idNumber',
-      width: 150,
-      render: (val) => (val ? <code className="text-xs">{val}</code> : '—'),
+      width: 170,
+      render: (val, r) => {
+        const displayVal = revealedIds[r._id] || val;
+        if (!displayVal) return '—';
+        return (
+          <Space size={4}>
+            <code className="text-xs">{displayVal}</code>
+            {canRevealIdNumber && !revealedIds[r._id] && (
+              <Tooltip title="Xem đầy đủ CCCD (có ghi Audit Log)">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<EyeOutlined />}
+                  onClick={() => handleRevealIdNumber(r._id)}
+                />
+              </Tooltip>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: 'Ngày dọn vào',

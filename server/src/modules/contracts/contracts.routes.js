@@ -172,14 +172,14 @@ router.patch(
  * /contracts/{id}/terminate:
  *   patch:
  *     tags: [Hợp đồng]
- *     summary: Chấm dứt sớm hợp đồng (Lễ tân) — UC-A06
+ *     summary: Chấm dứt sớm hợp đồng (Trưởng BQL) — UC-A06
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
 router.patch(
   '/:id/terminate',
   authenticate,
-  authorize('STAFF:RECEPTIONIST'),
+  authorize('MANAGER'),
   validate({ params: idParams }),
   async (req, res) => {
     const result = await service.terminateContract(req.validated.params.id, req.user, req.ip);

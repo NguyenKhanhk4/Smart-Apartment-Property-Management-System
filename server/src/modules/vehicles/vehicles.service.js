@@ -2,18 +2,21 @@ import {
   AUDIT_ACTIONS,
   CONFIG_KEYS,
   NOTIFICATION_TYPES,
+  PARKING_CARD_STATUS,
   RELATION_TYPES,
   ROLE_TITLES,
   VEHICLE_STATUS,
   VEHICLE_TYPES,
 } from '../../constants/enums.js';
-import { Resident, Vehicle } from '../../models/index.js';
+import { ParkingCard, Resident, Vehicle } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
 import { getActiveApartmentIds, resolveResidentApartment } from '../../services/residency.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
+import { withTransaction } from '../../utils/transaction.js';
+import { disableActiveCardsByVehicle } from '../parkingCards/parkingCards.service.js';
 
 /**
  * BR-A6: Chuẩn hóa biển số xe (in hoa, bỏ khoảng trắng và dấu chấm; rỗng -> null).
@@ -255,10 +258,20 @@ export async function listForStaff(query = {}) {
 }
 
 /**
- * UC-A10: Lễ tân duyệt yêu cầu đăng ký gửi xe
+ * UC-A10 & UC66: Lễ tân duyệt yêu cầu đăng ký gửi xe kèm cấp thẻ gửi xe ACTIVE trong cùng transaction
  */
-export async function approve(vehicleId, staffUser) {
+export async function approve(vehicleId, staffUser, { cardNumber } = {}, ip) {
   const staffId = staffUser?.id || staffUser?._id;
+  const normCardNumber = String(cardNumber || '')
+    .trim()
+    .toUpperCase();
+
+  if (!normCardNumber) {
+    throw ApiError.badRequest('Số thẻ gửi xe là bắt buộc khi duyệt phương tiện', [
+      { field: 'cardNumber', message: 'Số thẻ gửi xe là bắt buộc' },
+    ]);
+  }
+
   const vehicle = await Vehicle.findById(vehicleId);
 
   if (!vehicle) {
@@ -271,53 +284,126 @@ export async function approve(vehicleId, staffUser) {
 
   await assertCapacity(vehicle.type);
 
-  if (vehicle.plateNumber) {
-    const existing = await Vehicle.findOne({
-      _id: { $ne: vehicle._id },
-      plateNumber: vehicle.plateNumber,
-      status: { $in: [VEHICLE_STATUS.PENDING, VEHICLE_STATUS.APPROVED] },
-    }).lean();
+  let issuedCard = null;
 
-    if (existing) {
-      throw ApiError.badRequest('Biển số xe đã được duyệt cho phương tiện khác');
+  try {
+    await withTransaction(async (session) => {
+      const current = await Vehicle.findOne({
+        _id: vehicle._id,
+        status: VEHICLE_STATUS.PENDING,
+      }).session(session);
+
+      if (!current) {
+        throw new ApiError('STATUS_CONFLICT', 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại');
+      }
+
+      if (current.plateNumber) {
+        const existing = await Vehicle.findOne({
+          _id: { $ne: current._id },
+          plateNumber: current.plateNumber,
+          status: { $in: [VEHICLE_STATUS.PENDING, VEHICLE_STATUS.APPROVED] },
+        })
+          .session(session)
+          .lean();
+
+        if (existing) {
+          throw ApiError.badRequest('Biển số xe đã được duyệt cho phương tiện khác');
+        }
+      }
+
+      const existingCard = await ParkingCard.findOne({
+        cardNumber: normCardNumber,
+        status: {
+          $in: [
+            PARKING_CARD_STATUS.ACTIVE,
+            PARKING_CARD_STATUS.DISABLED_TO_COLLECT,
+            PARKING_CARD_STATUS.LOST,
+          ],
+        },
+      })
+        .session(session)
+        .lean();
+
+      if (existingCard) {
+        throw ApiError.badRequest('Số thẻ gửi xe đang được sử dụng hoặc chưa được thu hồi', [
+          { field: 'cardNumber', message: 'Số thẻ gửi xe đã tồn tại' },
+        ]);
+      }
+
+      const now = new Date();
+      current.status = VEHICLE_STATUS.APPROVED;
+      current.approvedAt = now;
+      current.reviewedBy = staffId;
+      await current.save({ session });
+
+      [issuedCard] = await ParkingCard.create(
+        [
+          {
+            cardNumber: normCardNumber,
+            vehicleId: current._id,
+            apartmentId: current.apartmentId,
+            status: PARKING_CARD_STATUS.ACTIVE,
+            issuedAt: now,
+          },
+        ],
+        { session },
+      );
+
+      await logAudit(
+        {
+          action: AUDIT_ACTIONS.VEHICLE_APPROVED,
+          user: staffUser,
+          targetType: 'vehicles',
+          targetId: current._id,
+          metadata: {
+            plateNumber: current.plateNumber,
+            type: current.type,
+            apartmentId: current.apartmentId,
+            cardNumber: normCardNumber,
+            parkingCardId: issuedCard._id,
+          },
+          ip,
+        },
+        { session },
+      );
+
+      await logAudit(
+        {
+          action: AUDIT_ACTIONS.PARKING_CARD_ISSUED,
+          user: staffUser,
+          targetType: 'ParkingCard',
+          targetId: issuedCard._id,
+          metadata: {
+            cardNumber: normCardNumber,
+            vehicleId: current._id,
+            apartmentId: current.apartmentId,
+          },
+          ip,
+        },
+        { session },
+      );
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      throw ApiError.badRequest('Số thẻ gửi xe hoặc biển số đã được sử dụng');
     }
+    throw err;
   }
 
-  const updated = await Vehicle.findOneAndUpdate(
-    { _id: vehicle._id, status: VEHICLE_STATUS.PENDING },
-    {
-      $set: {
-        status: VEHICLE_STATUS.APPROVED,
-        approvedAt: new Date(),
-        reviewedBy: staffId,
-      },
-    },
-    { returnDocument: 'after' },
-  )
+  const updated = await Vehicle.findById(vehicle._id)
     .populate('apartmentId', 'code')
-    .populate('registeredBy', 'fullName email');
+    .populate('registeredBy', 'fullName email')
+    .lean();
 
-  if (!updated) {
-    throw new ApiError('STATUS_CONFLICT', 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại');
+  if (updated) {
+    updated.parkingCard = issuedCard ? issuedCard.toObject() : null;
   }
 
-  await logAudit({
-    action: AUDIT_ACTIONS.VEHICLE_APPROVED,
-    user: staffUser,
-    targetType: 'vehicles',
-    targetId: updated._id,
-    metadata: {
-      plateNumber: updated.plateNumber,
-      type: updated.type,
-      apartmentId: updated.apartmentId?._id,
-    },
-  });
-
-  if (updated.registeredBy) {
+  if (updated?.registeredBy) {
     await notify(updated.registeredBy._id || updated.registeredBy, {
       type: NOTIFICATION_TYPES.SYSTEM,
       title: 'Đăng ký xe đã được duyệt',
-      content: `Phương tiện ${updated.plateNumber || updated.type} của bạn đã được duyệt. Phí gửi xe tính từ hóa đơn tháng sau.`,
+      content: `Phương tiện ${updated.plateNumber || updated.type} đã được duyệt (Số thẻ: ${normCardNumber}). Phí gửi xe tính từ hóa đơn tháng sau.`,
       link: '/r/my-vehicles',
       refId: updated._id,
     }).catch((err) => console.error('[module-a] notify error:', err.message));
@@ -391,9 +477,10 @@ export async function reject(vehicleId, staffUser, { reason } = {}) {
 }
 
 /**
- * UC-A10: Lễ tân xác nhận hủy vé gửi xe cho xe APPROVED có cancelRequestedAt
+ * UC-A10 & UC66: Lễ tân xác nhận hủy vé gửi xe cho xe APPROVED có cancelRequestedAt
+ * Đồng thời chuyển thẻ ACTIVE của xe đó sang DISABLED_TO_COLLECT.
  */
-export async function confirmCancel(vehicleId, staffUser) {
+export async function confirmCancel(vehicleId, staffUser, ip) {
   const staffId = staffUser?.id || staffUser?._id;
   const vehicle = await Vehicle.findById(vehicleId);
 
@@ -405,44 +492,50 @@ export async function confirmCancel(vehicleId, staffUser) {
     throw new ApiError('STATUS_CONFLICT', 'Phương tiện không ở trạng thái chờ hủy');
   }
 
-  const updated = await Vehicle.findOneAndUpdate(
-    {
+  await withTransaction(async (session) => {
+    const current = await Vehicle.findOne({
       _id: vehicle._id,
       status: VEHICLE_STATUS.APPROVED,
       cancelRequestedAt: { $ne: null },
-    },
-    {
-      $set: {
-        status: VEHICLE_STATUS.CANCELLED,
-        cancelledAt: new Date(),
-        reviewedBy: staffId,
+    }).session(session);
+
+    if (!current) {
+      throw new ApiError('STATUS_CONFLICT', 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại');
+    }
+
+    current.status = VEHICLE_STATUS.CANCELLED;
+    current.cancelledAt = new Date();
+    current.reviewedBy = staffId;
+    await current.save({ session });
+
+    const disabledCount = await disableActiveCardsByVehicle(current._id, session);
+
+    await logAudit(
+      {
+        action: AUDIT_ACTIONS.VEHICLE_CANCELLED,
+        user: staffUser,
+        targetType: 'vehicles',
+        targetId: current._id,
+        metadata: {
+          plateNumber: current.plateNumber,
+          type: current.type,
+          disabledCardsCount: disabledCount,
+        },
+        ip,
       },
-    },
-    { returnDocument: 'after' },
-  )
+      { session },
+    );
+  });
+
+  const updated = await Vehicle.findById(vehicle._id)
     .populate('apartmentId', 'code')
     .populate('registeredBy', 'fullName email');
 
-  if (!updated) {
-    throw new ApiError('STATUS_CONFLICT', 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại');
-  }
-
-  await logAudit({
-    action: AUDIT_ACTIONS.VEHICLE_CANCELLED,
-    user: staffUser,
-    targetType: 'vehicles',
-    targetId: updated._id,
-    metadata: {
-      plateNumber: updated.plateNumber,
-      type: updated.type,
-    },
-  });
-
-  if (updated.registeredBy) {
+  if (updated?.registeredBy) {
     await notify(updated.registeredBy._id || updated.registeredBy, {
       type: NOTIFICATION_TYPES.SYSTEM,
       title: 'Đã xác nhận hủy vé gửi xe',
-      content: `Phương tiện ${updated.plateNumber || updated.type} đã được hủy vé gửi xe thành công.`,
+      content: `Phương tiện ${updated.plateNumber || updated.type} đã được hủy vé gửi xe thành công. Vui lòng hoàn trả thẻ gửi xe tại quầy Lễ tân.`,
       link: '/r/my-vehicles',
       refId: updated._id,
     }).catch((err) => console.error('[module-a] notify error:', err.message));

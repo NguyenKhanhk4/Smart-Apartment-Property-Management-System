@@ -1,6 +1,6 @@
 // API Module A (Vũ Việt): Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện, Dashboard Admin.
 // Trả về nguyên envelope { success, data, pagination? } theo quy ước axiosClient.js.
-import { http } from './axiosClient';
+import { apiClient, http } from './axiosClient';
 
 // ===== UC-A03 & UC-A04: Người dùng & Tài khoản nội bộ =====
 export const usersApi = {
@@ -51,6 +51,23 @@ export const residentsApi = {
   updateMember: (id, body) => http.patch(`/residents/${id}`, body),
   removeMember: (id) => http.patch(`/residents/${id}/remove`),
   myApartments: () => http.get('/residents/me/apartments'),
+  revealIdNumber: (id) => http.get(`/residents/${id}/id-number`),
+  listChanges: (params) => http.get('/residents/changes', { params }),
+  exportChanges: async (params) => {
+    const res = await apiClient.get('/residents/changes/export', {
+      params,
+      responseType: 'blob',
+    });
+    const match = /filename="?([^"]+)"?/.exec(res.headers['content-disposition'] ?? '');
+    const filename = match?.[1] ?? 'bien-dong-nhan-khau.xlsx';
+    const url = URL.createObjectURL(res.data);
+    const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return filename;
+  },
 };
 
 // ===== UC-A09 & UC-A10: Phương tiện =====
@@ -59,9 +76,17 @@ export const vehicleApi = {
   register: (body) => http.post('/vehicles', body),
   requestCancel: (id) => http.patch(`/vehicles/${id}/cancel-request`),
   list: (params) => http.get('/vehicles', { params }),
-  approve: (id) => http.patch(`/vehicles/${id}/approve`),
+  approve: (id, body) => http.patch(`/vehicles/${id}/approve`, body),
   reject: (id, body) => http.patch(`/vehicles/${id}/reject`, body),
   confirmCancel: (id) => http.patch(`/vehicles/${id}/confirm-cancel`),
+};
+
+// ===== UC66: Thẻ gửi xe =====
+export const parkingCardsApi = {
+  list: (params) => http.get('/parking-cards', { params }),
+  collect: (id, body) => http.patch(`/parking-cards/${id}/collect`, body),
+  lost: (id, body) => http.patch(`/parking-cards/${id}/lost`, body),
+  updateStatus: (id, body) => http.patch(`/parking-cards/${id}/status`, body),
 };
 // ===== UC-A11: Dashboard thống kê hệ thống dành cho Admin =====
 export const adminApi = {

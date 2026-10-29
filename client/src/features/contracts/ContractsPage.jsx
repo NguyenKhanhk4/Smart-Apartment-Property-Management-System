@@ -44,6 +44,7 @@ export default function ContractsPage() {
   const { user } = useAuth();
   const { message } = App.useApp();
   const isReceptionist = user?.role === 'STAFF' && user?.roleTitle === 'RECEPTIONIST';
+  const isManager = user?.role === 'MANAGER';
 
   // Filters state
   const [filters, setFilters] = useState({
@@ -338,37 +339,35 @@ export default function ContractsPage() {
           >
             Xem
           </Button>
-          {isReceptionist && record.status === 'ACTIVE' && (
-            <>
-              {record.type === 'LEASE' && (
-                <Tooltip title="Gia hạn thời hạn hợp đồng">
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<CalendarOutlined />}
-                    onClick={() => handleOpenExtendModal(record)}
-                  >
-                    Gia hạn
-                  </Button>
-                </Tooltip>
-              )}
-              <Popconfirm
-                title="Chấm dứt hợp đồng"
-                description={
-                  record.type === 'SALE'
-                    ? 'Chấm dứt hợp đồng mua bán sẽ gỡ toàn bộ cư dân và đưa căn hộ về trạng thái Trống. Tiếp tục?'
-                    : 'Chấm dứt hợp đồng thuê sẽ gỡ người thuê và đưa căn hộ về trạng thái Đã sở hữu. Tiếp tục?'
-                }
-                okText="Chấm dứt"
-                cancelText="Hủy"
-                okButtonProps={{ danger: true }}
-                onConfirm={() => terminateContract(record._id)}
+          {isReceptionist && record.status === 'ACTIVE' && record.type === 'LEASE' && (
+            <Tooltip title="Gia hạn thời hạn hợp đồng">
+              <Button
+                size="small"
+                type="text"
+                icon={<CalendarOutlined />}
+                onClick={() => handleOpenExtendModal(record)}
               >
-                <Button size="small" type="text" danger icon={<StopOutlined />}>
-                  Chấm dứt
-                </Button>
-              </Popconfirm>
-            </>
+                Gia hạn
+              </Button>
+            </Tooltip>
+          )}
+          {isManager && record.status === 'ACTIVE' && (
+            <Popconfirm
+              title="Chấm dứt hợp đồng"
+              description={
+                record.type === 'SALE'
+                  ? 'Chấm dứt hợp đồng mua bán sẽ gỡ toàn bộ cư dân và đưa căn hộ về trạng thái Trống. Tiếp tục?'
+                  : 'Chấm dứt hợp đồng thuê sẽ gỡ người thuê và đưa căn hộ về trạng thái Đã sở hữu. Tiếp tục?'
+              }
+              okText="Chấm dứt"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => terminateContract(record._id)}
+            >
+              <Button size="small" type="text" danger icon={<StopOutlined />}>
+                Chấm dứt
+              </Button>
+            </Popconfirm>
           )}
         </Space>
       ),

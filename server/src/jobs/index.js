@@ -6,6 +6,8 @@ import { generateMaintenanceWorkOrders } from '../modules/workOrders/workOrders.
 import { autoCloseTickets, escalateOverdueTickets } from '../modules/tickets/tickets.jobs.js';
 import { expireLeases } from '../modules/contracts/contracts.jobs.js';
 import { generateMonthlyInvoices } from '../modules/invoices/invoices.jobs.js';
+import { expireGatePasses } from '../modules/gatePasses/gatePasses.jobs.js';
+import { remindExpiringLeases } from '../modules/contracts/contracts.jobs.js';
 
 /**
  * Đăng ký mọi cron job (node-cron, múi giờ Asia/Ho_Chi_Minh — srs_final.md §2.4).
@@ -23,6 +25,10 @@ export const JOBS = [
   { name: CRON_JOBS.CONTRACT_EXPIRE, schedule: '0 0 * * *', handler: expireLeases },
   // UC-B02 — 00:30 ngày 1 hằng tháng sinh hóa đơn kỳ mới
   { name: CRON_JOBS.INVOICE_GENERATE, schedule: '30 0 1 * *', handler: generateMonthlyInvoices },
+  // UC52 — mỗi 15 phút kiểm tra và chuyển đơn Gate Pass quá hạn sang EXPIRED
+  { name: CRON_JOBS.GATE_PASS_EXPIRE, schedule: '*/15 * * * *', handler: expireGatePasses },
+  // UC19 — 00:30 hằng ngày nhắc trước 15 ngày hợp đồng thuê sắp hết hạn
+  { name: CRON_JOBS.CONTRACT_EXPIRY_REMIND, schedule: '30 0 * * *', handler: remindExpiringLeases },
 ];
 
 export function startJobs() {

@@ -23,6 +23,8 @@ import { ApiError } from '../../utils/ApiError.js';
 import { paginate } from '../../utils/pagination.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { ensureCodes, parseDateOfBirth } from '../memberCodes/memberCodes.service.js';
+import { disableActiveCardsByApartment } from '../parkingCards/parkingCards.service.js';
+import { buildIdNumberFields } from '../residents/idCrypto.js';
 
 function generateTemporaryPassword(length = 10) {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -185,6 +187,8 @@ export async function createContract(receptionistUser, data, file, ip) {
         }
       }
 
+      const creatorId = receptionistUser?.id ?? receptionistUser?._id ?? null;
+
       // Tạo Contract
       const [contract] = await Contract.create(
         [
@@ -198,7 +202,7 @@ export async function createContract(receptionistUser, data, file, ip) {
             tenantPaysFees: false,
             status: CONTRACT_STATUS.ACTIVE,
             fileUrl,
-            createdBy: receptionistUser._id,
+            createdBy: creatorId,
           },
         ],
         { session },
@@ -217,7 +221,12 @@ export async function createContract(receptionistUser, data, file, ip) {
         existingResident.isActive = true;
         existingResident.moveInDate = new Date(startDate);
         existingResident.moveOutDate = null;
-        if (owner.idNumber) existingResident.idNumber = owner.idNumber;
+        if (owner.idNumber) {
+          const idFields = buildIdNumberFields(owner.idNumber);
+          existingResident.idNumber = idFields.idNumber;
+          existingResident.idNumberEnc = idFields.idNumberEnc;
+          existingResident.idNumberHash = idFields.idNumberHash;
+        }
         await existingResident.save({ session });
       } else {
         await Resident.create(
@@ -229,7 +238,7 @@ export async function createContract(receptionistUser, data, file, ip) {
               contractId: contract._id,
               isActive: true,
               moveInDate: new Date(startDate),
-              idNumber: owner.idNumber || null,
+              ...buildIdNumberFields(owner.idNumber),
             },
           ],
           { session },
@@ -240,19 +249,21 @@ export async function createContract(receptionistUser, data, file, ip) {
       apartment.status = APARTMENT_STATUS.OWNED;
       await apartment.save({ session });
 
-      await logAudit({
-        action: AUDIT_ACTIONS.CONTRACT_CREATED,
-        user: receptionistUser,
-        targetType: 'Contract',
-        targetId: contract._id,
-        metadata: {
-          type: 'SALE',
-          apartmentId,
-          ownerId: ownerUser._id,
+      await logAudit(
+        {
+          action: AUDIT_ACTIONS.CONTRACT_CREATED,
+          user: receptionistUser,
+          targetType: 'Contract',
+          targetId: contract._id,
+          metadata: {
+            type: 'SALE',
+            apartmentId,
+            ownerId: ownerUser._id,
+          },
+          ip,
         },
-        session,
-        ip,
-      });
+        { session },
+      );
     } else if (type === CONTRACT_TYPES.LEASE) {
       // BR-A5: LEASE cần SALE ACTIVE
       const activeSale = await Contract.findOne({
@@ -341,6 +352,8 @@ export async function createContract(receptionistUser, data, file, ip) {
         throw ApiError.badRequest('Người thuê không được trùng với chủ sở hữu căn hộ');
       }
 
+      const creatorId = receptionistUser?.id ?? receptionistUser?._id ?? null;
+
       // Tạo Contract LEASE
       const [contract] = await Contract.create(
         [
@@ -354,7 +367,7 @@ export async function createContract(receptionistUser, data, file, ip) {
             tenantPaysFees: Boolean(tenantPaysFees),
             status: CONTRACT_STATUS.ACTIVE,
             fileUrl,
-            createdBy: receptionistUser._id,
+            createdBy: creatorId,
           },
         ],
         { session },
@@ -373,7 +386,12 @@ export async function createContract(receptionistUser, data, file, ip) {
         existingResident.isActive = true;
         existingResident.moveInDate = new Date(startDate);
         existingResident.moveOutDate = null;
-        if (tenant.idNumber) existingResident.idNumber = tenant.idNumber;
+        if (tenant.idNumber) {
+          const idFields = buildIdNumberFields(tenant.idNumber);
+          existingResident.idNumber = idFields.idNumber;
+          existingResident.idNumberEnc = idFields.idNumberEnc;
+          existingResident.idNumberHash = idFields.idNumberHash;
+        }
         await existingResident.save({ session });
       } else {
         await Resident.create(
@@ -385,7 +403,7 @@ export async function createContract(receptionistUser, data, file, ip) {
               contractId: contract._id,
               isActive: true,
               moveInDate: new Date(startDate),
-              idNumber: tenant.idNumber || null,
+              ...buildIdNumberFields(tenant.idNumber),
             },
           ],
           { session },
@@ -396,20 +414,22 @@ export async function createContract(receptionistUser, data, file, ip) {
       apartment.status = APARTMENT_STATUS.RENTED;
       await apartment.save({ session });
 
-      await logAudit({
-        action: AUDIT_ACTIONS.CONTRACT_CREATED,
-        user: receptionistUser,
-        targetType: 'Contract',
-        targetId: contract._id,
-        metadata: {
-          type: 'LEASE',
-          apartmentId,
-          ownerId: activeSale.ownerId,
-          tenantId: tenantUser._id,
+      await logAudit(
+        {
+          action: AUDIT_ACTIONS.CONTRACT_CREATED,
+          user: receptionistUser,
+          targetType: 'Contract',
+          targetId: contract._id,
+          metadata: {
+            type: 'LEASE',
+            apartmentId,
+            ownerId: activeSale.ownerId,
+            tenantId: tenantUser._id,
+          },
+          ip,
         },
-        session,
-        ip,
-      });
+        { session },
+      );
     } else {
       throw ApiError.badRequest('Loại hợp đồng không hợp lệ');
     }
@@ -472,6 +492,7 @@ export async function updateContract(id, data, file, receptionistUser, ip) {
     }
     changes.endDate = { from: contract.endDate, to: data.endDate };
     contract.endDate = data.endDate ? new Date(data.endDate) : null;
+    contract.remindedAt = null;
   }
 
   if (data.tenantPaysFees !== undefined && contract.type === CONTRACT_TYPES.LEASE) {
@@ -510,88 +531,111 @@ export async function updateContract(id, data, file, receptionistUser, ip) {
  * Chấm dứt sớm hợp đồng (UC-A06.3, BR-A5)
  */
 export async function terminateContract(id, receptionistUser, ip) {
-  const contract = await Contract.findById(id);
-  if (!contract) {
-    throw ApiError.notFound('Hợp đồng không tồn tại');
-  }
+  let apartmentId = null;
 
-  if (contract.status !== CONTRACT_STATUS.ACTIVE) {
-    throw ApiError.badRequest('Chỉ có thể chấm dứt hợp đồng đang có hiệu lực');
-  }
-
-  const now = new Date();
-
-  if (contract.type === CONTRACT_TYPES.LEASE) {
-    // Chấm dứt LEASE:
-    // 1. Contract sang TERMINATED
-    contract.status = CONTRACT_STATUS.TERMINATED;
-    contract.terminatedAt = now;
-    await contract.save();
-
-    // 2. Gỡ residents có contractId là hợp đồng này
-    await Resident.updateMany(
-      { contractId: contract._id, isActive: true },
-      { isActive: false, moveOutDate: now },
-    );
-
-    // 3. Căn hộ về OWNED (vì còn SALE)
-    await Apartment.findByIdAndUpdate(contract.apartmentId, {
-      status: APARTMENT_STATUS.OWNED,
-    });
-
-    await logAudit({
-      action: AUDIT_ACTIONS.CONTRACT_TERMINATED,
-      user: receptionistUser,
-      targetType: 'Contract',
-      targetId: contract._id,
-      metadata: { reason: 'Chấm dứt sớm hợp đồng cho thuê' },
-      ip,
-    });
-  } else if (contract.type === CONTRACT_TYPES.SALE) {
-    // BR-A5: Không chấm dứt SALE khi còn LEASE ACTIVE
-    const activeLease = await Contract.findOne({
-      apartmentId: contract.apartmentId,
-      type: CONTRACT_TYPES.LEASE,
-      status: CONTRACT_STATUS.ACTIVE,
-    });
-
-    if (activeLease) {
-      throw ApiError.badRequest(
-        'Không thể chấm dứt hợp đồng mua bán khi căn hộ vẫn còn hợp đồng thuê đang hiệu lực',
-      );
+  await withTransaction(async (session) => {
+    const contract = await Contract.findById(id).session(session);
+    if (!contract) {
+      throw ApiError.notFound('Hợp đồng không tồn tại');
     }
 
-    // Chấm dứt SALE:
-    contract.status = CONTRACT_STATUS.TERMINATED;
-    contract.terminatedAt = now;
-    await contract.save();
+    if (contract.status !== CONTRACT_STATUS.ACTIVE) {
+      throw ApiError.badRequest('Chỉ có thể chấm dứt hợp đồng đang có hiệu lực');
+    }
 
-    // Gỡ mọi residents đang hoạt động của căn hộ
-    await Resident.updateMany(
-      { apartmentId: contract.apartmentId, isActive: true },
-      { isActive: false, moveOutDate: now },
-    );
+    apartmentId = contract.apartmentId;
+    const now = new Date();
 
-    // Căn hộ về VACANT
-    await Apartment.findByIdAndUpdate(contract.apartmentId, {
-      status: APARTMENT_STATUS.VACANT,
-    });
+    if (contract.type === CONTRACT_TYPES.LEASE) {
+      // Chấm dứt LEASE:
+      // 1. Contract sang TERMINATED
+      contract.status = CONTRACT_STATUS.TERMINATED;
+      contract.terminatedAt = now;
+      await contract.save({ session });
 
-    await logAudit({
-      action: AUDIT_ACTIONS.CONTRACT_TERMINATED,
-      user: receptionistUser,
-      targetType: 'Contract',
-      targetId: contract._id,
-      metadata: { reason: 'Chấm dứt hợp đồng mua bán' },
-      ip,
-    });
-  }
+      // 2. Gỡ residents có contractId là hợp đồng này
+      await Resident.updateMany(
+        { contractId: contract._id, isActive: true },
+        { isActive: false, moveOutDate: now },
+        { session },
+      );
+
+      // 3. Căn hộ về OWNED (vì còn SALE)
+      await Apartment.findByIdAndUpdate(
+        contract.apartmentId,
+        { status: APARTMENT_STATUS.OWNED },
+        { session },
+      );
+
+      // 4. Chuyển thẻ gửi xe ACTIVE sang DISABLED_TO_COLLECT (UC66)
+      await disableActiveCardsByApartment(contract.apartmentId, null, session);
+
+      await logAudit(
+        {
+          action: AUDIT_ACTIONS.CONTRACT_TERMINATED,
+          user: receptionistUser,
+          targetType: 'Contract',
+          targetId: contract._id,
+          metadata: { reason: 'Chấm dứt sớm hợp đồng cho thuê' },
+          ip,
+        },
+        { session },
+      );
+    } else if (contract.type === CONTRACT_TYPES.SALE) {
+      // BR-A5: Không chấm dứt SALE khi còn LEASE ACTIVE
+      const activeLease = await Contract.findOne({
+        apartmentId: contract.apartmentId,
+        type: CONTRACT_TYPES.LEASE,
+        status: CONTRACT_STATUS.ACTIVE,
+      }).session(session);
+
+      if (activeLease) {
+        throw ApiError.badRequest(
+          'Không thể chấm dứt hợp đồng mua bán khi căn hộ vẫn còn hợp đồng thuê đang hiệu lực',
+        );
+      }
+
+      // Chấm dứt SALE:
+      contract.status = CONTRACT_STATUS.TERMINATED;
+      contract.terminatedAt = now;
+      await contract.save({ session });
+
+      // Gỡ mọi residents đang hoạt động của căn hộ
+      await Resident.updateMany(
+        { apartmentId: contract.apartmentId, isActive: true },
+        { isActive: false, moveOutDate: now },
+        { session },
+      );
+
+      // Căn hộ về VACANT
+      await Apartment.findByIdAndUpdate(
+        contract.apartmentId,
+        { status: APARTMENT_STATUS.VACANT },
+        { session },
+      );
+
+      // Chuyển thẻ gửi xe ACTIVE sang DISABLED_TO_COLLECT (UC66)
+      await disableActiveCardsByApartment(contract.apartmentId, null, session);
+
+      await logAudit(
+        {
+          action: AUDIT_ACTIONS.CONTRACT_TERMINATED,
+          user: receptionistUser,
+          targetType: 'Contract',
+          targetId: contract._id,
+          metadata: { reason: 'Chấm dứt hợp đồng mua bán' },
+          ip,
+        },
+        { session },
+      );
+    }
+  });
 
   // Đồng bộ lại mã cư dân (ensureCodes) ngoài transaction
   try {
-    await ensureCodes(contract.apartmentId);
+    await ensureCodes(apartmentId);
   } catch (err) {
-    console.error('[module-a] ensureCodes', contract.apartmentId, err.message);
+    console.error('[module-a] ensureCodes', apartmentId, err.message);
   }
 
   return { message: 'Đã chấm dứt hợp đồng thành công' };
