@@ -23,24 +23,19 @@ import {
 import { parkingCardsApi } from '../../api/moduleA.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
-import { VEHICLE_TYPES } from '../../constants/enums';
+import { PARKING_CARD_STATUS, VEHICLE_TYPES } from '../../constants/enums';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDateTime } from '../../utils/format';
-
-const PARKING_CARD_STATUS_MAP = {
-  ACTIVE: { label: 'Đang hoạt động', color: 'success' },
-  DISABLED_TO_COLLECT: { label: 'Cần thu hồi', color: 'warning' },
-  RETURNED: { label: 'Đã thu hồi', color: 'default' },
-  LOST: { label: 'Mất thẻ', color: 'error' },
-};
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 
 export default function ParkingCardsPage() {
-  const { user } = useAuth();
-  const isReceptionist = user?.role === 'STAFF' && user?.roleTitle === 'RECEPTIONIST';
+  const { hasRole } = useAuth();
+  const isReceptionist = hasRole('STAFF:RECEPTIONIST');
 
   const [statusFilter, setStatusFilter] = useState('DISABLED_TO_COLLECT');
   const [search, setSearch] = useState('');
+  const searchQuery = useDebouncedValue(search.trim());
   const [lostTarget, setLostTarget] = useState(null);
   const [lostForm] = Form.useForm();
 
@@ -53,10 +48,10 @@ export default function ParkingCardsPage() {
     () =>
       parkingCardsApi.list({
         status: statusFilter || undefined,
-        q: search || undefined,
+        q: searchQuery || undefined,
         limit: 50,
       }),
-    [statusFilter, search],
+    [statusFilter, searchQuery],
   );
 
   const items = Array.isArray(listData) ? listData : listData?.items || [];
@@ -148,7 +143,7 @@ export default function ParkingCardsPage() {
       title: 'Trạng thái thẻ',
       dataIndex: 'status',
       key: 'status',
-      render: (v) => <EnumTag map={PARKING_CARD_STATUS_MAP} value={v} />,
+      render: (v) => <EnumTag map={PARKING_CARD_STATUS} value={v} />,
     },
     {
       title: 'Ngày cấp',
@@ -181,7 +176,7 @@ export default function ParkingCardsPage() {
           <Space wrap>
             <Popconfirm
               title={`Xác nhận đã thu hồi thẻ ${r.cardNumber}?`}
-              onConfirm={() => runCollect(r._id)}
+              onConfirm={() => runCollect(r._id).catch(() => {})}
               okText="Đã thu hồi"
               cancelText="Hủy"
             >
@@ -232,7 +227,7 @@ export default function ParkingCardsPage() {
               onChange={setStatusFilter}
               options={[
                 { value: '', label: 'Tất cả trạng thái thẻ' },
-                ...Object.entries(PARKING_CARD_STATUS_MAP).map(([k, v]) => ({
+                ...Object.entries(PARKING_CARD_STATUS).map(([k, v]) => ({
                   value: k,
                   label: v.label,
                 })),

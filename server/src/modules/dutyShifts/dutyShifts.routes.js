@@ -10,7 +10,7 @@ import * as service from './dutyShifts.service.js';
 
 // Người 4 — Lịch ca trực Kỹ thuật viên / Bảo vệ (X6). Trưởng BQL xếp / hủy ca; nhân viên xem lịch và ai đang trực.
 const router = Router();
-const VIEWERS = ['MANAGER', 'STAFF'];
+const VIEWERS = ['MANAGER', 'STAFF:TECHNICIAN', 'STAFF:SECURITY'];
 const roleTitle = () => Joi.string().valid(...values(DUTY_ROLE_TITLES));
 
 /**

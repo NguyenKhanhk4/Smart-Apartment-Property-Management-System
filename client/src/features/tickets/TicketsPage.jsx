@@ -7,11 +7,11 @@ import { complaintCategoryApi, ticketApi } from '../../api/moduleE.api';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
-import { PRIORITIES, TICKET_STATUS, enumOptions } from '../../constants/enums';
+import { PRIORITIES, TICKET_OPEN_STATUSES, TICKET_STATUS, enumOptions } from '../../constants/enums';
+import { isTicketOpen } from '../../utils/status';
 import { formatDateTime } from '../../utils/format';
 import { AssignModal } from './TicketActionModals';
 
-const OPEN = ['NEW', 'ASSIGNED', 'IN_PROGRESS'];
 
 // UC-E03 (Manager/Lễ tân: tất cả + quá hạn + phân công), UC-E04 (KTV: ticket được giao)
 export default function TicketsPage() {
@@ -19,7 +19,7 @@ export default function TicketsPage() {
   const { message } = App.useApp();
   const { hasRole } = useAuth();
   const isDispatcher = hasRole('MANAGER', 'STAFF:RECEPTIONIST');
-  const [filters, setFilters] = useState({ page: 1, limit: 20, status: isDispatcher ? undefined : OPEN });
+  const [filters, setFilters] = useState({ page: 1, limit: 20, status: isDispatcher ? undefined : TICKET_OPEN_STATUSES });
   const [assigning, setAssigning] = useState(null);
   const [running, setRunning] = useState(false);
 
@@ -66,7 +66,7 @@ export default function TicketsPage() {
       dataIndex: 'dueDate',
       width: 160,
       render: (v, r) => {
-        const overdue = OPEN.includes(r.status) && dayjs(v).isBefore(dayjs());
+        const overdue = isTicketOpen(r.status) && dayjs(v).isBefore(dayjs());
         return <Typography.Text type={overdue ? 'danger' : undefined}>{formatDateTime(v)}</Typography.Text>;
       },
     },
@@ -76,7 +76,7 @@ export default function TicketsPage() {
             title: '',
             width: 110,
             render: (_, r) =>
-              OPEN.includes(r.status) && (
+              isTicketOpen(r.status) && (
                 <Button
                   size="small"
                   onClick={(e) => {

@@ -1,45 +1,8 @@
-import { CRON_JOBS, CRON_STATUS } from '../../constants/enums.js';
-import {
-  Apartment,
-  AuditLog,
-  Building,
-  Contract,
-  CronRun,
-  DebtFollowup,
-  FeeType,
-  FundProposal,
-  FundTransaction,
-  Invoice,
-  InvoiceAdjustment,
-  MaintenanceFund,
-  OperatingExpense,
-  Payment,
-  User,
-} from '../../models/index.js';
-import { ApiError } from '../../utils/ApiError.js';
-import { periodStart, startOfVnDay } from '../../utils/time.js';
-
-export const ALLOWED_MODELS = [User, Building, Apartment, Contract, CronRun, AuditLog];
-export const FORBIDDEN_MODELS = [
-  Invoice,
-  Payment,
-  FeeType,
-  InvoiceAdjustment,
-  DebtFollowup,
-  MaintenanceFund,
-  FundTransaction,
-  FundProposal,
-  OperatingExpense,
-];
-
-/**
- * BR-R6: Dashboard hệ thống không được đọc bất kỳ collection tài chính hay nghiệp vụ quỹ/chi phí nào.
- */
-export function assertAllowedModel(Model) {
-  if (FORBIDDEN_MODELS.includes(Model) || !ALLOWED_MODELS.includes(Model)) {
-    throw ApiError.badRequest('Dashboard hệ thống không được truy cập dữ liệu tài chính/nghiệp vụ (BR-R6)');
-  }
-}
+// BR-R6: Dashboard hệ thống chỉ đọc tài khoản, tòa / căn, hợp đồng (đếm file), cron_runs, audit_logs — không đọc dữ liệu tài chính.
+import { CRON_STATUS } from '../../constants/enums.js';
+import { JOBS } from '../../jobs/index.js';
+import { Apartment, AuditLog, Building, Contract, CronRun, User } from '../../models/index.js';
+import { DAY_MS, VN_OFFSET_MS, periodStart, startOfVnDay, toVnYmd } from '../../utils/time.js';
 
 /**
  * UC-A11: Thống kê số liệu hệ thống cho Admin
@@ -48,7 +11,6 @@ export async function getDashboard() {
   const now = new Date();
 
   // 1. ACCOUNTS
-  assertAllowedModel(User);
   const byRoleRaw = await User.aggregate([
     {
       $group: {
@@ -76,7 +38,7 @@ export async function getDashboard() {
 
   // 6 tháng gần nhất (theo giờ VN)
   const monthList = [];
-  const vnNow = new Date(now.getTime() + 7 * 3600000);
+  const vnNow = new Date(now.getTime() + VN_OFFSET_MS);
   for (let i = 5; i >= 0; i -= 1) {
     const d = new Date(Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth() - i, 1));
     const mStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -106,8 +68,6 @@ export async function getDashboard() {
   }));
 
   // 2. BASE DATA (Tòa nhà & Căn hộ)
-  assertAllowedModel(Building);
-  assertAllowedModel(Apartment);
   const [buildingsCount, apartmentsCount, aptStatusRaw] = await Promise.all([
     Building.countDocuments(),
     Apartment.countDocuments(),
@@ -129,8 +89,7 @@ export async function getDashboard() {
     apartmentsCount > 0 ? (byStatus.OWNED + byStatus.RENTED) / apartmentsCount : 0;
 
   // 3. SYSTEM (Cron jobs & Uploaded files)
-  assertAllowedModel(CronRun);
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 3600000);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * DAY_MS);
 
   const [latestRuns, failed7DaysRaw] = await Promise.all([
     CronRun.aggregate([
@@ -154,8 +113,8 @@ export async function getDashboard() {
   const latestMap = Object.fromEntries(latestRuns.map((r) => [r._id, r]));
   const failedMap = Object.fromEntries(failed7DaysRaw.map((r) => [r._id, r.count]));
 
-  const allCronJobs = Object.values(CRON_JOBS);
-  const jobs = allCronJobs.map((jobName) => {
+  // Chỉ job đã đăng ký chạy (jobs/index.js); enum CRON_JOBS còn job chưa có handler
+  const jobs = JOBS.map(({ name: jobName }) => {
     const run = latestMap[jobName];
     return {
       jobName,
@@ -167,7 +126,6 @@ export async function getDashboard() {
     };
   });
 
-  assertAllowedModel(Contract);
   const [userAvatars, contractFiles] = await Promise.all([
     User.countDocuments({ avatarUrl: { $ne: null } }),
     Contract.countDocuments({ fileUrl: { $ne: null } }),
@@ -175,14 +133,12 @@ export async function getDashboard() {
   const uploadedFiles = userAvatars + contractFiles;
 
   // 4. AUDIT (30 ngày)
-  assertAllowedModel(AuditLog);
   const days30List = [];
   for (let i = 29; i >= 0; i -= 1) {
-    const d = new Date(vnNow.getTime() - i * 24 * 3600000);
-    days30List.push(d.toISOString().slice(0, 10));
+    days30List.push(toVnYmd(new Date(now.getTime() - i * DAY_MS)));
   }
 
-  const start30Days = startOfVnDay(new Date(now.getTime() - 29 * 24 * 3600000));
+  const start30Days = startOfVnDay(new Date(now.getTime() - 29 * DAY_MS));
 
   const [perDayRaw, topActionsRaw, topUsersRaw] = await Promise.all([
     AuditLog.aggregate([

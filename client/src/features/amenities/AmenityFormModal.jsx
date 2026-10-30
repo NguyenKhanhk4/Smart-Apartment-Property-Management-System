@@ -5,7 +5,7 @@ import dayjs from 'dayjs';
 import { amenityApi } from '../../api/moduleD.api';
 import { AMENITY_ACCESS_MODES, enumOptions } from '../../constants/enums';
 import { useAction } from '../../hooks/useApi';
-import { formatMoney } from '../../utils/format';
+import { formatMoney, moneyInputProps } from '../../utils/format';
 
 const MAX_SIZE = 5 * 1024 * 1024;
 const toDayjs = (hhmm) => (hhmm ? dayjs().hour(Number(hhmm.slice(0, 2))).minute(Number(hhmm.slice(3))).second(0) : null);
@@ -28,8 +28,7 @@ function MoneyInput(props) {
       precision={0}
       style={{ width: '100%' }}
       addonAfter="đ"
-      formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-      parser={(v) => v?.replace(/\./g, '')}
+      {...moneyInputProps}
       {...props}
     />
   );

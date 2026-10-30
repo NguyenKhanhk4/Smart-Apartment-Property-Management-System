@@ -10,7 +10,7 @@ import {
   Space,
   Spin,
   Tag,
-  message,
+  App,
 } from 'antd';
 import {
   CarOutlined,
@@ -21,21 +21,28 @@ import {
 import { gatePassesApi } from '../../api/gatePasses.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
-import { VEHICLE_TYPES } from '../../constants/enums';
+import { GATE_PASS_DIRECTIONS, GATE_PASS_STATUS, PLATE_LOOKUP_RESULTS, VEHICLE_TYPES } from '../../constants/enums';
 import { useAction, useApi } from '../../hooks/useApi';
+import { useAuth } from '../../hooks/useAuth';
+import { keysOf } from '../../utils/status';
 import { formatDateTime } from '../../utils/format';
-import {
-  GATE_PASS_DIRECTIONS_MAP,
-  GATE_PASS_STATUS_MAP,
-} from '../gatePasses/gatePassConstants';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+
+const PLATE = keysOf(PLATE_LOOKUP_RESULTS);
+const GP = keysOf(GATE_PASS_STATUS);
 
 export default function SecurityGatePage() {
+  const { message } = App.useApp();
+  const { hasRole } = useAuth();
+  // Chỉ Bảo vệ xác nhận xe qua cổng (server: PATCH /gate-passes/:id/mark-used chỉ cho STAFF:SECURITY); Trưởng BQL chỉ xem
+  const canMarkUsed = hasRole('STAFF:SECURITY');
   const [plateInput, setPlateInput] = useState('');
   const [lookupResult, setLookupResult] = useState(null);
   const [lookingUp, setLookingUp] = useState(false);
 
   const [includeUsed, setIncludeUsed] = useState(false);
   const [searchToday, setSearchToday] = useState('');
+  const searchTodayQuery = useDebouncedValue(searchToday.trim());
 
   const {
     data: todayPasses = [],
@@ -45,9 +52,9 @@ export default function SecurityGatePage() {
     () =>
       gatePassesApi.listToday({
         includeUsed,
-        search: searchToday || undefined,
+        search: searchTodayQuery || undefined,
       }),
-    [includeUsed, searchToday],
+    [includeUsed, searchTodayQuery],
   );
 
   const [runMarkUsed, markingUsed] = useAction((id) => gatePassesApi.markUsed(id), {
@@ -65,7 +72,7 @@ export default function SecurityGatePage() {
       const res = await gatePassesApi.lookupPlate(trimmed);
       setLookupResult(res.data || res);
     } catch (err) {
-      message.error(err?.response?.data?.message || 'Không thể tra cứu biển số');
+      message.error(err?.message || 'Không thể tra cứu biển số');
     } finally {
       setLookingUp(false);
     }
@@ -86,7 +93,7 @@ export default function SecurityGatePage() {
   const renderLookupCard = () => {
     if (!lookupResult) return null;
 
-    if (lookupResult.result === 'REGISTERED_VEHICLE') {
+    if (lookupResult.result === PLATE.REGISTERED_VEHICLE) {
       const v = lookupResult.vehicle;
       const apt = lookupResult.apartment;
       return (
@@ -118,7 +125,7 @@ export default function SecurityGatePage() {
       );
     }
 
-    if (lookupResult.result === 'MATCHES_GATE_PASS') {
+    if (lookupResult.result === PLATE.MATCHES_GATE_PASS) {
       const gp = lookupResult.gatePass;
       const apt = lookupResult.apartment;
       return (
@@ -135,7 +142,7 @@ export default function SecurityGatePage() {
             <div className="space-y-2 text-sm mt-1">
               <div>
                 Căn hộ: <b className="text-base">{apt?.code}</b> ({apt?.buildingId?.name || ''}) ·{' '}
-                <EnumTag map={GATE_PASS_DIRECTIONS_MAP} value={gp?.direction} />
+                <EnumTag map={GATE_PASS_DIRECTIONS} value={gp?.direction} />
               </div>
               <div>
                 Khung giờ: <b>{gp?.timeSlot?.from} – {gp?.timeSlot?.to}</b> · Người đăng ký:{' '}
@@ -145,7 +152,7 @@ export default function SecurityGatePage() {
                 Đồ đạc:{' '}
                 {(gp?.items || []).map((it) => `${it.name} (x${it.quantity})`).join(', ')}
               </div>
-              {gp?.status === 'APPROVED' && (
+              {gp?.status === GP.APPROVED && canMarkUsed && (
                 <Popconfirm
                   title="Xác nhận xe tải & đơn chuyển đồ này đã qua cổng?"
                   onConfirm={() => handleMarkUsed(gp._id)}
@@ -281,8 +288,8 @@ export default function SecurityGatePage() {
                       <Tag color="geekblue" className="text-sm font-semibold">
                         Căn {gp.apartmentId?.code}
                       </Tag>
-                      <EnumTag map={GATE_PASS_DIRECTIONS_MAP} value={gp.direction} />
-                      <EnumTag map={GATE_PASS_STATUS_MAP} value={gp.status} />
+                      <EnumTag map={GATE_PASS_DIRECTIONS} value={gp.direction} />
+                      <EnumTag map={GATE_PASS_STATUS} value={gp.status} />
                     </Space>
                     <Tag icon={<CarOutlined />} className="text-sm font-bold">
                       {gp.truckPlate}
@@ -304,7 +311,9 @@ export default function SecurityGatePage() {
                     {(gp.items || []).map((it) => `${it.name} (x${it.quantity})`).join(', ')}
                   </div>
 
-                  {gp.status === 'APPROVED' ? (
+                  {gp.status === GP.APPROVED && !canMarkUsed ? (
+                    <div className="text-xs text-ink-2 font-medium">Chờ bảo vệ xác nhận qua cổng</div>
+                  ) : gp.status === GP.APPROVED ? (
                     <Popconfirm
                       title={`Đánh dấu đơn ${gp.code} đã qua cổng?`}
                       onConfirm={() => handleMarkUsed(gp._id)}

@@ -12,7 +12,7 @@ const memberCodeSchema = new Schema(
     isActive: { type: Boolean, default: true },
     // BR-O26: thành viên chỉ phát sinh phí tiện ích khi chủ hộ bật; chủ hộ luôn được (không đọc field này)
     canIncurCharges: { type: Boolean, default: false },
-    // Ngày sinh tạm lưu ở Module D cho tới khi Module A có users.dateOfBirth (BR-O24); 00:00 giờ VN của ngày sinh
+    // DỮ LIỆU CŨ: ngày sinh nay lưu ở users.dateOfBirth; field này chỉ còn để đọc dự phòng bản ghi cũ, không ghi mới
     dateOfBirth: { type: Date, default: null },
     revokedAt: { type: Date, default: null },
   },

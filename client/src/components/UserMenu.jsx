@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router';
 import { Avatar, Dropdown } from 'antd';
-import { CarOutlined, HomeOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import { useAuth } from '../hooks/useAuth';
 import { roleLabelOf } from '../constants/enums';
 
@@ -13,34 +13,23 @@ const initials = (name) =>
     .join('')
     .toUpperCase();
 
-// Avatar + tên + chức danh ở góc phải header; xem hồ sơ và đăng xuất
+// Avatar + tên + chức danh ở góc phải header giao diện nội bộ (/app); xem hồ sơ và đăng xuất.
+// Giao diện cư dân dùng layouts/resident/AvatarMenu.
 // variant="reception": avatar chữ cái đầu + dòng phụ "Lễ tân" theo giao diện mới của Lễ tân
 export default function UserMenu({ compact = false, variant }) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const role = roleLabelOf(user);
 
-  const profilePath = user?.role === 'RESIDENT' ? '/r/profile' : '/app/profile';
-
   const items = [
     { key: 'profile', icon: <UserOutlined />, label: 'Hồ sơ cá nhân' },
-    ...(user?.role === 'RESIDENT'
-      ? [
-          { key: 'my-apartment', icon: <HomeOutlined />, label: 'Căn hộ của tôi' },
-          { key: 'my-vehicles', icon: <CarOutlined />, label: 'Xe của tôi' },
-        ]
-      : []),
     { type: 'divider' },
     { key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất', danger: true },
   ];
 
   const handleMenuClick = ({ key }) => {
     if (key === 'profile') {
-      navigate(profilePath, { viewTransition: true });
-    } else if (key === 'my-apartment') {
-      navigate('/r/my-apartment', { viewTransition: true });
-    } else if (key === 'my-vehicles') {
-      navigate('/r/my-vehicles', { viewTransition: true });
+      navigate('/app/profile', { viewTransition: true });
     } else if (key === 'logout') {
       logout();
     }

@@ -1,12 +1,18 @@
 import {
   AUDIT_ACTIONS,
+  AUDIT_TARGETS,
   CONFIG_KEYS,
   NOTIFICATION_TYPES,
   PRIORITIES,
   ROLES,
   ROLE_TITLES,
+  TICKET_FINAL_STATUSES,
+  TICKET_HISTORY_ACTIONS as ACT,
+  TICKET_OPEN_STATUSES,
+  TICKET_SLA_STATUSES,
   TICKET_STATUS,
 } from '../../constants/enums.js';
+import { isRole } from '../../middlewares/authorize.js';
 import { ComplaintCategory, Ticket, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyApartment, notifyRoles } from '../../services/notification.service.js';
@@ -16,13 +22,19 @@ import { uploadToCloudinary } from '../../services/upload.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { nextMonthlyCode, retryOnDuplicate } from '../../utils/codeGenerator.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
-import { HOUR_MS } from '../../utils/time.js';
+import { HOUR_MS, fmtDateTimeVn } from '../../utils/time.js';
 
 const { NEW, ASSIGNED, IN_PROGRESS, WAITING_CONFIRM, CLOSED, REJECTED } = TICKET_STATUS;
 
-// Ticket còn đang xử lý — dùng cho "quá hạn" và leo thang
-export const OPEN_STATUSES = [NEW, ASSIGNED, IN_PROGRESS];
-const FINAL_STATUSES = [CLOSED, REJECTED];
+/**
+ * Quy tắc SLA hoàn thành (dueDate) — một nguồn cho mỗi thời điểm:
+ *  - Lúc tạo: theo `slaHours` của loại phản ánh (form tạo hiển thị đúng số giờ này cho cư dân).
+ *  - Khi Trưởng BQL / Lễ tân đổi mức ưu tiên: tính lại TỪ LÚC ĐỔI theo tham số SLA_HOURS_<ưu tiên>
+ *    (đổi ưu tiên = đánh giá lại mức khẩn cấp, nên hạn chạy lại theo bảng SLA chung).
+ * Quá hạn / leo thang chỉ xét TICKET_SLA_STATUSES (tạm dừng khi chờ cư dân đồng ý phí).
+ */
+const isOverdueNow = (ticket, now = new Date()) =>
+  TICKET_SLA_STATUSES.includes(ticket.status) && Boolean(ticket.dueDate) && ticket.dueDate < now;
 
 const SLA_KEY_BY_PRIORITY = {
   [PRIORITIES.URGENT]: CONFIG_KEYS.SLA_HOURS_URGENT,
@@ -51,29 +63,14 @@ const LIST_POPULATE = [
   { path: 'assignedTo', select: 'fullName' },
 ];
 
-const isTechnician = (user) => user.role === ROLES.STAFF && user.roleTitle === ROLE_TITLES.TECHNICIAN;
-const isDispatcher = (user) =>
-  user.role === ROLES.MANAGER ||
-  (user.role === ROLES.STAFF && user.roleTitle === ROLE_TITLES.RECEPTIONIST);
+const isTechnician = (user) => isRole(user, 'STAFF:TECHNICIAN');
+const isDispatcher = (user) => isRole(user, 'MANAGER', 'STAFF:RECEPTIONIST');
 
 const ticketLink = (ticket, forResident) =>
   forResident ? `/r/tickets/${ticket._id}` : `/app/tickets/${ticket._id}`;
 
 function assertNotFinal(ticket) {
-  if (FINAL_STATUSES.includes(ticket.status)) throw new ApiError('TICKET_ALREADY_CLOSED');
-}
-
-/**
- * Lưu ticket với optimisticConcurrency: nếu có request khác đã sửa ticket từ lúc đọc
- * (2 lần assign/confirm đồng thời) → 409 CONCURRENT_UPDATE thay vì ghi đè trạng thái.
- */
-async function saveChecked(ticket) {
-  try {
-    await ticket.save();
-  } catch (err) {
-    if (err?.name === 'VersionError') throw new ApiError('CONCURRENT_UPDATE');
-    throw err;
-  }
+  if (TICKET_FINAL_STATUSES.includes(ticket.status)) throw new ApiError('TICKET_ALREADY_CLOSED');
 }
 
 async function findTicketOr404(id) {
@@ -115,7 +112,7 @@ export async function createTicket(user, { categoryId, title, description, apart
       priority: category.defaultPriority,
       dueDate: new Date(now.getTime() + category.slaHours * HOUR_MS), // BR-O7
       status: NEW,
-      history: [{ at: now, by: user.id, action: 'CREATED', toStatus: NEW }],
+      history: [{ at: now, by: user.id, action: ACT.CREATED, toStatus: NEW }],
     }),
   );
 
@@ -149,21 +146,23 @@ export async function listTickets(user, query) {
   if (query.assignedTo && isDispatcher(user)) filter.assignedTo = query.assignedTo;
   if (query.overdue) {
     filter.dueDate = { $lt: new Date() };
-    filter.status = { $in: query.status?.filter((s) => OPEN_STATUSES.includes(s)) ?? OPEN_STATUSES };
+    filter.status = { $in: query.status?.filter((s) => TICKET_SLA_STATUSES.includes(s)) ?? TICKET_SLA_STATUSES };
   }
   if (query.q) {
     const re = new RegExp(escapeRegex(query.q), 'i');
     filter.$or = [{ code: re }, { title: re }];
   }
 
-  return paginate(Ticket, filter, query, { populate: LIST_POPULATE, select: '-history' });
+  // Sort theo ưu tiên = theo mức độ nghiêm trọng (priorityRank), không theo bảng chữ cái
+  const sort = query.sort?.replace(/^(-?)priority$/, '$1priorityRank');
+  return paginate(Ticket, filter, { ...query, sort }, { populate: LIST_POPULATE, select: '-history' });
 }
 
 export async function getTicket(user, id) {
   const ticket = await Ticket.findById(id).populate(DETAIL_POPULATE).lean();
   if (!ticket) throw ApiError.notFound('Không tìm thấy phản ánh');
   await assertCanView(user, ticket);
-  ticket.isOverdue = OPEN_STATUSES.includes(ticket.status) && ticket.dueDate < new Date();
+  ticket.isOverdue = isOverdueNow(ticket);
   return ticket;
 }
 
@@ -178,7 +177,7 @@ export async function listAssignees() {
     .sort({ fullName: 1 })
     .lean();
   const load = await Ticket.aggregate([
-    { $match: { assignedTo: { $in: techs.map((t) => t._id) }, status: { $in: [ASSIGNED, IN_PROGRESS] } } },
+    { $match: { assignedTo: { $in: techs.map((t) => t._id) }, status: { $in: TICKET_OPEN_STATUSES } } },
     { $group: { _id: '$assignedTo', count: { $sum: 1 } } },
   ]);
   const loadMap = Object.fromEntries(load.map((l) => [String(l._id), l.count]));
@@ -217,26 +216,27 @@ export async function assignTicket(user, id, { assignedTo, priority, note }) {
   ticket.history.push({
     at: now,
     by: user.id,
-    action: prevAssignee ? 'REASSIGNED' : 'ASSIGNED',
+    action: prevAssignee ? ACT.REASSIGNED : ACT.ASSIGNED,
     fromStatus,
     toStatus: ASSIGNED,
     note: [`Giao cho ${tech.fullName}`, priorityChanged && `ưu tiên ${priority}`, note]
       .filter(Boolean)
       .join(' — '),
   });
-  await saveChecked(ticket);
+  // optimisticConcurrency: request đồng thời → VersionError → errorHandler trả 409 CONCURRENT_UPDATE
+  await ticket.save();
 
   await logAudit({
     action: AUDIT_ACTIONS.TICKET_ASSIGNED,
     user,
-    targetType: 'tickets',
+    targetType: AUDIT_TARGETS.TICKET,
     targetId: ticket._id,
     metadata: { code: ticket.code, assignedTo: tech._id, prevAssignee, priority: ticket.priority },
   });
   await notify(tech._id, {
     type: NOTIFICATION_TYPES.TICKET,
     title: `Bạn được giao phản ánh ${ticket.code}`,
-    content: `${ticket.title} — hạn xử lý ${ticket.dueDate.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`,
+    content: `${ticket.title} — hạn xử lý ${fmtDateTimeVn(ticket.dueDate)}`,
     refId: ticket._id,
     link: ticketLink(ticket, false),
   });
@@ -263,8 +263,8 @@ export async function rejectTicket(user, id, { reason }) {
   ticket.status = REJECTED;
   ticket.rejectReason = reason;
   ticket.closedAt = new Date();
-  ticket.history.push({ by: user.id, action: 'REJECTED', fromStatus, toStatus: REJECTED, note: reason });
-  await saveChecked(ticket);
+  ticket.history.push({ by: user.id, action: ACT.REJECTED, fromStatus, toStatus: REJECTED, note: reason });
+  await ticket.save();
 
   await notify(ticket.createdBy, {
     type: NOTIFICATION_TYPES.TICKET,
@@ -306,13 +306,13 @@ export async function updateProgress(user, id, { status, note }, files = []) {
   if (status === WAITING_CONFIRM) ticket.resolvedAt = new Date();
   ticket.history.push({
     by: user.id,
-    action: status === WAITING_CONFIRM ? 'RESOLVED' : 'PROGRESS',
+    action: status === WAITING_CONFIRM ? ACT.RESOLVED : ACT.PROGRESS,
     fromStatus,
     toStatus: status,
     note,
     imageUrls,
   });
-  await saveChecked(ticket);
+  await ticket.save();
 
   if (status === WAITING_CONFIRM) {
     await notifyApartment(ticket.apartmentId, {
@@ -347,7 +347,7 @@ export async function confirmTicket(user, id, { accepted, rating, comment, reaso
     ticket.history.push({
       at: now,
       by: user.id,
-      action: 'CONFIRMED',
+      action: ACT.CONFIRMED,
       fromStatus: WAITING_CONFIRM,
       toStatus: CLOSED,
       note: `Đánh giá ${rating}★${comment ? ` — ${comment}` : ''}`,
@@ -358,19 +358,19 @@ export async function confirmTicket(user, id, { accepted, rating, comment, reaso
     ticket.history.push({
       at: now,
       by: user.id,
-      action: 'REOPENED',
+      action: ACT.REOPENED,
       fromStatus: WAITING_CONFIRM,
       toStatus: IN_PROGRESS,
       note: reason,
     });
   }
-  await saveChecked(ticket);
+  await ticket.save();
 
   if (accepted) {
     await logAudit({
       action: AUDIT_ACTIONS.TICKET_CLOSED,
       user,
-      targetType: 'tickets',
+      targetType: AUDIT_TARGETS.TICKET,
       targetId: ticket._id,
       metadata: { code: ticket.code, rating },
     });

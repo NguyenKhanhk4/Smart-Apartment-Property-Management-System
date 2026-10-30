@@ -71,6 +71,31 @@ export const TICKET_STATUS = {
   REJECTED: { label: 'Từ chối', color: 'default' },
 };
 
+// Nhóm trạng thái — giống hệt server/src/constants/enums.js (test enumParity kiểm tra). Không tự liệt kê ở từng trang.
+// Đang mở = chưa xử lý xong; WAITING_CONFIRM (chờ nghiệm thu) và nhóm kết thúc nằm ngoài.
+export const TICKET_OPEN_STATUSES = ['NEW', 'ASSIGNED', 'WAITING_QUOTE_APPROVAL', 'IN_PROGRESS', 'WAITING_PARTS'];
+export const TICKET_FINAL_STATUSES = ['CLOSED', 'REJECTED'];
+
+// Lịch sử xử lý ticket
+export const TICKET_HISTORY_ACTIONS = {
+  CREATED: { label: 'Tạo phản ánh', color: 'blue' },
+  ASSIGNED: { label: 'Phân công', color: 'blue' },
+  REASSIGNED: { label: 'Phân công lại', color: 'blue' },
+  CLAIMED: { label: 'Kỹ thuật viên nhận', color: 'blue' },
+  PROGRESS: { label: 'Cập nhật tiến độ', color: 'blue' },
+  QUOTE_REQUESTED: { label: 'Gửi báo giá', color: 'purple' },
+  QUOTE_ACCEPTED: { label: 'Cư dân đồng ý phí', color: 'green' },
+  QUOTE_DECLINED: { label: 'Cư dân từ chối phí', color: 'gray' },
+  WAITING_PARTS: { label: 'Chờ linh kiện', color: 'orange' },
+  RESOLVED: { label: 'Đã xử lý xong', color: 'blue' },
+  CONFIRMED: { label: 'Cư dân nghiệm thu', color: 'green' },
+  REOPENED: { label: 'Cư dân chưa đồng ý', color: 'orange' },
+  ESCALATED: { label: 'Hệ thống leo thang', color: 'red' },
+  SLA_ALERTED: { label: 'Cảnh báo trễ hạn', color: 'red' },
+  AUTO_CLOSED: { label: 'Hệ thống tự đóng', color: 'green' },
+  REJECTED: { label: 'Từ chối', color: 'gray' },
+};
+
 // ===== Sự cố & tiện ích (Người 4) =====
 export const TICKET_TYPES = {
   INCIDENT: { label: 'Sự cố kỹ thuật', color: 'volcano' },
@@ -165,23 +190,28 @@ export const WORK_ORDER_STATUS = {
   DONE: { label: 'Hoàn thành', color: 'success' },
 };
 
+export const WORK_ORDER_OPEN_STATUSES = ['PENDING', 'IN_PROGRESS'];
+
 export const WORK_ORDER_TYPES = {
   SCHEDULED: { label: 'Bảo trì định kỳ', color: 'geekblue' },
   TICKET_LINKED: { label: 'Theo phản ánh', color: 'orange' },
 };
 
 // ===== Module D =====
-// PENDING, REJECTED: dữ liệu luồng duyệt cũ (không còn tạo mới — BR-O12)
+// PENDING, REJECTED: dữ liệu luồng duyệt cũ (không còn tạo mới — BR-O12). `tone` dùng cho StatusBadge ở giao diện cư dân
 export const BOOKING_STATUS = {
-  PENDING_PAYMENT: { label: 'Chờ thanh toán', color: 'gold' },
-  APPROVED: { label: 'Đã xác nhận', color: 'blue' },
-  CHECKED_IN: { label: 'Đã check-in', color: 'processing' },
-  COMPLETED: { label: 'Hoàn tất', color: 'success' },
-  CANCELLED: { label: 'Đã hủy', color: 'default' },
-  NO_SHOW: { label: 'Không đến', color: 'warning' },
-  PENDING: { label: 'Chờ duyệt', color: 'gold' },
-  REJECTED: { label: 'Từ chối', color: 'red' },
+  PENDING_PAYMENT: { label: 'Chờ thanh toán', color: 'gold', tone: 'warn' },
+  APPROVED: { label: 'Đã xác nhận', color: 'blue', tone: 'ok' },
+  CHECKED_IN: { label: 'Đã check-in', color: 'processing', tone: 'info' },
+  COMPLETED: { label: 'Đã dùng', color: 'success', tone: 'neutral' },
+  CANCELLED: { label: 'Đã hủy', color: 'default', tone: 'neutral' },
+  NO_SHOW: { label: 'Không đến', color: 'warning', tone: 'warn' },
+  PENDING: { label: 'Chờ duyệt (cũ)', color: 'default', tone: 'neutral' },
+  REJECTED: { label: 'Từ chối (cũ)', color: 'default', tone: 'neutral' },
 };
+// Booking đang chiếm slot; PENDING / REJECTED là dữ liệu luồng duyệt cũ, không đưa vào ô chọn / báo cáo
+export const BOOKING_ACTIVE_STATUSES = ['PENDING_PAYMENT', 'APPROVED', 'CHECKED_IN'];
+export const BOOKING_LEGACY_STATUSES = ['PENDING', 'REJECTED'];
 
 // Lượt vào tiện ích WALK_IN (UC-D10)
 export const VISIT_CHARGE_TYPES = {
@@ -224,6 +254,55 @@ export const ASSET_CATEGORIES = {
   PUMP: { label: 'Máy bơm', color: 'cyan' },
   FIRE_SYSTEM: { label: 'PCCC', color: 'red' },
   OTHER: { label: 'Khác', color: 'default' },
+};
+
+// ===== Gate Pass, thẻ gửi xe, biến động nhân khẩu (Người 2) =====
+export const GATE_PASS_DIRECTIONS = {
+  IN: { label: 'Chuyển đồ vào (IN)', color: 'blue' },
+  OUT: { label: 'Chuyển đồ ra (OUT)', color: 'volcano' },
+};
+
+export const GATE_PASS_STATUS = {
+  AWAITING_OWNER: { label: 'Chờ chủ hộ xác nhận', color: 'gold' },
+  PENDING: { label: 'Chờ BQL duyệt', color: 'processing' },
+  APPROVED: { label: 'Đã duyệt', color: 'success' },
+  USED: { label: 'Đã qua cổng', color: 'cyan' },
+  REJECTED: { label: 'Từ chối', color: 'error' },
+  EXPIRED: { label: 'Hết hạn', color: 'default' },
+};
+
+export const PLATE_LOOKUP_RESULTS = {
+  REGISTERED_VEHICLE: { label: 'Xe đã đăng ký', color: 'success' },
+  MATCHES_GATE_PASS: { label: 'Khớp Gate Pass hôm nay', color: 'processing' },
+  UNKNOWN: { label: 'Không có trong hệ thống', color: 'error' },
+};
+
+export const PARKING_CARD_STATUS = {
+  ACTIVE: { label: 'Đang hoạt động', color: 'success' },
+  DISABLED_TO_COLLECT: { label: 'Cần thu hồi', color: 'warning' },
+  RETURNED: { label: 'Đã thu hồi', color: 'default' },
+  LOST: { label: 'Mất thẻ', color: 'error' },
+};
+
+export const OCCUPANT_CHANGE_TYPES = {
+  MOVE_IN: { label: 'Vào ở', color: 'green' },
+  MOVE_OUT: { label: 'Chuyển đi', color: 'volcano' },
+};
+
+// ===== Hệ thống =====
+export const CRON_JOBS = {
+  INVOICE_GENERATE: { label: 'Tạo hóa đơn định kỳ', color: 'green' },
+  INVOICE_OVERDUE: { label: 'Quét hóa đơn quá hạn', color: 'red' },
+  BOOKING_COMPLETE: { label: 'Hoàn tất / không đến booking tiện ích', color: 'cyan' },
+  WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
+  TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },
+  TICKET_AUTO_CLOSE: { label: 'Tự đóng phản ánh chờ nghiệm thu', color: 'default' },
+  CONTRACT_EXPIRE: { label: 'Quét hợp đồng thuê hết hạn', color: 'purple' },
+  FUND_LOW_BALANCE: { label: 'Cảnh báo số dư quỹ thấp', color: 'gold' },
+  GATE_PASS_EXPIRE: { label: 'Hết hạn Gate Pass', color: 'default' },
+  CONTRACT_EXPIRY_REMIND: { label: 'Nhắc hợp đồng thuê sắp hết hạn', color: 'purple' },
+  TICKET_SLA_ALERT: { label: 'Cảnh báo SLA sự cố / phản ánh', color: 'red' },
+  BOOKING_HOLD_EXPIRE: { label: 'Hủy giữ chỗ quá hạn thanh toán', color: 'default' },
 };
 
 // Dùng cho <Select options={enumOptions(ROLES)} />

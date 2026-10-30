@@ -2,7 +2,7 @@
 // Phí vệ sinh, gửi xe tính cho chính kỳ P (thu trước); phí tiện ích phát sinh trong kỳ P−1 (thu sau).
 import {
   AMENITY_PASS_STATUS,
-  BOOKING_STATUS,
+  BOOKING_BILLABLE_STATUSES,
   FEE_CALC_METHODS,
   FEE_CATEGORIES,
   VISIT_STATUS,
@@ -11,16 +11,8 @@ import { AmenityPass, AmenityVisit, Booking } from '../../models/index.js';
 import { getPayer } from '../contracts/contracts.queries.js';
 import { getBillableVehicles } from '../vehicles/vehicles.queries.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { periodEnd, periodStart, shiftPeriod } from '../../utils/time.js';
+import { fmtDateVn, periodEnd, periodLabel, periodStart, shiftPeriod } from '../../utils/time.js';
 
-// Booking có phí bị tính khi đã giữ slot: dùng xong, đang dùng, hoặc đặt mà không đến.
-// CANCELLED (cư dân hủy trước giờ / lễ tân hủy — BR-O16) và luồng duyệt cũ PENDING/REJECTED không tính.
-export const BILLABLE_BOOKING_STATUS = [
-  BOOKING_STATUS.APPROVED,
-  BOOKING_STATUS.CHECKED_IN,
-  BOOKING_STATUS.COMPLETED,
-  BOOKING_STATUS.NO_SHOW,
-];
 
 // feeCode cho dòng tiện ích — phân biệt nguồn khi truy vết refId
 export const AMENITY_FEE_CODES = Object.freeze({
@@ -29,13 +21,7 @@ export const AMENITY_FEE_CODES = Object.freeze({
   BOOKING: 'AMENITY_BOOKING',
 });
 
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-const pad = (n) => String(n).padStart(2, '0');
-const periodLabel = (p) => `${p.slice(5)}/${p.slice(0, 4)}`;
-const dayLabel = (date) => {
-  const d = new Date(date.getTime() + VN_OFFSET_MS);
-  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}`;
-};
+const dayLabel = (date) => fmtDateVn(date).slice(0, 5); // "DD/MM"
 
 /** Mã hóa đơn gốc HD-YYYYMM-<mã tòa>-<mã căn> (mã căn chỉ unique trong 1 tòa) */
 export const baseInvoiceCode = (period, buildingCode, apartmentCode) =>
@@ -101,7 +87,8 @@ export async function collectAmenityCharges(apartmentId, prev) {
       .lean(),
     Booking.find({
       ...unbilled,
-      status: { $in: BILLABLE_BOOKING_STATUS },
+      status: { $in: BOOKING_BILLABLE_STATUSES },
+      paidAt: null, // đã thanh toán trước khi đặt (giữ chỗ chờ thanh toán) thì không thu lại trên hóa đơn
       date: { $gte: periodStart(prev), $lt: periodEnd(prev) },
     })
       .populate('amenityId', 'name')

@@ -82,6 +82,9 @@ export const PLATE_LOOKUP_RESULTS = Object.freeze({
 });
 
 // ===== Thẻ gửi xe (Người 2 — UC66) =====
+// Biến động nhân khẩu nộp Công an phường (UC21)
+export const OCCUPANT_CHANGE_TYPES = Object.freeze({ MOVE_IN: 'MOVE_IN', MOVE_OUT: 'MOVE_OUT' });
+
 export const PARKING_CARD_STATUS = Object.freeze({
   ACTIVE: 'ACTIVE',
   DISABLED_TO_COLLECT: 'DISABLED_TO_COLLECT',
@@ -99,6 +102,17 @@ export const FEE_CATEGORIES = Object.freeze({
 });
 
 // Cách tính đơn giá của fee_types (BR-F4)
+// Trạng thái hiệu lực của một mức giá theo kỳ hiện tại (UC-B01)
+export const FEE_TYPE_STATES = Object.freeze({ ACTIVE: 'ACTIVE', UPCOMING: 'UPCOMING', ENDED: 'ENDED' });
+
+// Kết quả xem trước khi sinh hóa đơn (UC-B02)
+export const INVOICE_PREVIEW_STATUS = Object.freeze({
+  NEW: 'NEW', // sẽ được lập
+  EXISTS: 'EXISTS', // đã có hóa đơn chưa hủy (BR-F2)
+  NO_PAYER: 'NO_PAYER', // chưa có hợp đồng hiệu lực → bỏ qua
+  ERROR: 'ERROR', // thiếu đơn giá...
+});
+
 export const FEE_CALC_METHODS = Object.freeze({
   PER_M2: 'PER_M2',
   PER_APARTMENT: 'PER_APARTMENT',
@@ -175,6 +189,9 @@ export const WORK_ORDER_STATUS = Object.freeze({
   DONE: 'DONE',
 });
 
+// Work order chưa hoàn thành (BR-O6: 1 tài sản chỉ 1 work order SCHEDULED đang mở)
+export const WORK_ORDER_OPEN_STATUSES = Object.freeze([WORK_ORDER_STATUS.PENDING, WORK_ORDER_STATUS.IN_PROGRESS]);
+
 // BR-O12: booking tự xác nhận APPROVED khi đặt → CHECKED_IN (lễ tân) → COMPLETED (hết giờ, tính phí BR-O5);
 // hoặc CANCELLED / NO_SHOW (không tính phí).
 // PENDING, REJECTED: luồng duyệt cũ, Module D KHÔNG còn tạo mới — giữ để dữ liệu & báo cáo UC-E14 cũ không lỗi.
@@ -190,6 +207,23 @@ export const BOOKING_STATUS = Object.freeze({
   PENDING: 'PENDING',
   REJECTED: 'REJECTED',
 });
+
+// Booking đang chiếm slot (sức chứa, giới hạn booking chưa dùng BR-O3); giữ chỗ chờ thanh toán cũng chiếm slot
+export const BOOKING_ACTIVE_STATUSES = Object.freeze([
+  BOOKING_STATUS.PENDING_PAYMENT,
+  BOOKING_STATUS.APPROVED,
+  BOOKING_STATUS.CHECKED_IN,
+]);
+// Booking có phí bị tính khi đã giữ slot: chưa đến giờ, đang dùng, đã dùng, hoặc không đến (BR-O5, BR-O16).
+// Booking đã thanh toán trước (paidAt) không gộp vào hóa đơn tháng — lọc riêng ở invoices.builder.
+export const BOOKING_BILLABLE_STATUSES = Object.freeze([
+  BOOKING_STATUS.APPROVED,
+  BOOKING_STATUS.CHECKED_IN,
+  BOOKING_STATUS.COMPLETED,
+  BOOKING_STATUS.NO_SHOW,
+]);
+// Luồng duyệt cũ: chỉ còn trong dữ liệu cũ, không tạo mới và không đưa vào báo cáo / ô chọn
+export const BOOKING_LEGACY_STATUSES = Object.freeze([BOOKING_STATUS.PENDING, BOOKING_STATUS.REJECTED]);
 
 // Kiểu tiện ích (BR-O15, BR-O22..O24): FREE = đi vào tự do, không đặt/không phí; WALK_IN = đến thẳng, lễ tân tra mã
 // (gói tháng / vé lẻ / miễn phí trẻ nhỏ); BOOKING = đặt slot độc quyền. Bản ghi cũ không có accessMode coi là BOOKING.
@@ -252,6 +286,41 @@ export const TICKET_STATUS = Object.freeze({
   REJECTED: 'REJECTED',
 });
 
+// Nhóm trạng thái ticket — mọi nơi (service, cron, báo cáo, client) dùng các nhóm này, không tự liệt kê.
+// Đang mở = chưa xử lý xong; WAITING_CONFIRM (đã xong, chờ nghiệm thu) và nhóm kết thúc nằm ngoài.
+export const TICKET_OPEN_STATUSES = Object.freeze([
+  TICKET_STATUS.NEW,
+  TICKET_STATUS.ASSIGNED,
+  TICKET_STATUS.WAITING_QUOTE_APPROVAL,
+  TICKET_STATUS.IN_PROGRESS,
+  TICKET_STATUS.WAITING_PARTS,
+]);
+// Tính SLA hoàn thành / leo thang: tạm dừng khi đang chờ cư dân đồng ý phí (lỗi không thuộc Ban quản lý)
+export const TICKET_SLA_STATUSES = Object.freeze(
+  TICKET_OPEN_STATUSES.filter((s) => s !== TICKET_STATUS.WAITING_QUOTE_APPROVAL),
+);
+export const TICKET_FINAL_STATUSES = Object.freeze([TICKET_STATUS.CLOSED, TICKET_STATUS.REJECTED]);
+
+// Hành động trong lịch sử xử lý ticket (tickets.history.action)
+export const TICKET_HISTORY_ACTIONS = Object.freeze({
+  CREATED: 'CREATED',
+  ASSIGNED: 'ASSIGNED',
+  REASSIGNED: 'REASSIGNED',
+  CLAIMED: 'CLAIMED',
+  PROGRESS: 'PROGRESS',
+  QUOTE_REQUESTED: 'QUOTE_REQUESTED',
+  QUOTE_ACCEPTED: 'QUOTE_ACCEPTED',
+  QUOTE_DECLINED: 'QUOTE_DECLINED',
+  WAITING_PARTS: 'WAITING_PARTS',
+  RESOLVED: 'RESOLVED',
+  CONFIRMED: 'CONFIRMED',
+  REOPENED: 'REOPENED',
+  ESCALATED: 'ESCALATED',
+  SLA_ALERTED: 'SLA_ALERTED',
+  AUTO_CLOSED: 'AUTO_CLOSED',
+  REJECTED: 'REJECTED',
+});
+
 // Loại phiếu: sự cố kỹ thuật vào hàng chờ Kỹ thuật; phản ánh chuyển sang màn hình xử lý của Người 2
 export const TICKET_TYPES = Object.freeze({
   INCIDENT: 'INCIDENT',
@@ -299,6 +368,8 @@ export const NOTIFICATION_TYPES = Object.freeze({
 export const CONFIG_SCOPES = Object.freeze({ BUSINESS: 'BUSINESS', TECHNICAL: 'TECHNICAL' });
 
 export const CRON_STATUS = Object.freeze({ SUCCESS: 'SUCCESS', FAILED: 'FAILED' });
+
+export const CRON_TRIGGERS = Object.freeze({ SCHEDULE: 'SCHEDULE', MANUAL: 'MANUAL' });
 
 export const CRON_JOBS = Object.freeze({
   INVOICE_GENERATE: 'INVOICE_GENERATE',
@@ -348,6 +419,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   CONTRACT_EXPIRED: 'CONTRACT_EXPIRED',
   RESIDENT_ASSIGNED: 'RESIDENT_ASSIGNED',
   RESIDENT_REMOVED: 'RESIDENT_REMOVED',
+  RESIDENT_UPDATED: 'RESIDENT_UPDATED',
   VEHICLE_APPROVED: 'VEHICLE_APPROVED',
   VEHICLE_REJECTED: 'VEHICLE_REJECTED',
   VEHICLE_CANCELLED: 'VEHICLE_CANCELLED',
@@ -375,6 +447,30 @@ export const AUDIT_ACTIONS = Object.freeze({
   TICKET_CLAIMED: 'TICKET_CLAIMED',
   TICKET_QUOTE_DECIDED: 'TICKET_QUOTE_DECIDED',
   BOOKING_PAYMENT_CONFIRMED: 'BOOKING_PAYMENT_CONFIRMED',
+});
+
+// targetType của audit_logs = tên collection (index { targetType, targetId } tra lịch sử một bản ghi)
+export const AUDIT_TARGETS = Object.freeze({
+  USER: 'users',
+  BUILDING: 'buildings',
+  APARTMENT: 'apartments',
+  CONTRACT: 'contracts',
+  RESIDENT: 'residents',
+  VEHICLE: 'vehicles',
+  GATE_PASS: 'gate_passes',
+  PARKING_CARD: 'parking_cards',
+  FEE_TYPE: 'fee_types',
+  INVOICE: 'invoices',
+  AMENITY: 'amenities',
+  AMENITY_PASS: 'amenity_passes',
+  AMENITY_VISIT: 'amenity_visits',
+  BOOKING: 'bookings',
+  WORK_ORDER: 'work_orders',
+  TICKET: 'tickets',
+  COMPLAINT_CATEGORY: 'complaint_categories',
+  ANNOUNCEMENT: 'announcements',
+  SYSTEM_CONFIG: 'system_configs',
+  DUTY_SHIFT: 'duty_shifts',
 });
 
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
@@ -409,30 +505,36 @@ export const CONFIG_KEYS = Object.freeze({
 
 export const DEFAULT_CONFIGS = Object.freeze([
   // BUSINESS — Manager sửa (UC-E01)
-  { key: CONFIG_KEYS.SLA_HOURS_URGENT, value: 24, scope: 'BUSINESS', description: 'SLA ticket Khẩn cấp (giờ) — BR-O7' },
-  { key: CONFIG_KEYS.SLA_HOURS_HIGH, value: 72, scope: 'BUSINESS', description: 'SLA ticket Cao (giờ) — BR-O7' },
-  { key: CONFIG_KEYS.SLA_HOURS_MEDIUM, value: 168, scope: 'BUSINESS', description: 'SLA ticket Thường (giờ) — BR-O7' },
-  { key: CONFIG_KEYS.SLA_HOURS_LOW, value: 168, scope: 'BUSINESS', description: 'SLA ticket Thấp (giờ)' },
-  { key: CONFIG_KEYS.TICKET_AUTO_CLOSE_DAYS, value: 7, scope: 'BUSINESS', description: 'Tự đóng ticket chờ xác nhận sau N ngày — BR-O9' },
-  { key: CONFIG_KEYS.PAYMENT_TERM_DAYS, value: 15, scope: 'BUSINESS', description: 'Hạn thanh toán hóa đơn (ngày) — BR-F8' },
-  { key: CONFIG_KEYS.DEBT_REMINDER_DAYS, value: [1, 7, 15], scope: 'BUSINESS', description: 'Ngày quá hạn gửi nhắc nợ — BR-D4' },
-  { key: CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, value: 50000000, scope: 'BUSINESS', description: 'Ngưỡng cảnh báo số dư quỹ (VNĐ) — UC-C06' },
-  { key: CONFIG_KEYS.FUND_APPROVAL_RATIO, value: 0.5, scope: 'BUSINESS', description: 'Tỷ lệ đồng ý tối thiểu (> giá trị) — BR-M2' },
-  { key: CONFIG_KEYS.BOOKING_MAX_ACTIVE_PER_APARTMENT, value: 2, scope: 'BUSINESS', description: 'Số booking chưa dùng tối đa/căn — BR-O3' },
-  { key: CONFIG_KEYS.BOOKING_ADVANCE_DAYS, value: 14, scope: 'BUSINESS', description: 'Đặt tiện ích trước tối đa N ngày — BR-O3' },
-  { key: CONFIG_KEYS.CHECKIN_EARLY_MINUTES, value: 15, scope: 'BUSINESS', description: 'Check-in sớm nhất trước giờ bắt đầu (phút) — BR-O14' },
-  { key: CONFIG_KEYS.NO_SHOW_GRACE_MINUTES, value: 15, scope: 'BUSINESS', description: 'Quá giờ bắt đầu N phút chưa check-in → không đến — BR-O14' },
-  { key: CONFIG_KEYS.RECEPTION_OPEN_TIME, value: '05:00', scope: 'BUSINESS', description: 'Giờ lễ tân bắt đầu làm việc (HH:mm) — BR-O15' },
-  { key: CONFIG_KEYS.RECEPTION_CLOSE_TIME, value: '22:00', scope: 'BUSINESS', description: 'Giờ lễ tân kết thúc (HH:mm) — BR-O15' },
-  { key: CONFIG_KEYS.CHILD_FREE_AGE, value: 6, scope: 'BUSINESS', description: 'Dưới số tuổi này được vào tiện ích miễn phí, cần người lớn đi kèm — BR-O24' },
-  { key: CONFIG_KEYS.CHILD_ADULT_AGE, value: 12, scope: 'BUSINESS', description: 'Từ số tuổi này tính giá người lớn; từ CHILD_FREE_AGE đến dưới mốc này tính giá trẻ em — BR-O24' },
-  { key: CONFIG_KEYS.WALK_IN_VISIT_MINUTES, value: 120, scope: 'BUSINESS', description: 'Thời lượng 1 lượt vào tiện ích vào cửa (phút), dùng đếm số người đang ở trong — BR-O23' },
-  { key: CONFIG_KEYS.PASS_EXPIRY_REMIND_DAYS, value: 3, scope: 'BUSINESS', description: 'Nhắc gia hạn gói tháng trong N ngày cuối tháng — BR-O22' },
-  { key: CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, value: 500, scope: 'BUSINESS', description: 'Sức chứa bãi xe máy' },
-  { key: CONFIG_KEYS.PARKING_CAPACITY_CAR, value: 100, scope: 'BUSINESS', description: 'Sức chứa bãi ô tô' },
-  { key: CONFIG_KEYS.TICKET_ACK_MINUTES, value: 30, scope: 'BUSINESS', description: 'Hạn kỹ thuật viên nhận sự cố kể từ lúc gửi (phút)' },
-  { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: 'BUSINESS', description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
-  { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 0, scope: 'BUSINESS', description: 'Giữ chỗ booking có phí chờ thanh toán (phút); 0 = tắt, phí gộp vào hóa đơn tháng' },
+  { key: CONFIG_KEYS.SLA_HOURS_URGENT, value: 24, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Khẩn cấp (giờ) — BR-O7' },
+  { key: CONFIG_KEYS.SLA_HOURS_HIGH, value: 72, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Cao (giờ) — BR-O7' },
+  { key: CONFIG_KEYS.SLA_HOURS_MEDIUM, value: 168, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Thường (giờ) — BR-O7' },
+  { key: CONFIG_KEYS.SLA_HOURS_LOW, value: 168, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Thấp (giờ)' },
+  { key: CONFIG_KEYS.TICKET_AUTO_CLOSE_DAYS, value: 7, scope: CONFIG_SCOPES.BUSINESS, description: 'Tự đóng ticket chờ xác nhận sau N ngày — BR-O9' },
+  { key: CONFIG_KEYS.PAYMENT_TERM_DAYS, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn thanh toán hóa đơn (ngày) — BR-F8' },
+  { key: CONFIG_KEYS.DEBT_REMINDER_DAYS, value: [1, 7, 15], scope: CONFIG_SCOPES.BUSINESS, description: 'Ngày quá hạn gửi nhắc nợ — BR-D4' },
+  { key: CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, value: 50000000, scope: CONFIG_SCOPES.BUSINESS, description: 'Ngưỡng cảnh báo số dư quỹ (VNĐ) — UC-C06' },
+  { key: CONFIG_KEYS.FUND_APPROVAL_RATIO, value: 0.5, scope: CONFIG_SCOPES.BUSINESS, description: 'Tỷ lệ đồng ý tối thiểu (> giá trị) — BR-M2' },
+  { key: CONFIG_KEYS.BOOKING_MAX_ACTIVE_PER_APARTMENT, value: 2, scope: CONFIG_SCOPES.BUSINESS, description: 'Số booking chưa dùng tối đa/căn — BR-O3' },
+  { key: CONFIG_KEYS.BOOKING_ADVANCE_DAYS, value: 14, scope: CONFIG_SCOPES.BUSINESS, description: 'Đặt tiện ích trước tối đa N ngày — BR-O3' },
+  { key: CONFIG_KEYS.CHECKIN_EARLY_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Check-in sớm nhất trước giờ bắt đầu (phút) — BR-O14' },
+  { key: CONFIG_KEYS.NO_SHOW_GRACE_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Quá giờ bắt đầu N phút chưa check-in → không đến — BR-O14' },
+  { key: CONFIG_KEYS.RECEPTION_OPEN_TIME, value: '05:00', scope: CONFIG_SCOPES.BUSINESS, description: 'Giờ lễ tân bắt đầu làm việc (HH:mm) — BR-O15' },
+  { key: CONFIG_KEYS.RECEPTION_CLOSE_TIME, value: '22:00', scope: CONFIG_SCOPES.BUSINESS, description: 'Giờ lễ tân kết thúc (HH:mm) — BR-O15' },
+  { key: CONFIG_KEYS.CHILD_FREE_AGE, value: 6, scope: CONFIG_SCOPES.BUSINESS, description: 'Dưới số tuổi này được vào tiện ích miễn phí, cần người lớn đi kèm — BR-O24' },
+  { key: CONFIG_KEYS.CHILD_ADULT_AGE, value: 12, scope: CONFIG_SCOPES.BUSINESS, description: 'Từ số tuổi này tính giá người lớn; từ CHILD_FREE_AGE đến dưới mốc này tính giá trẻ em — BR-O24' },
+  { key: CONFIG_KEYS.WALK_IN_VISIT_MINUTES, value: 120, scope: CONFIG_SCOPES.BUSINESS, description: 'Thời lượng 1 lượt vào tiện ích vào cửa (phút), dùng đếm số người đang ở trong — BR-O23' },
+  { key: CONFIG_KEYS.PASS_EXPIRY_REMIND_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Nhắc gia hạn gói tháng trong N ngày cuối tháng — BR-O22' },
+  { key: CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, value: 500, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi xe máy' },
+  { key: CONFIG_KEYS.PARKING_CAPACITY_CAR, value: 100, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi ô tô' },
+  { key: CONFIG_KEYS.TICKET_ACK_MINUTES, value: 30, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn kỹ thuật viên nhận sự cố kể từ lúc gửi (phút)' },
+  { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
+  { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 0, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán (phút); 0 = tắt, phí gộp vào hóa đơn tháng' },
   // TECHNICAL — Admin sửa
-  { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 5, scope: 'TECHNICAL', description: 'Dung lượng ảnh tối đa (MB) — NFR-10' },
+  { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 5, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10' },
 ]);
+
+// key → giá trị mặc định (module thuần như pricing / slot.utils đọc từ đây, không tự dựng lại map)
+export const CONFIG_DEFAULTS = Object.freeze(Object.fromEntries(DEFAULT_CONFIGS.map((c) => [c.key, c.value])));
+
+// Tham số được phép đặt 0 = tắt tính năng (các tham số số khác phải > 0)
+export const ZERO_ALLOWED_CONFIG_KEYS = Object.freeze([CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES]);

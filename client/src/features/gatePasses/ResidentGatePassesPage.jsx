@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -18,7 +18,7 @@ import {
   Spin,
   Tag,
   TimePicker,
-  message,
+  App,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -36,14 +36,21 @@ import { gatePassesApi } from '../../api/gatePasses.api';
 import { residentsApi } from '../../api/moduleA.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
-import { RELATION_TYPES } from '../../constants/enums';
+import { GATE_PASS_DIRECTIONS, GATE_PASS_STATUS, RELATION_TYPES } from '../../constants/enums';
 import { useAction, useApi } from '../../hooks/useApi';
+import { useResident } from '../../hooks/useResident';
 import { formatDate, formatDateTime } from '../../utils/format';
-import { GATE_PASS_DIRECTIONS_MAP, GATE_PASS_STATUS_MAP } from './gatePassConstants';
 
 export default function ResidentGatePassesPage() {
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const [selectedAptId, setSelectedAptId] = useState(null);
+  // Căn đang chọn đồng bộ với ô chọn căn trên header (useResident): mặc định theo header, đổi ở đây thì header đổi theo
+  const { apartmentId: headerAptId, setApartmentId: setHeaderAptId } = useResident();
+  const pickApartment = (id) => {
+    setSelectedAptId(id);
+    setHeaderAptId(id);
+  };
   const [statusFilter, setStatusFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [detailItem, setDetailItem] = useState(null);
@@ -53,6 +60,8 @@ export default function ResidentGatePassesPage() {
   const [rejectForm] = Form.useForm();
   const [timeToOpen, setTimeToOpen] = useState(false);
   const timeToRef = useRef(null);
+  const focusTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(focusTimerRef.current), []);
 
   const timeFromVal = Form.useWatch('timeFrom', createForm);
 
@@ -60,7 +69,10 @@ export default function ResidentGatePassesPage() {
   const apartments = Array.isArray(aptsData) ? aptsData : aptsData?.items || [];
 
   const activeApartment =
-    apartments.find((a) => (a.apartmentId || a._id) === selectedAptId) || apartments[0] || null;
+    apartments.find((a) => (a.apartmentId || a._id) === selectedAptId) ||
+    apartments.find((a) => (a.apartmentId || a._id) === headerAptId) ||
+    apartments[0] ||
+    null;
   const activeAptId = activeApartment ? activeApartment.apartmentId || activeApartment._id : null;
 
   const {
@@ -143,7 +155,8 @@ export default function ResidentGatePassesPage() {
       createForm.validateFields(['timeTo']).catch(() => {});
 
       // Tự động focus/mở luôn khung chọn của Giờ kết thúc
-      setTimeout(() => {
+      clearTimeout(focusTimerRef.current);
+      focusTimerRef.current = setTimeout(() => {
         setTimeToOpen(true);
         timeToRef.current?.focus?.();
       }, 120);
@@ -278,7 +291,7 @@ export default function ResidentGatePassesPage() {
               <Select
                 className="w-full"
                 value={activeAptId}
-                onChange={setSelectedAptId}
+                onChange={pickApartment}
                 options={apartments.map((a) => ({
                   value: a.apartmentId || a._id,
                   label: `Căn ${a.code} — ${a.building?.name || ''}`,
@@ -293,7 +306,7 @@ export default function ResidentGatePassesPage() {
               onChange={setStatusFilter}
               options={[
                 { value: '', label: 'Tất cả trạng thái' },
-                ...Object.entries(GATE_PASS_STATUS_MAP).map(([k, v]) => ({
+                ...Object.entries(GATE_PASS_STATUS).map(([k, v]) => ({
                   value: k,
                   label: v.label,
                 })),
@@ -325,8 +338,8 @@ export default function ResidentGatePassesPage() {
                 <div className="space-y-1">
                   <Space wrap>
                     <span className="font-bold text-base text-blue-600">{item.code}</span>
-                    <EnumTag map={GATE_PASS_DIRECTIONS_MAP} value={item.direction} />
-                    <EnumTag map={GATE_PASS_STATUS_MAP} value={item.status} />
+                    <EnumTag map={GATE_PASS_DIRECTIONS} value={item.direction} />
+                    <EnumTag map={GATE_PASS_STATUS} value={item.status} />
                     <Tag icon={<CarOutlined />}>{item.truckPlate}</Tag>
                   </Space>
                   <div className="text-sm text-gray-600 dark:text-gray-300">
@@ -587,10 +600,10 @@ export default function ResidentGatePassesPage() {
               {detailItem.apartmentId?.code} ({detailItem.apartmentId?.buildingId?.name})
             </Descriptions.Item>
             <Descriptions.Item label="Chiều">
-              <EnumTag map={GATE_PASS_DIRECTIONS_MAP} value={detailItem.direction} />
+              <EnumTag map={GATE_PASS_DIRECTIONS} value={detailItem.direction} />
             </Descriptions.Item>
             <Descriptions.Item label="Trạng thái">
-              <EnumTag map={GATE_PASS_STATUS_MAP} value={detailItem.status} />
+              <EnumTag map={GATE_PASS_STATUS} value={detailItem.status} />
             </Descriptions.Item>
             <Descriptions.Item label="Thời gian">
               {formatDate(detailItem.scheduledDate)} ({detailItem.timeSlot?.from} –{' '}
@@ -603,7 +616,7 @@ export default function ResidentGatePassesPage() {
             <Descriptions.Item label="Danh sách đồ">
               <ul className="list-disc pl-4 m-0">
                 {(detailItem.items || []).map((it, idx) => (
-                  <li key={idx}>
+                  <li key={`${it.name}-${idx}`}>
                     {it.name} — SL: <b>{it.quantity}</b>
                   </li>
                 ))}

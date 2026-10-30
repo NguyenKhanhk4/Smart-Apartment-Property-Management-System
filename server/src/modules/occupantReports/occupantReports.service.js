@@ -1,10 +1,10 @@
 import ExcelJS from 'exceljs';
-import { AUDIT_ACTIONS } from '../../constants/enums.js';
-import { Resident } from '../../models/index.js';
+import { AUDIT_ACTIONS, AUDIT_TARGETS, OCCUPANT_CHANGE_TYPES } from '../../constants/enums.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { endOfVnDay, startOfVnDay } from '../../utils/time.js';
+import { DAY_MS, endOfVnDay, fmtDateVn, startOfVnDay, toVnYmd } from '../../utils/time.js';
 import { decryptIdNumber, maskIdNumber } from '../residents/idCrypto.js';
+import { Resident } from '../../models/index.js';
 
 const RELATION_LABELS = {
   OWNER: 'Chủ sở hữu',
@@ -13,29 +13,21 @@ const RELATION_LABELS = {
 };
 
 const CHANGE_LABELS = {
-  MOVE_IN: 'Vào ở',
-  MOVE_OUT: 'Chuyển đi',
+  [OCCUPANT_CHANGE_TYPES.MOVE_IN]: 'Vào ở',
+  [OCCUPANT_CHANGE_TYPES.MOVE_OUT]: 'Chuyển đi',
 };
 
-function formatVnDate(date) {
-  if (!date) return '';
-  return new Date(date).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
-}
+const formatVnDate = (date) => (date ? fmtDateVn(date) : '');
 
-/**
- * Giải mã idNumberEnc và trả về dạng che (4 số cuối, vd ********1234)
- */
-export function resolveMaskedId(residentDoc) {
-  const plain = decryptIdNumber(residentDoc?.idNumberEnc);
-  return maskIdNumber(plain);
-}
+/** Giải mã idNumberEnc và trả về dạng che (4 số cuối, vd ********1234) */
+const resolveMaskedId = (residentDoc) => maskIdNumber(decryptIdNumber(residentDoc?.idNumberEnc));
 
 /**
  * UC21: Truy vấn danh sách biến động nhân khẩu trong khoảng [from, to]
  */
 export async function listResidentChanges({ from, to }) {
   const now = new Date();
-  const fromDate = from ? startOfVnDay(new Date(from)) : startOfVnDay(new Date(now.getTime() - 30 * 86400000));
+  const fromDate = from ? startOfVnDay(new Date(from)) : startOfVnDay(new Date(now.getTime() - 30 * DAY_MS));
   const toDate = to ? endOfVnDay(new Date(to)) : endOfVnDay(now);
 
   if (fromDate > toDate) {
@@ -74,7 +66,7 @@ export async function listResidentChanges({ from, to }) {
         buildingName: apt.buildingId?.name || '',
         relationType: r.relationType,
         relationLabel: RELATION_LABELS[r.relationType] || r.relationType,
-        changeType: 'MOVE_IN',
+        changeType: OCCUPANT_CHANGE_TYPES.MOVE_IN,
         changeLabel: CHANGE_LABELS.MOVE_IN,
         date: r.moveInDate,
       });
@@ -91,7 +83,7 @@ export async function listResidentChanges({ from, to }) {
         buildingName: apt.buildingId?.name || '',
         relationType: r.relationType,
         relationLabel: RELATION_LABELS[r.relationType] || r.relationType,
-        changeType: 'MOVE_OUT',
+        changeType: OCCUPANT_CHANGE_TYPES.MOVE_OUT,
         changeLabel: CHANGE_LABELS.MOVE_OUT,
         date: r.moveOutDate,
       });
@@ -105,12 +97,12 @@ export async function listResidentChanges({ from, to }) {
 /**
  * UC21: Xuất file Excel biến động nhân khẩu và ghi AuditLog
  */
-export async function exportResidentChangesExcel({ from, to }, actorUser, ip) {
+export async function exportResidentChangesExcel({ from, to }, actorUser, ip, { now = new Date() } = {}) {
   const rows = await listResidentChanges({ from, to });
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'SAPMS';
-  wb.created = new Date();
+  wb.created = now;
 
   const ws = wb.addWorksheet('Biến động nhân khẩu');
 
@@ -145,7 +137,7 @@ export async function exportResidentChangesExcel({ from, to }, actorUser, ip) {
   await logAudit({
     action: AUDIT_ACTIONS.RESIDENT_CHANGES_EXPORTED,
     user: actorUser,
-    targetType: 'Resident',
+    targetType: AUDIT_TARGETS.RESIDENT,
     targetId: null,
     metadata: {
       from: from || null,
@@ -155,6 +147,6 @@ export async function exportResidentChangesExcel({ from, to }, actorUser, ip) {
     ip,
   });
 
-  const filename = `bien-dong-nhan-khau-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const filename = `bien-dong-nhan-khau-${toVnYmd(now)}.xlsx`;
   return { buffer, filename, count: rows.length };
 }

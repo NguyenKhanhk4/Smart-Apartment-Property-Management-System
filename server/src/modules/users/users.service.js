@@ -1,7 +1,5 @@
-import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { AUDIT_ACTIONS, BOARD_TITLES, ROLES } from '../../constants/enums.js';
-import { env } from '../../config/env.js';
+import { AUDIT_ACTIONS, AUDIT_TARGETS, BOARD_TITLES, ROLES } from '../../constants/enums.js';
 import { Resident, User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
@@ -11,30 +9,7 @@ import { uploadToCloudinary } from '../../services/upload.service.js';
 import { parseDateOfBirth, ensureCodes } from '../memberCodes/memberCodes.service.js';
 import { toPublicUser } from '../auth/auth.service.js';
 import { signAccessToken, signRefreshToken } from '../auth/auth.tokens.js';
-
-function generateTemporaryPassword(length = 10) {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower = 'abcdefghijkmnopqrstuvwxyz';
-  const digits = '23456789';
-  const all = upper + lower + digits;
-
-  const chars = [
-    upper[crypto.randomInt(0, upper.length)],
-    lower[crypto.randomInt(0, lower.length)],
-    digits[crypto.randomInt(0, digits.length)],
-  ];
-
-  for (let i = 3; i < length; i += 1) {
-    chars.push(all[crypto.randomInt(0, all.length)]);
-  }
-
-  for (let i = chars.length - 1; i > 0; i -= 1) {
-    const j = crypto.randomInt(0, i + 1);
-    [chars[i], chars[j]] = [chars[j], chars[i]];
-  }
-
-  return chars.join('');
-}
+import { generateTemporaryPassword } from '../../utils/password.js';
 
 /**
  * UC-A03: Xem hồ sơ cá nhân
@@ -136,70 +111,70 @@ export async function listInternal(query = {}) {
   };
 }
 
+// ===== BR-R1 / BR-R2: chỉ 1 Trưởng BQL và 1 Trưởng BQT đang hoạt động =====
+/** Kiểm tra trước khi ghi: `user` sẽ là MANAGER / CHAIRMAN đang hoạt động thì không được có người khác giữ vai trò đó */
+async function assertSingleHolder({ role, boardTitle, excludeId = null }) {
+  const notSelf = excludeId ? { _id: { $ne: excludeId } } : {};
+  if (role === ROLES.MANAGER && (await User.exists({ role: ROLES.MANAGER, isActive: true, ...notSelf }))) {
+    throw new ApiError('MANAGER_ALREADY_EXISTS');
+  }
+  if (
+    role === ROLES.BOARD &&
+    boardTitle === BOARD_TITLES.CHAIRMAN &&
+    (await User.exists({ boardTitle: BOARD_TITLES.CHAIRMAN, isActive: true, ...notSelf }))
+  ) {
+    throw new ApiError('CHAIRMAN_ALREADY_EXISTS');
+  }
+}
+
+/** Ghi user; lỗi trùng unique index (2 request đồng thời vượt qua bước kiểm tra) → mã lỗi nghiệp vụ */
+async function saveUnique(write) {
+  try {
+    return await write();
+  } catch (err) {
+    if (err?.code !== 11000) throw err;
+    if (err.keyPattern?.role || err.message?.includes('uniq_active_manager')) throw new ApiError('MANAGER_ALREADY_EXISTS');
+    if (err.keyPattern?.boardTitle || err.message?.includes('uniq_active_chairman')) {
+      throw new ApiError('CHAIRMAN_ALREADY_EXISTS');
+    }
+    if (err.keyPattern?.email) throw new ApiError('EMAIL_EXISTS');
+    throw err;
+  }
+}
+
 /**
- * UC-A04: Tạo tài khoản nội bộ (Admin)
+ * UC-A04: Tạo tài khoản nội bộ (Admin). Mật khẩu tạm gửi qua email; chỉ trả về API khi gửi email thất bại.
  */
 export async function createInternal(adminUser, { fullName, email, phone, role, roleTitle, boardTitle }, { ip } = {}) {
   const normalizedEmail = email.trim().toLowerCase();
-
   const titleForRole = role === ROLES.STAFF ? roleTitle : null;
   const boardForRole = role === ROLES.BOARD ? boardTitle : null;
 
-  // Kiểm tra BR-R1 (duy nhất 1 MANAGER đang hoạt động)
-  if (role === ROLES.MANAGER) {
-    const activeManager = await User.findOne({ role: ROLES.MANAGER, isActive: true });
-    if (activeManager) throw new ApiError('MANAGER_ALREADY_EXISTS');
-  }
+  await assertSingleHolder({ role, boardTitle: boardForRole });
+  if (await User.exists({ email: normalizedEmail })) throw new ApiError('EMAIL_EXISTS');
 
-  // Kiểm tra BR-R2 (duy nhất 1 CHAIRMAN đang hoạt động)
-  if (role === ROLES.BOARD && boardForRole === BOARD_TITLES.CHAIRMAN) {
-    const activeChairman = await User.findOne({ boardTitle: BOARD_TITLES.CHAIRMAN, isActive: true });
-    if (activeChairman) throw ApiError.badRequest('Đã có 1 Trưởng BQT đang hoạt động');
-  }
-
-  const temporaryPassword = generateTemporaryPassword(10);
-  const passwordHash = await bcrypt.hash(temporaryPassword, 10);
-
-  let newUser;
-  try {
-    newUser = await User.create({
+  const temporaryPassword = generateTemporaryPassword();
+  const newUser = await saveUnique(async () =>
+    User.create({
       fullName: fullName.trim(),
       email: normalizedEmail,
       phone: phone?.trim() || null,
-      passwordHash,
+      passwordHash: await bcrypt.hash(temporaryPassword, 10),
       role,
       roleTitle: titleForRole,
       boardTitle: boardForRole,
       isActive: true,
-    });
-  } catch (err) {
-    if (err.code === 11000) {
-      if (err.keyPattern?.role || err.message?.includes('uniq_active_manager')) {
-        throw new ApiError('MANAGER_ALREADY_EXISTS');
-      }
-      if (err.keyPattern?.boardTitle || err.message?.includes('uniq_active_chairman')) {
-        throw ApiError.badRequest('Đã có 1 Trưởng BQT đang hoạt động');
-      }
-      throw ApiError.badRequest('Email đã được sử dụng', [
-        { field: 'email', message: 'Email đã được sử dụng' },
-      ]);
-    }
-    throw err;
-  }
+    }),
+  );
 
-  // Ghi audit log
   await logAudit({
     action: AUDIT_ACTIONS.ROLE_ASSIGNED,
     user: adminUser,
-    targetType: 'users',
+    targetType: AUDIT_TARGETS.USER,
     targetId: newUser._id,
     metadata: { role, roleTitle: titleForRole, boardTitle: boardForRole },
     ip,
   });
-
-  if (env.isDev) {
-    console.log('[module-a] mật khẩu tạm', normalizedEmail, temporaryPassword);
-  }
 
   const emailSent = await sendMail({
     to: normalizedEmail,
@@ -215,62 +190,39 @@ export async function createInternal(adminUser, { fullName, email, phone, role, 
 }
 
 /**
- * UC-A04: Cập nhật tài khoản nội bộ (Admin)
+ * UC-A04: Cập nhật tài khoản nội bộ (Admin). Không sửa tài khoản cư dân / Admin khác qua API này.
+ * Đổi vai trò / chức danh → tăng tokenVersion để phiên đăng nhập cũ (quyền cũ) hết hiệu lực.
  */
 export async function updateInternal(adminUser, targetId, { fullName, phone, role, roleTitle, boardTitle }, { ip } = {}) {
-  const target = await User.findById(targetId);
+  const target = await User.findById(targetId).select('+tokenVersion');
   if (!target) throw ApiError.notFound('Không tìm thấy tài khoản');
-  if (target.role === ROLES.RESIDENT) {
-    throw ApiError.badRequest('Không sửa tài khoản RESIDENT qua API này');
-  }
+  if (target.role === ROLES.RESIDENT) throw ApiError.badRequest('Không sửa tài khoản RESIDENT qua API này');
+  if (target.role === ROLES.ADMIN) throw ApiError.forbidden('Không được sửa tài khoản Quản trị viên khác');
 
-  const roleChanged = role && role !== target.role;
   const newRole = role ?? target.role;
   const newRoleTitle = newRole === ROLES.STAFF ? (roleTitle !== undefined ? roleTitle : target.roleTitle) : null;
   const newBoardTitle = newRole === ROLES.BOARD ? (boardTitle !== undefined ? boardTitle : target.boardTitle) : null;
+  const roleChanged = newRole !== target.role;
+  const titleChanged = newRoleTitle !== target.roleTitle || newBoardTitle !== target.boardTitle;
 
-  // Kiểm tra BR-R1 nếu chuyển thành MANAGER hoặc kích hoạt MANAGER
-  if (newRole === ROLES.MANAGER && (roleChanged || !target.isActive)) {
-    const activeMgr = await User.findOne({ role: ROLES.MANAGER, isActive: true, _id: { $ne: target._id } });
-    if (activeMgr) throw new ApiError('MANAGER_ALREADY_EXISTS');
-  }
-
-  // Kiểm tra BR-R2 nếu chuyển thành CHAIRMAN
-  if (newRole === ROLES.BOARD && newBoardTitle === BOARD_TITLES.CHAIRMAN) {
-    if (roleChanged || target.boardTitle !== BOARD_TITLES.CHAIRMAN || !target.isActive) {
-      const activeChairman = await User.findOne({ boardTitle: BOARD_TITLES.CHAIRMAN, isActive: true, _id: { $ne: target._id } });
-      if (activeChairman) throw ApiError.badRequest('Đã có 1 Trưởng BQT đang hoạt động');
-    }
+  if (target.isActive && (roleChanged || titleChanged)) {
+    await assertSingleHolder({ role: newRole, boardTitle: newBoardTitle, excludeId: target._id });
   }
 
   if (fullName !== undefined) target.fullName = fullName.trim();
   if (phone !== undefined) target.phone = phone ? phone.trim() : null;
-
-  const titleChanged = newRoleTitle !== target.roleTitle || newBoardTitle !== target.boardTitle;
-
   target.role = newRole;
   target.roleTitle = newRoleTitle;
   target.boardTitle = newBoardTitle;
+  if (roleChanged || titleChanged) target.tokenVersion = (target.tokenVersion ?? 0) + 1;
 
-  try {
-    await target.save();
-  } catch (err) {
-    if (err.code === 11000) {
-      if (err.keyPattern?.role || err.message?.includes('uniq_active_manager')) {
-        throw new ApiError('MANAGER_ALREADY_EXISTS');
-      }
-      if (err.keyPattern?.boardTitle || err.message?.includes('uniq_active_chairman')) {
-        throw ApiError.badRequest('Đã có 1 Trưởng BQT đang hoạt động');
-      }
-    }
-    throw err;
-  }
+  await saveUnique(() => target.save());
 
   if (roleChanged || titleChanged) {
     await logAudit({
       action: AUDIT_ACTIONS.ROLE_ASSIGNED,
       user: adminUser,
-      targetType: 'users',
+      targetType: AUDIT_TARGETS.USER,
       targetId: target._id,
       metadata: { role: newRole, roleTitle: newRoleTitle, boardTitle: newBoardTitle },
       ip,
@@ -284,57 +236,32 @@ export async function updateInternal(adminUser, targetId, { fullName, phone, rol
  * UC-A04: Khóa / mở khóa tài khoản (Admin)
  */
 export async function setStatus(adminUser, targetId, { isActive }, { ip } = {}) {
-  const currentAdminId = String(adminUser.id ?? adminUser._id);
-  if (currentAdminId === String(targetId)) {
+  if (String(adminUser.id) === String(targetId)) {
     throw ApiError.badRequest('Không thể tự khóa tài khoản của chính mình');
   }
 
   const target = await User.findById(targetId).select('+tokenVersion');
   if (!target) throw ApiError.notFound('Không tìm thấy tài khoản');
 
-  // Mở khóa: Kiểm tra BR-R1/R2 nếu tài khoản được mở là MANAGER hoặc CHAIRMAN
+  // Mở khóa MANAGER / CHAIRMAN: BR-R1/R2
   if (isActive && !target.isActive) {
-    if (target.role === ROLES.MANAGER) {
-      const activeMgr = await User.findOne({ role: ROLES.MANAGER, isActive: true, _id: { $ne: target._id } });
-      if (activeMgr) throw new ApiError('MANAGER_ALREADY_EXISTS');
-    }
-    if (target.boardTitle === BOARD_TITLES.CHAIRMAN) {
-      const activeChairman = await User.findOne({ boardTitle: BOARD_TITLES.CHAIRMAN, isActive: true, _id: { $ne: target._id } });
-      if (activeChairman) throw ApiError.badRequest('Đã có 1 Trưởng BQT đang hoạt động');
-    }
+    await assertSingleHolder({ role: target.role, boardTitle: target.boardTitle, excludeId: target._id });
   }
-
   // Khóa: tăng tokenVersion để vô hiệu hóa refresh token cũ
-  if (!isActive) {
-    target.tokenVersion = (target.tokenVersion ?? 0) + 1;
-  }
-
+  if (!isActive) target.tokenVersion = (target.tokenVersion ?? 0) + 1;
   target.isActive = isActive;
 
-  try {
-    await target.save();
-  } catch (err) {
-    if (err.code === 11000) {
-      if (err.keyPattern?.role || err.message?.includes('uniq_active_manager')) {
-        throw new ApiError('MANAGER_ALREADY_EXISTS');
-      }
-      if (err.keyPattern?.boardTitle || err.message?.includes('uniq_active_chairman')) {
-        throw ApiError.badRequest('Đã có 1 Trưởng BQT đang hoạt động');
-      }
-    }
-    throw err;
-  }
+  await saveUnique(() => target.save());
 
-  // Ghi log audit
   await logAudit({
     action: isActive ? AUDIT_ACTIONS.ACCOUNT_UNLOCKED : AUDIT_ACTIONS.ACCOUNT_LOCKED,
     user: adminUser,
-    targetType: 'users',
+    targetType: AUDIT_TARGETS.USER,
     targetId: target._id,
     ip,
   });
 
-  // Nếu là tài khoản RESIDENT: đồng bộ mã cư dân (ensureCodes) cho các căn của họ
+  // Tài khoản cư dân: đồng bộ mã cư dân của các căn
   if (target.role === ROLES.RESIDENT) {
     const apartmentIds = await Resident.find({ userId: target._id }).distinct('apartmentId');
     for (const apartmentId of apartmentIds) {

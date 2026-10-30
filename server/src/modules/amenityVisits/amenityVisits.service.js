@@ -1,12 +1,12 @@
 // UC-D10 — Quầy tiện ích: lễ tân tra mã cư dân rồi ghi lượt vào tiện ích WALK_IN (gói tháng / vé lẻ / miễn phí), hủy lượt.
 // KHÔNG thu tiền tại chỗ: phí vé lẻ được Module B cộng vào hóa đơn đầu tháng sau (billing ở bước 12).
 import { AGE_GROUPS, AMENITY_ACCESS_MODES, AUDIT_ACTIONS, NOTIFICATION_TYPES, VISIT_CHARGE_TYPES, VISIT_STATUS } from '../../constants/enums.js';
-import { Amenity, AmenityVisit, MemberCode } from '../../models/index.js';
+import { Amenity, AmenityVisit } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { getPagination, getSort } from '../../utils/pagination.js';
-import { vnPeriod } from '../../utils/time.js';
+import { paginate } from '../../utils/pagination.js';
+import { MINUTE_MS, fmtTimeVn, vnPeriod } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { assertNoOverdue } from '../amenities/overdue.js';
 import { accessModeOf, ageAt, ageGroupOf, formatVnd, visitFee } from '../amenities/pricing.js';
@@ -14,15 +14,13 @@ import { getBookingConfig, toMinutes, toVnYmd, vnDayStart } from '../amenities/s
 import { getActivePass } from '../amenityPasses/passes.queries.js';
 import { assertMember } from '../household/household.service.js';
 import { resolveMemberCode } from '../memberCodes/memberCodes.service.js';
-import { countInside, dayRange, findVisits, presentVisits } from './visits.queries.js';
+import { VISIT_POPULATE, countInside, dayRange, findVisits, presentVisits } from './visits.queries.js';
+import { canIncurCharges } from '../amenities/access.queries.js';
 
 const ADULT_ESCORT_AGE = 18; // người đi kèm trẻ em phải từ 18 tuổi
 const MIN_REASON = 5;
 const LINK = '/r/amenities';
-const MINUTE_MS = 60 * 1000;
-
-const badRequest = (field, message) => ApiError.badRequest(message, [{ field, message }]);
-const timeOf = (d) => new Date(d).toLocaleTimeString('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit' });
+const timeOf = fmtTimeVn;
 
 /** Phút kể từ 00:00 giờ VN của `now` */
 const vnMinutesOfDay = (now) => Math.floor((now.getTime() - vnDayStart(toVnYmd(now)).getTime()) / MINUTE_MS);
@@ -30,8 +28,7 @@ const vnMinutesOfDay = (now) => Math.floor((now.getTime() - vnDayStart(toVnYmd(n
 /** Người trong hộ + quyền phát sinh phí (BR-O26) + ngày sinh */
 async function personContext(record) {
   const { household, me } = await assertMember(record.userId, record.apartmentId);
-  const charge = me.isHead || Boolean((await MemberCode.findOne({ userId: record.userId, apartmentId: record.apartmentId, isActive: true }).select('canIncurCharges').lean())?.canIncurCharges);
-  return { household, me, canCharge: charge };
+  return { household, me, canCharge: await canIncurCharges(record.userId, record.apartmentId, me.isHead) };
 }
 
 /** Người lớn đi kèm của trẻ em (6–11 tuổi): phải là cư dân từ 18 tuổi (không có ngày sinh → coi là người lớn), khác chính trẻ */
@@ -155,7 +152,7 @@ export async function createVisit(staff, { amenityId, code, escortCode, accompan
 /** Hủy lượt (lễ tân, Trưởng BQL): bắt buộc lý do, chỉ khi chưa gộp hóa đơn, ghi audit */
 export async function cancelVisit(user, id, { reason } = {}, { now = new Date() } = {}) {
   const text = reason?.trim();
-  if (!text || text.length < MIN_REASON) throw badRequest('reason', `Lý do hủy là bắt buộc (tối thiểu ${MIN_REASON} ký tự)`);
+  if (!text || text.length < MIN_REASON) throw ApiError.field('reason', `Lý do hủy là bắt buộc (tối thiểu ${MIN_REASON} ký tự)`);
   const existing = await AmenityVisit.findById(id).lean();
   if (!existing) throw ApiError.notFound('Không tìm thấy lượt vào');
   if (existing.invoiceId) throw new ApiError('VISIT_ALREADY_BILLED');
@@ -209,20 +206,19 @@ export async function cancelVisit(user, id, { reason } = {}, { now = new Date() 
 /** Danh sách lượt vào (lễ tân, Trưởng BQL): lọc ngày (mặc định hôm nay, giờ VN), tiện ích, căn, loại, trạng thái */
 export async function listVisits(user, query, { now = new Date() } = {}) {
   const ymd = query.date ?? toVnYmd(now);
-  if (toVnYmd(vnDayStart(ymd)) !== ymd) throw badRequest('date', 'Ngày không hợp lệ (dạng YYYY-MM-DD)');
+  if (toVnYmd(vnDayStart(ymd)) !== ymd) throw ApiError.field('date', 'Ngày không hợp lệ (dạng YYYY-MM-DD)');
   const filter = { visitedAt: dayRange(ymd) };
   if (query.amenityId) filter.amenityId = query.amenityId;
   if (query.apartmentId) filter.apartmentId = query.apartmentId;
   if (query.chargeType) filter.chargeType = query.chargeType;
   if (query.status) filter.status = query.status;
-  const { page, limit, skip } = getPagination(query);
-  const [rows, total] = await Promise.all([
-    findVisits(filter, getSort(query.sort ?? '-visitedAt')).skip(skip).limit(limit).lean(),
-    AmenityVisit.countDocuments(filter),
-  ]);
-  const items = await presentVisits(rows);
-  const pagination = { page, limit, total };
-  return { items, pagination };
+  const { items: rows, pagination } = await paginate(
+    AmenityVisit,
+    filter,
+    { ...query, sort: query.sort ?? '-visitedAt' },
+    { populate: VISIT_POPULATE },
+  );
+  return { items: await presentVisits(rows), pagination };
 }
 
 /** Số người "đang trong tiện ích" của từng tiện ích WALK_IN đang hoạt động: { amenityId, name, current, max } */

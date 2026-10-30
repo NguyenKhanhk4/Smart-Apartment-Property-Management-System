@@ -1,11 +1,16 @@
 import mongoose from 'mongoose';
 import {
   APARTMENT_STATUS,
+  BOOKING_BILLABLE_STATUSES,
+  BOOKING_LEGACY_STATUSES,
   BOOKING_STATUS,
+  DEBT_STATUS,
   FUND_TX_TYPES,
   INVOICE_STATUS,
   PAYMENT_STATUS,
   REVIEW_STATUS,
+  TICKET_OPEN_STATUSES,
+  TICKET_SLA_STATUSES,
   TICKET_STATUS,
   WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
@@ -192,7 +197,7 @@ export async function debtReport({ buildingId }) {
 
   const followups = await DebtFollowup.find({
     apartmentId: { $in: rows.map((r) => r._id) },
-    status: 'OPEN',
+    status: DEBT_STATUS.OPEN,
   })
     .populate('assignedTo', 'fullName')
     .lean();
@@ -328,7 +333,6 @@ export async function ticketReport({ from, to, buildingId }) {
   const match = { createdAt: { $gte: start, $lte: end } };
   if (buildingId) match.buildingId = oid(buildingId);
   const now = new Date();
-  const openStatuses = [TICKET_STATUS.NEW, TICKET_STATUS.ASSIGNED, TICKET_STATUS.IN_PROGRESS];
 
   const [facets] = await Ticket.aggregate([
     { $match: match },
@@ -344,7 +348,7 @@ export async function ticketReport({ from, to, buildingId }) {
           { $sort: { count: -1 } },
         ],
         overdue: [
-          { $match: { status: { $in: openStatuses }, dueDate: { $lt: now } } },
+          { $match: { status: { $in: TICKET_SLA_STATUSES }, dueDate: { $lt: now } } },
           { $count: 'count' },
         ],
         resolution: [
@@ -394,7 +398,7 @@ export async function ticketReport({ from, to, buildingId }) {
   const res = facets.resolution[0];
   return {
     total,
-    open: openStatuses.reduce((s, k) => s + (byStatus[k] ?? 0), 0),
+    open: TICKET_OPEN_STATUSES.reduce((s, k) => s + (byStatus[k] ?? 0), 0),
     waitingConfirm: byStatus.WAITING_CONFIRM ?? 0,
     closed: byStatus.CLOSED ?? 0,
     rejected: byStatus.REJECTED ?? 0,
@@ -482,7 +486,13 @@ export async function amenityUsage({ from, to, amenityId }) {
   }
   const match = { date: { $gte: start, $lte: end } };
   if (amenityId) match.amenityId = oid(amenityId);
-  const USED = [BOOKING_STATUS.APPROVED, BOOKING_STATUS.COMPLETED];
+  // Lượt giữ slot thật (tính phí, BR-O5/O16): đã xác nhận, đang dùng, đã dùng, không đến
+  const USED = BOOKING_BILLABLE_STATUSES;
+  // Cột theo trạng thái — bỏ trạng thái luồng duyệt cũ (PENDING) ; REJECTED giữ riêng cho rejectRate của dữ liệu cũ
+  const STATUS_COLUMNS = [
+    ...Object.values(BOOKING_STATUS).filter((s) => !BOOKING_LEGACY_STATUSES.includes(s)),
+    BOOKING_STATUS.REJECTED,
+  ];
 
   const [facets] = await Booking.aggregate([
     { $match: match },
@@ -494,14 +504,14 @@ export async function amenityUsage({ from, to, amenityId }) {
               _id: '$amenityId',
               total: { $sum: 1 },
               ...Object.fromEntries(
-                Object.values(BOOKING_STATUS).map((s) => [
+                STATUS_COLUMNS.map((s) => [
                   s.toLowerCase(),
                   { $sum: { $cond: [{ $eq: ['$status', s] }, 1, 0] } },
                 ]),
               ),
-              // BR-O5: chỉ COMPLETED mới tính là đã sử dụng/được tính phí
+              // Doanh thu = phí của booking đã giữ slot (cùng nhóm với phí gộp hóa đơn — BOOKING_BILLABLE_STATUSES)
               revenue: {
-                $sum: { $cond: [{ $eq: ['$status', BOOKING_STATUS.COMPLETED] }, '$fee', 0] },
+                $sum: { $cond: [{ $in: ['$status', USED] }, '$fee', 0] },
               },
             },
           },
@@ -554,6 +564,7 @@ export async function amenityUsage({ from, to, amenityId }) {
     ...r,
     cancelRate: rate(r.cancelled, r.total),
     rejectRate: rate(r.rejected, r.total),
+    noShowRate: rate(r.no_show, r.total),
   }));
   const sum = (k) => byAmenity.reduce((s, a) => s + a[k], 0);
   const bySlot = facets.bySlot.map(({ _id, ...r }) => ({
@@ -570,7 +581,9 @@ export async function amenityUsage({ from, to, amenityId }) {
     rejected: sum('rejected'),
     revenue: sum('revenue'),
     cancelRate: rate(sum('cancelled'), sum('total')),
-    rejectRate: rate(sum('rejected'), sum('total')),
+    rejectRate: rate(sum('rejected'), sum('total')), // chỉ còn ý nghĩa với dữ liệu luồng duyệt cũ
+    noShow: sum('no_show'),
+    noShowRate: rate(sum('no_show'), sum('total')),
     mostUsed: byAmenity[0] ? { amenityId: byAmenity[0].amenityId, name: byAmenity[0].name } : null,
     peakSlot: peak?.slotStart ?? null,
     byAmenity,

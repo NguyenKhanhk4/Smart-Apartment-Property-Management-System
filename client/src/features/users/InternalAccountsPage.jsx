@@ -224,7 +224,8 @@ function EditAccountModal({ user, open, onClose, onDone }) {
           roleTitle: user?.roleTitle,
           boardTitle: user?.boardTitle,
         }}
-        onFinish={(v) => updateAccount(v).catch(() => {})}
+        // Email chỉ hiển thị, không đổi được → không gửi lên server
+        onFinish={({ email: _email, ...v }) => updateAccount(v).catch(() => {})}
       >
         <Form.Item name="email" label="Email (Không thể thay đổi)">
           <Input disabled />

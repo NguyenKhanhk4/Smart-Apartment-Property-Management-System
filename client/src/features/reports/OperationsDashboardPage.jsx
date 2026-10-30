@@ -6,11 +6,10 @@ import { lookupApi, reportApi } from '../../api/moduleE.api';
 import { useApi } from '../../hooks/useApi';
 import { PRIORITIES, TICKET_STATUS } from '../../constants/enums';
 import { formatDate, formatPercent } from '../../utils/format';
+import { priorityColor, ticketStatusColor } from '../../utils/status';
 import { CHART_COLORS } from './chartColors';
 import { ChartCard, ExportButton, StatCard, StatRow } from './components';
 
-const STATUS_COLOR = { NEW: '#1677ff', ASSIGNED: '#13c2c2', IN_PROGRESS: '#722ed1', WAITING_CONFIRM: '#faad14', CLOSED: '#52c41a', REJECTED: '#bfbfbf' };
-const PRIORITY_COLOR = { LOW: '#bfbfbf', MEDIUM: '#1677ff', HIGH: '#fa8c16', URGENT: '#f5222d' };
 
 // UC-E12 — Dashboard vận hành: lấp đầy, phản ánh, bảo trì (không có số liệu tài chính — BR-R6)
 export default function OperationsDashboardPage() {
@@ -69,7 +68,7 @@ export default function OperationsDashboardPage() {
           <ResponsiveContainer>
             <PieChart>
               <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={90} label={({ name, value }) => `${name}: ${value}`}>
-                {statusData.map((d) => <Cell key={d.key} fill={STATUS_COLOR[d.key]} />)}
+                {statusData.map((d) => <Cell key={d.key} fill={ticketStatusColor(d.key)} />)}
               </Pie>
               <Tooltip />
             </PieChart>
@@ -83,7 +82,7 @@ export default function OperationsDashboardPage() {
               <YAxis allowDecimals={false} />
               <Tooltip />
               <Bar dataKey="value" name="Số phản ánh">
-                {priorityData.map((d) => <Cell key={d.key} fill={PRIORITY_COLOR[d.key]} />)}
+                {priorityData.map((d) => <Cell key={d.key} fill={priorityColor(d.key)} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>

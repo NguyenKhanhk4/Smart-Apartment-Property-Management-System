@@ -7,6 +7,7 @@ export const ERROR_MESSAGES = {
   FORBIDDEN_ROLE: 'Bạn không có quyền thực hiện thao tác này.',
   NOT_FOUND: 'Không tìm thấy dữ liệu.',
   AUTH_INVALID_CREDENTIALS: 'Email hoặc mật khẩu không đúng.',
+  CHAIRMAN_ALREADY_EXISTS: 'Đã có 1 Trưởng Ban quản trị đang hoạt động.',
   MANAGER_ALREADY_EXISTS: 'Đã có 1 tài khoản Trưởng BQL đang hoạt động.',
   INVOICE_ALREADY_EXISTS: 'Căn hộ đã có hóa đơn của tháng này.',
   INVOICE_ALREADY_PAID: 'Hóa đơn đã được thanh toán.',
@@ -64,6 +65,10 @@ export const ERROR_MESSAGES = {
   WORKORDER_INVALID_ASSIGNEE: 'Người được giao phải là kỹ thuật viên đang hoạt động.',
   DUPLICATE_VALUE: 'Dữ liệu bị trùng.',
   CONCURRENT_UPDATE: 'Dữ liệu vừa được người khác cập nhật, vui lòng tải lại trang.',
+  EMAIL_EXISTS: 'Email đã được sử dụng bởi tài khoản khác.',
+  CONTRACT_ACTIVE_EXISTS: 'Căn hộ đã có hợp đồng cùng loại đang hiệu lực.',
+  STATUS_CONFLICT: 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại.',
+  TOO_MANY_REQUESTS: 'Bạn thao tác quá nhiều lần, vui lòng thử lại sau ít phút.',
   SERVER_ERROR: 'Có lỗi xảy ra phía máy chủ, vui lòng thử lại sau.',
 };
 

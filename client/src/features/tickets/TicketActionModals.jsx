@@ -1,9 +1,12 @@
 import { Form, Input, Modal, Radio, Rate, Select } from 'antd';
 import { ticketApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
-import { PRIORITIES, enumOptions } from '../../constants/enums';
+import { PRIORITIES, TICKET_STATUS, enumOptions } from '../../constants/enums';
+import { keysOf } from '../../utils/status';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
 import { toFiles } from '../../utils/upload';
+
+const TS = keysOf(TICKET_STATUS);
 
 // Modal dùng chung: form + submit qua useAction
 function ActionModal({ title, open, onClose, onDone, action, success, okText, children, initialValues, form: outerForm }) {
@@ -97,10 +100,10 @@ export function RejectModal({ ticket, open, onClose, onDone }) {
 // UC-E04 — KTV cập nhật tiến độ
 export function ProgressModal({ ticket, open, onClose, onDone }) {
   const [form] = Form.useForm();
-  const resolved = Form.useWatch('status', form) === 'WAITING_CONFIRM';
+  const resolved = Form.useWatch('status', form) === TS.WAITING_CONFIRM;
   const options = [
-    { value: 'IN_PROGRESS', label: 'Đang xử lý (cập nhật tiến độ)' },
-    { value: 'WAITING_CONFIRM', label: 'Đã xử lý xong — chờ cư dân xác nhận' },
+    { value: TS.IN_PROGRESS, label: 'Đang xử lý (cập nhật tiến độ)' },
+    { value: TS.WAITING_CONFIRM, label: 'Đã xử lý xong — chờ cư dân xác nhận' },
   ];
   return (
     <ActionModal
@@ -111,9 +114,9 @@ export function ProgressModal({ ticket, open, onClose, onDone }) {
       okText="Cập nhật"
       success="Đã cập nhật tiến độ"
       form={form}
-      initialValues={{ status: 'IN_PROGRESS' }}
+      initialValues={{ status: TS.IN_PROGRESS }}
       // "Đã xử lý xong" bắt buộc kèm ảnh kết quả làm bằng chứng cho Manager/Lễ tân
-      action={({ images, ...v }) => ticketApi.progress(ticket._id, v, v.status === 'WAITING_CONFIRM' ? toFiles(images) : [])}
+      action={({ images, ...v }) => ticketApi.progress(ticket._id, v, v.status === TS.WAITING_CONFIRM ? toFiles(images) : [])}
     >
       <Form.Item name="status" label="Trạng thái">
         <Radio.Group options={options} style={{ display: 'flex', flexDirection: 'column', gap: 8 }} />
@@ -135,7 +138,7 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
       onClose={onClose}
       onDone={onDone}
       okText="Gửi"
-      success={(res) => (res.data.status === 'CLOSED' ? 'Cảm ơn bạn đã đánh giá' : 'Đã gửi lại cho kỹ thuật viên')}
+      success={(res) => (res.data.status === TS.CLOSED ? 'Cảm ơn bạn đã đánh giá' : 'Đã gửi lại cho kỹ thuật viên')}
       initialValues={{ accepted: true, rating: 5 }}
       action={({ accepted, rating, comment, reason }) =>
         ticketApi.confirm(ticket._id, accepted ? { accepted, rating, comment } : { accepted, reason })

@@ -1,8 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { ROLES } from '../../constants/enums.js';
-import { User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from './auth.tokens.js';
+import { User } from '../../models/index.js';
 
 /**
  * Chuẩn hóa đối tượng user trả về cho client (không bao giờ lộ passwordHash, tokenVersion)
@@ -32,9 +32,7 @@ export async function register({ fullName, email, phone, password }) {
 
   const existing = await User.findOne({ email: normalizedEmail });
   if (existing) {
-    throw ApiError.badRequest('Email đã được sử dụng', [
-      { field: 'email', message: 'Email đã được sử dụng' },
-    ]);
+    throw new ApiError('EMAIL_EXISTS', undefined, { details: [{ field: 'email', message: 'Email đã được sử dụng' }] });
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
@@ -51,9 +49,7 @@ export async function register({ fullName, email, phone, password }) {
     return { user: toPublicUser(user) };
   } catch (err) {
     if (err.code === 11000) {
-      throw ApiError.badRequest('Email đã được sử dụng', [
-        { field: 'email', message: 'Email đã được sử dụng' },
-      ]);
+      throw new ApiError('EMAIL_EXISTS', undefined, { details: [{ field: 'email', message: 'Email đã được sử dụng' }] });
     }
     throw err;
   }

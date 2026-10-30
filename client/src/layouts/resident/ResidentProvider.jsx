@@ -3,9 +3,13 @@ import { memberCodeApi } from '../../api/moduleD.api';
 import { residentsApi, vehicleApi } from '../../api/moduleA.api';
 import { useApi } from '../../hooks/useApi';
 import { ResidentContext } from './ResidentContext';
+import { VEHICLE_STATUS } from '../../constants/enums';
+import { keysOf } from '../../utils/status';
+
+const VEHICLE = keysOf(VEHICLE_STATUS);
 
 // Xe tính là "đăng ký" khi đang chờ duyệt hoặc đã duyệt
-const COUNTED_VEHICLE_STATUS = ['PENDING', 'APPROVED'];
+const COUNTED_VEHICLE_STATUS = [VEHICLE.PENDING, VEHICLE.APPROVED];
 
 /**
  * Dữ liệu dùng chung của khu cư dân (header, menu avatar, trang chủ): căn đang chọn + thẻ mã + số thành viên/xe.

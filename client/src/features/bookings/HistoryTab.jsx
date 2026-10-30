@@ -7,21 +7,14 @@ import StatusBadge from '../../components/resident/StatusBadge';
 import SurfaceCard from '../../components/resident/SurfaceCard';
 import { useApi } from '../../hooks/useApi';
 import { useResident } from '../../hooks/useResident';
-import { formatMoney } from '../../utils/format';
+import { BOOKING_STATUS } from '../../constants/enums';
+import { formatDate, formatMoney } from '../../utils/format';
 
-// Nhãn + màu theo thiết kế: Đã xác nhận = ok, Chờ duyệt = warn, Đã dùng = neutral.
-// PENDING / REJECTED chỉ còn ở dữ liệu cũ (BR-O12 đã bỏ luồng duyệt).
-const STATUS = {
-  APPROVED: { label: 'Đã xác nhận', tone: 'ok' },
-  CHECKED_IN: { label: 'Đã check-in', tone: 'info' },
-  COMPLETED: { label: 'Đã dùng', tone: 'neutral' },
-  CANCELLED: { label: 'Đã hủy', tone: 'neutral' },
-  NO_SHOW: { label: 'Không đến', tone: 'warn' },
-  PENDING: { label: 'Chờ duyệt', tone: 'warn' },
-  REJECTED: { label: 'Từ chối', tone: 'neutral' },
-};
+// Nhãn + tone theo BOOKING_STATUS chung (constants/enums.js)
 
-const Badge = ({ status }) => <StatusBadge tone={STATUS[status]?.tone}>{STATUS[status]?.label ?? status}</StatusBadge>;
+const Badge = ({ status }) => (
+  <StatusBadge tone={BOOKING_STATUS[status]?.tone}>{BOOKING_STATUS[status]?.label ?? status}</StatusBadge>
+);
 const timeOf = (b) => `${b.slotStart}–${b.slotEnd}`;
 const feeOf = (b) => (b.fee > 0 ? formatMoney(b.fee) : b.passId ? 'Gói tháng' : 'Miễn phí');
 const startOf = (b) => dayjs(b.startAt ?? b.date);
@@ -83,7 +76,7 @@ export default function HistoryTab({ wide }) {
             {b.amenity?.name ?? 'Tiện ích'}
             {!b.isMine && b.bookedBy?.fullName && <span className="block text-xs font-normal text-r-subtle">Đặt bởi {b.bookedBy.fullName}</span>}
           </td>
-          <td className={td}>{startOf(b).format('DD/MM/YYYY')}</td>
+          <td className={td}>{formatDate(startOf(b))}</td>
           <td className={td}>{timeOf(b)}</td>
           <td className={td}>{feeOf(b)}</td>
           <td className={td}><Badge status={b.status} /></td>

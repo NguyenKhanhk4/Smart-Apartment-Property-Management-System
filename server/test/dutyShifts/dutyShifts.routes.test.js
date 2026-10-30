@@ -61,3 +61,8 @@ test('DELETE /duty-shifts/:id: id sai định dạng → 400', async () => {
   const res = await app.request('DELETE', '/duty-shifts/abc', { user: USERS.manager });
   assert.equal(res.status, 400);
 });
+
+test('GET /duty-shifts: Lễ tân không xem lịch ca (khớp menu)', async () => {
+  const res = await app.request('GET', '/duty-shifts', { user: USERS.receptionist });
+  assert.equal(res.status, 403);
+});

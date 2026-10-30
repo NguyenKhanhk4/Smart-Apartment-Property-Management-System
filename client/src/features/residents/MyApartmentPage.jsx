@@ -32,6 +32,7 @@ import { APARTMENT_STATUS, RELATION_TYPES } from '../../constants/enums';
 import { formatDate } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi } from '../../hooks/useApi';
+import { useResident } from '../../hooks/useResident';
 import { residentsApi } from '../../api/moduleA.api';
 
 export default function MyApartmentPage() {
@@ -46,12 +47,18 @@ export default function MyApartmentPage() {
   } = useApi(residentsApi.myApartments, []);
 
   const [selectedAptId, setSelectedAptId] = useState(null);
+  // Căn đang chọn đồng bộ với ô chọn căn trên header (useResident): mặc định theo header, đổi ở đây thì header đổi theo
+  const { apartmentId: headerAptId, setApartmentId: setHeaderAptId } = useResident();
+  const pickApartment = (id) => {
+    setSelectedAptId(id);
+    setHeaderAptId(id);
+  };
 
-  // Lấy căn hộ đang chọn hoặc mặc định căn đầu tiên
+  // Lấy căn hộ đang chọn, không có thì theo header, cuối cùng là căn đầu tiên
   const activeAptId =
-    selectedAptId && apartments.some((a) => a.apartmentId === selectedAptId)
-      ? selectedAptId
-      : apartments[0]?.apartmentId ?? null;
+    [selectedAptId, headerAptId].find((id) => id && apartments.some((a) => a.apartmentId === id)) ??
+    apartments[0]?.apartmentId ??
+    null;
 
   // Căn hộ hiện tại đang chọn
   const currentApartment = apartments.find((a) => a.apartmentId === activeAptId);
@@ -112,7 +119,7 @@ export default function MyApartmentPage() {
         <div className="overflow-x-auto pb-1">
           <Segmented
             value={activeAptId}
-            onChange={setSelectedAptId}
+            onChange={pickApartment}
             options={apartments.map((a) => ({
               label: (
                 <span className="px-2 py-1 flex items-center gap-1.5">

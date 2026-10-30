@@ -1,14 +1,10 @@
-import {
-  AUDIT_ACTIONS,
-  GATE_PASS_STATUS,
-  NOTIFICATION_TYPES,
-} from '../../constants/enums.js';
-import { GatePass } from '../../models/index.js';
+import { AUDIT_ACTIONS, AUDIT_TARGETS, GATE_PASS_STATUS, NOTIFICATION_TYPES } from '../../constants/enums.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { startOfVnDay } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { computeSlotStart } from './gatePasses.service.js';
+import { GatePass } from '../../models/index.js';
 
 /**
  * Cron mỗi 15 phút:
@@ -85,7 +81,7 @@ export async function expireGatePasses() {
           {
             action: AUDIT_ACTIONS.GATEPASS_EXPIRED,
             user: null,
-            targetType: 'GatePass',
+            targetType: AUDIT_TARGETS.GATE_PASS,
             targetId: current._id,
             metadata: {
               code: current.code,

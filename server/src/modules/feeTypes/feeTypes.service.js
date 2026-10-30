@@ -1,14 +1,12 @@
 // UC-B01 — Danh mục phí & đơn giá theo thời gian (BR-F4, BR-F12).
 // Đổi giá = tạo mức giá mới từ một kỳ, mức đang mở tự đóng lại; không sửa đè giá đã dùng lập hóa đơn (BR-F3).
-import { AUDIT_ACTIONS, FEE_CALC_METHODS, FEE_CATEGORIES } from '../../constants/enums.js';
+import { AUDIT_ACTIONS, FEE_CALC_METHODS, FEE_CATEGORIES, FEE_TYPE_STATES } from '../../constants/enums.js';
 import { FeeType } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { periodStart, vnPeriod } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { billedPeriodsByCode, endPeriodOf, fromPeriodOf, getPriceTable, isBilled } from './feeTypes.queries.js';
-
-export const FEE_TYPE_STATES = Object.freeze({ ACTIVE: 'ACTIVE', UPCOMING: 'UPCOMING', ENDED: 'ENDED' });
 
 // Thuộc tính cố định của một mã phí — mọi mức giá cùng code phải giống nhau để hóa đơn tính nhất quán
 const SHAPE_FIELDS = ['feeCategory', 'calcMethod', 'vehicleType'];
@@ -180,7 +178,7 @@ export async function endFeeType(user, id, { effectiveTo: stopPeriod }, { now = 
   const updated = await FeeType.findOneAndUpdate(
     { _id: id, effectiveTo: null },
     { $set: { effectiveTo: periodStart(stopPeriod) } },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (!updated) throw new ApiError('CONCURRENT_UPDATE');
   await audit(user, fee, { op: 'END', code: fee.code, stopPeriod });

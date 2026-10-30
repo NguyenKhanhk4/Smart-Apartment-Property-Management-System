@@ -14,6 +14,7 @@
 
 import axios from 'axios';
 import { authStorage } from '../utils/authStorage';
+import { readErrorPayload } from './errorPayload';
 import {
   DEFAULT_ERROR_MESSAGE,
   ERROR_MESSAGES,
@@ -108,6 +109,8 @@ export function toApiError(error) {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Request tải file (responseType 'blob') nhận body lỗi dạng Blob → đọc lại để lấy message của server
+    if (error.response?.data instanceof Blob) error.response.data = await readErrorPayload(error.response.data);
     if (!shouldTryRefresh(error)) throw toApiError(error);
 
     const { config } = error;

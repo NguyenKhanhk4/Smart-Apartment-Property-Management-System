@@ -1,15 +1,16 @@
 // UC-D06 — Xem lịch trống, đặt tiện ích (tự xác nhận APPROVED, BR-O12), xem lịch sử và hủy. CHỈ tiện ích accessMode = BOOKING.
 // Quyền đặt lấy từ household.service (thành viên CÓ QUYỀN của căn): chủ sở hữu "không ở" không đặt được.
 // UC-D07 (cùng file): lịch trong ngày, check-in (lễ tân / bảo vệ), lễ tân hủy kèm lý do, lễ tân đặt hộ tại quầy.
-import { AMENITY_ACCESS_MODES, AUDIT_ACTIONS, BOOKING_STATUS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
+import { AMENITY_ACCESS_MODES, AUDIT_ACTIONS, BOOKING_ACTIVE_STATUSES as ACTIVE, BOOKING_STATUS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
 import { Amenity, Apartment, Booking, MemberCode } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
-import { DAY_MS } from '../../utils/time.js';
+import { DAY_MS, MINUTE_MS, fmtDateVn } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
-import { getAmenity, ACTIVE_BOOKING_STATUSES as ACTIVE } from '../amenities/amenities.service.js';
+import { getAmenity } from '../amenities/amenities.service.js';
+import { amenityVisibleTo, canIncurCharges } from '../amenities/access.queries.js';
 import { assertNoOverdue, hasOverdueInvoice } from '../amenities/overdue.js';
 import { accessModeOf, formatVnd } from '../amenities/pricing.js';
 import { atTime, buildSlotGrid, getBookingConfig, toVnYmd, vnDayStart } from '../amenities/slot.utils.js';
@@ -18,9 +19,8 @@ import { assertMember, getMyHouseholds } from '../household/household.service.js
 import { ensureCodes, resolveApartmentId, resolveMemberCode } from '../memberCodes/memberCodes.service.js';
 import { checkInWindow, findDayBookings, isInCheckInWindow, loadBookingView, presentDayBookings, vnHHmm } from './bookings.queries.js';
 
-const MINUTE_MS = 60 * 1000;
 const LINK = '/r/amenities/bookings';
-const dateVn = (d) => toVnYmd(d).split('-').reverse().join('/'); // 2026-10-08 → 08/10/2026
+const dateVn = fmtDateVn; // 08/10/2026
 
 /** Khóa lý do hiển thị trên lưới slot */
 export const LOCK_MESSAGES = {
@@ -30,14 +30,10 @@ export const LOCK_MESSAGES = {
   FULL: 'Đã hết chỗ',
 };
 
-function badRequest(field, message) {
-  return ApiError.badRequest(message, [{ field, message }]);
-}
-
 /** "YYYY-MM-DD" hợp lệ (có thật) → 00:00 giờ VN của ngày đó */
 function parseDay(date) {
   if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) || toVnYmd(vnDayStart(date)) !== date) {
-    throw badRequest('date', 'Ngày không hợp lệ (dạng YYYY-MM-DD)');
+    throw ApiError.field('date', 'Ngày không hợp lệ (dạng YYYY-MM-DD)');
   }
   return vnDayStart(date);
 }
@@ -48,15 +44,6 @@ const daysFromToday = (dayStart, now) => Math.round((dayStart.getTime() - vnDayS
 /** Slot coi là đã qua khi hết thời gian cho phép check-in: startAt + NO_SHOW_GRACE_MINUTES (BR-O14) */
 const isSlotPast = (startAt, now, cfg) => now.getTime() >= startAt.getTime() + cfg.noShowGraceMinutes * MINUTE_MS;
 
-/** Tiện ích riêng tòa chỉ dành cho căn thuộc tòa đó; chung toàn khu thì mọi căn */
-const amenityVisibleTo = (amenity, apartment) =>
-  !amenity.buildingId || String(amenity.buildingId) === String(apartment.buildingId?._id ?? apartment.buildingId);
-
-async function canIncurCharges(userId, apartmentId, isHead) {
-  if (isHead) return true; // BR-O26: chủ hộ luôn được
-  const code = await MemberCode.findOne({ userId, apartmentId, isActive: true }).select('canIncurCharges').lean();
-  return Boolean(code?.canIncurCharges);
-}
 
 /** Booking chưa dùng của căn: đã xác nhận / đang dùng và chưa kết thúc (BR-O3). CANCELLED, NO_SHOW, COMPLETED không tính */
 const unusedFilter = (apartmentId, now) => ({
@@ -214,13 +201,13 @@ async function placeBooking({ bookerId, apartmentId, amenityId, date, slotStart 
     // 2. Slot khớp lưới, trong BOOKING_ADVANCE_DAYS, chưa qua
     const dayStart = parseDay(date);
     const slot = buildSlotGrid(amenity).find((s) => s.slotStart === slotStart);
-    if (!slot) throw badRequest('slotStart', 'Khung giờ không khớp lưới của tiện ích');
+    if (!slot) throw ApiError.field('slotStart', 'Khung giờ không khớp lưới của tiện ích');
     const offset = daysFromToday(dayStart, now);
-    if (offset < 0) throw badRequest('date', 'Ngày đã qua');
-    if (offset > cfg.advanceDays) throw badRequest('date', `Chỉ đặt trước tối đa ${cfg.advanceDays} ngày`);
+    if (offset < 0) throw ApiError.field('date', 'Ngày đã qua');
+    if (offset > cfg.advanceDays) throw ApiError.field('date', `Chỉ đặt trước tối đa ${cfg.advanceDays} ngày`);
     const startAt = atTime(dayStart, slot.slotStart);
     const endAt = atTime(dayStart, slot.slotEnd);
-    if (isSlotPast(startAt, now, cfg)) throw badRequest('slotStart', 'Khung giờ đã qua');
+    if (isSlotPast(startAt, now, cfg)) throw ApiError.field('slotStart', 'Khung giờ đã qua');
 
     // 3. Căn không nợ quá hạn (BR-F8)
     await assertNoOverdue(apartmentId, now);
@@ -397,7 +384,7 @@ const MIN_STAFF_REASON = 5;
 
 async function cancelByStaff(user, id, { reason } = {}, { now }) {
   const text = reason?.trim();
-  if (!text || text.length < MIN_STAFF_REASON) throw badRequest('reason', `Lý do hủy là bắt buộc (tối thiểu ${MIN_STAFF_REASON} ký tự)`);
+  if (!text || text.length < MIN_STAFF_REASON) throw ApiError.field('reason', `Lý do hủy là bắt buộc (tối thiểu ${MIN_STAFF_REASON} ký tự)`);
   const booking = await Booking.findById(id).lean();
   if (!booking) throw ApiError.notFound('Không tìm thấy booking');
   if (booking.status !== BOOKING_STATUS.APPROVED) throw new ApiError('BOOKING_INVALID_STATUS');

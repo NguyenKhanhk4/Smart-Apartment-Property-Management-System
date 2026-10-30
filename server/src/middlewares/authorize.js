@@ -23,6 +23,9 @@ export function hasPermission(user, specs) {
   });
 }
 
+/** Dùng trong service: isRole(user, 'MANAGER', 'STAFF:RECEPTIONIST') — cùng ngữ nghĩa authorize() */
+export const isRole = (user, ...specs) => hasPermission(user, specs);
+
 function assertValidSpec(spec) {
   const [role, title] = spec.split(':');
   const validRole = Object.values(ROLES).includes(role);

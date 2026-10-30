@@ -8,6 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
 import PageHeader from '../../components/PageHeader';
 import { DUTY_ROLE_TITLES, enumOptions } from '../../constants/enums';
 import CreateShiftModal from './CreateShiftModal';
+import { formatDate } from '../../utils/format';
 
 const hhmm = (d) => dayjs(d).format('HH:mm');
 
@@ -87,7 +88,7 @@ export default function DutyShiftsPage() {
           <Button onClick={() => setWeekStart(dayjs().startOf('week'))}>Tuần này</Button>
           <Button icon={<RightOutlined />} onClick={() => setWeekStart((w) => w.add(7, 'day'))} />
           <Typography.Text strong>
-            {weekStart.format('DD/MM')} – {weekStart.add(6, 'day').format('DD/MM/YYYY')}
+            {weekStart.format('DD/MM')} – {formatDate(weekStart.add(6, 'day'))}
           </Typography.Text>
         </Flex>
       </Flex>

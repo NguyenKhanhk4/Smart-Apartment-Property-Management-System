@@ -1,24 +1,15 @@
 // Lịch ca trực Kỹ thuật viên / Bảo vệ (Người 4 — X6). Trưởng BQL xếp ca; nhân viên xem lịch.
 // getOnDuty() dùng chung: hàng chờ sự cố (Người 4), checklist bảo trì theo ca (Người 1), tuần tra (Người 5).
-import { AUDIT_ACTIONS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
+import { AUDIT_ACTIONS, AUDIT_TARGETS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
 import { DutyShift, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { repeatWindows, splitOnDuty, validateShiftWindow, overlaps } from './shift.rules.js';
-import { DAY_MS } from '../../utils/time.js';
+import { overlaps, repeatWindows, splitOnDuty, validateShiftWindow } from './shift.rules.js';
+import { DAY_MS, fmtDateTimeVn } from '../../utils/time.js';
 
 const USER_SELECT = 'fullName phone roleTitle avatarUrl';
 const LINK = '/app/duty-shifts';
-
-const fmt = (d) =>
-  new Date(d).toLocaleString('vi-VN', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    hour: '2-digit',
-    minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-  });
 
 /** Nhân viên đang hoạt động có chức danh `roleTitle` — để chọn người khi xếp ca */
 export function listDutyStaff(roleTitle) {
@@ -68,33 +59,46 @@ export async function createShifts(user, { roleTitle, userId, startAt, endAt, is
   if (!staff) throw ApiError.badRequest('Người được xếp ca phải là nhân viên đang hoạt động đúng chức danh');
 
   const windows = repeatWindows(startAt, endAt, repeatDays);
-  const existing = await DutyShift.find({
-    userId,
-    startAt: { $lt: windows.at(-1).endAt },
-    endAt: { $gt: windows[0].startAt },
-  })
-    .select('startAt endAt')
-    .lean();
-  const clash = windows.find((w) => existing.some((e) => overlaps(w, e)));
-  if (clash) {
-    throw new ApiError('DUTY_SHIFT_OVERLAP', `${staff.fullName} đã có ca trực trùng thời gian ${fmt(clash.startAt)}`);
-  }
+  const findClash = async (excludeIds = []) => {
+    const existing = await DutyShift.find({
+      userId,
+      _id: { $nin: excludeIds },
+      startAt: { $lt: windows.at(-1).endAt },
+      endAt: { $gt: windows[0].startAt },
+    })
+      .select('startAt endAt')
+      .lean();
+    return windows.find((w) => existing.some((e) => overlaps(w, e)));
+  };
+  const overlapError = (clash) =>
+    new ApiError('DUTY_SHIFT_OVERLAP', `${staff.fullName} đã có ca trực trùng thời gian ${fmtDateTimeVn(clash.startAt)}`);
+
+  const clash = await findClash();
+  if (clash) throw overlapError(clash);
 
   const shifts = await DutyShift.insertMany(
     windows.map((w) => ({ roleTitle, userId, ...w, isBackup, note, createdBy: user.id })),
   );
+  // 2 request xếp trùng gửi cùng lúc đều qua được bước kiểm tra trên → kiểm tra lại sau khi ghi,
+  // trùng thì hoàn tác ca vừa tạo (có thể cả 2 cùng hoàn tác — an toàn hơn là để trùng ca)
+  const ownIds = shifts.map((s) => s._id);
+  const lateClash = await findClash(ownIds);
+  if (lateClash) {
+    await DutyShift.deleteMany({ _id: { $in: ownIds } });
+    throw overlapError(lateClash);
+  }
 
   await logAudit({
     action: AUDIT_ACTIONS.DUTY_SHIFT_CREATED,
     user,
-    targetType: 'duty_shifts',
+    targetType: AUDIT_TARGETS.DUTY_SHIFT,
     targetId: shifts[0]._id,
     metadata: { userId, roleTitle, isBackup, count: shifts.length, startAt: windows[0].startAt },
   });
   await notify(userId, {
     type: NOTIFICATION_TYPES.SYSTEM,
     title: isBackup ? 'Bạn được xếp trực dự phòng' : 'Bạn được xếp ca trực',
-    content: `${shifts.length} ca, ca đầu ${fmt(windows[0].startAt)} – ${fmt(windows[0].endAt)}.`,
+    content: `${shifts.length} ca, ca đầu ${fmtDateTimeVn(windows[0].startAt)} – ${fmtDateTimeVn(windows[0].endAt)}.`,
     refId: shifts[0]._id,
     link: LINK,
   });
@@ -111,14 +115,14 @@ export async function deleteShift(user, id, { now = new Date() } = {}) {
   await logAudit({
     action: AUDIT_ACTIONS.DUTY_SHIFT_DELETED,
     user,
-    targetType: 'duty_shifts',
+    targetType: AUDIT_TARGETS.DUTY_SHIFT,
     targetId: shift._id,
     metadata: { userId: shift.userId, roleTitle: shift.roleTitle, startAt: shift.startAt, endAt: shift.endAt },
   });
   await notify(shift.userId, {
     type: NOTIFICATION_TYPES.SYSTEM,
     title: 'Ca trực của bạn đã bị hủy',
-    content: `Ca ${fmt(shift.startAt)} – ${fmt(shift.endAt)} đã được Trưởng BQL hủy.`,
+    content: `Ca ${fmtDateTimeVn(shift.startAt)} – ${fmtDateTimeVn(shift.endAt)} đã được Trưởng BQL hủy.`,
     link: LINK,
   });
   return { _id: shift._id };

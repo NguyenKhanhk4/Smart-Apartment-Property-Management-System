@@ -3,9 +3,7 @@ import {
   Button,
   Card,
   Col,
-  Form,
   Input,
-  Modal,
   Popconfirm,
   Row,
   Select,
@@ -13,7 +11,7 @@ import {
   Table,
   Tabs,
   Tag,
-  message,
+  App,
 } from 'antd';
 import {
   CarOutlined,
@@ -26,13 +24,16 @@ import {
 import { vehicleApi } from '../../api/moduleA.api';
 import EnumTag from '../../components/EnumTag';
 import { VEHICLE_STATUS, VEHICLE_TYPES, enumOptions } from '../../constants/enums';
-import { useAction, useApi } from '../../hooks/useApi';
+import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/format';
+import ReasonModal from '../../components/ReasonModal';
+import ApproveVehicleModal from './ApproveVehicleModal';
 
 export default function VehicleRequestsPage() {
-  const { user } = useAuth();
-  const isReceptionist = user?.role === 'STAFF' && user?.roleTitle === 'RECEPTIONIST';
+  const { message } = App.useApp();
+  const { hasRole } = useAuth();
+  const isReceptionist = hasRole('STAFF:RECEPTIONIST');
 
   const [activeTab, setActiveTab] = useState('pending');
 
@@ -101,63 +102,12 @@ export default function VehicleRequestsPage() {
     ? allData
     : allData?.items || [];
 
-  // Modal Duyệt (bắt buộc nhập số thẻ gửi xe — UC66)
-  const [approveModalOpen, setApproveModalOpen] = useState(false);
+  // Đang duyệt (cấp thẻ) / từ chối
   const [approvingItem, setApprovingItem] = useState(null);
-  const [approveForm] = Form.useForm();
-
-  // Modal Từ chối
-  const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectingItem, setRejectingItem] = useState(null);
-  const [rejectForm] = Form.useForm();
 
   // Đang thao tác duyệt/hủy
   const [actionLoadingId, setActionLoadingId] = useState(null);
-
-  const openApproveModal = (item) => {
-    setApprovingItem(item);
-    approveForm.resetFields();
-    setApproveModalOpen(true);
-  };
-
-  // Action Duyệt kèm cấp thẻ gửi xe
-  const [approveAction, approveSubmitting] = useAction(
-    async (values) => {
-      if (!approvingItem) return null;
-      return vehicleApi.approve(approvingItem._id, {
-        cardNumber: values.cardNumber.trim().toUpperCase(),
-      });
-    },
-    {
-      success: 'Đã duyệt đăng ký xe và cấp thẻ gửi xe thành công!',
-      onDone: () => {
-        setApproveModalOpen(false);
-        reloadPending();
-      },
-    },
-  );
-
-  // Mở modal Từ chối
-  const openRejectModal = (item) => {
-    setRejectingItem(item);
-    rejectForm.resetFields();
-    setRejectModalOpen(true);
-  };
-
-  // Action Từ chối
-  const [rejectAction, rejectSubmitting] = useAction(
-    async (values) => {
-      if (!rejectingItem) return null;
-      return vehicleApi.reject(rejectingItem._id, { reason: values.reason });
-    },
-    {
-      success: 'Đã từ chối đăng ký xe thành công',
-      onDone: () => {
-        setRejectModalOpen(false);
-        reloadPending();
-      },
-    },
-  );
 
   // Xác nhận Hủy
   const handleConfirmCancel = async (id) => {
@@ -167,7 +117,7 @@ export default function VehicleRequestsPage() {
       message.success('Đã xác nhận hủy vé gửi xe thành công!');
       reloadCancel();
     } catch (err) {
-      message.error(err.response?.data?.message || 'Xác nhận hủy thất bại');
+      message.error(err?.message || 'Xác nhận hủy thất bại');
     } finally {
       setActionLoadingId(null);
     }
@@ -243,7 +193,7 @@ export default function VehicleRequestsPage() {
               type="primary"
               size="small"
               icon={<CheckOutlined />}
-              onClick={() => openApproveModal(r)}
+              onClick={() => setApprovingItem(r)}
             >
               Duyệt & Cấp thẻ
             </Button>
@@ -252,7 +202,7 @@ export default function VehicleRequestsPage() {
               size="small"
               danger
               icon={<CloseOutlined />}
-              onClick={() => openRejectModal(r)}
+              onClick={() => setRejectingItem(r)}
             >
               Từ chối
             </Button>
@@ -575,68 +525,24 @@ export default function VehicleRequestsPage() {
         />
       </Card>
 
-      {/* Modal Duyệt & Cấp số thẻ gửi xe (UC66) */}
-      <Modal
-        title={`Duyệt phương tiện & Cấp thẻ gửi xe: ${approvingItem?.plateNumber || approvingItem?.type || ''}`}
-        open={approveModalOpen}
-        onCancel={() => setApproveModalOpen(false)}
-        onOk={() => approveForm.submit()}
-        confirmLoading={approveSubmitting}
-        okText="Xác nhận duyệt & cấp thẻ"
-        cancelText="Hủy"
-        destroyOnClose
-      >
-        <Form
-          form={approveForm}
-          layout="vertical"
-          onFinish={approveAction}
-          className="mt-4"
-        >
-          <Form.Item
-            name="cardNumber"
-            label="Số thẻ gửi xe (bắt buộc)"
-            rules={[{ required: true, message: 'Vui lòng nhập số thẻ gửi xe' }]}
-            extra="Thẻ gửi xe sẽ được kích hoạt (ACTIVE) ngay khi duyệt phương tiện."
-          >
-            <Input
-              placeholder="Ví dụ: PC-A101-01"
-              className="uppercase font-semibold"
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Modal Nhập lý do từ chối */}
-      <Modal
+      {approvingItem && (
+        <ApproveVehicleModal vehicle={approvingItem} open onClose={() => setApprovingItem(null)} onDone={reloadPending} />
+      )}
+      <ReasonModal
+        open={Boolean(rejectingItem)}
         title={`Từ chối đăng ký phương tiện: ${rejectingItem?.plateNumber || rejectingItem?.type || ''}`}
-        open={rejectModalOpen}
-        onCancel={() => setRejectModalOpen(false)}
-        onOk={() => rejectForm.submit()}
-        confirmLoading={rejectSubmitting}
+        hint="Lý do từ chối sẽ được gửi thông báo trực tiếp đến cư dân."
+        label="Lý do từ chối"
+        placeholder="Ví dụ: Bãi xe máy tạm thời hết chỗ, hoặc thông tin giấy tờ xe chưa hợp lệ..."
         okText="Xác nhận từ chối"
-        okButtonProps={{ danger: true }}
-        cancelText="Hủy"
-        destroyOnClose
-      >
-        <Form
-          form={rejectForm}
-          layout="vertical"
-          onFinish={rejectAction}
-          className="mt-4"
-        >
-          <Form.Item
-            name="reason"
-            label="Lý do từ chối"
-            rules={[{ required: true, message: 'Vui lòng nhập lý do từ chối' }]}
-            extra="Lý do từ chối sẽ được gửi thông báo trực tiếp đến cư dân."
-          >
-            <Input.TextArea
-              rows={4}
-              placeholder="Ví dụ: Bãi xe máy tạm thời hết chỗ, hoặc thông tin giấy tờ xe chưa hợp lệ..."
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
+        action={(reason) => vehicleApi.reject(rejectingItem._id, { reason })}
+        onClose={() => setRejectingItem(null)}
+        onDone={() => {
+          message.success('Đã từ chối đăng ký xe');
+          setRejectingItem(null);
+          reloadPending();
+        }}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ export const ERROR_CODES = Object.freeze({
   FORBIDDEN_ROLE: { status: 403, message: 'Bạn không có quyền thực hiện thao tác này' },
   NOT_FOUND: { status: 404, message: 'Không tìm thấy dữ liệu' },
   AUTH_INVALID_CREDENTIALS: { status: 401, message: 'Email hoặc mật khẩu không đúng' },
+  CHAIRMAN_ALREADY_EXISTS: { status: 409, message: 'Đã có 1 Trưởng Ban quản trị đang hoạt động' },
   MANAGER_ALREADY_EXISTS: { status: 409, message: 'Đã có 1 tài khoản Trưởng BQL đang hoạt động' },
   INVOICE_ALREADY_EXISTS: { status: 409, message: 'Căn hộ đã có hóa đơn cho tháng này' },
   INVOICE_ALREADY_PAID: { status: 409, message: 'Hóa đơn đã được thanh toán' },
@@ -82,6 +83,7 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Chủ hộ chỉ hủy được gói của tháng sau; gói của tháng này vui lòng liên hệ Trưởng BQL',
   },
+  TOO_MANY_REQUESTS: { status: 429, message: 'Bạn thao tác quá nhiều lần, vui lòng thử lại sau ít phút' },
   SERVER_ERROR: { status: 500, message: 'Lỗi hệ thống, vui lòng thử lại sau' },
 
   // Bổ sung ngoài SRS: lỗi trùng unique index chưa được module ánh xạ sang mã riêng
@@ -103,6 +105,8 @@ export const ERROR_CODES = Object.freeze({
   // Module B: sinh hóa đơn mà bảng giá kỳ đó thiếu mức giá cần dùng (vd chưa khai giá gửi xe đạp) — không tính 0đ âm thầm
   FEE_PRICE_MISSING: { status: 422, message: 'Chưa có đơn giá áp dụng cho kỳ này, hãy bổ sung trong Bảng phí' },
   // Module A (Vũ Việt): trạng thái nghiệp vụ xung đột (hợp đồng, xe...)
+  EMAIL_EXISTS: { status: 409, message: 'Email đã được sử dụng bởi tài khoản khác' },
+  CONTRACT_ACTIVE_EXISTS: { status: 409, message: 'Căn hộ đã có hợp đồng cùng loại đang hiệu lực' },
   STATUS_CONFLICT: {
     status: 409,
     message: 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại',

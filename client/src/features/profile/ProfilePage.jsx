@@ -14,6 +14,7 @@ import { usersApi } from '../../api/moduleA.api';
 import { useAuth } from '../../hooks/useAuth';
 import { roleLabelOf } from '../../constants/enums';
 import PageHeader from '../../components/PageHeader';
+import { roleHome } from '../../routes/roleHome';
 
 // UC-A03: Trang hồ sơ cá nhân và đổi mật khẩu (/app/profile và /r/profile)
 export default function ProfilePage() {
@@ -303,7 +304,7 @@ export default function ProfilePage() {
         title="Hồ sơ cá nhân"
         subtitle="Quản lý thông tin tài khoản và bảo mật mật khẩu của bạn"
         breadcrumb={[
-          { label: 'Trang chủ', path: user?.role === 'RESIDENT' ? '/r/home' : '/app/home' },
+          { label: 'Trang chủ', path: roleHome(user) },
           { label: 'Hồ sơ cá nhân' },
         ]}
       />

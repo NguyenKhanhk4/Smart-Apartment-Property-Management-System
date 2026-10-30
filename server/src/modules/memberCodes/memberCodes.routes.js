@@ -4,7 +4,7 @@ import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { ok } from '../../utils/response.js';
-import { objectId } from '../../utils/validators.js';
+import { objectId, ymd } from '../../utils/validators.js';
 import * as service from './memberCodes.service.js';
 
 // Module D — Thanh Bình. UC-D11: Thẻ cư dân (mã chữ theo căn hộ), quyền tiện ích của thành viên, tra mã tại quầy.
@@ -15,8 +15,7 @@ const STAFF_LOOKUP = ['MANAGER', 'STAFF:RECEPTIONIST', 'STAFF:SECURITY'];
 const apartmentQuery = Joi.object({ apartmentId: objectId() });
 const userParams = Joi.object({ userId: objectId().required() });
 // 'YYYY-MM-DD' hoặc null (xóa). Ngày không có thật / ở tương lai bị service từ chối (400, details theo field)
-const dateOfBirth = Joi.string()
-  .pattern(/^\d{4}-\d{2}-\d{2}$/)
+const dateOfBirth = ymd()
   .allow(null, '')
   .messages({ 'string.pattern.base': 'Ngày sinh phải có dạng YYYY-MM-DD' });
 

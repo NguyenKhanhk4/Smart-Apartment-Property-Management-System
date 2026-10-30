@@ -18,24 +18,13 @@ import { ticketApi } from '../../api/moduleE.api';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
-import { PRIORITIES, TICKET_STATUS } from '../../constants/enums';
+import { PRIORITIES, TICKET_HISTORY_ACTIONS, TICKET_STATUS } from '../../constants/enums';
+import { isTicketFinal, keysOf } from '../../utils/status';
+
+const TS = keysOf(TICKET_STATUS);
 import { formatDateTime } from '../../utils/format';
 import EvidencePhotos from '../../components/EvidencePhotos';
 import { AssignModal, ConfirmModal, ProgressModal, RejectModal } from './TicketActionModals';
-
-const HISTORY_LABEL = {
-  CREATED: 'Cư dân tạo phản ánh',
-  ASSIGNED: 'Phân công',
-  REASSIGNED: 'Phân công lại',
-  PROGRESS: 'Cập nhật tiến độ',
-  RESOLVED: 'Đã xử lý xong',
-  CONFIRMED: 'Cư dân xác nhận',
-  REOPENED: 'Cư dân chưa đồng ý',
-  ESCALATED: 'Hệ thống leo thang',
-  AUTO_CLOSED: 'Hệ thống tự đóng',
-  REJECTED: 'Từ chối',
-};
-const HISTORY_COLOR = { ESCALATED: 'red', REJECTED: 'gray', REOPENED: 'orange', CONFIRMED: 'green', AUTO_CLOSED: 'green' };
 
 // Chi tiết phản ánh dùng chung cho cư dân (/r) và nội bộ (/app); nút thao tác hiện theo quyền
 export default function TicketDetailPage() {
@@ -50,11 +39,11 @@ export default function TicketDetailPage() {
   }
   if (!t) return <Spin style={{ display: 'block', margin: 48 }} />;
 
-  const isFinal = ['CLOSED', 'REJECTED'].includes(t.status);
-  const canDispatch = hasRole('MANAGER', 'STAFF:RECEPTIONIST') && !isFinal && t.status !== 'WAITING_CONFIRM';
+  const isFinal = isTicketFinal(t.status);
+  const canDispatch = hasRole('MANAGER', 'STAFF:RECEPTIONIST') && !isFinal && t.status !== TS.WAITING_CONFIRM;
   const isMyTask = hasRole('STAFF:TECHNICIAN') && t.assignedTo?._id === user.id;
-  const canProgress = isMyTask && ['ASSIGNED', 'IN_PROGRESS'].includes(t.status);
-  const canConfirm = hasRole('RESIDENT') && t.status === 'WAITING_CONFIRM';
+  const canProgress = isMyTask && [TS.ASSIGNED, TS.IN_PROGRESS, TS.WAITING_PARTS].includes(t.status);
+  const canConfirm = hasRole('RESIDENT') && t.status === TS.WAITING_CONFIRM;
   const modalProps = (key) => ({ ticket: t, open: modal === key, onClose: () => setModal(null), onDone: reload });
 
   return (
@@ -70,7 +59,7 @@ export default function TicketDetailPage() {
               <Button type="primary" onClick={() => setModal('assign')}>
                 {t.assignedTo ? 'Phân công lại' : 'Phân công'}
               </Button>
-              {['NEW', 'ASSIGNED'].includes(t.status) && (
+              {[TS.NEW, TS.ASSIGNED].includes(t.status) && (
                 <Button danger onClick={() => setModal('reject')}>
                   Từ chối
                 </Button>
@@ -139,11 +128,11 @@ export default function TicketDetailPage() {
         <Card size="small" title="Lịch sử xử lý">
           <Timeline
             items={[...t.history].reverse().map((h) => ({
-              color: HISTORY_COLOR[h.action] ?? 'blue',
+              color: TICKET_HISTORY_ACTIONS[h.action]?.color ?? 'blue',
               content: (
                 <Flex vertical>
                   <Typography.Text strong>
-                    {HISTORY_LABEL[h.action] ?? h.action}
+                    {TICKET_HISTORY_ACTIONS[h.action]?.label ?? h.action}
                     {h.by?.fullName ? ` — ${h.by.fullName}` : h.by ? '' : ' — Hệ thống'}
                   </Typography.Text>
                   {h.note && <Typography.Text>{h.note}</Typography.Text>}

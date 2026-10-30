@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 
+// Dùng chung cho mọi nơi cấp mật khẩu tạm (tài khoản nội bộ, cư dân, hợp đồng).
 /**
  * Sinh mật khẩu tạm thời ngẫu nhiên độ dài length (mặc định 10),
  * gồm chữ hoa, chữ thường và chữ số (BR-A2)

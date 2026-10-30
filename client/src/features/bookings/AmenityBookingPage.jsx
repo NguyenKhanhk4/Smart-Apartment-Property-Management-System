@@ -10,7 +10,7 @@ import SurfaceCard from '../../components/resident/SurfaceCard';
 import { AMENITY_ACCESS_MODES } from '../../constants/enums';
 import { useApi } from '../../hooks/useApi';
 import { useResident } from '../../hooks/useResident';
-import { formatMoney } from '../../utils/format';
+import { formatDate, formatMoney } from '../../utils/format';
 import { usePurchasePass } from '../amenityPasses/usePurchasePass';
 import { passSpan } from './passUtils';
 
@@ -192,7 +192,7 @@ function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) 
       {slot ? (
         <div className="flex flex-col gap-3 border-t border-r-divider pt-4">
           <div className="text-sm">
-            <b>{amenity.name}</b> · {dayjs(date).format('DD/MM/YYYY')} · {slot.slotStart}–{slot.slotEnd}
+            <b>{amenity.name}</b> · {formatDate(date)} · {slot.slotStart}–{slot.slotEnd}
           </div>
 
           {slot.usesPass && <div className="px-3.5 py-3 rounded-xl bg-r-ok-bg text-r-ok-fg text-sm">Miễn phí theo gói tháng của bạn.</div>}

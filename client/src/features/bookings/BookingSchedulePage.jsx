@@ -1,16 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { Avatar, Button, Card, DatePicker, Flex, Form, Input, Modal, Select, Table, Tag, Tooltip, Typography } from 'antd';
+import { App, Avatar, Button, Card, DatePicker, Flex, Form, Input, Modal, Select, Table, Tag, Tooltip, Typography } from 'antd';
 import { LoginOutlined, PlusOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { bookingApi } from '../../api/moduleD.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
 import { BOOKING_STATUS } from '../../constants/enums';
+import { keysOf } from '../../utils/status';
+
+const BS = keysOf(BOOKING_STATUS);
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatMoney } from '../../utils/format';
 import CounterBookingModal from './CounterBookingModal';
+import ReasonModal from '../../components/ReasonModal';
+import { usePolling } from '../../hooks/usePolling';
 
 const AUTO_REFRESH_MS = 60 * 1000;
 const CLOCK_TICK_MS = 15 * 1000;
@@ -18,8 +23,8 @@ const hhmm = (d) => (d ? dayjs(d).format('HH:mm') : '');
 
 /** Nhãn thời gian check-in, tính theo giờ máy chủ (nowMs) chứ không theo đồng hồ máy người dùng */
 function checkInTag(b, nowMs) {
-  if (b.status === 'CHECKED_IN') return <Tag color="processing">Check-in lúc {hhmm(b.checkedInAt)}</Tag>;
-  if (b.status !== 'APPROVED') return null;
+  if (b.status === BS.CHECKED_IN) return <Tag color="processing">Check-in lúc {hhmm(b.checkedInAt)}</Tag>;
+  if (b.status !== BS.APPROVED) return null;
   const opens = Date.parse(b.checkIn.opensAt);
   const closes = Date.parse(b.checkIn.closesAt);
   if (nowMs < opens) return <Tag>Mở check-in lúc {hhmm(opens)}</Tag>;
@@ -27,10 +32,11 @@ function checkInTag(b, nowMs) {
   return <Tag color="red">Quá hạn check-in</Tag>;
 }
 
-const inWindow = (b, nowMs) => b.status === 'APPROVED' && nowMs >= Date.parse(b.checkIn.opensAt) && nowMs <= Date.parse(b.checkIn.closesAt);
+const inWindow = (b, nowMs) => b.status === BS.APPROVED && nowMs >= Date.parse(b.checkIn.opensAt) && nowMs <= Date.parse(b.checkIn.closesAt);
 
 // UC-D07 — Lịch đặt tiện ích trong ngày. Lễ tân: check-in, hủy kèm lý do, đặt hộ; Bảo vệ: chỉ check-in; Trưởng BQL: chỉ xem.
 export default function BookingSchedulePage() {
+  const { message } = App.useApp();
   const { hasRole } = useAuth();
   const isReception = hasRole('STAFF:RECEPTIONIST');
   const canCheckIn = hasRole('STAFF:RECEPTIONIST', 'STAFF:SECURITY');
@@ -43,7 +49,6 @@ export default function BookingSchedulePage() {
   const [checkingIn, setCheckingIn] = useState(null);
   const [cancelling, setCancelling] = useState(null);
   const [counterOpen, setCounterOpen] = useState(false);
-  const [cancelForm] = Form.useForm();
   const [checkInForm] = Form.useForm();
 
   const dateText = date.format('YYYY-MM-DD');
@@ -61,30 +66,14 @@ export default function BookingSchedulePage() {
     reload().finally(() => setSilent(false));
   }, [reload]);
 
-  useEffect(() => {
-    const tick = setInterval(() => setClock(Date.now()), CLOCK_TICK_MS);
-    const refresh = setInterval(() => {
-      if (!document.hidden) refreshSilently();
-    }, AUTO_REFRESH_MS);
-    return () => {
-      clearInterval(tick);
-      clearInterval(refresh);
-    };
-  }, [refreshSilently]);
+  usePolling(() => setClock(Date.now()), CLOCK_TICK_MS);
+  usePolling(refreshSilently, AUTO_REFRESH_MS);
 
   const [checkIn, checkingIn$] = useAction((v) => bookingApi.checkIn(checkingIn._id, v.code?.trim()), {
     success: 'Đã check-in',
     onDone: () => {
       setCheckingIn(null);
       checkInForm.resetFields();
-      refreshSilently();
-    },
-  });
-  const [cancel, cancelling$] = useAction((v) => bookingApi.cancel(cancelling._id, v.reason), {
-    success: 'Đã hủy booking, cư dân được thông báo không bị tính phí',
-    onDone: () => {
-      setCancelling(null);
-      cancelForm.resetFields();
       refreshSilently();
     },
   });
@@ -162,7 +151,7 @@ export default function BookingSchedulePage() {
             width: isReception ? 170 : 110,
             fixed: 'right',
             render: (_, b) =>
-              b.status === 'APPROVED' && (
+              b.status === BS.APPROVED && (
                 <Flex gap={6}>
                   <Tooltip title={inWindow(b, nowMs) ? null : 'Ngoài khung check-in'}>
                     <Button size="small" type="primary" icon={<LoginOutlined />} disabled={!inWindow(b, nowMs)} onClick={() => setCheckingIn(b)}>
@@ -251,26 +240,21 @@ export default function BookingSchedulePage() {
         </Form>
       </Modal>
 
-      <Modal
-        title="Hủy booking"
+      <ReasonModal
         open={Boolean(cancelling)}
-        onCancel={() => setCancelling(null)}
-        onOk={() => cancelForm.submit()}
+        title="Hủy booking"
+        hint={cancelling && `${describe(cancelling)}. Người đặt sẽ được thông báo và không bị tính phí; thao tác được ghi nhật ký.`}
+        label="Lý do hủy"
         okText="Hủy booking"
-        okButtonProps={{ danger: true }}
-        cancelText="Đóng"
-        confirmLoading={cancelling$}
-        destroyOnHidden
-      >
-        <Typography.Paragraph type="secondary">
-          {describe(cancelling)}. Người đặt sẽ được thông báo và không bị tính phí; thao tác được ghi nhật ký.
-        </Typography.Paragraph>
-        <Form form={cancelForm} layout="vertical" preserve={false} onFinish={(v) => cancel(v).catch(() => {})}>
-          <Form.Item name="reason" label="Lý do hủy" rules={[{ required: true, whitespace: true, min: 5, max: 500, message: 'Nhập lý do 5–500 ký tự' }]}>
-            <Input.TextArea rows={3} maxLength={500} showCount />
-          </Form.Item>
-        </Form>
-      </Modal>
+        minLength={5}
+        action={(reason) => bookingApi.cancel(cancelling._id, reason)}
+        onClose={() => setCancelling(null)}
+        onDone={() => {
+          message.success('Đã hủy booking, cư dân được thông báo không bị tính phí');
+          setCancelling(null);
+          refreshSilently();
+        }}
+      />
 
       {counterOpen && <CounterBookingModal initialDate={date.isBefore(dayjs(), 'day') ? dayjs() : date} onClose={() => setCounterOpen(false)} onDone={refreshSilently} />}
     </>

@@ -12,7 +12,7 @@ import { announcementApi, guestApi, ticketApi } from '../../api/moduleE.api';
 import { bookingApi } from '../../api/moduleD.api';
 import StatusBadge from '../../components/resident/StatusBadge';
 import SurfaceCard from '../../components/resident/SurfaceCard';
-import { TICKET_STATUS } from '../../constants/enums';
+import { TICKET_STATUS, TICKET_OPEN_STATUSES } from '../../constants/enums';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -21,7 +21,8 @@ import { dayLabel, formatDate, givenName } from '../../utils/format';
 import ResidentAside from './ResidentAside';
 
 // Phản ánh còn dang dở (cư dân đang chờ BQL hoặc cần xác nhận kết quả)
-const OPEN_TICKET_STATUS = 'NEW,ASSIGNED,IN_PROGRESS,WAITING_CONFIRM';
+// Phản ánh còn cần theo dõi: đang xử lý + chờ cư dân nghiệm thu
+const OPEN_TICKET_STATUS = [...TICKET_OPEN_STATUSES, 'WAITING_CONFIRM'].join(',');
 
 const TONE_ICON = {
   info: 'bg-r-info-bg text-r-info-fg',

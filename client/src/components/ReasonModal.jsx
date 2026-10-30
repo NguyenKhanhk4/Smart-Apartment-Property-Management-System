@@ -1,8 +1,22 @@
 import { Form, Input, Modal, Typography } from 'antd';
-import { useAction } from '../../../hooks/useApi';
+import { useAction } from '../hooks/useApi';
 
-/** Modal nhập lý do (từ chối đăng ký xe, hủy booking). `action(reason)` trả promise; thành công thì onDone() */
-export function ReasonModal({ open, title, hint, okText, minLength = 1, action, onClose, onDone }) {
+/**
+ * Modal nhập lý do dùng chung (từ chối, hủy...). `action(reason)` trả promise; thành công thì onDone().
+ * `label`, `placeholder`, `required` tùy chọn.
+ */
+export default function ReasonModal({
+  open,
+  title,
+  hint,
+  okText,
+  label = 'Lý do',
+  placeholder,
+  minLength = 1,
+  action,
+  onClose,
+  onDone,
+}) {
   const [form] = Form.useForm();
   const [run, loading] = useAction((v) => action(v.reason.trim()), {
     onDone: () => {
@@ -26,10 +40,10 @@ export function ReasonModal({ open, title, hint, okText, minLength = 1, action, 
       <Form form={form} layout="vertical" preserve={false} onFinish={(v) => run(v).catch(() => {})}>
         <Form.Item
           name="reason"
-          label="Lý do"
+          label={label}
           rules={[{ required: true, whitespace: true, min: minLength, max: 500, message: `Nhập lý do (tối thiểu ${minLength} ký tự)` }]}
         >
-          <Input.TextArea rows={3} maxLength={500} showCount />
+          <Input.TextArea rows={3} maxLength={500} showCount placeholder={placeholder} />
         </Form.Item>
       </Form>
     </Modal>
