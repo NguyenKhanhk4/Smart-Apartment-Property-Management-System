@@ -12,6 +12,7 @@ import {
   ClusterOutlined,
   DashboardOutlined,
   DollarOutlined,
+  FieldTimeOutlined,
   FileTextOutlined,
   FundOutlined,
   HomeOutlined,
@@ -97,6 +98,9 @@ const FundDashboardPage = lazy(() => import('../features/reports/FundDashboardPa
 const OperationsDashboardPage = lazy(() => import('../features/reports/OperationsDashboardPage'));
 const AmenityUsagePage = lazy(() => import('../features/reports/AmenityUsagePage'));
 
+// ===== Sự cố & Tiện ích (Người 4) =====
+const DutyShiftsPage = lazy(() => import('../features/dutyShifts/DutyShiftsPage'));
+
 // ===== Gate Pass & Kiểm soát xe (Người 2) =====
 const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
 const ResidentGatePassesPage = lazy(() => import('../features/gatePasses/ResidentGatePassesPage'));
@@ -172,6 +176,16 @@ export const adminMenu = [
     path: 'my-work-orders',
     roles: ['STAFF:TECHNICIAN'],
     component: WorkOrdersPage,
+  },
+  // Lịch ca trực Kỹ thuật / Bảo vệ (Người 4): Trưởng BQL xếp ca, nhân viên xem lịch
+  {
+    key: 'duty-shifts',
+    group: 'Kỹ thuật & vận hành',
+    label: 'Lịch ca trực',
+    icon: FieldTimeOutlined,
+    path: 'duty-shifts',
+    roles: ['MANAGER', 'STAFF:TECHNICIAN', 'STAFF:SECURITY'],
+    component: DutyShiftsPage,
   },
   // Tiện ích (UC-D05)
   {
