@@ -7,7 +7,8 @@ import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
-import { WORK_ORDER_STATUS, WORK_ORDER_TYPES, enumOptions } from '../../constants/enums';
+import { WORK_ORDER_OPEN_STATUSES, WORK_ORDER_STATUS, WORK_ORDER_TYPES, enumOptions } from '../../constants/enums';
+import { keysOf } from '../../utils/status';
 import { formatDate, formatDateTime } from '../../utils/format';
 import { vtName } from '../../motion/viewTransition';
 import AssignWorkOrderModal from './AssignWorkOrderModal';
@@ -15,10 +16,11 @@ import CompleteWorkOrderModal from './CompleteWorkOrderModal';
 import WorkOrderReportModal from './WorkOrderReportModal';
 
 const UNASSIGNED = 'UNASSIGNED';
+const WO = keysOf(WORK_ORDER_STATUS);
 
 // Việc đang mở: gần hạn nhất lên trước; việc đã xong: mới hoàn thành lên trước
 const TABS = {
-  open: { status: 'PENDING,IN_PROGRESS', sort: 'scheduledDate' },
+  open: { status: WORK_ORDER_OPEN_STATUSES.join(','), sort: 'scheduledDate' },
   done: { status: 'DONE', sort: '-completedAt' },
 };
 
@@ -37,7 +39,7 @@ export default function WorkOrdersPage() {
   const { data = [], pagination, loading, reload } = useApi(() => workOrderApi.list(filters), [filters]);
   const { data: buildings = [] } = useApi(() => lookupApi.buildings(), [], { enabled: !isTech });
   const { data: techs = [] } = useApi(() => workOrderApi.assignees(), [], { enabled: !isTech });
-  const [start] = useAction((id) => workOrderApi.updateStatus(id, { status: 'IN_PROGRESS' }), { onDone: reload });
+  const [start] = useAction((id) => workOrderApi.updateStatus(id, { status: WO.IN_PROGRESS }), { onDone: reload });
 
   const changeTab = (key) => {
     setTab(key);
@@ -125,7 +127,7 @@ export default function WorkOrdersPage() {
             width: 130,
             fixed: 'right',
             render: (_, r) =>
-              r.status === 'PENDING' ? (
+              r.status === WO.PENDING ? (
                 <Popconfirm
                   title="Bắt đầu xử lý work order này?"
                   onConfirm={() => start(r._id).catch(() => {})}

@@ -34,7 +34,11 @@ export default function AmenityUsagePage() {
       <StatRow>
         <StatCard title="Tổng lượt đặt" value={data?.total} />
         <StatCard title="Đã sử dụng" value={data?.completed} hint="Booking COMPLETED (BR-O5)" />
-        <StatCard title="Tỷ lệ hủy / từ chối" value={`${formatPercent(data?.cancelRate)} / ${formatPercent(data?.rejectRate)}`} />
+        <StatCard
+          title="Tỷ lệ hủy / không đến"
+          value={`${formatPercent(data?.cancelRate)} / ${formatPercent(data?.noShowRate)}`}
+          hint={data?.noShow != null && `${data.noShow} lượt không đến`}
+        />
         <StatCard title="Dùng nhiều nhất" value={data?.mostUsed?.name ?? '—'} hint={data?.peakSlot && `Cao điểm khung ${data.peakSlot}`} />
         <StatCard title="Phí tiện ích phát sinh" value={data?.revenue} formatter={formatMoney} />
       </StatRow>
@@ -49,10 +53,9 @@ export default function AmenityUsagePage() {
               <Tooltip />
               <Legend />
               <Bar dataKey="completed" name="Hoàn thành" stackId="s" fill="#52c41a" />
-              <Bar dataKey="approved" name="Đã duyệt" stackId="s" fill="#1677ff" />
-              <Bar dataKey="pending" name="Chờ duyệt" stackId="s" fill="#faad14" />
+              <Bar dataKey="approved" name="Đã xác nhận" stackId="s" fill="#1677ff" />
+              <Bar dataKey="noShow" name="Không đến" stackId="s" fill="#fa8c16" />
               <Bar dataKey="cancelled" name="Hủy" stackId="s" fill="#bfbfbf" />
-              <Bar dataKey="rejected" name="Từ chối" stackId="s" fill="#ff7875" />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -86,7 +89,7 @@ export default function AmenityUsagePage() {
               { title: 'Tổng', dataIndex: 'total', align: 'right' },
               { title: 'Hoàn thành', dataIndex: 'completed', align: 'right' },
               { title: 'Hủy', dataIndex: 'cancelRate', align: 'right', render: (v) => formatPercent(v) },
-              { title: 'Từ chối', dataIndex: 'rejectRate', align: 'right', render: (v) => formatPercent(v) },
+              { title: 'Không đến', dataIndex: 'noShowRate', align: 'right', render: (v) => formatPercent(v) },
               { title: 'Phí phát sinh', dataIndex: 'revenue', align: 'right', render: formatMoney },
             ]}
           />

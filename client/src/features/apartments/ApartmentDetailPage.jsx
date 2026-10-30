@@ -15,9 +15,6 @@ import {
   Row,
   Col,
   Statistic,
-  Descriptions,
-  Empty,
-  Badge,
   Tooltip,
 } from 'antd';
 import {
@@ -29,7 +26,6 @@ import {
   EditOutlined,
   DeleteOutlined,
   CrownOutlined,
-  BankOutlined,
   EyeOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
@@ -52,10 +48,10 @@ import { apartmentsApi, contractsApi, residentsApi, vehicleApi } from '../../api
 export default function ApartmentDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { hasRole } = useAuth();
 
-  const isReceptionist = user?.role === 'STAFF' && user?.roleTitle === 'RECEPTIONIST';
-  const canRevealIdNumber = isReceptionist || user?.role === 'MANAGER';
+  const isReceptionist = hasRole('STAFF:RECEPTIONIST');
+  const canRevealIdNumber = hasRole('STAFF:RECEPTIONIST', 'MANAGER');
   const [revealedIds, setRevealedIds] = useState({});
 
   const handleRevealIdNumber = async (residentId) => {
@@ -270,7 +266,7 @@ export default function ApartmentDetailPage() {
                   <Popconfirm
                     title="Gỡ thành viên"
                     description={`Bạn có chắc chắn muốn gỡ ${r.fullName} khỏi căn hộ?`}
-                    onConfirm={() => removeMemberAction(r._id)}
+                    onConfirm={() => removeMemberAction(r._id).catch(() => {})}
                     okText="Gỡ"
                     cancelText="Hủy"
                     okButtonProps={{ danger: true }}
@@ -562,7 +558,7 @@ export default function ApartmentDetailPage() {
         confirmLoading={addingMember}
         destroyOnClose
       >
-        <Form form={addForm} layout="vertical" onFinish={addMemberAction} className="mt-4">
+        <Form form={addForm} layout="vertical" onFinish={(v) => addMemberAction(v).catch(() => {})} className="mt-4">
           <Form.Item
             name="email"
             label="Email tài khoản"
@@ -610,7 +606,7 @@ export default function ApartmentDetailPage() {
         confirmLoading={updatingMember}
         destroyOnClose
       >
-        <Form form={editForm} layout="vertical" onFinish={updateMemberAction} className="mt-4">
+        <Form form={editForm} layout="vertical" onFinish={(v) => updateMemberAction(v).catch(() => {})} className="mt-4">
           <Form.Item name="idNumber" label="Số CCCD">
             <Input placeholder="Nhập số CCCD mới" />
           </Form.Item>

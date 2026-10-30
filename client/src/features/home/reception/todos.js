@@ -1,5 +1,8 @@
 import dayjs from 'dayjs';
-import { VEHICLE_TYPES } from '../../../constants/enums';
+import { BOOKING_STATUS, VEHICLE_TYPES } from '../../../constants/enums';
+import { keysOf } from '../../../utils/status';
+
+const BOOKING = keysOf(BOOKING_STATUS);
 
 // Lễ tân không xem hợp đồng nên không có nguồn hợp đồng.
 // Gom việc đang chờ từ nhiều nguồn thành một danh sách "Cần xử lý", sắp theo mức gấp:
@@ -37,7 +40,7 @@ export function buildTodos(snapshot) {
 
   if (parts.bookings.status === 'ok') {
     for (const b of parts.bookings.data.bookings) {
-      if (b.status !== 'APPROVED') continue;
+      if (b.status !== BOOKING.APPROVED) continue;
       const opens = Date.parse(b.checkIn.opensAt);
       const closes = Date.parse(b.checkIn.closesAt);
       if (now < opens - BOOKING_LEAD_MS) continue;

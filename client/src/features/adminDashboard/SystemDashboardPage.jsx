@@ -32,40 +32,11 @@ import {
 import { adminApi } from '../../api/moduleA.api';
 import PageHeader from '../../components/PageHeader';
 import { useApi } from '../../hooks/useApi';
+import { CRON_JOBS, roleLabelOf } from '../../constants/enums';
 import { formatDateTime, formatPercent } from '../../utils/format';
 import { CHART_COLORS } from '../reports/chartColors';
 import { ChartCard, StatCard, StatRow } from '../reports/components';
 
-const JOB_LABELS = {
-  CONTRACT_EXPIRE: 'Quét hợp đồng thuê hết hạn',
-  INVOICE_GENERATE: 'Tạo hóa đơn định kỳ',
-  INVOICE_OVERDUE: 'Quét hóa đơn quá hạn',
-  PAYMENT_REMIND: 'Nhắc thanh toán hóa đơn',
-  DEBT_CLASSIFY: 'Phân loại nợ xấu',
-};
-
-function formatRoleLabel(item) {
-  if (item.role === 'ADMIN') return 'Quản trị viên';
-  if (item.role === 'RESIDENT') return 'Cư dân';
-  if (item.role === 'STAFF') {
-    const titles = {
-      MANAGER: 'Ban quản lý',
-      RECEPTIONIST: 'Lễ tân',
-      ACCOUNTANT: 'Kế toán',
-      TECHNICIAN: 'Kỹ thuật',
-    };
-    return titles[item.roleTitle] || (item.roleTitle ? `NV ${item.roleTitle}` : 'Nhân viên');
-  }
-  if (item.role === 'BOARD') {
-    const titles = {
-      CHAIRMAN: 'Trưởng BQT',
-      VICE_CHAIRMAN: 'Phó BQT',
-      MEMBER: 'Thành viên BQT',
-    };
-    return titles[item.boardTitle] || (item.boardTitle ? `BQT ${item.boardTitle}` : 'Ban quản trị');
-  }
-  return item.role;
-}
 
 /**
  * UC-A11: Dashboard thống kê hệ thống dành cho Admin
@@ -79,7 +50,7 @@ export default function SystemDashboardPage() {
     const active = byRole.reduce((sum, item) => sum + (item.active || 0), 0);
     const locked = byRole.reduce((sum, item) => sum + (item.locked || 0), 0);
     const chartData = byRole.map((item) => ({
-      name: formatRoleLabel(item),
+      name: roleLabelOf(item)?.label ?? item.role,
       active: item.active || 0,
       locked: item.locked || 0,
       total: (item.active || 0) + (item.locked || 0),
@@ -135,7 +106,7 @@ export default function SystemDashboardPage() {
       key: 'jobName',
       render: (name) => (
         <Flex vertical>
-          <Typography.Text strong>{JOB_LABELS[name] || name}</Typography.Text>
+          <Typography.Text strong>{CRON_JOBS[name]?.label ?? name}</Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12, fontFamily: 'monospace' }}>
             {name}
           </Typography.Text>

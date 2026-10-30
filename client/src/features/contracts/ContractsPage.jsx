@@ -15,14 +15,12 @@ import {
   Row,
   Col,
   Descriptions,
-  Alert,
   Upload,
   Radio,
   App,
   Tooltip,
 } from 'antd';
 import {
-  FileTextOutlined,
   PlusOutlined,
   ReloadOutlined,
   EyeOutlined,
@@ -38,13 +36,14 @@ import { CONTRACT_TYPES, CONTRACT_STATUS } from '../../constants/enums';
 import { formatDate } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi, useAction } from '../../hooks/useApi';
-import { contractsApi, buildingsApi, apartmentsApi } from '../../api/moduleA.api';
+import { contractsApi, buildingsApi } from '../../api/moduleA.api';
+import ApartmentSelect from '../../components/ApartmentSelect';
 
 export default function ContractsPage() {
-  const { user } = useAuth();
+  const { hasRole } = useAuth();
   const { message } = App.useApp();
-  const isReceptionist = user?.role === 'STAFF' && user?.roleTitle === 'RECEPTIONIST';
-  const isManager = user?.role === 'MANAGER';
+  const isReceptionist = hasRole('STAFF:RECEPTIONIST');
+  const isManager = hasRole('MANAGER');
 
   // Filters state
   const [filters, setFilters] = useState({
@@ -59,12 +58,6 @@ export default function ContractsPage() {
 
   // Load buildings for filter & form
   const { data: buildings = [] } = useApi(buildingsApi.list, []);
-
-  // Load apartments for apartment selection dropdown
-  const { data: allApartments = [] } = useApi(
-    () => apartmentsApi.list({ limit: 100 }),
-    [],
-  );
 
   // Load contracts list
   const {
@@ -236,7 +229,7 @@ export default function ContractsPage() {
       const res = await contractsApi.getById(id);
       setSelectedContract(res.data);
     } catch (err) {
-      message.error(err?.response?.data?.message || 'Không thể tải chi tiết hợp đồng');
+      message.error(err?.message || 'Không thể tải chi tiết hợp đồng');
       setDetailModalOpen(false);
     } finally {
       setLoadingDetail(false);
@@ -362,7 +355,7 @@ export default function ContractsPage() {
               okText="Chấm dứt"
               cancelText="Hủy"
               okButtonProps={{ danger: true }}
-              onConfirm={() => terminateContract(record._id)}
+              onConfirm={() => terminateContract(record._id).catch(() => {})}
             >
               <Button size="small" type="text" danger icon={<StopOutlined />}>
                 Chấm dứt
@@ -413,23 +406,13 @@ export default function ContractsPage() {
             ))}
           </Select>
 
-          <Select
+          <ApartmentSelect
             placeholder="Căn hộ"
             allowClear
-            showSearch
-            filterOption={(input, option) =>
-              (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-            }
-            style={{ width: 140 }}
+            style={{ width: 160 }}
             value={filters.apartmentId}
             onChange={(val) => setFilters((prev) => ({ ...prev, page: 1, apartmentId: val }))}
-          >
-            {allApartments.map((a) => (
-              <Select.Option key={a._id} value={a._id}>
-                {a.code}
-              </Select.Option>
-            ))}
-          </Select>
+          />
 
           <Select
             placeholder="Loại hợp đồng"
@@ -518,19 +501,10 @@ export default function ContractsPage() {
                 label="Căn hộ"
                 rules={[{ required: true, message: 'Vui lòng chọn căn hộ' }]}
               >
-                <Select
-                  placeholder="Chọn căn hộ"
-                  showSearch
-                  filterOption={(input, option) =>
-                    (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
-                >
-                  {allApartments.map((a) => (
-                    <Select.Option key={a._id} value={a._id}>
-                      {a.code} ({a.buildingId?.name || ''}) — {a.status}
-                    </Select.Option>
-                  ))}
-                </Select>
+                <ApartmentSelect
+                  placeholder="Gõ mã căn để tìm"
+                  renderLabel={(a) => `${a.code} (${a.buildingId?.name || ''}) — ${a.status}`}
+                />
               </Form.Item>
             </Col>
 

@@ -32,7 +32,7 @@ vehicleSchema.index(
   {
     name: 'uniq_active_plate',
     unique: true,
-    partialFilterExpression: { status: { $in: ['PENDING', 'APPROVED'] }, plateNumber: { $type: 'string' } },
+    partialFilterExpression: { status: { $in: [VEHICLE_STATUS.PENDING, VEHICLE_STATUS.APPROVED] }, plateNumber: { $type: 'string' } },
   },
 );
 vehicleSchema.index({ apartmentId: 1, status: 1 });

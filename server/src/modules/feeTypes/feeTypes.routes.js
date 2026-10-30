@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { FEE_CALC_METHODS, FEE_CATEGORIES, VEHICLE_TYPES, values } from '../../constants/enums.js';
+import { FEE_CALC_METHODS, FEE_CATEGORIES, FEE_TYPE_STATES, VEHICLE_TYPES, values } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
@@ -26,7 +26,7 @@ const name = Joi.string().trim().min(1).max(100);
 const listQuery = Joi.object({
   code,
   feeCategory: Joi.string().valid(...FEE_TYPE_CATEGORIES),
-  state: Joi.string().valid(...values(service.FEE_TYPE_STATES)),
+  state: Joi.string().valid(...values(FEE_TYPE_STATES)),
 });
 const createBody = Joi.object({
   code: code.required(),

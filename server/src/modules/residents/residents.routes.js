@@ -4,7 +4,7 @@ import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { created, ok } from '../../utils/response.js';
-import { idParams, objectId } from '../../utils/validators.js';
+import { idParams, objectId, ymd } from '../../utils/validators.js';
 import * as occupantReportsService from '../occupantReports/occupantReports.service.js';
 import * as service from './residents.service.js';
 
@@ -17,12 +17,12 @@ const addMemberBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100).required(),
   phone: Joi.string().trim().allow('', null),
   idNumber: Joi.string().trim().allow('', null),
-  dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
+  dateOfBirth: ymd().allow('', null),
 });
 
 const updateMemberBody = Joi.object({
   idNumber: Joi.string().trim().allow('', null),
-  dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
+  dateOfBirth: ymd().allow('', null),
 }).min(1);
 
 const changesQuerySchema = Joi.object({
@@ -93,7 +93,7 @@ router.get(
   authenticate,
   authorize('RESIDENT'),
   async (req, res) => {
-    const list = await service.myApartments(req.user.id || req.user._id);
+    const list = await service.myApartments(req.user.id);
     ok(res, list);
   },
 );

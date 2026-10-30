@@ -1,4 +1,4 @@
-import { AMENITY_ACCESS_MODES, AUDIT_ACTIONS, BOOKING_STATUS, ROLES } from '../../constants/enums.js';
+import { AMENITY_ACCESS_MODES, AUDIT_ACTIONS, BOOKING_ACTIVE_STATUSES, ROLES } from '../../constants/enums.js';
 import { Amenity, Apartment, Booking, Building } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { getActiveApartmentIds } from '../../services/residency.service.js';
@@ -8,8 +8,6 @@ import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { accessModeOf, priceSummaryOf } from './pricing.js';
 import { getBookingConfig, toMinutes } from './slot.utils.js';
 
-// Booking còn hiệu lực: đã xác nhận hoặc đang dùng (BR-O19)
-export const ACTIVE_BOOKING_STATUSES = [BOOKING_STATUS.APPROVED, BOOKING_STATUS.CHECKED_IN];
 
 const POPULATE = [{ path: 'buildingId', select: 'code name' }];
 
@@ -152,7 +150,8 @@ async function residentBuildingIds(userId) {
   return Apartment.find({ _id: { $in: apartmentIds } }).distinct('buildingId');
 }
 
-async function visibilityFilter(user) {
+/** Điều kiện tiện ích người dùng được thấy: cư dân chỉ thấy tiện ích đang mở, dùng chung hoặc thuộc tòa mình */
+export async function visibilityFilter(user) {
   if (user.role !== ROLES.RESIDENT) return {};
   const buildingIds = await residentBuildingIds(user.id);
   return { isActive: true, $or: [{ buildingId: null }, { buildingId: { $in: buildingIds } }] };
@@ -251,7 +250,7 @@ export async function updateAmenity(user, id, body, files) {
 }
 
 const hasUpcomingBookings = (amenityId) =>
-  Booking.exists({ amenityId, status: { $in: ACTIVE_BOOKING_STATUSES }, endAt: { $gt: new Date() } });
+  Booking.exists({ amenityId, status: { $in: BOOKING_ACTIVE_STATUSES }, endAt: { $gt: new Date() } });
 
 // ===== UC-D05: ngừng / kích hoạt lại (không xóa cứng — BR-O17; BR-O19) =====
 export async function setAmenityStatus(id, isActive) {

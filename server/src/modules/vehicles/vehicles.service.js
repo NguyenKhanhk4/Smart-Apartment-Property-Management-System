@@ -1,5 +1,6 @@
 import {
   AUDIT_ACTIONS,
+  AUDIT_TARGETS,
   CONFIG_KEYS,
   NOTIFICATION_TYPES,
   PARKING_CARD_STATUS,
@@ -45,31 +46,26 @@ export function normalizePlate(raw, type) {
   return cleaned;
 }
 
+const CAPACITY = {
+  [VEHICLE_TYPES.MOTORBIKE]: { key: CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, message: 'Bãi đỗ xe máy đã hết chỗ' },
+  [VEHICLE_TYPES.CAR]: { key: CONFIG_KEYS.PARKING_CAPACITY_CAR, message: 'Bãi đỗ ô tô đã hết chỗ' },
+};
+
+/** Sức chứa còn lại của loại xe (null = không giới hạn, vd xe đạp). `session` để đếm trong transaction duyệt xe. */
+async function remainingSlots(type, session = null) {
+  const rule = CAPACITY[type];
+  if (!rule) return null;
+  const capacity = Number(await getConfig(rule.key));
+  const used = await Vehicle.countDocuments({ type, status: VEHICLE_STATUS.APPROVED }).session(session);
+  return capacity - used;
+}
+
 /**
- * BR-A6: Kiểm tra sức chứa bãi xe. Xe máy và ô tô đếm số xe APPROVED so với cấu hình.
- * Xe đạp không giới hạn chỗ.
+ * BR-A6: Kiểm tra sức chứa bãi xe. Xe máy và ô tô đếm số xe APPROVED so với cấu hình; xe đạp không giới hạn.
  */
-export async function assertCapacity(type) {
-  if (type === VEHICLE_TYPES.BICYCLE) {
-    return;
-  }
-
-  if (type === VEHICLE_TYPES.MOTORBIKE) {
-    const capacity = await getConfig(CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, 500);
-    const count = await Vehicle.countDocuments({ type, status: VEHICLE_STATUS.APPROVED });
-    if (count >= capacity) {
-      throw new ApiError('VEHICLE_SLOT_FULL', 'Bãi đỗ xe máy đã hết chỗ');
-    }
-    return;
-  }
-
-  if (type === VEHICLE_TYPES.CAR) {
-    const capacity = await getConfig(CONFIG_KEYS.PARKING_CAPACITY_CAR, 100);
-    const count = await Vehicle.countDocuments({ type, status: VEHICLE_STATUS.APPROVED });
-    if (count >= capacity) {
-      throw new ApiError('VEHICLE_SLOT_FULL', 'Bãi đỗ ô tô đã hết chỗ');
-    }
-  }
+async function assertCapacity(type, session = null) {
+  const left = await remainingSlots(type, session);
+  if (left !== null && left <= 0) throw new ApiError('VEHICLE_SLOT_FULL', CAPACITY[type].message);
 }
 
 /**
@@ -77,7 +73,7 @@ export async function assertCapacity(type) {
  * Chỉ chủ sở hữu (OWNER) hoặc người thuê (TENANT) đang hoạt động của căn hộ mới được đăng ký.
  */
 export async function register(body, viewer) {
-  const userId = viewer?.id || viewer?._id;
+  const userId = viewer.id;
   const apartment = await resolveResidentApartment(userId, body.apartmentId);
 
   const resident = await Resident.findOne({
@@ -102,9 +98,9 @@ export async function register(body, viewer) {
     }).lean();
 
     if (existing) {
-      throw ApiError.badRequest('Biển số xe đã được đăng ký hoặc đang chờ duyệt', [
+      throw new ApiError('DUPLICATE_VALUE', 'Biển số xe đã được đăng ký hoặc đang chờ duyệt', { details: [
         { field: 'plateNumber', message: 'Biển số xe đã được đăng ký hoặc đang chờ duyệt' },
-      ]);
+      ] });
     }
   }
 
@@ -130,9 +126,9 @@ export async function register(body, viewer) {
     return vehicle;
   } catch (err) {
     if (err.code === 11000) {
-      throw ApiError.badRequest('Biển số xe đã được đăng ký hoặc đang chờ duyệt', [
+      throw new ApiError('DUPLICATE_VALUE', 'Biển số xe đã được đăng ký hoặc đang chờ duyệt', { details: [
         { field: 'plateNumber', message: 'Biển số xe đã được đăng ký hoặc đang chờ duyệt' },
-      ]);
+      ] });
     }
     throw err;
   }
@@ -142,7 +138,7 @@ export async function register(body, viewer) {
  * UC-A09: Danh sách phương tiện của căn hộ cư dân đang ở
  */
 export async function listMine(viewer, query = {}) {
-  const userId = viewer?.id || viewer?._id;
+  const userId = viewer.id;
 
   if (query.apartmentId) {
     const apartment = await resolveResidentApartment(userId, query.apartmentId);
@@ -175,44 +171,49 @@ export async function listMine(viewer, query = {}) {
  * - Trạng thái khác hoặc đã yêu cầu: STATUS_CONFLICT.
  */
 export async function requestCancel(vehicleId, viewer) {
-  const userId = viewer?.id || viewer?._id;
-  const vehicle = await Vehicle.findById(vehicleId);
+  const vehicle = await Vehicle.findById(vehicleId).lean();
+  if (!vehicle) throw ApiError.notFound('Không tìm thấy phương tiện');
 
-  if (!vehicle) {
-    throw ApiError.notFound('Không tìm thấy phương tiện');
-  }
-
-  const aptIds = await getActiveApartmentIds(userId);
+  const aptIds = await getActiveApartmentIds(viewer.id);
   if (!aptIds.includes(String(vehicle.apartmentId))) {
     throw ApiError.forbidden('Bạn không thuộc căn hộ của phương tiện này');
   }
 
+  const conflict = (message = 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại') =>
+    new ApiError('STATUS_CONFLICT', message);
+  const now = new Date();
+
+  // Ghi có điều kiện theo trạng thái vừa đọc: lễ tân duyệt / hủy song song thì request này nhận 409, không ghi đè
   if (vehicle.status === VEHICLE_STATUS.PENDING) {
-    vehicle.status = VEHICLE_STATUS.CANCELLED;
-    vehicle.cancelledAt = new Date();
-    await vehicle.save();
-    return vehicle.toObject();
+    const cancelled = await Vehicle.findOneAndUpdate(
+      { _id: vehicle._id, status: VEHICLE_STATUS.PENDING },
+      { $set: { status: VEHICLE_STATUS.CANCELLED, cancelledAt: now } },
+      { returnDocument: 'after' },
+    ).lean();
+    if (!cancelled) throw conflict();
+    return cancelled;
   }
 
   if (vehicle.status === VEHICLE_STATUS.APPROVED) {
-    if (vehicle.cancelRequestedAt) {
-      throw new ApiError('STATUS_CONFLICT', 'Yêu cầu hủy đã được gửi trước đó và đang chờ xử lý');
-    }
-    vehicle.cancelRequestedAt = new Date();
-    await vehicle.save();
+    if (vehicle.cancelRequestedAt) throw conflict('Yêu cầu hủy đã được gửi trước đó và đang chờ xử lý');
+    const requested = await Vehicle.findOneAndUpdate(
+      { _id: vehicle._id, status: VEHICLE_STATUS.APPROVED, cancelRequestedAt: null },
+      { $set: { cancelRequestedAt: now } },
+      { returnDocument: 'after' },
+    ).lean();
+    if (!requested) throw conflict('Yêu cầu hủy đã được gửi trước đó và đang chờ xử lý');
 
     await notifyRoles([`STAFF:${ROLE_TITLES.RECEPTIONIST}`], {
       type: NOTIFICATION_TYPES.SYSTEM,
       title: 'Yêu cầu hủy vé gửi xe',
-      content: `Cư dân yêu cầu hủy vé cho phương tiện ${vehicle.plateNumber || vehicle.type}`,
+      content: `Cư dân yêu cầu hủy vé cho phương tiện ${requested.plateNumber || requested.type}`,
       link: '/app/vehicle-requests',
-      refId: vehicle._id,
+      refId: requested._id,
     }).catch((err) => console.error('[module-a] notifyRoles error:', err.message));
-
-    return vehicle.toObject();
+    return requested;
   }
 
-  throw new ApiError('STATUS_CONFLICT', 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại');
+  throw conflict();
 }
 
 /**
@@ -261,7 +262,7 @@ export async function listForStaff(query = {}) {
  * UC-A10 & UC66: Lễ tân duyệt yêu cầu đăng ký gửi xe kèm cấp thẻ gửi xe ACTIVE trong cùng transaction
  */
 export async function approve(vehicleId, staffUser, { cardNumber } = {}, ip) {
-  const staffId = staffUser?.id || staffUser?._id;
+  const staffId = staffUser.id;
   const normCardNumber = String(cardNumber || '')
     .trim()
     .toUpperCase();
@@ -296,6 +297,8 @@ export async function approve(vehicleId, staffUser, { cardNumber } = {}, ip) {
       if (!current) {
         throw new ApiError('STATUS_CONFLICT', 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại');
       }
+      // Đếm lại sức chứa trong transaction (BR-A6)
+      await assertCapacity(current.type, session);
 
       if (current.plateNumber) {
         const existing = await Vehicle.findOne({
@@ -307,7 +310,7 @@ export async function approve(vehicleId, staffUser, { cardNumber } = {}, ip) {
           .lean();
 
         if (existing) {
-          throw ApiError.badRequest('Biển số xe đã được duyệt cho phương tiện khác');
+          throw new ApiError('DUPLICATE_VALUE', 'Biển số xe đã được duyệt cho phương tiện khác');
         }
       }
 
@@ -325,9 +328,9 @@ export async function approve(vehicleId, staffUser, { cardNumber } = {}, ip) {
         .lean();
 
       if (existingCard) {
-        throw ApiError.badRequest('Số thẻ gửi xe đang được sử dụng hoặc chưa được thu hồi', [
+        throw new ApiError('DUPLICATE_VALUE', 'Số thẻ gửi xe đang được sử dụng hoặc chưa được thu hồi', { details: [
           { field: 'cardNumber', message: 'Số thẻ gửi xe đã tồn tại' },
-        ]);
+        ] });
       }
 
       const now = new Date();
@@ -353,7 +356,7 @@ export async function approve(vehicleId, staffUser, { cardNumber } = {}, ip) {
         {
           action: AUDIT_ACTIONS.VEHICLE_APPROVED,
           user: staffUser,
-          targetType: 'vehicles',
+          targetType: AUDIT_TARGETS.VEHICLE,
           targetId: current._id,
           metadata: {
             plateNumber: current.plateNumber,
@@ -371,7 +374,7 @@ export async function approve(vehicleId, staffUser, { cardNumber } = {}, ip) {
         {
           action: AUDIT_ACTIONS.PARKING_CARD_ISSUED,
           user: staffUser,
-          targetType: 'ParkingCard',
+          targetType: AUDIT_TARGETS.PARKING_CARD,
           targetId: issuedCard._id,
           metadata: {
             cardNumber: normCardNumber,
@@ -385,9 +388,23 @@ export async function approve(vehicleId, staffUser, { cardNumber } = {}, ip) {
     });
   } catch (err) {
     if (err.code === 11000) {
-      throw ApiError.badRequest('Số thẻ gửi xe hoặc biển số đã được sử dụng');
+      throw new ApiError('DUPLICATE_VALUE', 'Số thẻ gửi xe hoặc biển số đã được sử dụng');
     }
     throw err;
+  }
+
+  // 2 lễ tân duyệt đồng thời có thể cùng thấy còn 1 chỗ (mỗi transaction chỉ thấy dữ liệu của mình).
+  // Sau commit đếm lại; vượt sức chứa thì hoàn tác lượt duyệt này (an toàn hơn để bãi vượt chỗ).
+  if ((await remainingSlots(vehicle.type)) < 0) {
+    await withTransaction(async (session) => {
+      await ParkingCard.deleteOne({ _id: issuedCard._id }, { session });
+      await Vehicle.updateOne(
+        { _id: vehicle._id, status: VEHICLE_STATUS.APPROVED },
+        { $set: { status: VEHICLE_STATUS.PENDING, approvedAt: null, reviewedBy: null } },
+        { session },
+      );
+    });
+    throw new ApiError('VEHICLE_SLOT_FULL', CAPACITY[vehicle.type].message);
   }
 
   const updated = await Vehicle.findById(vehicle._id)
@@ -416,7 +433,7 @@ export async function approve(vehicleId, staffUser, { cardNumber } = {}, ip) {
  * UC-A10: Lễ tân từ chối yêu cầu đăng ký gửi xe (bắt buộc lý do)
  */
 export async function reject(vehicleId, staffUser, { reason } = {}) {
-  const staffId = staffUser?.id || staffUser?._id;
+  const staffId = staffUser.id;
 
   if (!reason || !reason.trim()) {
     throw ApiError.badRequest('Lý do từ chối là bắt buộc', [
@@ -454,7 +471,7 @@ export async function reject(vehicleId, staffUser, { reason } = {}) {
   await logAudit({
     action: AUDIT_ACTIONS.VEHICLE_REJECTED,
     user: staffUser,
-    targetType: 'vehicles',
+    targetType: AUDIT_TARGETS.VEHICLE,
     targetId: updated._id,
     metadata: {
       reason: reason.trim(),
@@ -481,7 +498,7 @@ export async function reject(vehicleId, staffUser, { reason } = {}) {
  * Đồng thời chuyển thẻ ACTIVE của xe đó sang DISABLED_TO_COLLECT.
  */
 export async function confirmCancel(vehicleId, staffUser, ip) {
-  const staffId = staffUser?.id || staffUser?._id;
+  const staffId = staffUser.id;
   const vehicle = await Vehicle.findById(vehicleId);
 
   if (!vehicle) {
@@ -508,13 +525,13 @@ export async function confirmCancel(vehicleId, staffUser, ip) {
     current.reviewedBy = staffId;
     await current.save({ session });
 
-    const disabledCount = await disableActiveCardsByVehicle(current._id, session);
+    const disabledCount = await disableActiveCardsByVehicle(current._id, session, staffUser);
 
     await logAudit(
       {
         action: AUDIT_ACTIONS.VEHICLE_CANCELLED,
         user: staffUser,
-        targetType: 'vehicles',
+        targetType: AUDIT_TARGETS.VEHICLE,
         targetId: current._id,
         metadata: {
           plateNumber: current.plateNumber,

@@ -8,6 +8,11 @@ export const formatCompactMoney = (n) => {
   if (v >= 1e3) return `${(n / 1e3).toFixed(0)} k`;
   return String(n ?? 0);
 };
+/** Ô nhập tiền VND: 1500000 ⇄ "1.500.000" — dùng <InputNumber {...moneyInputProps} /> */
+export const moneyInputProps = {
+  formatter: (v) => (v == null ? '' : `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')),
+  parser: (v) => (v == null ? '' : v.replace(/\./g, '')),
+};
 export const formatPercent = (r, digits = 1) => `${((r ?? 0) * 100).toFixed(digits)}%`;
 export const formatDateTime = (d) => (d ? dayjs(d).format('HH:mm DD/MM/YYYY') : '—');
 export const formatDate = (d) => (d ? dayjs(d).format('DD/MM/YYYY') : '—');

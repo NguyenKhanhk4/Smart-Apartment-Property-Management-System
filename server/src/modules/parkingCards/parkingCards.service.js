@@ -1,44 +1,50 @@
-import {
-  AUDIT_ACTIONS,
-  PARKING_CARD_STATUS,
-} from '../../constants/enums.js';
-import { ParkingCard } from '../../models/index.js';
+import { AUDIT_ACTIONS, AUDIT_TARGETS, PARKING_CARD_STATUS } from '../../constants/enums.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { withTransaction } from '../../utils/transaction.js';
+import { ParkingCard } from '../../models/index.js';
 
 /**
- * Chuyển các thẻ ACTIVE của phương tiện sang DISABLED_TO_COLLECT
+ * Chuyển các thẻ ACTIVE khớp `filter` sang DISABLED_TO_COLLECT và ghi audit PARKING_CARD_DISABLED từng thẻ.
+ * `actor` = người thao tác (null = hệ thống, vd cron hết hạn hợp đồng). Trả về số thẻ đã chuyển.
  */
-export async function disableActiveCardsByVehicle(vehicleId, session = null) {
-  const options = session ? { session } : {};
+async function disableActiveCards(filter, session, actor, reason) {
+  const cards = await ParkingCard.find({ ...filter, status: PARKING_CARD_STATUS.ACTIVE })
+    .select('cardNumber vehicleId apartmentId')
+    .session(session)
+    .lean();
+  if (!cards.length) return 0;
+
   const res = await ParkingCard.updateMany(
-    { vehicleId, status: PARKING_CARD_STATUS.ACTIVE },
+    { _id: { $in: cards.map((c) => c._id) }, status: PARKING_CARD_STATUS.ACTIVE },
     { $set: { status: PARKING_CARD_STATUS.DISABLED_TO_COLLECT } },
-    options,
+    { session },
   );
+  for (const card of cards) {
+    await logAudit(
+      {
+        action: AUDIT_ACTIONS.PARKING_CARD_DISABLED,
+        user: actor,
+        targetType: AUDIT_TARGETS.PARKING_CARD,
+        targetId: card._id,
+        metadata: { cardNumber: card.cardNumber, vehicleId: card.vehicleId, apartmentId: card.apartmentId, reason },
+      },
+      { session },
+    );
+  }
   return res.modifiedCount || 0;
 }
 
-/**
- * Chuyển các thẻ ACTIVE của căn hộ (hoặc danh sách phương tiện) sang DISABLED_TO_COLLECT
- */
-export async function disableActiveCardsByApartment(apartmentId, vehicleIds = null, session = null) {
-  const filter = {
-    apartmentId,
-    status: PARKING_CARD_STATUS.ACTIVE,
-  };
-  if (Array.isArray(vehicleIds)) {
-    filter.vehicleId = { $in: vehicleIds };
-  }
-  const options = session ? { session } : {};
-  const res = await ParkingCard.updateMany(
-    filter,
-    { $set: { status: PARKING_CARD_STATUS.DISABLED_TO_COLLECT } },
-    options,
-  );
-  return res.modifiedCount || 0;
+/** Thẻ ACTIVE của 1 phương tiện → cần thu hồi (hủy xe) */
+export const disableActiveCardsByVehicle = (vehicleId, session = null, actor = null) =>
+  disableActiveCards({ vehicleId }, session, actor, 'VEHICLE_CANCELLED');
+
+/** Thẻ ACTIVE của căn hộ (hoặc danh sách phương tiện) → cần thu hồi (chấm dứt / hết hạn hợp đồng) */
+export function disableActiveCardsByApartment(apartmentId, vehicleIds = null, session = null, actor = null) {
+  const filter = { apartmentId };
+  if (Array.isArray(vehicleIds)) filter.vehicleId = { $in: vehicleIds };
+  return disableActiveCards(filter, session, actor, 'CONTRACT_ENDED');
 }
 
 /**
@@ -61,10 +67,7 @@ export async function listParkingCards(query = {}) {
     filter.cardNumber = reg;
   }
 
-  return paginate(ParkingCard, filter, {
-    page: query.page,
-    limit: query.limit,
-    sort: { updatedAt: -1, createdAt: -1 },
+  return paginate(ParkingCard, filter, { page: query.page, limit: query.limit, sort: '-updatedAt' }, {
     populate: [
       {
         path: 'vehicleId',
@@ -89,7 +92,7 @@ export async function closeParkingCard(cardId, { status, note }, receptionistUse
     throw ApiError.badRequest('Trạng thái đóng thẻ chỉ nhận RETURNED hoặc LOST');
   }
 
-  const staffId = receptionistUser?.id || receptionistUser?._id || null;
+  const staffId = receptionistUser?.id ?? null;
   let updated = null;
 
   await withTransaction(async (session) => {
@@ -122,7 +125,7 @@ export async function closeParkingCard(cardId, { status, note }, receptionistUse
             ? AUDIT_ACTIONS.PARKING_CARD_RETURNED
             : AUDIT_ACTIONS.PARKING_CARD_LOST,
         user: receptionistUser,
-        targetType: 'ParkingCard',
+        targetType: AUDIT_TARGETS.PARKING_CARD,
         targetId: card._id,
         metadata: {
           cardNumber: card.cardNumber,

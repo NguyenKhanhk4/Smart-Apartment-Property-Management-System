@@ -43,9 +43,11 @@ import { buildingsApi, apartmentsApi } from '../../api/moduleA.api';
 
 export default function BuildingsPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { hasRole } = useAuth();
   const { message } = App.useApp();
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = hasRole('ADMIN');
+  // Trang chi tiết căn hộ (route apartment-detail) chỉ dành cho Trưởng BQL / Lễ tân
+  const canOpenApartment = hasRole('MANAGER', 'STAFF:RECEPTIONIST');
 
   // Active tab: 'buildings' | 'apartments'
   const [activeTab, setActiveTab] = useState('buildings');
@@ -221,7 +223,7 @@ export default function BuildingsPage() {
       const res = await apartmentsApi.getById(id);
       setSelectedApartment(res.data);
     } catch (err) {
-      message.error(err?.response?.data?.message || 'Không thể tải chi tiết căn hộ');
+      message.error(err?.message || 'Không thể tải chi tiết căn hộ');
       setDetailModalOpen(false);
     } finally {
       setLoadingDetail(false);
@@ -289,7 +291,7 @@ export default function BuildingsPage() {
                   okText="Xóa"
                   cancelText="Hủy"
                   okButtonProps={{ danger: true, disabled: record.apartmentCount > 0 }}
-                  onConfirm={() => deleteBuilding(record._id)}
+                  onConfirm={() => deleteBuilding(record._id).catch(() => {})}
                 >
                   <Button size="small" type="text" danger icon={<DeleteOutlined />}>
                     Xóa
@@ -309,15 +311,18 @@ export default function BuildingsPage() {
       dataIndex: 'code',
       key: 'code',
       width: 120,
-      render: (code, record) => (
-        <button
-          type="button"
-          onClick={() => navigate(`/app/apartments/${record._id}`)}
-          className="font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer bg-transparent border-0 p-0 text-left"
-        >
-          {code}
-        </button>
-      ),
+      render: (code, record) =>
+        canOpenApartment ? (
+          <button
+            type="button"
+            onClick={() => navigate(`/app/apartments/${record._id}`)}
+            className="font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer bg-transparent border-0 p-0 text-left"
+          >
+            {code}
+          </button>
+        ) : (
+          <span className="font-semibold">{code}</span>
+        ),
     },
     {
       title: 'Tòa nhà',
@@ -377,7 +382,7 @@ export default function BuildingsPage() {
                 okText="Xóa"
                 cancelText="Hủy"
                 okButtonProps={{ danger: true }}
-                onConfirm={() => deleteApartment(record._id)}
+                onConfirm={() => deleteApartment(record._id).catch(() => {})}
               >
                 <Button size="small" type="text" danger icon={<DeleteOutlined />}>
                   Xóa
@@ -713,17 +718,19 @@ export default function BuildingsPage() {
         open={detailModalOpen}
         onCancel={() => setDetailModalOpen(false)}
         footer={[
-          <Button
-            key="manage"
-            type="primary"
-            icon={<TeamOutlined />}
-            onClick={() => {
-              setDetailModalOpen(false);
-              navigate(`/app/apartments/${selectedApartment?._id}`);
-            }}
-          >
-            Quản lý nhân khẩu & Hợp đồng
-          </Button>,
+          canOpenApartment && (
+            <Button
+              key="manage"
+              type="primary"
+              icon={<TeamOutlined />}
+              onClick={() => {
+                setDetailModalOpen(false);
+                navigate(`/app/apartments/${selectedApartment?._id}`);
+              }}
+            >
+              Quản lý nhân khẩu & Hợp đồng
+            </Button>
+          ),
           <Button key="close" onClick={() => setDetailModalOpen(false)}>
             Đóng
           </Button>,

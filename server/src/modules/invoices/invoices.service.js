@@ -4,8 +4,13 @@ import mongoose from 'mongoose';
 import {
   AMENITY_PASS_STATUS,
   AUDIT_ACTIONS,
+  AUDIT_TARGETS,
+  BOOKING_BILLABLE_STATUSES,
+  CONFIG_KEYS,
   CRON_JOBS,
+  CRON_TRIGGERS,
   GENERATED_BY,
+  INVOICE_PREVIEW_STATUS as PREVIEW_STATUS,
   INVOICE_STATUS,
   NOTIFICATION_TYPES,
   VISIT_STATUS,
@@ -17,23 +22,13 @@ import { notify } from '../../services/notification.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex } from '../../utils/pagination.js';
-import { DAY_MS, vnPeriod } from '../../utils/time.js';
+import { DAY_MS, fmtDateVn, periodLabel, vnPeriod } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { formatVnd } from '../amenities/pricing.js';
 import { getPriceTable } from '../feeTypes/feeTypes.queries.js';
-import { BILLABLE_BOOKING_STATUS, buildInvoiceDraft } from './invoices.builder.js';
-
-export const PREVIEW_STATUS = Object.freeze({
-  NEW: 'NEW', // sẽ được lập
-  EXISTS: 'EXISTS', // đã có hóa đơn chưa hủy (BR-F2)
-  NO_PAYER: 'NO_PAYER', // chưa có hợp đồng mua bán hiệu lực → bỏ qua
-  ERROR: 'ERROR', // thiếu đơn giá...
-});
+import { buildInvoiceDraft } from './invoices.builder.js';
 
 const MAX_ATTEMPTS = 3;
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-const periodLabel = (p) => `${p.slice(5)}/${p.slice(0, 4)}`;
-const dateVn = (date) => new Date(date.getTime() + VN_OFFSET_MS).toISOString().slice(0, 10).split('-').reverse().join('/');
 const isDuplicateOn = (err, field) => err?.code === 11000 && Boolean(err.keyPattern?.[field] ?? err.keyValue?.[field]);
 const ACTIVE_INVOICE = { $ne: INVOICE_STATUS.CANCELLED };
 
@@ -65,7 +60,7 @@ async function persistInvoice(draft, { now, dueDate, generatedBy }) {
   const targets = [
     [AmenityPass, draft.charges.passIds, AMENITY_PASS_STATUS.ACTIVE],
     [AmenityVisit, draft.charges.visitIds, VISIT_STATUS.VALID],
-    [Booking, draft.charges.bookingIds, { $in: BILLABLE_BOOKING_STATUS }],
+    [Booking, draft.charges.bookingIds, { $in: BOOKING_BILLABLE_STATUSES }],
   ].filter(([, ids]) => ids.length);
 
   return withTransaction(async (session) => {
@@ -129,19 +124,19 @@ async function notifyPayers(invoices) {
     await notify(inv.payerId, {
       type: NOTIFICATION_TYPES.INVOICE,
       title: `Hóa đơn tháng ${periodLabel(inv.period)}`,
-      content: `Hóa đơn ${inv.code}: ${formatVnd(inv.totalAmount)}. Hạn thanh toán ${dateVn(inv.dueDate)}.`,
+      content: `Hóa đơn ${inv.code}: ${formatVnd(inv.totalAmount)}. Hạn thanh toán ${fmtDateVn(inv.dueDate)}.`,
       refId: inv._id,
-      link: `/r/invoices/${inv._id}`,
+      link: null, // chưa có trang hóa đơn cho cư dân (Module B) — thêm link khi có trang
       email: true,
     }).catch((err) => console.error(`[invoice] gửi thông báo ${inv.code} lỗi:`, err));
   }
 }
 
 const auditGenerated = (user, metadata, targetId = null) =>
-  logAudit({ action: AUDIT_ACTIONS.INVOICE_GENERATED, user, targetType: 'invoices', targetId, metadata });
+  logAudit({ action: AUDIT_ACTIONS.INVOICE_GENERATED, user, targetType: AUDIT_TARGETS.INVOICE, targetId, metadata });
 
 async function generationContext(period, now) {
-  const [prices, termDays] = await Promise.all([getPriceTable(period), getConfig('PAYMENT_TERM_DAYS')]);
+  const [prices, termDays] = await Promise.all([getPriceTable(period), getConfig(CONFIG_KEYS.PAYMENT_TERM_DAYS)]);
   return { prices, opts: { now, dueDate: new Date(now.getTime() + termDays * DAY_MS) } };
 }
 
@@ -188,15 +183,11 @@ export async function generateForPeriod({ period = vnPeriod(), now = new Date(),
 }
 
 /** Có căn lỗi → throw để cron_runs ghi FAILED kèm danh sách căn lỗi (các căn khác vẫn đã có hóa đơn) */
-export function assertNoFailures(summary) {
-  if (!summary.failed.length) return;
-  const list = summary.failed
-    .slice(0, 10)
-    .map((f) => `${f.apartment} (${f.message})`)
-    .join('; ');
-  const more = summary.failed.length > 10 ? `; … và ${summary.failed.length - 10} căn khác` : '';
-  throw new Error(`Đã lập ${summary.created} hóa đơn kỳ ${summary.period}, lỗi ${summary.failed.length} căn: ${list}${more}`);
-}
+/** Kết quả cho runTrackedJob: số hóa đơn đã lập + căn lỗi (cron_runs ghi FAILED nhưng vẫn giữ số đã lập) */
+export const toJobResult = (summary) => ({
+  affectedCount: summary.created,
+  failed: summary.failed.map((f) => ({ message: `${f.apartment} (${f.message})` })),
+});
 
 /** Kế toán bấm sinh cả đợt: chạy như cron (ghi cron_runs, trigger MANUAL), trả kèm thống kê */
 export async function generateBatch(user, { period }, { now = new Date() } = {}) {
@@ -206,10 +197,9 @@ export async function generateBatch(user, { period }, { now = new Date() } = {})
     CRON_JOBS.INVOICE_GENERATE,
     async () => {
       summary = await generateForPeriod({ period, now, user });
-      assertNoFailures(summary);
-      return summary.created;
+      return toJobResult(summary);
     },
-    { trigger: 'MANUAL' },
+    { trigger: CRON_TRIGGERS.MANUAL },
   );
   return { run, summary };
 }

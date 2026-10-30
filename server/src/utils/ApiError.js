@@ -7,6 +7,10 @@ import { ERROR_CODES } from '../constants/errorCodes.js';
  */
 export class ApiError extends Error {
   constructor(errorCode = 'SERVER_ERROR', message, { status, details } = {}) {
+    // Gõ sai mã lỗi: dev/test báo ngay; production vẫn trả 500 thay vì sập request
+    if (!ERROR_CODES[errorCode] && process.env.NODE_ENV !== 'production') {
+      throw new Error(`ApiError: errorCode "${errorCode}" chưa khai báo trong constants/errorCodes.js`);
+    }
     const def = ERROR_CODES[errorCode] ?? ERROR_CODES.SERVER_ERROR;
     super(message ?? def.message);
     this.name = 'ApiError';
@@ -17,6 +21,11 @@ export class ApiError extends Error {
 
   static badRequest(message, details) {
     return new ApiError('VALIDATION_ERROR', message, { details });
+  }
+
+  /** Lỗi 400 gắn với 1 field của form */
+  static field(field, message) {
+    return ApiError.badRequest(message, [{ field, message }]);
   }
 
   static unauthorized(message) {

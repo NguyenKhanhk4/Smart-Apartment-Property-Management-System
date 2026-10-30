@@ -7,7 +7,8 @@ import { AssignModal } from '../../tickets/TicketActionModals';
 import { Block } from './Block';
 import { refreshReceptionDashboard, useReceptionDashboard } from './receptionDashboard';
 import { DIVIDER, LINK, MUTED, TEXT } from './styles';
-import { ReasonModal } from './TodoModals';
+import ReasonModal from '../../../components/ReasonModal';
+import ApproveVehicleModal from '../../vehicles/ApproveVehicleModal';
 import { TODO_KINDS, buildTodos } from './todos';
 
 const COLLAPSED_ROWS = 6;
@@ -34,7 +35,7 @@ export default function TodoList() {
   const [done, setDone] = useState({}); // key → { item, index, text, tone }
   const [busy, setBusy] = useState(null);
   const [expanded, setExpanded] = useState(false);
-  const [modal, setModal] = useState(null); // { type: 'assign' | 'reject' | 'cancel', item }
+  const [modal, setModal] = useState(null); // { type: 'assign' | 'approve' | 'reject' | 'cancel', item }
 
   // Dòng đã xử lý giữ nguyên vị trí cho tới khi người dùng tải lại trang
   const rows = useMemo(() => {
@@ -109,7 +110,7 @@ export default function TodoList() {
             <Button size="large" onClick={() => setModal({ type: 'reject', item })}>
               Từ chối
             </Button>
-            <Button size="large" type="primary" loading={loading} onClick={() => run(item, () => vehicleApi.approve(r._id), 'Đã duyệt')}>
+            <Button size="large" type="primary" onClick={() => setModal({ type: 'approve', item })}>
               Duyệt
             </Button>
           </>
@@ -168,6 +169,9 @@ export default function TodoList() {
         )}
       </Block>
 
+      {modal?.type === 'approve' && (
+        <ApproveVehicleModal vehicle={item.raw} open onClose={close} onDone={() => markDone(item, 'Đã duyệt')} />
+      )}
       {modal?.type === 'assign' && (
         <AssignModal
           ticket={item.raw}

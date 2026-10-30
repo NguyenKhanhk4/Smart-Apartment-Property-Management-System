@@ -28,7 +28,7 @@ parkingCardSchema.index(
     name: 'uniq_unreturned_parking_card',
     unique: true,
     partialFilterExpression: {
-      status: { $in: ['ACTIVE', 'DISABLED_TO_COLLECT', 'LOST'] },
+      status: { $in: [PARKING_CARD_STATUS.ACTIVE, PARKING_CARD_STATUS.DISABLED_TO_COLLECT, PARKING_CARD_STATUS.LOST] },
     },
   },
 );

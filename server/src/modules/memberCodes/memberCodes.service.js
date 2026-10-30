@@ -3,10 +3,10 @@
 import { Apartment, Building, MemberCode, User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { retryOnDuplicate } from '../../utils/codeGenerator.js';
-import { periodEnd, vnPeriod } from '../../utils/time.js';
+import { periodEnd, toVnYmd, vnDayStart, vnPeriod } from '../../utils/time.js';
 import { escapeRegex } from '../../utils/pagination.js';
 import { ageAt, ageGroupOf } from '../amenities/pricing.js';
-import { getBookingConfig, toVnYmd, vnDayStart } from '../amenities/slot.utils.js';
+import { getBookingConfig } from '../amenities/slot.utils.js';
 import { activePassesByUser } from '../amenityPasses/passes.queries.js';
 import { listVisitsToday } from '../amenityVisits/visits.queries.js';
 import { listApartmentBookingsToday } from '../bookings/bookings.queries.js';
@@ -16,7 +16,7 @@ import { assertHead, getHousehold, getMyHouseholds } from '../household/househol
 const pad = (n, width) => String(n).padStart(width, '0');
 
 /** "A-0501" → số căn "0501"; bỏ tiền tố trùng mã tòa, đệm 4 chữ số; không phải số thì dùng nguyên văn */
-export function apartmentNumber(apartmentCode, buildingCode) {
+function apartmentNumber(apartmentCode, buildingCode) {
   const full = String(apartmentCode).trim().toUpperCase();
   const prefix = String(buildingCode).trim().toUpperCase();
   let rest = full;
@@ -28,7 +28,7 @@ export function apartmentNumber(apartmentCode, buildingCode) {
 }
 
 /** Mã chữ: chủ hộ (seq 0) "A-0501", thành viên "A-0501-01", "A-0501-02"… */
-export function formatCode(buildingCode, apartmentCode, seq) {
+function formatCode(buildingCode, apartmentCode, seq) {
   const base = `${String(buildingCode).trim().toUpperCase()}-${apartmentNumber(apartmentCode, buildingCode)}`;
   return seq === 0 ? base : `${base}-${pad(seq, 2)}`;
 }
@@ -70,18 +70,7 @@ async function syncCodes(apartmentId) {
   for (const m of members) {
     if (byUser.has(m.userId)) continue;
     const seq = wantSeq(m) ?? nextSeq++;
-    // Ngày sinh gắn với người: người từng có mã (ở căn này hoặc căn khác) thì giữ lại
-    const previous = await MemberCode.findOne({ userId: m.userId, dateOfBirth: { $ne: null } })
-      .sort({ updatedAt: -1 })
-      .select('dateOfBirth')
-      .lean();
-    await MemberCode.create({
-      userId: m.userId,
-      apartmentId,
-      code: formatCode(building.code, apartment.code, seq),
-      seq,
-      dateOfBirth: previous?.dateOfBirth ?? null,
-    });
+    await MemberCode.create({ userId: m.userId, apartmentId, code: formatCode(building.code, apartment.code, seq), seq });
   }
   return household;
 }
@@ -195,14 +184,15 @@ export async function updateMember(headId, apartmentId, memberUserId, body) {
   await assertHead(headId, id);
   const { record, member } = await activeRecord(id, memberUserId);
 
-  const patch = {};
   if (body.canIncurCharges !== undefined) {
     // BR-O26: chủ hộ luôn được phát sinh phí, không cần bật
-    if (member.isHead) throw ApiError.badRequest('Chủ hộ luôn được phát sinh phí tiện ích', [{ field: 'canIncurCharges', message: 'Chủ hộ luôn được phát sinh phí' }]);
-    patch.canIncurCharges = body.canIncurCharges;
+    if (member.isHead) throw ApiError.field('canIncurCharges', 'Chủ hộ luôn được phát sinh phí tiện ích');
+    await MemberCode.updateOne({ _id: record._id, isActive: true }, { canIncurCharges: body.canIncurCharges });
   }
-  if (body.dateOfBirth !== undefined) patch.dateOfBirth = parseDateOfBirth(body.dateOfBirth);
-  if (Object.keys(patch).length) await MemberCode.updateOne({ _id: record._id, isActive: true }, patch);
+  // Ngày sinh gắn với người (users.dateOfBirth), không theo từng mã căn hộ
+  if (body.dateOfBirth !== undefined) {
+    await User.updateOne({ _id: memberUserId }, { dateOfBirth: parseDateOfBirth(body.dateOfBirth) });
+  }
   return getMemberView(id, memberUserId);
 }
 
@@ -227,8 +217,10 @@ export async function setDateOfBirthByStaff(userId, dateOfBirth) {
   if (!user) throw ApiError.notFound('Không tìm thấy tài khoản');
   const mine = await getMyHouseholds(userId);
   for (const { apartment } of mine) await ensureCodes(apartment._id);
-  const res = await MemberCode.updateMany({ userId, isActive: true }, { dateOfBirth: date });
-  if (!res.matchedCount) throw new ApiError('MEMBER_CODE_NOT_FOUND', 'Người này chưa có mã cư dân (không thuộc hộ nào có quyền tiện ích)');
+  if (!(await MemberCode.exists({ userId, isActive: true }))) {
+    throw new ApiError('MEMBER_CODE_NOT_FOUND', 'Người này chưa có mã cư dân (không thuộc hộ nào có quyền tiện ích)');
+  }
+  await User.updateOne({ _id: userId }, { dateOfBirth: date });
   const cfg = await getBookingConfig();
   return { userId: String(userId), fullName: user.fullName, dateOfBirth: date, ...ageInfo(date, new Date(), cfg) };
 }

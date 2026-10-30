@@ -24,7 +24,7 @@ import EnumTag from '../../components/EnumTag';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { FEE_CALC_METHODS, FEE_CATEGORIES, FEE_TYPE_STATES, VEHICLE_TYPES, enumOptions } from '../../constants/enums';
-import { formatMoney } from '../../utils/format';
+import { formatMoney, moneyInputProps } from '../../utils/format';
 
 // Phí tiện ích do Module D định giá trên từng tiện ích → chỉ cấu hình vệ sinh & gửi xe ở đây
 const CATEGORY_OPTIONS = ['CLEANING', 'PARKING'].map((v) => ({ value: v, label: FEE_CATEGORIES[v].label }));
@@ -52,8 +52,7 @@ const priceField = (
       min={0}
       step={1000}
       style={{ width: '100%' }}
-      formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}
-      parser={(v) => v.replace(/\./g, '')}
+      {...moneyInputProps}
     />
   </Form.Item>
 );

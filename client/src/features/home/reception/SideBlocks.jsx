@@ -7,6 +7,7 @@ import { useApi } from '../../../hooks/useApi';
 import { Block } from './Block';
 import { refreshReceptionDashboard, useReceptionDashboard } from './receptionDashboard';
 import { DIVIDER, LINK, MUTED, TEXT } from './styles';
+import { formatDate } from '../../../utils/format';
 
 const GUEST_ROWS = 4;
 const NEWS_ROWS = 3;
@@ -80,7 +81,7 @@ export function LatestNews() {
                 {a.isPinned && <PushpinOutlined className="text-r-gold-icon mr-1.5" aria-label="Tin ghim" />}
                 {a.title}
               </div>
-              <div className={`text-[13px] ${MUTED}`}>{dayjs(a.createdAt).format('DD/MM/YYYY')}</div>
+              <div className={`text-[13px] ${MUTED}`}>{formatDate(a.createdAt)}</div>
             </li>
           ))}
         </ul>

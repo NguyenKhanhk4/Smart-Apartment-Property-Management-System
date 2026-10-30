@@ -1,9 +1,9 @@
 // Giá tiện ích theo nhóm tuổi (BR-O24). Hàm thuần — không đọc DB; tuổi tính theo ngày lịch giờ Việt Nam.
 // Dùng lại ở bước vé lẻ / gói tháng / billing: ageGroupOf(user.dateOfBirth, mốc phát sinh, cfg) → visitFee / passFee.
-import { AGE_GROUPS, AMENITY_ACCESS_MODES, CONFIG_KEYS, DEFAULT_CONFIGS } from '../../constants/enums.js';
+import { AGE_GROUPS, AMENITY_ACCESS_MODES, CONFIG_KEYS, CONFIG_DEFAULTS } from '../../constants/enums.js';
+import { VN_OFFSET_MS } from '../../utils/time.js';
 
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-const DEFAULTS = Object.fromEntries(DEFAULT_CONFIGS.map((c) => [c.key, c.value]));
+const DEFAULTS = CONFIG_DEFAULTS;
 const DEFAULT_AGE_CFG = {
   childFreeAge: DEFAULTS[CONFIG_KEYS.CHILD_FREE_AGE],
   childAdultAge: DEFAULTS[CONFIG_KEYS.CHILD_ADULT_AGE],
@@ -14,7 +14,7 @@ export const accessModeOf = (amenity) => amenity?.accessMode ?? AMENITY_ACCESS_M
 
 /** Ngày lịch (năm, tháng, ngày) theo giờ VN */
 function vnYmd(date) {
-  const d = new Date(new Date(date).getTime() + VN_OFFSET_MS);
+  const d = new Date(new Date(date).getTime() + VN_OFFSET_MS); // đọc getUTC*() ra ngày giờ VN
   return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate() };
 }
 

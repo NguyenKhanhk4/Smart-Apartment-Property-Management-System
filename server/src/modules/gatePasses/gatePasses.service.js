@@ -1,5 +1,6 @@
 import {
   AUDIT_ACTIONS,
+  AUDIT_TARGETS,
   GATE_PASS_DIRECTIONS,
   GATE_PASS_STATUS,
   NOTIFICATION_TYPES,
@@ -16,20 +17,13 @@ import { resolveResidentApartment } from '../../services/residency.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { retryOnDuplicate } from '../../utils/codeGenerator.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
-import { endOfVnDay, startOfVnDay } from '../../utils/time.js';
+import { MINUTE_MS, endOfVnDay, startOfVnDay, toVnYmd } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { normalizePlate } from '../vehicles/vehicles.service.js';
 import { getApartmentDebt } from './debtProvider.js';
 
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-
-function vnDateDigits(date = new Date()) {
-  const shifted = new Date(date.getTime() + VN_OFFSET_MS);
-  const y = shifted.getUTCFullYear();
-  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(shifted.getUTCDate()).padStart(2, '0');
-  return `${y}${m}${d}`;
-}
+/** 2026-11-01 (giờ VN) → "20261101" — phần ngày của mã GP-YYYYMMDD-xxx */
+const vnDateDigits = (date = new Date()) => toVnYmd(date).replaceAll('-', '');
 
 async function nextGatePassCode(date = new Date()) {
   const base = `GP-${vnDateDigits(date)}-`;
@@ -41,7 +35,7 @@ async function nextGatePassCode(date = new Date()) {
   return `${base}${String(seq).padStart(3, '0')}`;
 }
 
-export function parseTimeMinutes(timeStr, fieldName = 'timeSlot') {
+function parseTimeMinutes(timeStr, fieldName = 'timeSlot') {
   const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(timeStr || '').trim());
   if (!match) {
     throw ApiError.badRequest(`Giờ không hợp lệ (${fieldName}), định dạng chuẩn HH:mm`);
@@ -52,14 +46,14 @@ export function parseTimeMinutes(timeStr, fieldName = 'timeSlot') {
 export function computeSlotStart(scheduledDate, fromTimeStr) {
   const dayStart = startOfVnDay(new Date(scheduledDate));
   const minutes = parseTimeMinutes(fromTimeStr, 'timeSlot.from');
-  return new Date(dayStart.getTime() + minutes * 60 * 1000);
+  return new Date(dayStart.getTime() + minutes * MINUTE_MS);
 }
 
 /**
  * UC52: Cư dân tạo đơn chuyển đồ (Gate Pass)
  */
 export async function createGatePass(viewer, body, ip) {
-  const userId = viewer?.id || viewer?._id;
+  const userId = viewer.id;
   const apartment = await resolveResidentApartment(userId, body.apartmentId);
 
   const resident = await Resident.findOne({
@@ -79,7 +73,7 @@ export async function createGatePass(viewer, body, ip) {
   }
 
   const scheduledDay = startOfVnDay(new Date(body.scheduledDate));
-  const slotStart = new Date(scheduledDay.getTime() + fromMin * 60 * 1000);
+  const slotStart = new Date(scheduledDay.getTime() + fromMin * MINUTE_MS);
   if (slotStart <= new Date()) {
     throw ApiError.badRequest('Thời điểm bắt đầu chuyển đồ phải ở tương lai');
   }
@@ -124,7 +118,7 @@ export async function createGatePass(viewer, body, ip) {
         {
           action: AUDIT_ACTIONS.GATEPASS_CREATED,
           user: viewer,
-          targetType: 'GatePass',
+          targetType: AUDIT_TARGETS.GATE_PASS,
           targetId: doc._id,
           metadata: {
             code: doc.code,
@@ -171,11 +165,19 @@ export async function createGatePass(viewer, body, ip) {
   return created;
 }
 
+const LIST_POPULATE = [
+  { path: 'apartmentId', select: 'code floor buildingId', populate: { path: 'buildingId', select: 'code name' } },
+  { path: 'createdBy', select: 'fullName email phone' },
+  { path: 'ownerDecision.by', select: 'fullName email phone' },
+  { path: 'reviewedBy', select: 'fullName email' },
+  { path: 'usedBy', select: 'fullName email' },
+];
+
 /**
  * Danh sách Gate Pass (Cư dân xem đơn của căn mình; Nội bộ lọc theo trạng thái/ngày/căn)
  */
 export async function listGatePasses(viewer, query = {}) {
-  const userId = viewer?.id || viewer?._id;
+  const userId = viewer.id;
   const filter = {};
   let ownerApartmentIdSet = new Set();
 
@@ -225,38 +227,28 @@ export async function listGatePasses(viewer, query = {}) {
     filter.$or = [{ code: reg }, { truckPlate: reg }];
   }
 
-  const result = await paginate(GatePass, filter, {
-    page: query.page,
-    limit: query.limit,
-    sort: { scheduledDate: -1, createdAt: -1 },
-    populate: [
-      { path: 'apartmentId', select: 'code floor buildingId', populate: { path: 'buildingId', select: 'code name' } },
-      { path: 'createdBy', select: 'fullName email phone' },
-      { path: 'ownerDecision.by', select: 'fullName email phone' },
-      { path: 'reviewedBy', select: 'fullName email' },
-      { path: 'usedBy', select: 'fullName email' },
-    ],
-  });
+  const { items, pagination } = await paginate(
+    GatePass,
+    filter,
+    { page: query.page, limit: query.limit, sort: '-scheduledDate' },
+    { populate: LIST_POPULATE },
+  );
+  if (viewer.role !== ROLES.RESIDENT) return { items, pagination };
 
-  if (viewer.role === ROLES.RESIDENT) {
-    result.data = result.data.map((item) => {
-      const aptId = String(item.apartmentId?._id || item.apartmentId);
-      return {
-        ...item,
-        canOwnerConfirm:
-          item.status === GATE_PASS_STATUS.AWAITING_OWNER && ownerApartmentIdSet.has(aptId),
-      };
-    });
-  }
-
-  return result;
+  const withOwnerFlag = items.map((item) => ({
+    ...item,
+    canOwnerConfirm:
+      item.status === GATE_PASS_STATUS.AWAITING_OWNER &&
+      ownerApartmentIdSet.has(String(item.apartmentId?._id ?? item.apartmentId)),
+  }));
+  return { items: withOwnerFlag, pagination };
 }
 
 /**
  * Chi tiết Gate Pass (kèm công nợ hiện tại nếu là đơn OUT)
  */
 export async function getGatePassById(viewer, id) {
-  const userId = viewer?.id || viewer?._id;
+  const userId = viewer.id;
   const gatePass = await GatePass.findById(id)
     .populate({
       path: 'apartmentId',
@@ -300,7 +292,7 @@ export async function getGatePassById(viewer, id) {
  * UC52: Chủ hộ xác nhận hoặc từ chối đơn AWAITING_OWNER của khách thuê
  */
 export async function ownerDecision(viewer, id, { approved, rejectReason }, ip) {
-  const userId = viewer?.id || viewer?._id;
+  const userId = viewer.id;
   let updated = null;
   let apartmentCode = '';
 
@@ -356,7 +348,7 @@ export async function ownerDecision(viewer, id, { approved, rejectReason }, ip) 
           ? AUDIT_ACTIONS.GATEPASS_OWNER_APPROVED
           : AUDIT_ACTIONS.GATEPASS_OWNER_REJECTED,
         user: viewer,
-        targetType: 'GatePass',
+        targetType: AUDIT_TARGETS.GATE_PASS,
         targetId: gatePass._id,
         metadata: {
           code: gatePass.code,
@@ -403,7 +395,7 @@ export async function ownerDecision(viewer, id, { approved, rejectReason }, ip) 
  * UC53: Trưởng BQL duyệt hoặc từ chối đơn PENDING
  */
 export async function reviewGatePass(managerUser, id, { approved, rejectReason }, ip) {
-  const userId = managerUser?.id || managerUser?._id;
+  const userId = managerUser.id;
   if (!approved && !rejectReason?.trim()) {
     throw ApiError.badRequest('Vui lòng nhập lý do từ chối', [
       { field: 'rejectReason', message: 'Lý do từ chối là bắt buộc' },
@@ -454,7 +446,7 @@ export async function reviewGatePass(managerUser, id, { approved, rejectReason }
       {
         action: approved ? AUDIT_ACTIONS.GATEPASS_APPROVED : AUDIT_ACTIONS.GATEPASS_REJECTED,
         user: managerUser,
-        targetType: 'GatePass',
+        targetType: AUDIT_TARGETS.GATE_PASS,
         targetId: gatePass._id,
         metadata: {
           code: gatePass.code,
@@ -518,7 +510,7 @@ export async function listTodayGatePassesForSecurity(query = {}) {
  * UC54: Bảo vệ đánh dấu Gate Pass đã sử dụng (Used)
  */
 export async function markGatePassUsed(securityUser, id, ip) {
-  const userId = securityUser?.id || securityUser?._id;
+  const userId = securityUser.id;
   const now = new Date();
   const todayStart = startOfVnDay(now);
   const todayEnd = endOfVnDay(now);
@@ -549,7 +541,7 @@ export async function markGatePassUsed(securityUser, id, ip) {
       {
         action: AUDIT_ACTIONS.GATEPASS_USED,
         user: securityUser,
-        targetType: 'GatePass',
+        targetType: AUDIT_TARGETS.GATE_PASS,
         targetId: gatePass._id,
         metadata: {
           code: gatePass.code,

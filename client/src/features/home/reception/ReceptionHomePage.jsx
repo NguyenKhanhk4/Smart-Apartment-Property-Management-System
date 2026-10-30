@@ -9,6 +9,7 @@ import { LatestNews, UpcomingGuests } from './SideBlocks';
 import StatCards from './StatCards';
 import { MUTED, TEXT } from './styles';
 import TodoList from './TodoList';
+import { formatDate } from '../../../utils/format';
 
 const WEEKDAYS = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
 
@@ -32,7 +33,7 @@ export default function ReceptionHomePage() {
             {greeting(now.hour())}, {user.fullName}
           </h1>
           <p className={`mt-1 mb-0 text-[15px] ${MUTED}`}>
-            {WEEKDAYS[now.day()]}, {now.format('DD/MM/YYYY')}
+            {WEEKDAYS[now.day()]}, {formatDate(now)}
             {waiting != null && ` · Có ${waiting} việc đang chờ bạn xử lý`}
           </p>
         </div>

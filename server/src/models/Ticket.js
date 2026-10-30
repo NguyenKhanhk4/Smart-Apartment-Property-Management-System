@@ -1,4 +1,4 @@
-import { PRIORITIES, TICKET_SCOPES, TICKET_STATUS, TICKET_TYPES, values } from '../constants/enums.js';
+import { PRIORITIES, PRIORITY_ORDER, TICKET_HISTORY_ACTIONS, TICKET_SCOPES, TICKET_STATUS, TICKET_TYPES, values } from '../constants/enums.js';
 import { ObjectId, Schema, model, schemaOptions } from './_shared.js';
 
 // Lịch sử xử lý — mỗi lần đổi trạng thái/phân công/leo thang thêm 1 dòng
@@ -6,7 +6,7 @@ const ticketHistorySchema = new Schema(
   {
     at: { type: Date, default: Date.now },
     by: { type: ObjectId, ref: 'User', default: null }, // null = hệ thống (cron)
-    action: { type: String, required: true }, // CREATED, ASSIGNED, PROGRESS, ESCALATED, CONFIRMED...
+    action: { type: String, enum: values(TICKET_HISTORY_ACTIONS), required: true },
     fromStatus: String,
     toStatus: String,
     note: String,
@@ -31,6 +31,8 @@ const ticketSchema = new Schema(
     description: { type: String, required: true },
     imageUrls: { type: [String], validate: [(v) => v.length <= 5, 'Tối đa 5 ảnh'] },
     priority: { type: String, enum: values(PRIORITIES), required: true },
+    // Thứ tự mức ưu tiên (LOW=0 … URGENT=3) để sort theo độ nghiêm trọng thay vì bảng chữ cái; tự cập nhật theo priority
+    priorityRank: { type: Number, default: null },
     status: {
       type: String,
       enum: values(TICKET_STATUS),
@@ -69,6 +71,11 @@ const ticketSchema = new Schema(
   // tránh ghi đè trạng thái lẫn nhau (errorHandler trả 409 CONCURRENT_UPDATE)
   schemaOptions('tickets', { optimisticConcurrency: true }),
 );
+
+// Đồng bộ priorityRank khi lưu bằng document (create/save); chỗ cập nhật bằng updateOne tự set kèm (tickets.jobs)
+ticketSchema.pre('validate', function syncPriorityRank() {
+  this.priorityRank = PRIORITY_ORDER.indexOf(this.priority);
+});
 
 ticketSchema.index({ status: 1, dueDate: 1 }); // cron leo thang + danh sách quá hạn
 ticketSchema.index({ apartmentId: 1, createdAt: -1 });

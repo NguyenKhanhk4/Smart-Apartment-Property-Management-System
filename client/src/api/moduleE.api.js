@@ -98,3 +98,14 @@ export const lookupApi = {
   apartments: (params) => http.get('/lookups/apartments', { params }),
   amenities: () => http.get('/lookups/amenities'),
 };
+
+// ===== Người 4: Lịch ca trực Kỹ thuật / Bảo vệ =====
+export const dutyShiftApi = {
+  /** params: { from, to, roleTitle?, userId? } (ISO) */
+  list: (params) => http.get('/duty-shifts', { params }),
+  onDuty: (roleTitle) => http.get('/duty-shifts/on-duty', { params: { roleTitle } }),
+  staff: (roleTitle) => http.get('/duty-shifts/staff', { params: { roleTitle } }),
+  /** body: { roleTitle, userId, startAt, endAt, isBackup?, repeatDays?, note? } */
+  create: (body) => http.post('/duty-shifts', body),
+  remove: (id) => http.delete(`/duty-shifts/${id}`),
+};

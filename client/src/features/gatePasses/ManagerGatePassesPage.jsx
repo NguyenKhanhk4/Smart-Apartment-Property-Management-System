@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import {
+  App,
   Alert,
   Button,
   Card,
   Col,
   Descriptions,
-  Form,
   Input,
   Modal,
   Popconfirm,
@@ -26,18 +26,20 @@ import {
 import { gatePassesApi } from '../../api/gatePasses.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
-import { RELATION_TYPES } from '../../constants/enums';
+import { GATE_PASS_DIRECTIONS, GATE_PASS_STATUS, RELATION_TYPES } from '../../constants/enums';
 import { useAction, useApi } from '../../hooks/useApi';
-import { formatCurrency, formatDate, formatDateTime } from '../../utils/format';
-import { GATE_PASS_DIRECTIONS_MAP, GATE_PASS_STATUS_MAP } from './gatePassConstants';
+import { formatMoney, formatDate, formatDateTime } from '../../utils/format';
+import ReasonModal from '../../components/ReasonModal';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 
 export default function ManagerGatePassesPage() {
+  const { message } = App.useApp();
   const [statusFilter, setStatusFilter] = useState('PENDING');
   const [directionFilter, setDirectionFilter] = useState('');
   const [search, setSearch] = useState('');
+  const searchQuery = useDebouncedValue(search.trim());
   const [detailId, setDetailId] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
-  const [rejectForm] = Form.useForm();
 
   const {
     data: listData,
@@ -49,10 +51,10 @@ export default function ManagerGatePassesPage() {
       gatePassesApi.list({
         status: statusFilter || undefined,
         direction: directionFilter || undefined,
-        search: search || undefined,
+        search: searchQuery || undefined,
         limit: 50,
       }),
-    [statusFilter, directionFilter, search],
+    [statusFilter, directionFilter, searchQuery],
   );
 
   const items = Array.isArray(listData) ? listData : listData?.items || [];
@@ -70,12 +72,6 @@ export default function ManagerGatePassesPage() {
   const [runApprove, approving] = useAction((id) => gatePassesApi.approve(id), {
     success: 'Đã phê duyệt đơn chuyển đồ',
   });
-  const [runReject, rejecting] = useAction(
-    ({ id, rejectReason }) => gatePassesApi.reject(id, rejectReason),
-    {
-      success: 'Đã từ chối đơn chuyển đồ',
-    },
-  );
 
   const handleApprove = async (id) => {
     try {
@@ -87,18 +83,6 @@ export default function ManagerGatePassesPage() {
     }
   };
 
-  const handleReject = async () => {
-    try {
-      const values = await rejectForm.validateFields();
-      await runReject({ id: rejectTarget._id, rejectReason: values.rejectReason });
-      setRejectTarget(null);
-      rejectForm.resetFields();
-      reload();
-      if (detailId === rejectTarget._id) reloadDetail();
-    } catch {
-      // handled
-    }
-  };
 
   const columns = [
     {
@@ -130,7 +114,7 @@ export default function ManagerGatePassesPage() {
       title: 'Chiều',
       dataIndex: 'direction',
       key: 'direction',
-      render: (v) => <EnumTag map={GATE_PASS_DIRECTIONS_MAP} value={v} />,
+      render: (v) => <EnumTag map={GATE_PASS_DIRECTIONS} value={v} />,
     },
     {
       title: 'Thời gian',
@@ -154,7 +138,7 @@ export default function ManagerGatePassesPage() {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
-      render: (v) => <EnumTag map={GATE_PASS_STATUS_MAP} value={v} />,
+      render: (v) => <EnumTag map={GATE_PASS_STATUS} value={v} />,
     },
     {
       title: 'Thao tác',
@@ -185,10 +169,7 @@ export default function ManagerGatePassesPage() {
                 size="small"
                 danger
                 icon={<CloseOutlined />}
-                onClick={() => {
-                  setRejectTarget(r);
-                  rejectForm.resetFields();
-                }}
+                onClick={() => setRejectTarget(r)}
               >
                 Từ chối
               </Button>
@@ -217,7 +198,7 @@ export default function ManagerGatePassesPage() {
               Công nợ hiện tại:{' '}
               {isAvailable ? (
                 <b className={currentDebt.amount > 0 ? 'text-red-600' : 'text-emerald-600'}>
-                  {formatCurrency(currentDebt.amount)}
+                  {formatMoney(currentDebt.amount)}
                 </b>
               ) : (
                 <span className="italic text-gray-500">Chưa có dữ liệu công nợ</span>
@@ -226,7 +207,7 @@ export default function ManagerGatePassesPage() {
             {gp.debtSnapshot?.at && (
               <div className="text-xs text-gray-500">
                 Công nợ ghi nhận lúc duyệt ({formatDateTime(gp.debtSnapshot.at)}):{' '}
-                <b>{formatCurrency(gp.debtSnapshot.amount ?? 0)}</b>
+                <b>{formatMoney(gp.debtSnapshot.amount ?? 0)}</b>
               </div>
             )}
           </div>
@@ -256,7 +237,7 @@ export default function ManagerGatePassesPage() {
               onChange={setStatusFilter}
               options={[
                 { value: '', label: 'Tất cả trạng thái' },
-                ...Object.entries(GATE_PASS_STATUS_MAP).map(([k, v]) => ({
+                ...Object.entries(GATE_PASS_STATUS).map(([k, v]) => ({
                   value: k,
                   label: v.label,
                 })),
@@ -333,10 +314,7 @@ export default function ManagerGatePassesPage() {
                 <Button
                   danger
                   icon={<CloseOutlined />}
-                  onClick={() => {
-                    setRejectTarget(detailData);
-                    rejectForm.resetFields();
-                  }}
+                  onClick={() => setRejectTarget(detailData)}
                 >
                   Từ chối
                 </Button>
@@ -362,10 +340,10 @@ export default function ManagerGatePassesPage() {
                   <EnumTag map={RELATION_TYPES} value={detailData.creatorRelation} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Chiều vận chuyển">
-                  <EnumTag map={GATE_PASS_DIRECTIONS_MAP} value={detailData.direction} />
+                  <EnumTag map={GATE_PASS_DIRECTIONS} value={detailData.direction} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Trạng thái">
-                  <EnumTag map={GATE_PASS_STATUS_MAP} value={detailData.status} />
+                  <EnumTag map={GATE_PASS_STATUS} value={detailData.status} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Ngày & khung giờ">
                   {formatDate(detailData.scheduledDate)} ({detailData.timeSlot?.from} –{' '}
@@ -380,7 +358,7 @@ export default function ManagerGatePassesPage() {
                 <Descriptions.Item label="Danh sách đồ đạc">
                   <ul className="list-disc pl-4 m-0">
                     {(detailData.items || []).map((it, idx) => (
-                      <li key={idx}>
+                      <li key={`${it.name}-${idx}`}>
                         {it.name} — Số lượng: <b>{it.quantity}</b>
                       </li>
                     ))}
@@ -410,27 +388,22 @@ export default function ManagerGatePassesPage() {
         )}
       </Modal>
 
-      {/* Modal từ chối */}
-      <Modal
-        title={`Từ chối Gate Pass ${rejectTarget?.code || ''}`}
+      <ReasonModal
         open={Boolean(rejectTarget)}
-        onCancel={() => setRejectTarget(null)}
-        onOk={handleReject}
-        confirmLoading={rejecting}
+        title={`Từ chối Gate Pass ${rejectTarget?.code || ''}`}
+        label="Lý do từ chối"
+        placeholder="Nhập lý do từ chối đơn chuyển đồ..."
         okText="Xác nhận từ chối"
-        okButtonProps={{ danger: true }}
-        cancelText="Hủy"
-      >
-        <Form form={rejectForm} layout="vertical">
-          <Form.Item
-            name="rejectReason"
-            label="Lý do từ chối (bắt buộc)"
-            rules={[{ required: true, message: 'Vui lòng nhập lý do từ chối' }]}
-          >
-            <Input.TextArea rows={3} placeholder="Nhập lý do từ chối đơn chuyển đồ..." />
-          </Form.Item>
-        </Form>
-      </Modal>
+        action={(reason) => gatePassesApi.reject(rejectTarget._id, reason)}
+        onClose={() => setRejectTarget(null)}
+        onDone={() => {
+          message.success('Đã từ chối đơn chuyển đồ');
+          const id = rejectTarget._id;
+          setRejectTarget(null);
+          reload();
+          if (detailId === id) reloadDetail();
+        }}
+      />
     </div>
   );
 }

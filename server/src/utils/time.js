@@ -1,7 +1,39 @@
-// Tiện ích thời gian theo giờ Việt Nam (UTC+7, không có DST).
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
-export const HOUR_MS = 60 * 60 * 1000;
+// Tiện ích thời gian theo giờ Việt Nam (UTC+7, không có DST). Module KHÔNG tự khai báo lại các hằng / hàm này.
+export const MINUTE_MS = 60 * 1000;
+export const HOUR_MS = 60 * MINUTE_MS;
 export const DAY_MS = 24 * HOUR_MS;
+export const VN_OFFSET_MS = 7 * HOUR_MS;
+
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+const pad = (n) => String(n).padStart(2, '0');
+/** Date "dịch" sang giờ VN để đọc getUTC*() ra ngày giờ VN */
+const shiftVn = (date) => new Date(new Date(date).getTime() + VN_OFFSET_MS);
+
+export const addMinutes = (date, minutes) => new Date(new Date(date).getTime() + minutes * MINUTE_MS);
+
+/** Date → "YYYY-MM-DD" theo giờ VN */
+export const toVnYmd = (date) => shiftVn(date).toISOString().slice(0, 10);
+
+/** "2026-10-08" → 00:00 ngày đó giờ VN (= 2026-10-07T17:00:00.000Z) */
+export function vnDayStart(ymd) {
+  if (!YMD.test(ymd)) throw new Error(`Ngày không đúng dạng YYYY-MM-DD: ${ymd}`);
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) - VN_OFFSET_MS);
+}
+
+/** "HH:mm" giờ VN của một mốc thời gian */
+export const vnHHmm = (date) => shiftVn(date).toISOString().slice(11, 16);
+
+// Định dạng hiển thị (thông báo, email, file xuất) — tự ghép chuỗi để không phụ thuộc ICU/locale của máy chủ
+export const fmtTimeVn = (date) => (date ? vnHHmm(date) : '—');
+export function fmtDateVn(date) {
+  if (!date) return '—';
+  const d = shiftVn(date);
+  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
+}
+export const fmtDateTimeVn = (date) => (date ? `${fmtTimeVn(date)} ${fmtDateVn(date)}` : '—');
+/** "2026-03" → "03/2026" */
+export const periodLabel = (period) => `${period.slice(5)}/${period.slice(0, 4)}`;
 
 /** 00:00 giờ VN của ngày chứa `date`, trả về Date (UTC). */
 export function startOfVnDay(date = new Date()) {

@@ -4,7 +4,8 @@ import { notifyApartment } from '../../services/notification.service.js';
 import { getActiveApartmentIds, resolveResidentApartment } from '../../services/residency.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
-import { HOUR_MS, endOfVnDay, startOfVnDay } from '../../utils/time.js';
+import { HOUR_MS, endOfVnDay, fmtTimeVn, startOfVnDay } from '../../utils/time.js';
+import { buildIdNumberFields, decryptIdNumber, maskIdNumber } from '../residents/idCrypto.js';
 
 const POPULATE = [
   { path: 'apartmentId', select: 'code buildingId', populate: { path: 'buildingId', select: 'name' } },
@@ -12,8 +13,22 @@ const POPULATE = [
   { path: 'recordedBy', select: 'fullName' },
 ];
 
+/**
+ * CCCD khách lưu mã hóa (idNumberEnc + idNumberHash, không select mặc định) như CCCD cư dân.
+ * API chỉ trả số đã che; bản ghi cũ còn idNumber dạng rõ cũng được che khi trả về.
+ */
+const withIdFields = ({ idNumber, ...data }) => (idNumber === undefined ? data : { ...data, ...buildIdNumberFields(idNumber) });
+
+export function presentGuest(log) {
+  const plain = typeof log.toObject === 'function' ? log.toObject() : log;
+  const { idNumberEnc, ...rest } = plain;
+  delete rest.idNumberHash;
+  const idNumber = idNumberEnc ? decryptIdNumber(idNumberEnc) : plain.idNumber;
+  return { ...rest, idNumber: maskIdNumber(idNumber) };
+}
+
 async function findOr404(id) {
-  const log = await GuestLog.findById(id);
+  const log = await GuestLog.findById(id).select('+idNumberEnc');
   if (!log) throw ApiError.notFound('Không tìm thấy bản ghi khách');
   return log;
 }
@@ -24,13 +39,14 @@ export async function registerGuest(user, data) {
   if (data.expectedTime.getTime() < Date.now() - HOUR_MS) {
     throw ApiError.badRequest('Thời gian dự kiến không được ở quá khứ');
   }
-  return GuestLog.create({
-    ...data,
+  const log = await GuestLog.create({
+    ...withIdFields(data),
     apartmentId: apartment._id,
     buildingId: apartment.buildingId,
     status: GUEST_STATUS.EXPECTED,
     registeredBy: user.id,
   });
+  return presentGuest(log);
 }
 
 export async function cancelRegistration(user, id) {
@@ -67,7 +83,11 @@ export async function listGuests(user, query) {
     filter.$and = [...(filter.$or ? [{ $or: filter.$or }] : []), { $or: or }];
     delete filter.$or;
   }
-  return paginate(GuestLog, filter, { ...query, sort: query.sort ?? '-createdAt' }, { populate: POPULATE });
+  const { items, pagination } = await paginate(GuestLog, filter, { ...query, sort: query.sort ?? '-createdAt' }, {
+    populate: POPULATE,
+    select: '+idNumberEnc',
+  });
+  return { items: items.map(presentGuest), pagination };
 }
 
 // ===== UC-E08: Bảo vệ ghi nhận khách đến/rời =====
@@ -83,11 +103,11 @@ export async function checkIn(user, id, { note }) {
   await notifyApartment(log.apartmentId, {
     type: NOTIFICATION_TYPES.GUEST,
     title: 'Khách của bạn đã đến',
-    content: `${log.guestName} đã vào tòa nhà lúc ${log.checkInTime.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}.`,
+    content: `${log.guestName} đã vào tòa nhà lúc ${fmtTimeVn(log.checkInTime)}.`,
     refId: log._id,
     link: '/r/guests',
   });
-  return log;
+  return presentGuest(log);
 }
 
 /** BR-O10: khách vãng lai — bắt buộc tên khách + căn hộ đến thăm */
@@ -96,7 +116,7 @@ export async function walkIn(user, data) {
   if (!apartment) throw ApiError.badRequest('Căn hộ đến thăm không tồn tại');
   const now = new Date();
   const log = await GuestLog.create({
-    ...data,
+    ...withIdFields(data),
     buildingId: apartment.buildingId,
     status: GUEST_STATUS.CHECKED_IN,
     isWalkIn: true,
@@ -111,7 +131,7 @@ export async function walkIn(user, data) {
     refId: log._id,
     link: '/r/guests',
   });
-  return log;
+  return presentGuest(log);
 }
 
 export async function checkOut(user, id) {
@@ -121,5 +141,5 @@ export async function checkOut(user, id) {
   log.checkOutTime = new Date();
   log.recordedBy ??= user.id;
   await log.save();
-  return log;
+  return presentGuest(log);
 }

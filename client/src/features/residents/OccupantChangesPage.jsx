@@ -9,7 +9,7 @@ import {
   Statistic,
   Table,
   Tag,
-  message,
+  App,
 } from 'antd';
 import {
   FileExcelOutlined,
@@ -22,11 +22,15 @@ import dayjs from 'dayjs';
 import { residentsApi } from '../../api/moduleA.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
-import { RELATION_TYPES } from '../../constants/enums';
+import { OCCUPANT_CHANGE_TYPES, RELATION_TYPES } from '../../constants/enums';
+import { keysOf } from '../../utils/status';
+
+const CHANGE = keysOf(OCCUPANT_CHANGE_TYPES);
 import { useApi } from '../../hooks/useApi';
 import { formatDate } from '../../utils/format';
 
 export default function OccupantChangesPage() {
+  const { message } = App.useApp();
   const [dateRange, setDateRange] = useState([
     dayjs().subtract(30, 'day'),
     dayjs(),
@@ -46,8 +50,8 @@ export default function OccupantChangesPage() {
   );
 
   const rows = Array.isArray(changes) ? changes : changes?.items || [];
-  const moveInCount = rows.filter((r) => r.changeType === 'MOVE_IN').length;
-  const moveOutCount = rows.filter((r) => r.changeType === 'MOVE_OUT').length;
+  const moveInCount = rows.filter((r) => r.changeType === CHANGE.MOVE_IN).length;
+  const moveOutCount = rows.filter((r) => r.changeType === CHANGE.MOVE_OUT).length;
 
   const handleExport = async () => {
     setExporting(true);
@@ -99,16 +103,11 @@ export default function OccupantChangesPage() {
       title: 'Loại biến động',
       dataIndex: 'changeType',
       key: 'changeType',
-      render: (v) =>
-        v === 'MOVE_IN' ? (
-          <Tag color="success" icon={<LoginOutlined />}>
-            Vào ở
-          </Tag>
-        ) : (
-          <Tag color="volcano" icon={<LogoutOutlined />}>
-            Chuyển đi
-          </Tag>
-        ),
+      render: (v) => (
+        <Tag color={OCCUPANT_CHANGE_TYPES[v]?.color} icon={v === CHANGE.MOVE_IN ? <LoginOutlined /> : <LogoutOutlined />}>
+          {OCCUPANT_CHANGE_TYPES[v]?.label ?? v}
+        </Tag>
+      ),
     },
     {
       title: 'Ngày biến động',

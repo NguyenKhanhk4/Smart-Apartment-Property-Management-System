@@ -47,8 +47,8 @@ router.get(
   authorize(...VIEWERS),
   validate({ query: listQuerySchema }),
   async (req, res) => {
-    const result = await service.listParkingCards(req.validated.query);
-    return paginated(res, result);
+    const { items, pagination } = await service.listParkingCards(req.validated.query);
+    return paginated(res, items, pagination);
   },
 );
 

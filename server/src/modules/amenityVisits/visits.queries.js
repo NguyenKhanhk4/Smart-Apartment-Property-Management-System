@@ -1,11 +1,10 @@
 // Truy vấn / trình bày lượt vào tiện ích dùng chung (UC-D10): danh sách quầy, đếm số người đang ở trong tiện ích,
 // và khối "lượt vào hôm nay" của màn hình tra mã. Chỉ phụ thuộc model + util để memberCodes.service gọi được mà không import vòng.
 import { VISIT_STATUS } from '../../constants/enums.js';
-import { AmenityVisit, MemberCode } from '../../models/index.js';
-import { DAY_MS } from '../../utils/time.js';
+import { AmenityVisit } from '../../models/index.js';
+import { DAY_MS, MINUTE_MS } from '../../utils/time.js';
+import { activeMemberCodes } from '../amenities/access.queries.js';
 import { toVnYmd, vnDayStart } from '../amenities/slot.utils.js';
-
-const MINUTE_MS = 60 * 1000;
 
 const POPULATE = [
   { path: 'amenityId', select: 'name' },
@@ -38,13 +37,7 @@ export const dayRange = (ymd) => {
 /** Lượt vào ở dạng trả về cho client (kèm mã cư dân đang hiệu lực của người vào) */
 export async function presentVisits(rows) {
   if (!rows.length) return [];
-  const codes = await MemberCode.find({
-    userId: { $in: rows.map((r) => r.userId?._id ?? r.userId) },
-    isActive: true,
-  })
-    .select('userId apartmentId code')
-    .lean();
-  const codeOf = new Map(codes.map((c) => [`${c.apartmentId}:${c.userId}`, c.code]));
+  const codeOf = await activeMemberCodes(rows);
   const name = (u) => (u && typeof u === 'object' ? { userId: u._id, fullName: u.fullName } : null);
   return rows.map((r) => {
     const person = r.userId && typeof r.userId === 'object' ? r.userId : null;
@@ -80,6 +73,7 @@ export async function presentVisits(rows) {
   });
 }
 
+export const VISIT_POPULATE = POPULATE;
 export const findVisits = (filter, sort = { visitedAt: -1 }) => AmenityVisit.find(filter).populate(POPULATE).sort(sort);
 
 /** Lượt vào hôm nay (giờ VN) của một người, mọi trạng thái — khối "Lượt vào hôm nay" khi tra mã */

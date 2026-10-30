@@ -12,7 +12,7 @@ import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { paginationQuery } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
-import { idParams, objectId } from '../../utils/validators.js';
+import { hhmm, idParams, objectId } from '../../utils/validators.js';
 import * as service from './gatePasses.service.js';
 
 const router = Router();
@@ -35,11 +35,9 @@ const createBodySchema = Joi.object({
     .required(),
   scheduledDate: Joi.date().iso().required(),
   timeSlot: Joi.object({
-    from: Joi.string()
-      .pattern(/^([01]\d|2[0-3]):([0-5]\d)$/)
+    from: hhmm()
       .required(),
-    to: Joi.string()
-      .pattern(/^([01]\d|2[0-3]):([0-5]\d)$/)
+    to: hhmm()
       .required(),
   }).required(),
   items: Joi.array()
@@ -150,8 +148,8 @@ router.get(
   authorize(...VIEWERS),
   validate({ query: listQuerySchema }),
   async (req, res) => {
-    const result = await service.listGatePasses(req.user, req.validated.query);
-    return paginated(res, result);
+    const { items, pagination } = await service.listGatePasses(req.user, req.validated.query);
+    return paginated(res, items, pagination);
   },
 );
 

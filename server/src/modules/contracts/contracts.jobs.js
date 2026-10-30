@@ -1,6 +1,7 @@
 import {
   APARTMENT_STATUS,
   AUDIT_ACTIONS,
+  AUDIT_TARGETS,
   CONTRACT_STATUS,
   CONTRACT_TYPES,
   NOTIFICATION_TYPES,
@@ -8,7 +9,7 @@ import {
 import { Apartment, Contract, Resident } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
-import { DAY_MS, endOfVnDay, startOfVnDay } from '../../utils/time.js';
+import { DAY_MS, endOfVnDay, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { ensureCodes } from '../memberCodes/memberCodes.service.js';
 import { disableActiveCardsByApartment } from '../parkingCards/parkingCards.service.js';
@@ -81,14 +82,14 @@ export async function expireLeases() {
         );
 
         // Chuyển thẻ gửi xe ACTIVE sang DISABLED_TO_COLLECT (UC66)
-        await disableActiveCardsByApartment(current.apartmentId, null, session);
+        await disableActiveCardsByApartment(current.apartmentId, null, session, null);
 
         // 4. Ghi audit log CONTRACT_EXPIRED
         await logAudit(
           {
             action: AUDIT_ACTIONS.CONTRACT_EXPIRED,
             user: null,
-            targetType: 'Contract',
+            targetType: AUDIT_TARGETS.CONTRACT,
             targetId: current._id,
             metadata: {
               reason: 'Hết hạn hợp đồng cho thuê',
@@ -123,68 +124,54 @@ export async function expireLeases() {
   return processedCount;
 }
 
+/** Số ngày nhắc trước khi hợp đồng thuê hết hạn (UC19) */
+export const LEASE_REMIND_DAYS = 15;
+
 /**
- * UC19: Cron job nhắc trước 15 ngày hợp đồng cho thuê sắp hết hạn
+ * UC19: Cron job nhắc hợp đồng cho thuê sắp hết hạn
  * - Chạy lúc 00:30 hằng ngày (giờ VN).
- * - Tìm hợp đồng LEASE đang ACTIVE có endDate thuộc ngày (today + 15 ngày) theo giờ VN và chưa nhắc (remindedAt == null).
- * - Gửi thông báo cho cả chủ hộ (ownerId) và người thuê (tenantId), sau đó đánh dấu remindedAt = now để idempotent.
+ * - Tìm hợp đồng LEASE ACTIVE có endDate từ hôm nay đến hết ngày (hôm nay + 15) theo giờ VN và CHƯA nhắc
+ *   (remindedAt == null) → cron lỡ một hôm vẫn nhắc ở lần chạy sau, không bỏ sót.
+ * - Gửi thông báo cho chủ hộ và người thuê, đánh dấu remindedAt có điều kiện để mỗi hợp đồng chỉ nhắc 1 lần.
  */
-export async function remindExpiringLeases() {
-  const todayStart = startOfVnDay();
-  const targetStart = new Date(todayStart.getTime() + 15 * DAY_MS);
-  const targetEnd = endOfVnDay(targetStart);
+export async function remindExpiringLeases(now = new Date()) {
+  const todayStart = startOfVnDay(now);
+  const windowEnd = endOfVnDay(new Date(todayStart.getTime() + LEASE_REMIND_DAYS * DAY_MS));
+  const notReminded = { $or: [{ remindedAt: null }, { remindedAt: { $exists: false } }] };
 
   const contracts = await Contract.find({
     type: CONTRACT_TYPES.LEASE,
     status: CONTRACT_STATUS.ACTIVE,
-    endDate: { $gte: targetStart, $lte: targetEnd },
-    $or: [{ remindedAt: null }, { remindedAt: { $exists: false } }],
+    endDate: { $gte: todayStart, $lte: windowEnd },
+    ...notReminded,
   })
     .populate('apartmentId', 'code')
     .lean();
 
-  if (!contracts.length) {
-    return 0;
-  }
-
-  const now = new Date();
   let remindedCount = 0;
-
   for (const contract of contracts) {
     try {
       const updated = await Contract.findOneAndUpdate(
-        {
-          _id: contract._id,
-          status: CONTRACT_STATUS.ACTIVE,
-          $or: [{ remindedAt: null }, { remindedAt: { $exists: false } }],
-        },
+        { _id: contract._id, status: CONTRACT_STATUS.ACTIVE, ...notReminded },
         { $set: { remindedAt: now } },
-        { new: true },
+        { returnDocument: 'after' },
       );
-
-      if (!updated) {
-        continue;
-      }
+      if (!updated) continue;
 
       const aptCode = contract.apartmentId?.code || '';
-      const endDateStr = new Date(contract.endDate).toLocaleDateString('vi-VN', {
-        timeZone: 'Asia/Ho_Chi_Minh',
-      });
-
+      const daysLeft = Math.max(0, Math.round((startOfVnDay(contract.endDate) - todayStart) / DAY_MS));
       await notify([contract.ownerId, contract.tenantId], {
         type: NOTIFICATION_TYPES.SYSTEM,
-        title: `Hợp đồng thuê căn ${aptCode} sắp hết hạn sau 15 ngày`,
-        content: `Hợp đồng cho thuê căn hộ ${aptCode} sẽ hết hạn vào ngày ${endDateStr}. Vui lòng liên hệ Lễ tân / Ban quản lý để làm thủ tục gia hạn hoặc báo chuyển đi trước thời hạn.`,
+        title: `Hợp đồng thuê căn ${aptCode} sắp hết hạn sau ${daysLeft} ngày`,
+        content: `Hợp đồng cho thuê căn hộ ${aptCode} sẽ hết hạn vào ngày ${fmtDateVn(contract.endDate)}. Vui lòng liên hệ Lễ tân / Ban quản lý để làm thủ tục gia hạn hoặc báo chuyển đi trước thời hạn.`,
         refId: contract._id,
         link: '/r/my-apartment',
         email: true,
       });
-
       remindedCount += 1;
     } catch (err) {
       console.error('[module-a] remindExpiringLeases error for contract', contract._id, err.message);
     }
   }
-
   return remindedCount;
 }

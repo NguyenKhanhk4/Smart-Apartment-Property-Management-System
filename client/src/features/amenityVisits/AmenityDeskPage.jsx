@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Avatar, Button, Card, DatePicker, Flex, Form, Input, Modal, Progress, Select, Table, Tag, Tooltip, Typography } from 'antd';
+import { useCallback, useState } from 'react';
+import { App, Avatar, Button, Card, DatePicker, Flex, Progress, Select, Table, Tag, Tooltip, Typography } from 'antd';
 import { ReloadOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { amenityApi, amenityVisitApi } from '../../api/moduleD.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
 import { AGE_GROUPS, VISIT_CHARGE_TYPES, VISIT_STATUS, enumOptions } from '../../constants/enums';
-import { useAction, useApi } from '../../hooks/useApi';
+import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatMoney } from '../../utils/format';
 import ResidentPanel from './ResidentPanel';
+import ReasonModal from '../../components/ReasonModal';
+import { usePolling } from '../../hooks/usePolling';
 
 const AUTO_REFRESH_MS = 60 * 1000;
 
@@ -40,6 +42,7 @@ function OccupancyCards({ items, windowMinutes }) {
 
 // UC-D10 — Quầy tiện ích. Lễ tân: tra mã cư dân, ghi lượt vào, hủy lượt. Trưởng BQL: chỉ xem lượt vào và số người đang trong tiện ích.
 export default function AmenityDeskPage() {
+  const { message } = App.useApp();
   const { hasRole } = useAuth();
   const isReception = hasRole('STAFF:RECEPTIONIST');
   const [date, setDate] = useState(() => dayjs());
@@ -48,7 +51,6 @@ export default function AmenityDeskPage() {
   const [page, setPage] = useState(1);
   const [silent, setSilent] = useState(false);
   const [cancelling, setCancelling] = useState(null);
-  const [cancelForm] = Form.useForm();
 
   const dateText = date.format('YYYY-MM-DD');
   const { data: occupancy, reload: reloadOccupancy } = useApi(() => amenityVisitApi.occupancy(), []);
@@ -63,19 +65,8 @@ export default function AmenityDeskPage() {
     Promise.all([reloadVisits(), reloadOccupancy()]).finally(() => setSilent(false));
   }, [reloadVisits, reloadOccupancy]);
 
-  useEffect(() => {
-    const timer = setInterval(() => !document.hidden && refresh(), AUTO_REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [refresh]);
+  usePolling(refresh, AUTO_REFRESH_MS);
 
-  const [cancel, cancelling$] = useAction((v) => amenityVisitApi.cancel(cancelling._id, v.reason.trim()), {
-    success: 'Đã hủy lượt vào',
-    onDone: () => {
-      setCancelling(null);
-      cancelForm.resetFields();
-      refresh();
-    },
-  });
 
   const columns = [
     { title: 'Giờ', dataIndex: 'visitedAt', width: 80, render: (v) => dayjs(v).format('HH:mm') },
@@ -194,29 +185,26 @@ export default function AmenityDeskPage() {
         />
       </Card>
 
-      <Modal
-        title="Hủy lượt vào"
+      <ReasonModal
         open={Boolean(cancelling)}
-        onCancel={() => setCancelling(null)}
-        onOk={() => cancelForm.submit()}
+        title="Hủy lượt vào"
+        hint={
+          cancelling &&
+          `${cancelling.person?.fullName} · ${cancelling.amenity?.name} · ${dayjs(cancelling.visitedAt).format('HH:mm')}${
+            cancelling.fee > 0 ? ` · ${formatMoney(cancelling.fee)} sẽ không còn tính vào hóa đơn` : ''
+          }. Thao tác được ghi nhật ký.`
+        }
+        label="Lý do hủy"
         okText="Hủy lượt"
-        okButtonProps={{ danger: true }}
-        cancelText="Đóng"
-        confirmLoading={cancelling$}
-        destroyOnHidden
-      >
-        {cancelling && (
-          <Typography.Paragraph type="secondary">
-            {cancelling.person?.fullName} · {cancelling.amenity?.name} · {dayjs(cancelling.visitedAt).format('HH:mm')}
-            {cancelling.fee > 0 ? ` · ${formatMoney(cancelling.fee)} sẽ không còn tính vào hóa đơn` : ''}. Thao tác được ghi nhật ký.
-          </Typography.Paragraph>
-        )}
-        <Form form={cancelForm} layout="vertical" preserve={false} onFinish={(v) => cancel(v).catch(() => {})}>
-          <Form.Item name="reason" label="Lý do hủy" rules={[{ required: true, whitespace: true, min: 5, max: 500, message: 'Nhập lý do 5–500 ký tự' }]}>
-            <Input.TextArea rows={3} maxLength={500} showCount />
-          </Form.Item>
-        </Form>
-      </Modal>
+        minLength={5}
+        action={(reason) => amenityVisitApi.cancel(cancelling._id, reason)}
+        onClose={() => setCancelling(null)}
+        onDone={() => {
+          message.success('Đã hủy lượt vào');
+          setCancelling(null);
+          refresh();
+        }}
+      />
     </Flex>
   );
 }

@@ -1,8 +1,11 @@
 import {
   AUDIT_ACTIONS,
+  AUDIT_TARGETS,
   CONFIG_KEYS,
   NOTIFICATION_TYPES,
   PRIORITY_ORDER,
+  TICKET_HISTORY_ACTIONS as ACT,
+  TICKET_SLA_STATUSES,
   TICKET_STATUS,
 } from '../../constants/enums.js';
 import { Ticket } from '../../models/index.js';
@@ -10,12 +13,12 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
 import { DAY_MS, startOfVnDay } from '../../utils/time.js';
-import { OPEN_STATUSES } from './tickets.service.js';
 
 /**
  * UC-E06 / BR-O8 — [Cron 09:00] Ticket chưa xong mà quá dueDate → nâng 1 mức ưu tiên
  * (LOW→MEDIUM→HIGH→URGENT, đã URGENT thì giữ), tối đa 1 lần/ngày, báo Trưởng BQL + KTV phụ trách.
- * Gồm cả ticket NEW chưa ai nhận (quá hạn vẫn phải có người chịu trách nhiệm — mục tiêu G6).
+ * Gồm cả ticket NEW chưa ai nhận (quá hạn vẫn phải có người chịu trách nhiệm — mục tiêu G6) và ticket chờ linh kiện;
+ * bỏ qua ticket chờ cư dân đồng ý phí (TICKET_SLA_STATUSES — SLA tạm dừng).
  * Trả về số ticket đã leo thang (affectedCount cho cron_runs).
  *
  * Mỗi ticket được cập nhật bằng updateOne có điều kiện (status còn mở + chưa leo thang hôm nay):
@@ -25,7 +28,7 @@ export async function escalateOverdueTickets(now = new Date()) {
   const todayStart = startOfVnDay(now);
   const notEscalatedToday = { $or: [{ escalatedAt: null }, { escalatedAt: { $lt: todayStart } }] };
   const tickets = await Ticket.find({
-    status: { $in: OPEN_STATUSES },
+    status: { $in: TICKET_SLA_STATUSES },
     dueDate: { $lt: now },
     ...notEscalatedToday,
   })
@@ -39,15 +42,15 @@ export async function escalateOverdueTickets(now = new Date()) {
     const to = PRIORITY_ORDER[Math.min(idx + 1, PRIORITY_ORDER.length - 1)];
 
     const res = await Ticket.updateOne(
-      { _id: ticket._id, status: { $in: OPEN_STATUSES }, priority: from, ...notEscalatedToday },
+      { _id: ticket._id, status: { $in: TICKET_SLA_STATUSES }, priority: from, ...notEscalatedToday },
       {
-        $set: { priority: to, escalatedAt: now },
+        $set: { priority: to, priorityRank: PRIORITY_ORDER.indexOf(to), escalatedAt: now },
         $inc: { escalationCount: 1, __v: 1 },
         $push: {
           history: {
             at: now,
             by: null,
-            action: 'ESCALATED',
+            action: ACT.ESCALATED,
             fromStatus: ticket.status,
             toStatus: ticket.status,
             note: from === to ? `Quá hạn — giữ mức ${to}` : `Quá hạn — nâng ưu tiên ${from} → ${to}`,
@@ -61,7 +64,7 @@ export async function escalateOverdueTickets(now = new Date()) {
     await logAudit({
       action: AUDIT_ACTIONS.TICKET_ESCALATED,
       user: null,
-      targetType: 'tickets',
+      targetType: AUDIT_TARGETS.TICKET,
       targetId: ticket._id,
       metadata: { code: ticket.code, from, to, dueDate: ticket.dueDate },
     });
@@ -103,7 +106,7 @@ export async function autoCloseTickets(now = new Date()) {
           history: {
             at: now,
             by: null,
-            action: 'AUTO_CLOSED',
+            action: ACT.AUTO_CLOSED,
             fromStatus: TICKET_STATUS.WAITING_CONFIRM,
             toStatus: TICKET_STATUS.CLOSED,
             note: `Tự đóng sau ${days} ngày cư dân không phản hồi`,
@@ -116,7 +119,7 @@ export async function autoCloseTickets(now = new Date()) {
     await logAudit({
       action: AUDIT_ACTIONS.TICKET_CLOSED,
       user: null,
-      targetType: 'tickets',
+      targetType: AUDIT_TARGETS.TICKET,
       targetId: ticket._id,
       metadata: { code: ticket.code, autoClosed: true },
     });

@@ -12,7 +12,7 @@ import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { idParams, objectId } from '../../utils/validators.js';
+import { idParams, objectId, ymd } from '../../utils/validators.js';
 import * as service from './contracts.service.js';
 
 // Module A — Vũ Việt. UC-A06: Quản lý hợp đồng (Contracts)
@@ -35,7 +35,7 @@ const personSchema = Joi.object({
   email: Joi.string().trim().email(),
   phone: Joi.string().trim().allow('', null),
   idNumber: Joi.string().trim().allow('', null),
-  dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
+  dateOfBirth: ymd().allow('', null),
 });
 
 const createContractBody = Joi.object({

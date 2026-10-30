@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { dbStatus } from './config/db.js';
 import { env } from './config/env.js';
 import { ok } from './utils/response.js';
+import { authLimiter } from './middlewares/rateLimit.js';
 import complaintCategoryRoutes from './modules/complaintCategories/complaintCategories.routes.js';
 import systemConfigRoutes from './modules/systemConfigs/systemConfigs.routes.js';
 import ticketRoutes from './modules/tickets/tickets.routes.js';
@@ -30,6 +31,7 @@ import feeTypeRoutes from './modules/feeTypes/feeTypes.routes.js';
 import invoiceRoutes from './modules/invoices/invoices.routes.js';
 import gatePassRoutes, { platesRouter } from './modules/gatePasses/gatePasses.routes.js';
 import parkingCardRoutes from './modules/parkingCards/parkingCards.routes.js';
+import dutyShiftRoutes from './modules/dutyShifts/dutyShifts.routes.js';
 
 const router = Router();
 
@@ -72,7 +74,7 @@ router.use('/bookings', bookingRoutes);
 router.use('/amenity-visits', amenityVisitRoutes);
 
 // Module A — Vũ Việt (Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện)
-router.use('/auth', authRoutes);
+router.use('/auth', authLimiter, authRoutes);
 router.use('/users', userRoutes);
 router.use('/buildings', buildingRoutes);
 router.use('/apartments', apartmentRoutes);
@@ -88,7 +90,10 @@ router.use('/parking-cards', parkingCardRoutes);
 router.use('/fee-types', feeTypeRoutes);
 router.use('/invoices', invoiceRoutes);
 
-// Chỉ phục vụ đăng nhập nhanh khi dev (xem modules/devAuth).
-if (env.isDev) router.use('/dev', devAuthRoutes);
+// Người 4 — Sự cố & Tiện ích (lịch ca trực)
+router.use('/duty-shifts', dutyShiftRoutes);
+
+// Đăng nhập nhanh không mật khẩu: chỉ khi NODE_ENV=development và ENABLE_DEV_AUTH khác false (xem modules/devAuth).
+if (env.devAuthEnabled) router.use('/dev', devAuthRoutes);
 
 export default router;
