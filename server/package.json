@@ -9,7 +9,8 @@
     "start": "node src/server.js",
     "lint": "eslint .",
     "db:sync": "node scripts/db-sync.js",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "node scripts/seed.js",
+    "test": "node --import ./test/setup.js --test \"test/**/*.test.js\""
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
