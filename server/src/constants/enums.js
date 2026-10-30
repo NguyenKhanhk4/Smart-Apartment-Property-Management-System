@@ -178,7 +178,10 @@ export const WORK_ORDER_STATUS = Object.freeze({
 // BR-O12: booking tự xác nhận APPROVED khi đặt → CHECKED_IN (lễ tân) → COMPLETED (hết giờ, tính phí BR-O5);
 // hoặc CANCELLED / NO_SHOW (không tính phí).
 // PENDING, REJECTED: luồng duyệt cũ, Module D KHÔNG còn tạo mới — giữ để dữ liệu & báo cáo UC-E14 cũ không lỗi.
+// PENDING_PAYMENT (Người 4): booking có phí giữ chỗ chờ thanh toán khi BOOKING_PAYMENT_HOLD_MINUTES > 0,
+// quá hạn giữ mà chưa thanh toán thì cron chuyển CANCELLED.
 export const BOOKING_STATUS = Object.freeze({
+  PENDING_PAYMENT: 'PENDING_PAYMENT',
   APPROVED: 'APPROVED',
   CHECKED_IN: 'CHECKED_IN',
   COMPLETED: 'COMPLETED',
@@ -236,13 +239,35 @@ export const PRIORITY_ORDER = Object.freeze([
   PRIORITIES.URGENT,
 ]);
 
+// Máy trạng thái sự cố (Người 4): Mới → Đã nhận → (Chờ cư dân đồng ý phí) → Đang xử lý ⇄ Chờ linh kiện
+// → Đã xong, chờ nghiệm thu → Đã nghiệm thu (CLOSED)
 export const TICKET_STATUS = Object.freeze({
   NEW: 'NEW',
   ASSIGNED: 'ASSIGNED',
+  WAITING_QUOTE_APPROVAL: 'WAITING_QUOTE_APPROVAL',
   IN_PROGRESS: 'IN_PROGRESS',
+  WAITING_PARTS: 'WAITING_PARTS',
   WAITING_CONFIRM: 'WAITING_CONFIRM',
   CLOSED: 'CLOSED',
   REJECTED: 'REJECTED',
+});
+
+// Loại phiếu: sự cố kỹ thuật vào hàng chờ Kỹ thuật; phản ánh chuyển sang màn hình xử lý của Người 2
+export const TICKET_TYPES = Object.freeze({
+  INCIDENT: 'INCIDENT',
+  COMPLAINT: 'COMPLAINT',
+});
+
+// Phạm vi sự cố: trong căn hộ thì cần báo giá và cư dân đồng ý phí trước khi xử lý
+export const TICKET_SCOPES = Object.freeze({
+  COMMON_AREA: 'COMMON_AREA',
+  IN_APARTMENT: 'IN_APARTMENT',
+});
+
+// Chức danh được xếp lịch ca trực (Người 4 — X6)
+export const DUTY_ROLE_TITLES = Object.freeze({
+  TECHNICIAN: ROLE_TITLES.TECHNICIAN,
+  SECURITY: ROLE_TITLES.SECURITY,
 });
 
 export const GUEST_STATUS = Object.freeze({
@@ -286,6 +311,9 @@ export const CRON_JOBS = Object.freeze({
   FUND_LOW_BALANCE: 'FUND_LOW_BALANCE',
   GATE_PASS_EXPIRE: 'GATE_PASS_EXPIRE',
   CONTRACT_EXPIRY_REMIND: 'CONTRACT_EXPIRY_REMIND',
+  // Sự cố & tiện ích (Người 4)
+  TICKET_SLA_ALERT: 'TICKET_SLA_ALERT',
+  BOOKING_HOLD_EXPIRE: 'BOOKING_HOLD_EXPIRE',
 });
 
 // Hành động ghi audit log (BR-O11, NFR-05). Module khác bổ sung thêm khi cần.
@@ -341,6 +369,12 @@ export const AUDIT_ACTIONS = Object.freeze({
   // Biến động nhân khẩu (Người 2 — UC21)
   RESIDENT_CHANGES_EXPORTED: 'RESIDENT_CHANGES_EXPORTED',
   RESIDENT_ID_VIEWED: 'RESIDENT_ID_VIEWED',
+  // Sự cố & tiện ích (Người 4)
+  DUTY_SHIFT_CREATED: 'DUTY_SHIFT_CREATED',
+  DUTY_SHIFT_DELETED: 'DUTY_SHIFT_DELETED',
+  TICKET_CLAIMED: 'TICKET_CLAIMED',
+  TICKET_QUOTE_DECIDED: 'TICKET_QUOTE_DECIDED',
+  BOOKING_PAYMENT_CONFIRMED: 'BOOKING_PAYMENT_CONFIRMED',
 });
 
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
@@ -367,6 +401,10 @@ export const CONFIG_KEYS = Object.freeze({
   PARKING_CAPACITY_MOTORBIKE: 'PARKING_CAPACITY_MOTORBIKE',
   PARKING_CAPACITY_CAR: 'PARKING_CAPACITY_CAR',
   UPLOAD_MAX_SIZE_MB: 'UPLOAD_MAX_SIZE_MB',
+  // Sự cố & tiện ích (Người 4)
+  TICKET_ACK_MINUTES: 'TICKET_ACK_MINUTES',
+  COMPLAINT_RESPONSE_HOURS: 'COMPLAINT_RESPONSE_HOURS',
+  BOOKING_PAYMENT_HOLD_MINUTES: 'BOOKING_PAYMENT_HOLD_MINUTES',
 });
 
 export const DEFAULT_CONFIGS = Object.freeze([
@@ -392,6 +430,9 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.PASS_EXPIRY_REMIND_DAYS, value: 3, scope: 'BUSINESS', description: 'Nhắc gia hạn gói tháng trong N ngày cuối tháng — BR-O22' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, value: 500, scope: 'BUSINESS', description: 'Sức chứa bãi xe máy' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_CAR, value: 100, scope: 'BUSINESS', description: 'Sức chứa bãi ô tô' },
+  { key: CONFIG_KEYS.TICKET_ACK_MINUTES, value: 30, scope: 'BUSINESS', description: 'Hạn kỹ thuật viên nhận sự cố kể từ lúc gửi (phút)' },
+  { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: 'BUSINESS', description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
+  { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 0, scope: 'BUSINESS', description: 'Giữ chỗ booking có phí chờ thanh toán (phút); 0 = tắt, phí gộp vào hóa đơn tháng' },
   // TECHNICAL — Admin sửa
   { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 5, scope: 'TECHNICAL', description: 'Dung lượng ảnh tối đa (MB) — NFR-10' },
 ]);

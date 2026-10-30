@@ -49,6 +49,12 @@ export const ERROR_CODES = Object.freeze({
   VEHICLE_SLOT_FULL: { status: 409, message: 'Bãi xe đã hết chỗ' },
   RESIDENCY_DATE_OVERLAP: { status: 409, message: 'Khai báo bị trùng thời gian với khai báo khác' },
   TICKET_ALREADY_CLOSED: { status: 409, message: 'Phản ánh đã đóng, không thể cập nhật' },
+  // Sự cố & tiện ích (Người 4)
+  TICKET_ALREADY_CLAIMED: { status: 409, message: 'Sự cố đã có kỹ thuật viên khác nhận' },
+  NOT_ON_DUTY: { status: 403, message: 'Bạn không trong ca trực hiện tại' },
+  DUTY_SHIFT_OVERLAP: { status: 409, message: 'Nhân viên đã có ca trực trùng thời gian' },
+  BOOKING_QR_INVALID: { status: 400, message: 'Mã QR không hợp lệ hoặc không phải vé đặt tiện ích' },
+  BOOKING_HOLD_EXPIRED: { status: 409, message: 'Đã hết thời gian giữ chỗ chờ thanh toán' },
   WORKORDER_DUPLICATE: {
     status: 409,
     message: 'Tài sản đang có work order chưa hoàn thành',

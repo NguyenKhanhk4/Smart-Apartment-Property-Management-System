@@ -62,11 +62,29 @@ export const PRIORITIES = {
 
 export const TICKET_STATUS = {
   NEW: { label: 'Mới', color: 'blue' },
-  ASSIGNED: { label: 'Đã phân công', color: 'cyan' },
+  ASSIGNED: { label: 'Đã nhận', color: 'cyan' },
+  WAITING_QUOTE_APPROVAL: { label: 'Chờ đồng ý phí', color: 'purple' },
   IN_PROGRESS: { label: 'Đang xử lý', color: 'processing' },
-  WAITING_CONFIRM: { label: 'Chờ xác nhận', color: 'gold' },
-  CLOSED: { label: 'Đã đóng', color: 'success' },
+  WAITING_PARTS: { label: 'Chờ linh kiện', color: 'orange' },
+  WAITING_CONFIRM: { label: 'Chờ nghiệm thu', color: 'gold' },
+  CLOSED: { label: 'Đã nghiệm thu', color: 'success' },
   REJECTED: { label: 'Từ chối', color: 'default' },
+};
+
+// ===== Sự cố & tiện ích (Người 4) =====
+export const TICKET_TYPES = {
+  INCIDENT: { label: 'Sự cố kỹ thuật', color: 'volcano' },
+  COMPLAINT: { label: 'Phản ánh', color: 'geekblue' },
+};
+
+export const TICKET_SCOPES = {
+  COMMON_AREA: { label: 'Khu vực chung', color: 'default' },
+  IN_APARTMENT: { label: 'Trong căn hộ', color: 'magenta' },
+};
+
+export const DUTY_ROLE_TITLES = {
+  TECHNICIAN: { label: 'Kỹ thuật viên', color: 'orange' },
+  SECURITY: { label: 'Bảo vệ', color: 'volcano' },
 };
 
 export const GUEST_STATUS = {
@@ -155,6 +173,7 @@ export const WORK_ORDER_TYPES = {
 // ===== Module D =====
 // PENDING, REJECTED: dữ liệu luồng duyệt cũ (không còn tạo mới — BR-O12)
 export const BOOKING_STATUS = {
+  PENDING_PAYMENT: { label: 'Chờ thanh toán', color: 'gold' },
   APPROVED: { label: 'Đã xác nhận', color: 'blue' },
   CHECKED_IN: { label: 'Đã check-in', color: 'processing' },
   COMPLETED: { label: 'Hoàn tất', color: 'success' },

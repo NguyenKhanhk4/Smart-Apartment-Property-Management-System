@@ -34,6 +34,10 @@ const bookingSchema = new Schema(
     noShowAt: Date,
     completedAt: Date,
     invoiceId: { type: ObjectId, ref: 'Invoice', default: null }, // chống tính phí 2 lần
+    // Giữ chỗ chờ thanh toán (Người 4): đã thanh toán trước thì không gộp phí vào hóa đơn tháng
+    holdExpiresAt: { type: Date, default: null },
+    paidAt: { type: Date, default: null },
+    paymentRef: { type: String, default: null },
   },
   schemaOptions('bookings'),
 );
@@ -44,5 +48,6 @@ bookingSchema.index({ status: 1, date: 1 }); // thống kê UC-E14
 bookingSchema.index({ amenityId: 1, startAt: 1, status: 1 }); // sức chứa slot + booking sắp tới của tiện ích
 bookingSchema.index({ status: 1, startAt: 1 }); // cron NO_SHOW
 bookingSchema.index({ status: 1, endAt: 1 }); // cron COMPLETED
+bookingSchema.index({ status: 1, holdExpiresAt: 1 }); // cron hủy giữ chỗ quá hạn
 
 export const Booking = model('Booking', bookingSchema);
