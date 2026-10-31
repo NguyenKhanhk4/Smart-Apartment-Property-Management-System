@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { CRON_JOBS, PRIORITIES, TICKET_STATUS, values } from '../../constants/enums.js';
+import { CRON_JOBS, CRON_TRIGGERS, PRIORITIES, TICKET_SCOPES, TICKET_STATUS, TICKET_TYPES, values } from '../../constants/enums.js';
 import { runTrackedJob } from '../../jobs/cronRunner.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
@@ -9,7 +9,7 @@ import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId } from '../../utils/validators.js';
-import { autoCloseTickets, escalateOverdueTickets } from './tickets.jobs.js';
+import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from './tickets.jobs.js';
 import * as service from './tickets.service.js';
 
 const router = Router();
@@ -24,16 +24,28 @@ const listQuery = Joi.object({
   buildingId: objectId(),
   apartmentId: objectId(),
   assignedTo: objectId(),
+  type: Joi.string().valid(...values(TICKET_TYPES)),
+  scope: Joi.string().valid(...values(TICKET_SCOPES)),
   overdue: Joi.boolean(),
   q: Joi.string().trim().max(100),
 });
 
-const createBody = Joi.object({
+const ticketFields = {
   categoryId: objectId().required(),
   title: Joi.string().trim().min(5).max(150).required(),
   description: Joi.string().trim().min(10).max(2000).required(),
-  apartmentId: objectId(),
-});
+  type: Joi.string().valid(...values(TICKET_TYPES)).default(TICKET_TYPES.INCIDENT),
+  scope: Joi.string().valid(...values(TICKET_SCOPES)).default(TICKET_SCOPES.COMMON_AREA),
+};
+const createBody = Joi.object({ ...ticketFields, apartmentId: objectId() });
+const staffCreateBody = Joi.object({ ...ticketFields, apartmentId: objectId().required() });
+
+// Chạy lại thủ công các cron của ticket (ghi cron_runs)
+const MANUAL_JOBS = {
+  escalate: [CRON_JOBS.TICKET_ESCALATE, escalateOverdueTickets],
+  'auto-close': [CRON_JOBS.TICKET_AUTO_CLOSE, autoCloseTickets],
+  'sla-alert': [CRON_JOBS.TICKET_SLA_ALERT, alertSlaBreaches],
+};
 
 /**
  * @openapi
@@ -50,7 +62,7 @@ const createBody = Joi.object({
  *       - { in: query, name: q, schema: { type: string }, description: 'Tìm theo mã/tiêu đề' }
  *   post:
  *     tags: [Ticket]
- *     summary: Cư dân tạo phản ánh kèm tối đa 5 ảnh jpg/png ≤5MB (UC-E02)
+ *     summary: Cư dân gửi sự cố (INCIDENT → hàng chờ Kỹ thuật) hoặc phản ánh (COMPLAINT → Trưởng BQL), tối đa 5 ảnh (UC-E02)
  *     requestBody:
  *       content:
  *         multipart/form-data:
@@ -62,6 +74,8 @@ const createBody = Joi.object({
  *               title: { type: string }
  *               description: { type: string }
  *               apartmentId: { type: string, description: 'Bắt buộc nếu cư dân ở nhiều căn' }
+ *               type: { type: string, enum: [INCIDENT, COMPLAINT] }
+ *               scope: { type: string, enum: [COMMON_AREA, IN_APARTMENT], description: 'Chỉ áp dụng cho sự cố' }
  *               images: { type: array, items: { type: string, format: binary } }
  */
 router.get(
@@ -87,6 +101,50 @@ router.post(
 
 /**
  * @openapi
+ * /tickets/staff:
+ *   post:
+ *     tags: [Ticket]
+ *     summary: Lễ tân tạo hộ sự cố / phản ánh cho cư dân (bắt buộc apartmentId), ghi createdByStaff
+ */
+router.post(
+  '/staff',
+  authenticate,
+  authorize('STAFF:RECEPTIONIST'),
+  uploadImages('images', 5),
+  validate({ body: staffCreateBody }),
+  async (req, res) =>
+    created(res, await service.createTicketByStaff(req.user, req.body, req.files), 'Đã tạo phiếu giúp cư dân'),
+);
+
+/**
+ * @openapi
+ * /tickets/queue:
+ *   get:
+ *     tags: [Ticket]
+ *     summary: Hàng chờ sự cố chưa ai nhận (khẩn cấp lên đầu) + cờ KTV có đang trong ca không — { items, hasSchedule, onDuty }
+ */
+router.get('/queue', authenticate, authorize('STAFF:TECHNICIAN'), async (req, res) =>
+  ok(res, await service.listQueue(req.user)),
+);
+
+/**
+ * @openapi
+ * /tickets/board:
+ *   get:
+ *     tags: [Ticket]
+ *     summary: Kanban điều phối sự cố của Trưởng BQL — { columns: [{ status, items }] }
+ *     parameters: [{ in: query, name: buildingId, schema: { type: string } }]
+ */
+router.get(
+  '/board',
+  authenticate,
+  authorize('MANAGER'),
+  validate({ query: Joi.object({ buildingId: objectId() }) }),
+  async (req, res) => ok(res, await service.getBoard(req.user, req.validated.query)),
+);
+
+/**
+ * @openapi
  * /tickets/assignees:
  *   get:
  *     tags: [Ticket]
@@ -101,20 +159,17 @@ router.get('/assignees', authenticate, authorize(...DISPATCHERS), async (_req, r
  * /tickets/jobs/{job}/run:
  *   post:
  *     tags: [Ticket]
- *     summary: Chạy lại thủ công cron leo thang (escalate) hoặc tự đóng (auto-close), ghi cron_runs
- *     parameters: [{ in: path, name: job, required: true, schema: { type: string, enum: [escalate, auto-close] } }]
+ *     summary: Chạy lại thủ công cron leo thang (escalate), tự đóng (auto-close) hoặc cảnh báo SLA (sla-alert), ghi cron_runs
+ *     parameters: [{ in: path, name: job, required: true, schema: { type: string, enum: [escalate, auto-close, sla-alert] } }]
  */
 router.post(
   '/jobs/:job/run',
   authenticate,
   authorize('MANAGER', 'ADMIN'),
-  validate({ params: Joi.object({ job: Joi.string().valid('escalate', 'auto-close').required() }) }),
+  validate({ params: Joi.object({ job: Joi.string().valid(...Object.keys(MANUAL_JOBS)).required() }) }),
   async (req, res) => {
-    const [name, handler] =
-      req.params.job === 'escalate'
-        ? [CRON_JOBS.TICKET_ESCALATE, escalateOverdueTickets]
-        : [CRON_JOBS.TICKET_AUTO_CLOSE, autoCloseTickets];
-    ok(res, await runTrackedJob(name, () => handler(), { trigger: 'MANUAL' }));
+    const [name, handler] = MANUAL_JOBS[req.params.job];
+    ok(res, await runTrackedJob(name, () => handler(), { trigger: CRON_TRIGGERS.MANUAL }));
   },
 );
 
@@ -204,7 +259,14 @@ router.patch(
   validate({
     params: idParams,
     body: Joi.object({
-      status: Joi.string().valid(TICKET_STATUS.IN_PROGRESS, TICKET_STATUS.WAITING_CONFIRM).required(),
+      status: Joi.string()
+        .valid(
+          TICKET_STATUS.WAITING_QUOTE_APPROVAL,
+          TICKET_STATUS.IN_PROGRESS,
+          TICKET_STATUS.WAITING_PARTS,
+          TICKET_STATUS.WAITING_CONFIRM,
+        )
+        .required(),
       note: Joi.string().trim().max(1000).allow(''),
     }),
   }),
@@ -253,6 +315,46 @@ router.patch(
   }),
   async (req, res) =>
     ok(res, await service.confirmTicket(req.user, req.params.id, req.body), 'Đã ghi nhận'),
+);
+
+/**
+ * @openapi
+ * /tickets/{id}/claim:
+ *   patch:
+ *     tags: [Ticket]
+ *     summary: KTV nhận sự cố trong hàng chờ — chỉ 1 người nhận được (TICKET_ALREADY_CLAIMED); có lịch trực thì phải trong ca (NOT_ON_DUTY)
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.patch('/:id/claim', authenticate, authorize('STAFF:TECHNICIAN'), validate({ params: idParams }), async (req, res) =>
+  ok(res, await service.claimTicket(req.user, req.params.id), 'Đã nhận sự cố'),
+);
+
+/**
+ * @openapi
+ * /tickets/{id}/quote-decision:
+ *   patch:
+ *     tags: [Ticket]
+ *     summary: Người nộp phí của căn đồng ý (→ Đang xử lý) hoặc từ chối (→ Từ chối) báo giá sửa chữa trong căn hộ
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [accepted]
+ *             properties:
+ *               accepted: { type: boolean }
+ *               note: { type: string }
+ */
+router.patch(
+  '/:id/quote-decision',
+  authenticate,
+  authorize('RESIDENT'),
+  validate({
+    params: idParams,
+    body: Joi.object({ accepted: Joi.boolean().required(), note: Joi.string().trim().max(500).allow('') }),
+  }),
+  async (req, res) => ok(res, await service.decideQuote(req.user, req.params.id, req.body), 'Đã ghi nhận quyết định'),
 );
 
 export default router;

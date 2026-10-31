@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import {
   AppstoreOutlined,
+  ProjectOutlined,
   BankOutlined,
   CarOutlined,
   CoffeeOutlined,
@@ -100,6 +101,7 @@ const AmenityUsagePage = lazy(() => import('../features/reports/AmenityUsagePage
 
 // ===== Sự cố & Tiện ích (Người 4) =====
 const DutyShiftsPage = lazy(() => import('../features/dutyShifts/DutyShiftsPage'));
+const TicketBoardPage = lazy(() => import('../features/tickets/TicketBoardPage'));
 
 // ===== Gate Pass & Kiểm soát xe (Người 2) =====
 const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
@@ -116,7 +118,7 @@ export const adminMenu = [
   {
     key: 'tickets',
     group: 'Cư dân & dịch vụ',
-    label: 'Phản ánh',
+    label: 'Sự cố & phản ánh',
     icon: ToolOutlined,
     path: 'tickets',
     roles: ['MANAGER', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN'],
@@ -176,6 +178,16 @@ export const adminMenu = [
     path: 'my-work-orders',
     roles: ['STAFF:TECHNICIAN'],
     component: WorkOrdersPage,
+  },
+  // Kanban điều phối sự cố của Trưởng BQL (Người 4)
+  {
+    key: 'ticket-board',
+    group: 'Kỹ thuật & vận hành',
+    label: 'Điều phối sự cố',
+    icon: ProjectOutlined,
+    path: 'ticket-board',
+    roles: ['MANAGER'],
+    component: TicketBoardPage,
   },
   // Lịch ca trực Kỹ thuật / Bảo vệ (Người 4): Trưởng BQL xếp ca, nhân viên xem lịch
   {

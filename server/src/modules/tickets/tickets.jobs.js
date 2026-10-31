@@ -5,14 +5,19 @@ import {
   NOTIFICATION_TYPES,
   PRIORITY_ORDER,
   TICKET_HISTORY_ACTIONS as ACT,
+  ROLE_TITLES,
+  TICKET_FINAL_STATUSES,
   TICKET_SLA_STATUSES,
   TICKET_STATUS,
+  TICKET_TYPES,
 } from '../../constants/enums.js';
 import { Ticket } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
 import { DAY_MS, startOfVnDay } from '../../utils/time.js';
+import { getOnDuty } from '../dutyShifts/dutyShifts.service.js';
+import { slaBreaches } from './ticket.rules.js';
 
 /**
  * UC-E06 / BR-O8 — [Cron 09:00] Ticket chưa xong mà quá dueDate → nâng 1 mức ưu tiên
@@ -123,6 +128,68 @@ export async function autoCloseTickets(now = new Date()) {
       targetId: ticket._id,
       metadata: { code: ticket.code, autoClosed: true },
     });
+  }
+  return affected;
+}
+
+// Cột đánh dấu đã cảnh báo theo loại vi phạm (chống báo lặp) + nội dung thông báo
+const SLA_ALERTS = {
+  ACK: { field: 'ackAlertedAt', text: (t) => `Sự cố ${t.code} quá hạn nhận nhưng chưa có kỹ thuật viên nào nhận` },
+  RESPONSE: { field: 'responseAlertedAt', text: (t) => `Phản ánh ${t.code} quá hạn phản hồi cư dân` },
+};
+
+/**
+ * [Cron 5 phút] Cảnh báo SLA (Người 4): sự cố chưa ai nhận quá hạn nhận phiếu (TICKET_ACK_MINUTES) → báo Trưởng BQL
+ * kèm email + KTV trực dự phòng; phản ánh chưa phản hồi quá hạn (COMPLAINT_RESPONSE_HOURS) → báo Trưởng BQL.
+ * Mỗi vi phạm chỉ báo 1 lần (updateOne có điều kiện trên cột *AlertedAt). Trả về số cảnh báo đã gửi.
+ */
+export async function alertSlaBreaches(now = new Date()) {
+  const tickets = await Ticket.find({
+    $or: [
+      { type: { $ne: TICKET_TYPES.COMPLAINT }, status: TICKET_STATUS.NEW, assignedTo: null, ackAlertedAt: null, ackDueAt: { $lt: now } },
+      {
+        type: TICKET_TYPES.COMPLAINT,
+        status: { $nin: TICKET_FINAL_STATUSES },
+        respondedAt: null,
+        responseAlertedAt: null,
+        responseDueAt: { $lt: now },
+      },
+    ],
+  })
+    .select('code title type status assignedTo ackDueAt ackAlertedAt responseDueAt respondedAt responseAlertedAt')
+    .lean();
+
+  let affected = 0;
+  let backups = null; // KTV trực dự phòng — chỉ đọc khi có sự cố quá hạn nhận
+  for (const ticket of tickets) {
+    for (const kind of slaBreaches(ticket, now)) {
+      const { field, text } = SLA_ALERTS[kind];
+      const res = await Ticket.updateOne(
+        { _id: ticket._id, [field]: null },
+        {
+          $set: { [field]: now },
+          $inc: { __v: 1 },
+          $push: {
+            history: { at: now, by: null, action: ACT.SLA_ALERTED, fromStatus: ticket.status, toStatus: ticket.status, note: text(ticket) },
+          },
+        },
+      );
+      if (!res.modifiedCount) continue;
+      affected += 1;
+
+      const payload = {
+        type: NOTIFICATION_TYPES.TICKET,
+        title: text(ticket),
+        content: `"${ticket.title}" đã quá hạn, cần Trưởng BQL điều phối.`,
+        refId: ticket._id,
+        link: `/app/tickets/${ticket._id}`,
+      };
+      await notifyRoles(['MANAGER'], { ...payload, email: true });
+      if (kind === 'ACK') {
+        backups ??= (await getOnDuty(ROLE_TITLES.TECHNICIAN, now)).backup.map((p) => p._id);
+        await notify(backups, payload);
+      }
+    }
   }
   return affected;
 }

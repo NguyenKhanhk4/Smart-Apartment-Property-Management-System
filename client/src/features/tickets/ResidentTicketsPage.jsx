@@ -5,7 +5,7 @@ import { PlusOutlined, RightOutlined } from '@ant-design/icons';
 import { ticketApi } from '../../api/moduleE.api';
 import { useApi } from '../../hooks/useApi';
 import EnumTag from '../../components/EnumTag';
-import { PRIORITIES, TICKET_FINAL_STATUSES, TICKET_OPEN_STATUSES, TICKET_STATUS } from '../../constants/enums';
+import { PRIORITIES, TICKET_FINAL_STATUSES, TICKET_OPEN_STATUSES, TICKET_STATUS, TICKET_TYPES } from '../../constants/enums';
 import { fromNow } from '../../utils/format';
 import TicketCreateModal from './TicketCreateModal';
 
@@ -34,7 +34,7 @@ export default function ResidentTicketsPage() {
           Phản ánh
         </Typography.Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-          Tạo phản ánh
+          Gửi mới
         </Button>
       </Flex>
       <Segmented
@@ -60,6 +60,7 @@ export default function ResidentTicketsPage() {
                     {t.code} · {t.category?.name} · {fromNow(t.createdAt)}
                   </Typography.Text>
                   <Flex gap={4} wrap>
+                    <EnumTag map={TICKET_TYPES} value={t.type} />
                     <EnumTag map={TICKET_STATUS} value={t.status} />
                     <EnumTag map={PRIORITIES} value={t.priority} />
                   </Flex>
