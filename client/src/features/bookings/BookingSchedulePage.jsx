@@ -1,21 +1,23 @@
 import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { App, Avatar, Button, Card, DatePicker, Flex, Form, Input, Modal, Select, Table, Tag, Tooltip, Typography } from 'antd';
-import { LoginOutlined, PlusOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons';
+import { App, Avatar, Button, Card, DatePicker, Flex, Form, Input, Modal, Popconfirm, Select, Table, Tag, Tooltip, Typography } from 'antd';
+import { DollarOutlined, LoginOutlined, PlusOutlined, ReloadOutlined, ScanOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { bookingApi } from '../../api/moduleD.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
+import QrScanModal from '../../components/QrScanModal';
+import ReasonModal from '../../components/ReasonModal';
 import { BOOKING_STATUS } from '../../constants/enums';
-import { keysOf } from '../../utils/status';
-
-const BS = keysOf(BOOKING_STATUS);
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
-import { formatMoney } from '../../utils/format';
-import CounterBookingModal from './CounterBookingModal';
-import ReasonModal from '../../components/ReasonModal';
 import { usePolling } from '../../hooks/usePolling';
+import { formatMoney } from '../../utils/format';
+import { keysOf } from '../../utils/status';
+import CounterBookingModal from './CounterBookingModal';
+import { holdLabel } from './bookingHelpers';
+
+const BS = keysOf(BOOKING_STATUS);
 
 const AUTO_REFRESH_MS = 60 * 1000;
 const CLOCK_TICK_MS = 15 * 1000;
@@ -49,6 +51,7 @@ export default function BookingSchedulePage() {
   const [checkingIn, setCheckingIn] = useState(null);
   const [cancelling, setCancelling] = useState(null);
   const [counterOpen, setCounterOpen] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [checkInForm] = Form.useForm();
 
   const dateText = date.format('YYYY-MM-DD');
@@ -68,6 +71,19 @@ export default function BookingSchedulePage() {
 
   usePolling(() => setClock(Date.now()), CLOCK_TICK_MS);
   usePolling(refreshSilently, AUTO_REFRESH_MS);
+
+  // Quét vé QR (Người 4): thành công thì đóng modal; lỗi (mã sai, ngoài giờ) báo và để quét tiếp
+  const scanTicket = async (token) => {
+    try {
+      const { data: view } = await bookingApi.checkInByQr(token);
+      message.success(`Đã check-in: ${view?.amenity?.name ?? ''} · căn ${view?.apartment?.code ?? ''} · ${view?.slotStart}–${view?.slotEnd}`);
+      setScanning(false);
+      refreshSilently();
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
+  const [markPaid] = useAction((b) => bookingApi.markPaid(b._id), { success: 'Đã xác nhận thu tiền', onDone: () => refreshSilently() });
 
   const [checkIn, checkingIn$] = useAction((v) => bookingApi.checkIn(checkingIn._id, v.code?.trim()), {
     success: 'Đã check-in',
@@ -148,10 +164,34 @@ export default function BookingSchedulePage() {
       ? [
           {
             title: '',
-            width: isReception ? 170 : 110,
+            width: isReception ? 220 : 110,
             fixed: 'right',
             render: (_, b) =>
-              b.status === BS.APPROVED && (
+              b.status === BS.PENDING_PAYMENT ? (
+                <Flex vertical gap={4}>
+                  <Typography.Text type="warning" style={{ fontSize: 12 }}>
+                    {holdLabel(b.holdExpiresAt, new Date(nowMs))}
+                  </Typography.Text>
+                  {isReception && (
+                    <Flex gap={6}>
+                      <Popconfirm
+                        title={`Xác nhận đã thu ${formatMoney(b.fee)}?`}
+                        okText="Đã thu"
+                        cancelText="Chưa"
+                        onConfirm={() => markPaid(b).catch(() => {})}
+                      >
+                        <Button size="small" type="primary" icon={<DollarOutlined />}>
+                          Đã thu tiền
+                        </Button>
+                      </Popconfirm>
+                      <Button size="small" danger onClick={() => setCancelling(b)}>
+                        Hủy
+                      </Button>
+                    </Flex>
+                  )}
+                </Flex>
+              ) : (
+                b.status === BS.APPROVED && (
                 <Flex gap={6}>
                   <Tooltip title={inWindow(b, nowMs) ? null : 'Ngoài khung check-in'}>
                     <Button size="small" type="primary" icon={<LoginOutlined />} disabled={!inWindow(b, nowMs)} onClick={() => setCheckingIn(b)}>
@@ -164,6 +204,7 @@ export default function BookingSchedulePage() {
                     </Button>
                   )}
                 </Flex>
+                )
               ),
           },
         ]
@@ -188,6 +229,11 @@ export default function BookingSchedulePage() {
             <Button icon={<ReloadOutlined />} onClick={() => reload()}>
               Làm mới
             </Button>
+            {canCheckIn && (
+              <Button icon={<ScanOutlined />} onClick={() => setScanning(true)}>
+                Quét vé QR
+              </Button>
+            )}
             {isReception && (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setCounterOpen(true)}>
                 Đặt hộ
@@ -240,6 +286,7 @@ export default function BookingSchedulePage() {
         </Form>
       </Modal>
 
+      <QrScanModal open={scanning} title="Quét vé đặt tiện ích" onClose={() => setScanning(false)} onResult={scanTicket} />
       <ReasonModal
         open={Boolean(cancelling)}
         title="Hủy booking"

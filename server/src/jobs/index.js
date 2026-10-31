@@ -6,7 +6,7 @@ import { generateMaintenanceWorkOrders } from '../modules/workOrders/workOrders.
 import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from '../modules/tickets/tickets.jobs.js';
 import { expireLeases } from '../modules/contracts/contracts.jobs.js';
 import { generateMonthlyInvoices, markOverdueInvoices } from '../modules/invoices/invoices.jobs.js';
-import { completeBookings } from '../modules/bookings/bookings.jobs.js';
+import { completeBookings, expireBookingHolds } from '../modules/bookings/bookings.jobs.js';
 import { expireGatePasses } from '../modules/gatePasses/gatePasses.jobs.js';
 import { remindExpiringLeases } from '../modules/contracts/contracts.jobs.js';
 
@@ -32,6 +32,8 @@ export const JOBS = [
   { name: CRON_JOBS.INVOICE_OVERDUE, schedule: '15 0 * * *', handler: markOverdueInvoices },
   // BR-O5 / BR-O14 — mỗi 5 phút: booking quá giờ check-in → NO_SHOW, đã dùng xong → COMPLETED
   { name: CRON_JOBS.BOOKING_COMPLETE, schedule: '*/5 * * * *', handler: completeBookings },
+  // Người 4 — mỗi phút hủy giữ chỗ quá hạn thanh toán (chỉ có tác dụng khi BOOKING_PAYMENT_HOLD_MINUTES > 0)
+  { name: CRON_JOBS.BOOKING_HOLD_EXPIRE, schedule: '* * * * *', handler: expireBookingHolds },
   // UC52 — mỗi 15 phút kiểm tra và chuyển đơn Gate Pass quá hạn sang EXPIRED
   { name: CRON_JOBS.GATE_PASS_EXPIRE, schedule: '*/15 * * * *', handler: expireGatePasses },
   // UC19 — 00:30 hằng ngày nhắc trước 15 ngày hợp đồng thuê sắp hết hạn

@@ -65,6 +65,14 @@ export const bookingApi = {
   checkIn: (id, code) => http.patch(`/bookings/${id}/check-in`, code ? { code } : {}),
   /** Lễ tân. body: { memberCode, amenityId, date, slotStart, payerCode?, checkInNow? } */
   counter: (body) => http.post('/bookings/counter', body),
+
+  // ----- Người 4: vé QR, giữ chỗ chờ thanh toán, đổi lịch -----
+  /** Lễ tân / Bảo vệ quét vé QR của cư dân */
+  checkInByQr: (token) => http.post('/bookings/check-in-by-qr', { token }),
+  /** Lễ tân xác nhận đã thu tiền booking đang giữ chỗ */
+  markPaid: (id, paymentRef) => http.patch(`/bookings/${id}/mark-paid`, paymentRef ? { paymentRef } : {}),
+  /** Cư dân đổi sang khung giờ khác. body: { date: 'YYYY-MM-DD', slotStart: 'HH:mm' } */
+  reschedule: (id, body) => http.patch(`/bookings/${id}/reschedule`, body),
 };
 
 // ===== UC-D10: Quầy tiện ích (lượt vào tiện ích WALK_IN) =====

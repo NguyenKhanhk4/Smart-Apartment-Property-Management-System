@@ -65,6 +65,8 @@ export async function presentDayBookings(bookings, cfg) {
       fee: b.fee,
       usesPass: Boolean(b.passId),
       invoiceId: b.invoiceId ?? null,
+      holdExpiresAt: b.holdExpiresAt ?? null,
+      paidAt: b.paidAt ?? null,
       amenity: amenity && { _id: amenity._id, name: amenity.name, imageUrl: amenity.imageUrl ?? null, location: amenity.location ?? null },
       apartment: apartment && {
         _id: apartment._id,

@@ -9,6 +9,9 @@ import { useApi } from '../../hooks/useApi';
 import { useResident } from '../../hooks/useResident';
 import { BOOKING_STATUS } from '../../constants/enums';
 import { formatDate, formatMoney } from '../../utils/format';
+import BookingTicketModal from './BookingTicketModal';
+import RescheduleModal from './RescheduleModal';
+import { holdLabel } from './bookingHelpers';
 
 // Nhãn + tone theo BOOKING_STATUS chung (constants/enums.js)
 
@@ -24,6 +27,8 @@ export default function HistoryTab({ wide }) {
   const { message } = App.useApp();
   const { apartmentId } = useResident();
   const [page, setPage] = useState(1);
+  const [ticket, setTicket] = useState(null); // booking đang mở vé QR
+  const [moving, setMoving] = useState(null); // booking đang đổi lịch
   const enabled = Boolean(apartmentId);
 
   const upcoming = useApi(() => bookingApi.mine({ scope: 'upcoming', limit: 50, apartmentId }), [apartmentId], { enabled });
@@ -45,6 +50,28 @@ export default function HistoryTab({ wide }) {
 
   const rebookTo = (b) => `/r/amenities/${b.amenityId}${apartmentId ? `?apartmentId=${apartmentId}` : ''}`;
 
+  const linkBtn = 'p-0 border-0 bg-transparent text-sm font-medium text-r-link cursor-pointer';
+  // Vé QR (đã xác nhận) + đổi giờ + hủy cho booking sắp tới
+  const actions = (b) => (
+    <span className="inline-flex flex-wrap justify-end gap-x-3 gap-y-1">
+      {b.qrToken && (
+        <button type="button" className={linkBtn} onClick={() => setTicket(b)}>
+          Vé QR
+        </button>
+      )}
+      {b.canReschedule && (
+        <button type="button" className={linkBtn} onClick={() => setMoving(b)}>
+          Đổi giờ
+        </button>
+      )}
+      {cancelButton(b)}
+    </span>
+  );
+  const holdLine = (b) =>
+    b.status === 'PENDING_PAYMENT' && (
+      <span className="block text-xs text-r-warn-fg">{holdLabel(b.holdExpiresAt)} · thanh toán tại quầy lễ tân</span>
+    );
+
   const cancelButton = (b) =>
     b.canCancel && (
       <Popconfirm
@@ -58,6 +85,13 @@ export default function HistoryTab({ wide }) {
         <button type="button" className="p-0 border-0 bg-transparent text-sm font-medium text-r-link cursor-pointer">Hủy</button>
       </Popconfirm>
     );
+
+  const modals = (
+    <>
+      <BookingTicketModal booking={ticket} onClose={() => setTicket(null)} />
+      {moving && <RescheduleModal booking={moving} apartmentId={apartmentId} onClose={() => setMoving(null)} onDone={reload} />}
+    </>
+  );
 
   if ((upcoming.loading || past.loading) && !upRows.length && !pastRows.length) return <Skeleton active paragraph={{ rows: 4 }} />;
   if (!upRows.length && !pastRows.length) return <Empty description="Chưa có lượt đặt nào" />;
@@ -79,11 +113,15 @@ export default function HistoryTab({ wide }) {
           <td className={td}>{formatDate(startOf(b))}</td>
           <td className={td}>{timeOf(b)}</td>
           <td className={td}>{feeOf(b)}</td>
-          <td className={td}><Badge status={b.status} /></td>
+          <td className={td}>
+            <Badge status={b.status} />
+            {holdLine(b)}
+          </td>
           <td className={`${td} text-right`}>
-            {cancelButton(b) || (muted && (
+            {muted ? null : actions(b)}
+            {muted && (
               <Link to={rebookTo(b)} viewTransition className="text-sm font-medium text-r-link no-underline">Đặt lại</Link>
-            ))}
+            )}
           </td>
         </tr>
       );
@@ -109,6 +147,7 @@ export default function HistoryTab({ wide }) {
           </table>
         </SurfaceCard>
         {pager}
+        {modals}
       </div>
     );
   }
@@ -127,10 +166,11 @@ export default function HistoryTab({ wide }) {
             {timeOf(b)} · {feeOf(b)}
           </div>
           {!b.isMine && b.bookedBy?.fullName && <div className="text-xs text-r-subtle truncate">Đặt bởi {b.bookedBy.fullName}</div>}
+          {holdLine(b)}
         </div>
         <div className="flex flex-col items-end gap-1.5">
           {muted && b.status === 'COMPLETED' ? null : <Badge status={b.status} />}
-          {cancelButton(b)}
+          {!muted && actions(b)}
           {muted && (
             <Link to={rebookTo(b)} viewTransition className="text-sm font-medium text-r-link no-underline py-1">Đặt lại</Link>
           )}
@@ -146,6 +186,7 @@ export default function HistoryTab({ wide }) {
       {pastRows.length > 0 && <div className={`text-[13px] font-medium text-r-muted ${upRows.length ? 'mt-2' : ''}`}>Đã qua</div>}
       {pastRows.map((b) => mobileRow(b, true))}
       {pager}
+      {modals}
     </div>
   );
 }
