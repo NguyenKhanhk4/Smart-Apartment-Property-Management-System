@@ -16,10 +16,28 @@ export const feeTypeApi = {
   remove: (id) => http.delete(`/fee-types/${id}`),
 };
 
-// ===== UC-B02: Sinh hóa đơn tháng =====
+// ===== Mô đun 4: Thông báo phí (UC26 tính phí, UC27 duyệt & phát hành, UC28 xem, UC36 trả lại) =====
 export const invoiceApi = {
   /** params: { period: 'YYYY-MM', apartmentId?, buildingId? } — tính thử, không ghi */
   preview: (params) => http.get('/invoices/preview', { params }),
-  /** body: { period, apartmentId? } — có apartmentId: lập 1 căn; không có: chạy cả đợt */
+  /** body: { period, apartmentId? } — có apartmentId: tính 1 căn; không có: cả kỳ → thông báo Nháp */
   generate: (body) => http.post('/invoices/generate', body),
+
+  /** Quản trị — params: { page, limit, sort, period, status (CSV), buildingId, apartmentId, payerId, q }. Kèm byStatus */
+  list: (params) => http.get('/invoices', { params }),
+  /** Cư dân — params: { apartmentId, page, limit, status, period }. Kèm summary (còn nợ, số dư trả trước) */
+  my: (params) => http.get('/invoices/my', { params }),
+  get: (id) => http.get(`/invoices/${id}`),
+
+  // Sửa Nháp (Kế toán)
+  /** body: { description, amount } */
+  addItem: (id, body) => http.post(`/invoices/${id}/items`, body),
+  removeItem: (id, index) => http.delete(`/invoices/${id}/items/${index}`),
+  recalculate: (id) => http.post(`/invoices/${id}/recalculate`),
+
+  // Duyệt — selector: { invoiceIds: [...] } hoặc { period }
+  submit: (selector) => http.post('/invoices/submit', selector),
+  publish: (selector) => http.post('/invoices/publish', selector),
+  /** body: { invoiceIds | period, reason } */
+  returnBack: (body) => http.post('/invoices/return', body),
 };

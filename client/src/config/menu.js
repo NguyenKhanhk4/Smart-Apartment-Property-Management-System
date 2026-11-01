@@ -69,6 +69,10 @@ const SystemDashboardPage = lazy(() => import('../features/adminDashboard/System
 // ===== Module B =====
 const FeeTypesPage = lazy(() => import('../features/feeTypes/FeeTypesPage'));
 const InvoiceGeneratePage = lazy(() => import('../features/invoices/InvoiceGeneratePage'));
+const InvoiceListPage = lazy(() => import('../features/invoices/InvoiceListPage'));
+const InvoiceDetailPage = lazy(() => import('../features/invoices/InvoiceDetailPage'));
+const MyInvoicesPage = lazy(() => import('../features/invoices/MyInvoicesPage'));
+const MyInvoiceDetailPage = lazy(() => import('../features/invoices/MyInvoiceDetailPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -323,6 +327,23 @@ export const adminMenu = [
     roles: ['ACCOUNTANT', 'MANAGER'],
     component: InvoiceGeneratePage,
   },
+  {
+    key: 'invoices',
+    group: 'Tài chính',
+    label: 'Thông báo phí',
+    icon: FileTextOutlined,
+    path: 'invoices',
+    roles: ['ACCOUNTANT', 'MANAGER'],
+    component: InvoiceListPage,
+  },
+  {
+    key: 'invoice-detail',
+    label: 'Chi tiết thông báo phí',
+    path: 'invoices/:id',
+    roles: ['ACCOUNTANT', 'MANAGER'],
+    component: InvoiceDetailPage,
+    hideInMenu: true,
+  },
 
   // ===== Module A (Vũ Việt) =====
   {
@@ -460,6 +481,9 @@ export const residentMenu = [
     hideInMenu: true,
   },
   { key: 'guests', label: 'Khách', icon: UsergroupAddOutlined, path: 'guests', component: ResidentGuestsPage },
+  // Mô đun 4 — thông báo phí của căn đang chọn (UC28)
+  { key: 'my-invoices', label: 'Phí dịch vụ', icon: DollarOutlined, path: 'invoices', component: MyInvoicesPage },
+  { key: 'my-invoice-detail', label: 'Chi tiết phí', path: 'invoices/:id', component: MyInvoiceDetailPage, hideInMenu: true },
   // Thẻ cư dân (UC-D11): mã chữ; trang Gia đình chỉ chủ hộ, mở từ nút trong "Mã của tôi"
   { key: 'my-code', label: 'Mã của tôi', icon: IdcardOutlined, path: 'my-code', component: MyCodePage },
   { key: 'family', label: 'Gia đình', path: 'my-code/family', component: FamilyPage, hideInMenu: true },
@@ -521,4 +545,4 @@ export const residentMenu = [
 // Thanh điều hướng dưới (mobile): 5 mục, mục giữa là nút nổi "Mã của tôi". Bảng tin vào qua "Xem tất cả" ở trang chủ.
 export const residentBottomNav = ['home', 'amenities', 'my-code', 'tickets', 'guests'];
 // Thanh điều hướng ngang (web ≥768px). "Mã của tôi" là nút riêng bên phải nên không nằm trong danh sách này.
-export const residentWebNav = ['home', 'amenities', 'tickets', 'guests', 'announcements'];
+export const residentWebNav = ['home', 'my-invoices', 'amenities', 'tickets', 'guests', 'announcements'];

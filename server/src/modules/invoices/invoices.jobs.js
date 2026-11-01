@@ -2,6 +2,7 @@ import { CONFIG_KEYS, INVOICE_STATUS, NOTIFICATION_TYPES } from '../../constants
 import { Invoice } from '../../models/index.js';
 import { notifyRoles } from '../../services/notification.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
+import { remindPendingApprovals } from './invoices.approval.js';
 import { periodLabel, startOfVnDay, toVnYmd, vnPeriod } from '../../utils/time.js';
 
 /**
@@ -21,6 +22,11 @@ export async function remindBilling(now = new Date()) {
     content: `Đã đến ngày tính phí kỳ ${periodLabel(period)}. Vào "Tính phí" để tạo thông báo phí Nháp và trình duyệt.`,
     link: '/app/invoices/generate',
   });
+}
+
+/** Cron BILLING_REMIND 08:00: nhắc Kế toán đến kỳ tính phí + nhắc Trưởng BQL thông báo chờ duyệt quá hạn (X8) */
+export async function billingReminders(now = new Date()) {
+  return (await remindBilling(now)) + (await remindPendingApprovals(now));
 }
 
 /**

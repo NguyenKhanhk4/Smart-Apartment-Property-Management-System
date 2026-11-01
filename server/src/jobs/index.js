@@ -5,7 +5,7 @@ import { runTrackedJob } from './cronRunner.js';
 import { generateMaintenanceWorkOrders } from '../modules/workOrders/workOrders.jobs.js';
 import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from '../modules/tickets/tickets.jobs.js';
 import { expireLeases } from '../modules/contracts/contracts.jobs.js';
-import { markOverdueInvoices, remindBilling } from '../modules/invoices/invoices.jobs.js';
+import { billingReminders, markOverdueInvoices } from '../modules/invoices/invoices.jobs.js';
 import { completeBookings, expireBookingHolds } from '../modules/bookings/bookings.jobs.js';
 import { expireGatePasses } from '../modules/gatePasses/gatePasses.jobs.js';
 import { remindExpiringLeases } from '../modules/contracts/contracts.jobs.js';
@@ -13,7 +13,7 @@ import { remindExpiringLeases } from '../modules/contracts/contracts.jobs.js';
 /**
  * Đăng ký mọi cron job (node-cron, múi giờ Asia/Ho_Chi_Minh — srs_final.md §2.4).
  * Module khác thêm job của mình vào mảng này:
- *   { name: CRON_JOBS.BILLING_REMIND, schedule: '0 8 * * *', handler: remindBilling }
+ *   { name: CRON_JOBS.BILLING_REMIND, schedule: '0 8 * * *', handler: billingReminders }
  */
 export const JOBS = [
   // UC-E06 / BR-O8 — 09:00 hằng ngày
@@ -26,8 +26,8 @@ export const JOBS = [
   { name: CRON_JOBS.WORK_ORDER_GENERATE, schedule: '0 2 * * *', handler: generateMaintenanceWorkOrders },
   // UC-A06 / BR-O2 — 00:00 hằng ngày kiểm tra và chuyển hợp đồng thuê hết hạn
   { name: CRON_JOBS.CONTRACT_EXPIRE, schedule: '0 0 * * *', handler: expireLeases },
-  // Mô đun 4 — 08:00 hằng ngày: đến ngày cấu hình thì nhắc Kế toán tính phí (hệ thống không tự tính / phát hành)
-  { name: CRON_JOBS.BILLING_REMIND, schedule: '0 8 * * *', handler: remindBilling },
+  // Mô đun 4 — 08:00 hằng ngày: đến ngày cấu hình thì nhắc Kế toán tính phí; nhắc Trưởng BQL thông báo chờ duyệt quá N ngày (không tự duyệt)
+  { name: CRON_JOBS.BILLING_REMIND, schedule: '0 8 * * *', handler: billingReminders },
   // BR-F8 — 00:15 hằng ngày chuyển hóa đơn quá hạn thanh toán sang OVERDUE
   { name: CRON_JOBS.INVOICE_OVERDUE, schedule: '15 0 * * *', handler: markOverdueInvoices },
   // BR-O5 / BR-O14 — mỗi 5 phút: booking quá giờ check-in → NO_SHOW, đã dùng xong → COMPLETED
