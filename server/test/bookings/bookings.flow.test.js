@@ -87,17 +87,31 @@ test('cư dân hủy được booking đang giữ chỗ chờ thanh toán', asyn
   assert.equal(cancelled.status, 'CANCELLED');
 });
 
+// Mốc giờ cố định (giờ VN) — khung check-in phụ thuộc giờ Lễ tân mở cửa (05:00), không dùng đồng hồ thật
+const atVn = (hhmm) => new Date(`${tomorrow()}T${hhmm}:00+07:00`);
+
 test('vé QR: lịch sử đặt trả mã QR cho booking đã xác nhận; quét QR check-in trong khung giờ', async () => {
   const ctx = await setup();
-  const soon = await createBooking({ amenity: ctx.amenity, apartment: ctx.apartment, startAt: new Date(Date.now() + 5 * MIN), bookedBy: ctx.resident.id });
-  const { items } = await service.listMyBookings(ctx.resident, { scope: 'upcoming', page: 1, limit: 10 });
+  const now = atVn('10:00');
+  const soon = await createBooking({ amenity: ctx.amenity, apartment: ctx.apartment, startAt: new Date(now.getTime() + 5 * MIN), bookedBy: ctx.resident.id });
+  const { items } = await service.listMyBookings(ctx.resident, { scope: 'upcoming', page: 1, limit: 10 }, { now });
   const mine = items.find((b) => String(b._id) === String(soon._id));
   assert.equal(mine.qrToken, signBookingQr(String(soon._id)));
 
   const guard = asUser(await createSecurity());
-  const view = await service.checkInByQr(guard, { token: mine.qrToken });
+  const view = await service.checkInByQr(guard, { token: mine.qrToken }, { now });
   assert.equal(view.status, 'CHECKED_IN');
-  await assert.rejects(service.checkInByQr(guard, { token: mine.qrToken }), { errorCode: 'BOOKING_INVALID_STATUS' });
+  await assert.rejects(service.checkInByQr(guard, { token: mine.qrToken }, { now }), { errorCode: 'BOOKING_INVALID_STATUS' });
+});
+
+test('vé QR: trước giờ Lễ tân mở cửa (05:00) chưa check-in được dù sắp tới giờ đặt', async () => {
+  const ctx = await setup();
+  const now = atVn('02:00');
+  const early = await createBooking({ amenity: ctx.amenity, apartment: ctx.apartment, startAt: new Date(now.getTime() + 5 * MIN) });
+  const guard = asUser(await createSecurity());
+  await assert.rejects(service.checkInByQr(guard, { token: signBookingQr(String(early._id)) }, { now }), {
+    errorCode: 'BOOKING_CHECKIN_OUT_OF_WINDOW',
+  });
 });
 
 test('vé QR: mã giả / mã cư dân / booking chờ thanh toán → không check-in được', async () => {
