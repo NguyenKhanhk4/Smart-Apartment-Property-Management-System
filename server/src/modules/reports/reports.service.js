@@ -7,6 +7,7 @@ import {
   DEBT_STATUS,
   FUND_TX_TYPES,
   INVOICE_STATUS,
+  INVOICE_UNPUBLISHED_STATUSES,
   PAYMENT_STATUS,
   REVIEW_STATUS,
   TICKET_OPEN_STATUSES,
@@ -60,7 +61,8 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
     throw ApiError.badRequest(`Khoảng thời gian tối đa ${MAX_RANGE_MONTHS} tháng, hãy thu hẹp lại`);
   }
 
-  const match = { period: { $gte: from, $lte: to } };
+  // Nháp / Chờ duyệt chưa gửi cư dân → không tính là đã phát hành
+  const match = { period: { $gte: from, $lte: to }, status: { $nin: [...INVOICE_UNPUBLISHED_STATUSES] } };
   if (buildingId) match.buildingId = oid(buildingId);
   if (feeCategory) match['items.feeCategory'] = feeCategory;
 

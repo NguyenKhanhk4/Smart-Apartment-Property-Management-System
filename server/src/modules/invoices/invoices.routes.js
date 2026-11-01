@@ -5,6 +5,7 @@ import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { created, ok } from '../../utils/response.js';
 import { idParams, objectId, period } from '../../utils/validators.js';
+import * as approval from './invoices.approval.js';
 import * as drafts from './invoices.drafts.js';
 import * as service from './invoices.service.js';
 
@@ -116,5 +117,80 @@ router.delete('/:id/items/:index', authenticate, authorize('ACCOUNTANT'), valida
 router.post('/:id/recalculate', authenticate, authorize('ACCOUNTANT'), validate({ params: idParams }), async (req, res) =>
   ok(res, await drafts.recalculateDraft(req.user, req.params.id), 'Đã tính lại'),
 );
+
+// ---- Trình duyệt / Duyệt & Phát hành / Trả lại: chọn theo danh sách id HOẶC cả kỳ ----
+const selectorKeys = {
+  invoiceIds: Joi.array().items(objectId()).min(1).max(2000).unique(),
+  period: period(),
+};
+const selectorBody = Joi.object(selectorKeys).xor('invoiceIds', 'period');
+const returnBody = Joi.object({ ...selectorKeys, reason: Joi.string().trim().min(5).max(500).required() }).xor(
+  'invoiceIds',
+  'period',
+);
+const skippedNote = (r) => (r.skipped.length ? `, bỏ qua ${r.skipped.length} thông báo không đúng trạng thái` : '');
+
+/**
+ * @openapi
+ * /invoices/submit:
+ *   post:
+ *     tags: [Phí & hóa đơn]
+ *     summary: Kế toán trình duyệt thông báo NHÁP → Chờ duyệt, báo Trưởng BQL. Gửi invoiceIds hoặc period (cả kỳ)
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               invoiceIds: { type: array, items: { type: string } }
+ *               period: { type: string, example: '2026-10' }
+ */
+router.post('/submit', authenticate, authorize('ACCOUNTANT'), validate({ body: selectorBody }), async (req, res) => {
+  const r = await approval.submitInvoices(req.user, req.body);
+  return ok(res, r, `Đã trình duyệt ${r.count} thông báo phí${skippedNote(r)}`);
+});
+
+/**
+ * @openapi
+ * /invoices/publish:
+ *   post:
+ *     tags: [Phí & hóa đơn]
+ *     summary: Trưởng BQL Duyệt & Phát hành thông báo Chờ duyệt → đặt hạn đóng, chụp Nợ các kỳ trước, trừ Số dư trả trước, gửi Email + Web cho Người nộp phí
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               invoiceIds: { type: array, items: { type: string } }
+ *               period: { type: string, example: '2026-10' }
+ */
+router.post('/publish', authenticate, authorize('MANAGER'), validate({ body: selectorBody }), async (req, res) => {
+  const r = await approval.publishInvoices(req.user, req.body);
+  const failed = r.failed.length ? `, lỗi ${r.failed.length}` : '';
+  return ok(res, r, `Đã phát hành ${r.count} thông báo phí${failed}${skippedNote(r)}`);
+});
+
+/**
+ * @openapi
+ * /invoices/return:
+ *   post:
+ *     tags: [Phí & hóa đơn]
+ *     summary: Trưởng BQL trả lại thông báo Chờ duyệt → về Nháp kèm lý do, báo Kế toán đã trình
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reason]
+ *             properties:
+ *               invoiceIds: { type: array, items: { type: string } }
+ *               period: { type: string, example: '2026-10' }
+ *               reason: { type: string, example: 'Sai số xe căn A1205' }
+ */
+router.post('/return', authenticate, authorize('MANAGER'), validate({ body: returnBody }), async (req, res) => {
+  const r = await approval.returnInvoices(req.user, req.body);
+  return ok(res, r, `Đã trả lại ${r.count} thông báo phí${skippedNote(r)}`);
+});
 
 export default router;
