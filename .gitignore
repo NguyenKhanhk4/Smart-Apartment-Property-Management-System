@@ -28,3 +28,9 @@ Thumbs.db
 
 # Tài liệu cá nhân, không push
 /doc/
+
+# GitHub config (workflows, templates...) - không push
+.github/
+
+# Tài liệu Markdown - không push
+*.md
