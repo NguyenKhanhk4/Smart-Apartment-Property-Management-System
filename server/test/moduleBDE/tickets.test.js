@@ -61,7 +61,17 @@ test('SLA: tạo theo slaHours của loại phản ánh; đổi ưu tiên thì t
   assert.ok(Math.abs(hours - 24) < 0.01, `hạn mới phải là 24h (SLA_HOURS_URGENT), được ${hours}`);
 });
 
-test('2 lần phân công đồng thời: lần sau bị từ chối do ghi đè, không mất dữ liệu', async () => {
+test('ghi đè trên bản đã cũ bị chặn: lưu ticket đọc trước lần sửa khác → VersionError (errorHandler trả 409)', async () => {
+  const { user, apartment } = await createHousehold();
+  const ticket = await createTicket({ apartment, createdBy: user });
+  const [first, stale] = await Promise.all([Ticket.findById(ticket._id), Ticket.findById(ticket._id)]);
+  first.status = 'ASSIGNED';
+  await first.save();
+  stale.status = 'REJECTED';
+  await assert.rejects(stale.save(), { name: 'VersionError' });
+});
+
+test('2 lần phân công đồng thời: không mất lần ghi nào dù 2 request đan xen hay chạy nối tiếp', async () => {
   const { user, apartment } = await createHousehold();
   const manager = asUser(await createManager());
   const [a, b] = await Promise.all([createTechnician(), createTechnician()]);
@@ -70,9 +80,14 @@ test('2 lần phân công đồng thời: lần sau bị từ chối do ghi đè
     service.assignTicket(manager, ticket._id, { assignedTo: a._id }),
     service.assignTicket(manager, ticket._id, { assignedTo: b._id }),
   ]);
-  const rejected = results.filter((r) => r.status === 'rejected');
-  assert.equal(rejected.length, 1);
-  assert.equal(rejected[0].reason.name, 'VersionError'); // errorHandler đổi thành 409 CONCURRENT_UPDATE
+  // Đan xen → 1 lần bị VersionError; nối tiếp → cả 2 thành công (lần sau là giao lại). Không có trường hợp nào khác.
+  for (const r of results.filter((x) => x.status === 'rejected')) assert.equal(r.reason.name, 'VersionError');
+  const ok = results.filter((r) => r.status === 'fulfilled').length;
+  assert.ok(ok >= 1);
+  const saved = await Ticket.findById(ticket._id).lean();
+  const assigns = saved.history.filter((h) => ['ASSIGNED', 'REASSIGNED'].includes(h.action));
+  assert.equal(assigns.length, ok);
+  assert.ok([String(a._id), String(b._id)].includes(String(saved.assignedTo)));
 });
 
 test('sắp xếp theo ưu tiên: theo mức độ nghiêm trọng, không theo bảng chữ cái', async () => {

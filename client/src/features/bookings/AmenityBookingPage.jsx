@@ -13,6 +13,7 @@ import { useResident } from '../../hooks/useResident';
 import { formatDate, formatMoney } from '../../utils/format';
 import { usePurchasePass } from '../amenityPasses/usePurchasePass';
 import { passSpan } from './passUtils';
+import { holdLabel } from './bookingHelpers';
 
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const DEFAULT_ADVANCE_DAYS = 14;
@@ -110,8 +111,10 @@ function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) 
   const submit = async () => {
     setBooking(true);
     try {
-      await bookingApi.create({ apartmentId, amenityId: amenity._id, date, slotStart: picked });
-      message.success('Đặt chỗ thành công');
+      const { data: booking } = await bookingApi.create({ apartmentId, amenityId: amenity._id, date, slotStart: picked });
+      // Giữ chỗ chờ thanh toán (khi Ban quản lý bật): nhắc thanh toán trước giờ hết hạn
+      if (booking?.status === 'PENDING_PAYMENT') message.warning(`${holdLabel(booking.holdExpiresAt)}. Vui lòng thanh toán tại quầy lễ tân.`, 6);
+      else message.success('Đặt chỗ thành công');
       navigate(`/r/amenities?tab=history&apartmentId=${apartmentId}`, { viewTransition: true });
     } catch (e) {
       message.error(e.message);
