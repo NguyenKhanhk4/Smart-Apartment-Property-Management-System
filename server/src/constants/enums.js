@@ -153,7 +153,7 @@ export const INVOICE_ACTIVE_STATUSES = Object.freeze([...INVOICE_UNPUBLISHED_STA
 export const GENERATED_BY = Object.freeze({ CRON: 'CRON', MANUAL: 'MANUAL' });
 
 export const PAYMENT_METHODS = Object.freeze({
-  VNPAY: 'VNPAY',
+  PAYOS: 'PAYOS', // thanh toán online qua link payOS (VietQR)
   CASH: 'CASH',
   BANK_TRANSFER: 'BANK_TRANSFER',
 });

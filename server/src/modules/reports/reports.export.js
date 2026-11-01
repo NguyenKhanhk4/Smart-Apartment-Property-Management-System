@@ -18,7 +18,7 @@ const LABELS = {
   PARKING: 'Phí gửi xe',
   AMENITY: 'Phí tiện ích',
   ADJUSTMENT: 'Điều chỉnh',
-  VNPAY: 'VNPay',
+  PAYOS: 'payOS (VietQR)',
   CASH: 'Tiền mặt',
   BANK_TRANSFER: 'Chuyển khoản',
   INCOME: 'Thu',
