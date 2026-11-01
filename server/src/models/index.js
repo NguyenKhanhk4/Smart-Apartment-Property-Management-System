@@ -16,6 +16,8 @@ export { ParkingCard } from './ParkingCard.js';
 export { FeeType } from './FeeType.js';
 export { Invoice } from './Invoice.js';
 export { Payment } from './Payment.js';
+export { PrepaidBalance } from './PrepaidBalance.js';
+export { PrepaidTransaction } from './PrepaidTransaction.js';
 export { InvoiceAdjustment } from './InvoiceAdjustment.js';
 export { DebtFollowup } from './DebtFollowup.js';
 

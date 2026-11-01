@@ -203,41 +203,54 @@ for (const period of periods) {
     }
     const totalAmount = items.reduce((s, i) => s + i.amount, 0);
 
-    // Kỳ hiện tại: đa số chưa trả; kỳ trước: 1 phần quá hạn; các kỳ cũ: gần như đã trả hết
+    // Kỳ hiện tại: đa số chưa trả, vài căn trả một phần; kỳ trước: 1 phần quá hạn; các kỳ cũ: gần như đã trả hết
     const r = rand();
     let status = 'PAID';
-    if (isCurrent) status = r < 0.3 ? 'PAID' : 'UNPAID';
+    if (isCurrent) status = r < 0.3 ? 'PAID' : r < 0.4 ? 'PARTIALLY_PAID' : 'UNPAID';
     else if (isPrev) status = r < 0.7 ? 'PAID' : 'OVERDUE';
     else if (r < 0.03) status = 'OVERDUE';
     else if (r < 0.05) status = 'CANCELLED';
 
-    const paidAt = status === 'PAID' ? new Date(issuedAt.getTime() + between(1, 14) * DAY_MS) : null;
+    // Đã trả một phần: làm tròn nghìn đồng
+    let paidAmount = 0;
+    if (status === 'PAID') paidAmount = totalAmount;
+    else if (status === 'PARTIALLY_PAID') paidAmount = Math.round((totalAmount * 0.4) / 1000) * 1000;
+    const paidAt = paidAmount > 0 ? new Date(issuedAt.getTime() + between(1, 14) * DAY_MS) : null;
     const invoice = {
       _id: new M.Invoice()._id,
       code: `HD-${period.replace('-', '')}-${buildings.find((b) => String(b._id) === String(a.buildingId)).code}-${a.code}`,
       apartmentId: a._id,
       buildingId: a.buildingId,
       payerId: residentUsers[apartments.indexOf(a)]?._id,
+      payerSource: 'OWNER',
       period,
       items,
       totalAmount,
+      paidAmount,
       status,
+      submittedBy: U.accountant._id,
+      submittedAt: issuedAt,
+      reviewedBy: U.manager._id,
       issuedAt,
       dueDate,
-      paidAt,
-      generatedBy: 'CRON',
+      paidAt: status === 'PAID' ? paidAt : null,
+      generatedBy: 'MANUAL',
     };
     invoices.push(invoice);
-    if (status === 'PAID') {
-      const method = pick(['VNPAY', 'VNPAY', 'CASH', 'BANK_TRANSFER']);
+    if (paidAmount > 0) {
+      // Trả một phần chỉ qua tiền mặt / chuyển khoản tay (payOS trả đúng tổng đã chọn)
+      const method = status === 'PAID' ? pick(['PAYOS', 'PAYOS', 'CASH', 'BANK_TRANSFER']) : pick(['CASH', 'BANK_TRANSFER']);
       payments.push({
+        apartmentId: a._id,
+        payerId: invoice.payerId,
         invoiceId: invoice._id,
+        allocations: [{ invoiceId: invoice._id, amount: paidAmount }],
         method,
-        amount: totalAmount,
+        amount: paidAmount,
         status: 'SUCCESS',
         paidAt,
-        ...(method === 'VNPAY'
-          ? { vnpTxnRef: `${invoice.code}-${between(1000, 9999)}`, vnpResponseCode: '00' }
+        ...(method === 'PAYOS'
+          ? { orderCode: (payments.length + 1) * 1000 + between(100, 999), reference: `FT${between(10000000, 99999999)}` }
           : {
               receiptNo: `PT-${period.replace('-', '')}-${String((receiptSeq += 1)).padStart(5, '0')}`,
               confirmedBy: U.accountant._id,

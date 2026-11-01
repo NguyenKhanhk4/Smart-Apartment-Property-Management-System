@@ -175,7 +175,7 @@ export const PAYER_SOURCES = {
 };
 
 export const PAYMENT_METHODS = {
-  VNPAY: { label: 'VNPay', color: 'blue' },
+  PAYOS: { label: 'payOS (VietQR)', color: 'blue' },
   CASH: { label: 'Tiền mặt', color: 'green' },
   BANK_TRANSFER: { label: 'Chuyển khoản', color: 'cyan' },
 };
