@@ -317,7 +317,7 @@ export const adminMenu = [
   {
     key: 'invoice-generate',
     group: 'Tài chính',
-    label: 'Lập hóa đơn',
+    label: 'Tính phí',
     icon: FileTextOutlined,
     path: 'invoices/generate',
     roles: ['ACCOUNTANT', 'MANAGER'],
