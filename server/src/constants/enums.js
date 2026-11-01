@@ -99,6 +99,7 @@ export const FEE_CATEGORIES = Object.freeze({
   PARKING: 'PARKING',
   AMENITY: 'AMENITY',
   ADJUSTMENT: 'ADJUSTMENT',
+  OTHER: 'OTHER', // khoản thu khác Kế toán thêm tay vào thông báo Nháp (Mô đun 4)
 });
 
 // Cách tính đơn giá của fee_types (BR-F4)
@@ -119,12 +120,35 @@ export const FEE_CALC_METHODS = Object.freeze({
   PER_VEHICLE: 'PER_VEHICLE',
 });
 
+// Vòng đời thông báo phí (Mô đun 4): Nháp → Chờ duyệt → Đã phát hành (UNPAID) → (Thanh toán một phần) → Đã thanh toán.
+// Quá hạn đóng mà chưa trả đủ → OVERDUE. UNPAID giữ nghĩa "đã phát hành, chưa trả" để module khác đọc như cũ.
 export const INVOICE_STATUS = Object.freeze({
+  DRAFT: 'DRAFT',
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
   UNPAID: 'UNPAID',
+  PARTIALLY_PAID: 'PARTIALLY_PAID',
   PAID: 'PAID',
   OVERDUE: 'OVERDUE',
   CANCELLED: 'CANCELLED',
 });
+
+// Chưa phát hành: Kế toán / Trưởng BQL còn sửa, duyệt; cư dân không thấy
+export const INVOICE_UNPUBLISHED_STATUSES = Object.freeze([INVOICE_STATUS.DRAFT, INVOICE_STATUS.PENDING_APPROVAL]);
+// Đã phát hành tới Người nộp phí: cư dân xem được, tính vào doanh thu / công nợ
+export const INVOICE_PUBLISHED_STATUSES = Object.freeze([
+  INVOICE_STATUS.UNPAID,
+  INVOICE_STATUS.PARTIALLY_PAID,
+  INVOICE_STATUS.PAID,
+  INVOICE_STATUS.OVERDUE,
+]);
+// Còn nợ: thu tiền được, tính vào sổ công nợ
+export const INVOICE_OUTSTANDING_STATUSES = Object.freeze([
+  INVOICE_STATUS.UNPAID,
+  INVOICE_STATUS.PARTIALLY_PAID,
+  INVOICE_STATUS.OVERDUE,
+]);
+// Mọi trạng thái trừ CANCELLED: mỗi căn 1 thông báo/kỳ (BR-F2)
+export const INVOICE_ACTIVE_STATUSES = Object.freeze([...INVOICE_UNPUBLISHED_STATUSES, ...INVOICE_PUBLISHED_STATUSES]);
 
 export const GENERATED_BY = Object.freeze({ CRON: 'CRON', MANUAL: 'MANUAL' });
 
@@ -138,6 +162,13 @@ export const PAYMENT_STATUS = Object.freeze({
   PENDING: 'PENDING',
   SUCCESS: 'SUCCESS',
   FAILED: 'FAILED',
+});
+
+// Sổ Số dư trả trước của căn theo Người nộp phí (Mô đun 4)
+export const PREPAID_TX_TYPES = Object.freeze({
+  DEPOSIT: 'DEPOSIT', // tiền thu thừa ghi vào số dư
+  APPLY: 'APPLY', // trừ số dư vào thông báo phí khi phát hành
+  REFUND: 'REFUND', // phiếu chi hoàn tiền (hoàn ngoài hệ thống)
 });
 
 export const ADJUSTMENT_TYPES = Object.freeze({ ADJUST: 'ADJUST', CANCEL: 'CANCEL' });
@@ -359,6 +390,8 @@ export const NOTIFICATION_TYPES = Object.freeze({
   MAINTENANCE: 'MAINTENANCE',
   FUND_APPROVAL: 'FUND_APPROVAL',
   INVOICE_ADJUSTMENT: 'INVOICE_ADJUSTMENT',
+  INVOICE_APPROVAL: 'INVOICE_APPROVAL', // trình duyệt / trả lại / nhắc kỳ tính phí (Kế toán ↔ Trưởng BQL)
+  PAYMENT_RECEIPT: 'PAYMENT_RECEIPT', // biên lai điện tử mỗi lần thu tiền
   ANNOUNCEMENT: 'ANNOUNCEMENT',
   GUEST: 'GUEST',
   SYSTEM: 'SYSTEM',
@@ -374,6 +407,7 @@ export const CRON_TRIGGERS = Object.freeze({ SCHEDULE: 'SCHEDULE', MANUAL: 'MANU
 export const CRON_JOBS = Object.freeze({
   INVOICE_GENERATE: 'INVOICE_GENERATE',
   INVOICE_OVERDUE: 'INVOICE_OVERDUE',
+  BILLING_REMIND: 'BILLING_REMIND', // nhắc Kế toán đến kỳ tính phí + nhắc Trưởng BQL duyệt quá hạn (X8)
   BOOKING_COMPLETE: 'BOOKING_COMPLETE',
   WORK_ORDER_GENERATE: 'WORK_ORDER_GENERATE',
   TICKET_ESCALATE: 'TICKET_ESCALATE',
@@ -394,6 +428,13 @@ export const AUDIT_ACTIONS = Object.freeze({
   INVOICE_ADJUSTED: 'INVOICE_ADJUSTED',
   INVOICE_CANCELLED: 'INVOICE_CANCELLED',
   PAYMENT_CONFIRMED: 'PAYMENT_CONFIRMED',
+  INVOICE_RECALCULATED: 'INVOICE_RECALCULATED',
+  INVOICE_ITEM_ADDED: 'INVOICE_ITEM_ADDED',
+  INVOICE_ITEM_REMOVED: 'INVOICE_ITEM_REMOVED',
+  INVOICE_SUBMITTED: 'INVOICE_SUBMITTED',
+  INVOICE_PUBLISHED: 'INVOICE_PUBLISHED',
+  INVOICE_RETURNED: 'INVOICE_RETURNED',
+  PREPAID_REFUNDED: 'PREPAID_REFUNDED',
   FEE_TYPE_CHANGED: 'FEE_TYPE_CHANGED',
   FUND_INCOME_RECORDED: 'FUND_INCOME_RECORDED',
   FUND_VOTED: 'FUND_VOTED',
@@ -482,6 +523,8 @@ export const CONFIG_KEYS = Object.freeze({
   TICKET_AUTO_CLOSE_DAYS: 'TICKET_AUTO_CLOSE_DAYS',
   PAYMENT_TERM_DAYS: 'PAYMENT_TERM_DAYS',
   DEBT_REMINDER_DAYS: 'DEBT_REMINDER_DAYS',
+  BILLING_REMIND_DAY: 'BILLING_REMIND_DAY',
+  INVOICE_APPROVAL_REMIND_DAYS: 'INVOICE_APPROVAL_REMIND_DAYS',
   FUND_LOW_BALANCE_THRESHOLD: 'FUND_LOW_BALANCE_THRESHOLD',
   FUND_APPROVAL_RATIO: 'FUND_APPROVAL_RATIO',
   BOOKING_MAX_ACTIVE_PER_APARTMENT: 'BOOKING_MAX_ACTIVE_PER_APARTMENT',
@@ -512,6 +555,8 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.TICKET_AUTO_CLOSE_DAYS, value: 7, scope: CONFIG_SCOPES.BUSINESS, description: 'Tự đóng ticket chờ xác nhận sau N ngày — BR-O9' },
   { key: CONFIG_KEYS.PAYMENT_TERM_DAYS, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn thanh toán hóa đơn (ngày) — BR-F8' },
   { key: CONFIG_KEYS.DEBT_REMINDER_DAYS, value: [1, 7, 15], scope: CONFIG_SCOPES.BUSINESS, description: 'Ngày quá hạn gửi nhắc nợ — BR-D4' },
+  { key: CONFIG_KEYS.BILLING_REMIND_DAY, value: 1, scope: CONFIG_SCOPES.BUSINESS, description: 'Ngày trong tháng nhắc Kế toán tính phí (1–28) — Mô đun 4' },
+  { key: CONFIG_KEYS.INVOICE_APPROVAL_REMIND_DAYS, value: 2, scope: CONFIG_SCOPES.BUSINESS, description: 'Thông báo phí chờ duyệt quá N ngày thì nhắc Trưởng BQL mỗi ngày — X8' },
   { key: CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, value: 50000000, scope: CONFIG_SCOPES.BUSINESS, description: 'Ngưỡng cảnh báo số dư quỹ (VNĐ) — UC-C06' },
   { key: CONFIG_KEYS.FUND_APPROVAL_RATIO, value: 0.5, scope: CONFIG_SCOPES.BUSINESS, description: 'Tỷ lệ đồng ý tối thiểu (> giá trị) — BR-M2' },
   { key: CONFIG_KEYS.BOOKING_MAX_ACTIVE_PER_APARTMENT, value: 2, scope: CONFIG_SCOPES.BUSINESS, description: 'Số booking chưa dùng tối đa/căn — BR-O3' },

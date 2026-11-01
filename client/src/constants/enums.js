@@ -132,6 +132,8 @@ export const NOTIFICATION_TYPES = {
   MAINTENANCE: { label: 'Bảo trì', color: 'volcano' },
   FUND_APPROVAL: { label: 'Quỹ bảo trì', color: 'purple' },
   INVOICE_ADJUSTMENT: { label: 'Điều chỉnh HĐ', color: 'gold' },
+  INVOICE_APPROVAL: { label: 'Duyệt thông báo phí', color: 'geekblue' },
+  PAYMENT_RECEIPT: { label: 'Biên lai', color: 'green' },
   ANNOUNCEMENT: { label: 'Bảng tin', color: 'blue' },
   GUEST: { label: 'Khách', color: 'geekblue' },
   SYSTEM: { label: 'Hệ thống', color: 'default' },
@@ -143,6 +145,7 @@ export const FEE_CATEGORIES = {
   PARKING: { label: 'Phí gửi xe', color: 'blue' },
   AMENITY: { label: 'Phí tiện ích', color: 'purple' },
   ADJUSTMENT: { label: 'Điều chỉnh', color: 'gold' },
+  OTHER: { label: 'Khoản thu khác', color: 'magenta' },
 };
 
 // ===== Module B — Phí & đơn giá (UC-B01) =====
@@ -177,11 +180,21 @@ export const PAYMENT_METHODS = {
   BANK_TRANSFER: { label: 'Chuyển khoản', color: 'cyan' },
 };
 
+// Vòng đời thông báo phí (Mô đun 4): Nháp → Chờ duyệt → Đã phát hành → Thanh toán một phần → Đã thanh toán
 export const INVOICE_STATUS = {
+  DRAFT: { label: 'Nháp', color: 'default' },
+  PENDING_APPROVAL: { label: 'Chờ duyệt', color: 'gold' },
   UNPAID: { label: 'Chưa thanh toán', color: 'blue' },
+  PARTIALLY_PAID: { label: 'Thanh toán một phần', color: 'cyan' },
   PAID: { label: 'Đã thanh toán', color: 'green' },
   OVERDUE: { label: 'Quá hạn', color: 'red' },
   CANCELLED: { label: 'Đã hủy', color: 'default' },
+};
+
+export const PREPAID_TX_TYPES = {
+  DEPOSIT: { label: 'Tiền thừa ghi vào số dư', color: 'green' },
+  APPLY: { label: 'Trừ vào thông báo phí', color: 'blue' },
+  REFUND: { label: 'Hoàn tiền', color: 'orange' },
 };
 
 export const WORK_ORDER_STATUS = {
@@ -293,6 +306,7 @@ export const OCCUPANT_CHANGE_TYPES = {
 export const CRON_JOBS = {
   INVOICE_GENERATE: { label: 'Tạo hóa đơn định kỳ', color: 'green' },
   INVOICE_OVERDUE: { label: 'Quét hóa đơn quá hạn', color: 'red' },
+  BILLING_REMIND: { label: 'Nhắc tính phí / duyệt thông báo phí', color: 'gold' },
   BOOKING_COMPLETE: { label: 'Hoàn tất / không đến booking tiện ích', color: 'cyan' },
   WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
   TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },

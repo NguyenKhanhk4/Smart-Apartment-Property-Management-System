@@ -4,6 +4,8 @@ import { ApiError } from '../../utils/ApiError.js';
 
 // Tham số dạng tỷ lệ: 0 < value ≤ 1
 const RATIO_KEYS = new Set([CONFIG_KEYS.FUND_APPROVAL_RATIO]);
+// Tham số là ngày trong tháng: 1–28 để tháng nào cũng có ngày đó
+const DAY_OF_MONTH_KEYS = new Set([CONFIG_KEYS.BILLING_REMIND_DAY]);
 const MAX_NUMBER = 1e12;
 const MAX_ARRAY = 50;
 const isNumberInRange = (n, min) => typeof n === 'number' && Number.isFinite(n) && n >= min && n <= MAX_NUMBER;
@@ -26,6 +28,7 @@ export function assertValidValue(key, current, next) {
     } else if (!Number.isInteger(next)) {
       throw ApiError.badRequest('Giá trị phải là số nguyên');
     }
+    if (DAY_OF_MONTH_KEYS.has(key) && next > 28) throw ApiError.badRequest('Ngày trong tháng phải từ 1 đến 28');
   } else if (Array.isArray(current)) {
     if (!Array.isArray(next) || !next.length || next.length > MAX_ARRAY) {
       throw ApiError.badRequest(`Giá trị phải là danh sách 1–${MAX_ARRAY} số lớn hơn 0`);
