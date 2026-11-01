@@ -3,10 +3,13 @@ import Joi from 'joi';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
-import { created, ok } from '../../utils/response.js';
-import { idParams, objectId, period } from '../../utils/validators.js';
+import { INVOICE_STATUS } from '../../constants/enums.js';
+import { paginationQuery, sortable } from '../../utils/pagination.js';
+import { created, ok, paginated } from '../../utils/response.js';
+import { csvEnum, idParams, objectId, period } from '../../utils/validators.js';
 import * as approval from './invoices.approval.js';
 import * as drafts from './invoices.drafts.js';
+import * as queries from './invoices.queries.js';
 import * as service from './invoices.service.js';
 
 // Mô đun 4 — UC26: Tính phí → thông báo Nháp; Kế toán sửa Nháp (khoản thu khác, tính lại) trước khi trình duyệt.
@@ -21,6 +24,51 @@ const otherItemBody = Joi.object({
   amount: Joi.number().integer().min(1).max(MAX_ITEM_AMOUNT).required(), // VND nguyên
 });
 const itemParams = Joi.object({ id: objectId().required(), index: Joi.number().integer().min(0).max(500).required() });
+
+const INVOICE_SORT = sortable('createdAt', 'period', 'code', 'totalAmount', 'dueDate');
+const listQuery = Joi.object({
+  ...paginationQuery,
+  sort: INVOICE_SORT.default('code'),
+  period: period(),
+  status: csvEnum(Object.values(INVOICE_STATUS)),
+  buildingId: objectId(),
+  apartmentId: objectId(),
+  payerId: objectId(),
+  q: Joi.string().trim().max(50).allow(''),
+});
+const myQuery = Joi.object({
+  ...paginationQuery,
+  sort: sortable('period', 'createdAt').default('-period'),
+  apartmentId: objectId().required(),
+  period: period(),
+  status: csvEnum(Object.values(INVOICE_STATUS)),
+});
+
+/**
+ * @openapi
+ * /invoices:
+ *   get:
+ *     tags: [Phí & hóa đơn]
+ *     summary: Kế toán / Trưởng BQL xem danh sách thông báo phí (lọc kỳ, trạng thái CSV, tòa, căn, người nộp, mã). Kèm byStatus = đếm + tổng tiền theo trạng thái (cùng bộ lọc, bỏ lọc trạng thái)
+ */
+router.get('/', authenticate, authorize(...queries.STAFF_VIEW_ROLES), validate({ query: listQuery }), async (req, res) => {
+  const { items, pagination, byStatus } = await queries.listInvoices(req.validated.query);
+  return paginated(res, items, pagination, { byStatus });
+});
+
+/**
+ * @openapi
+ * /invoices/my:
+ *   get:
+ *     tags: [Phí & hóa đơn]
+ *     summary: Cư dân xem thông báo phí ĐÃ PHÁT HÀNH của căn đang chọn (X1 — Người nộp phí xem mọi thông báo của mình; thành viên khác chỉ xem các kỳ từ khi chuyển vào). Kèm summary = tổng còn nợ, quá hạn, Số dư trả trước của chính mình
+ *     parameters:
+ *       - { in: query, name: apartmentId, required: true, schema: { type: string } }
+ */
+router.get('/my', authenticate, authorize('RESIDENT'), validate({ query: myQuery }), async (req, res) => {
+  const { items, pagination, summary } = await queries.myInvoices(req.user, req.validated.query);
+  return paginated(res, items, pagination, { summary });
+});
 
 /**
  * @openapi
@@ -192,5 +240,18 @@ router.post('/return', authenticate, authorize('MANAGER'), validate({ body: retu
   const r = await approval.returnInvoices(req.user, req.body);
   return ok(res, r, `Đã trả lại ${r.count} thông báo phí${skippedNote(r)}`);
 });
+
+/**
+ * @openapi
+ * /invoices/{id}:
+ *   get:
+ *     tags: [Phí & hóa đơn]
+ *     summary: Chi tiết thông báo phí + các lần thanh toán đã phân bổ + giao dịch Số dư trả trước. Cư dân chỉ xem được thông báo đã phát hành theo quyền X1 (không có quyền → 404)
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ */
+router.get('/:id', authenticate, authorize(...queries.STAFF_VIEW_ROLES, 'RESIDENT'), validate({ params: idParams }), async (req, res) =>
+  ok(res, await queries.getInvoice(req.user, req.params.id)),
+);
 
 export default router;
