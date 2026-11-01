@@ -1,19 +1,31 @@
-import { INVOICE_STATUS } from '../../constants/enums.js';
+import { CONFIG_KEYS, INVOICE_STATUS, NOTIFICATION_TYPES } from '../../constants/enums.js';
 import { Invoice } from '../../models/index.js';
-import { startOfVnDay, vnPeriod } from '../../utils/time.js';
-import { generateForPeriod, toJobResult } from './invoices.service.js';
+import { notifyRoles } from '../../services/notification.service.js';
+import { getConfig } from '../../services/systemConfig.service.js';
+import { periodLabel, startOfVnDay, toVnYmd, vnPeriod } from '../../utils/time.js';
 
 /**
- * UC-B02 — 00:30 ngày 1 hằng tháng: lập hóa đơn kỳ hiện tại (giờ VN) cho mọi căn có hợp đồng mua bán hiệu lực.
- * Một căn lỗi không làm hỏng cả đợt: cron_runs ghi FAILED kèm danh sách căn lỗi nhưng vẫn giữ số hóa đơn đã lập.
+ * Mô đun 4 — hằng ngày 08:00: đến ngày BILLING_REMIND_DAY mà kỳ hiện tại chưa tính phí → nhắc Kế toán bấm "Tính phí".
+ * Hệ thống không tự tính phí (Kế toán chạy, Trưởng BQL duyệt). Trả về số người được nhắc.
  */
-export async function generateMonthlyInvoices({ period = vnPeriod(), now = new Date() } = {}) {
-  return toJobResult(await generateForPeriod({ period, now }));
+export async function remindBilling(now = new Date()) {
+  const day = await getConfig(CONFIG_KEYS.BILLING_REMIND_DAY);
+  if (Number(toVnYmd(now).slice(8, 10)) !== day) return 0;
+
+  const period = vnPeriod(now);
+  if (await Invoice.exists({ period, status: { $ne: INVOICE_STATUS.CANCELLED } })) return 0; // đã tính (ít nhất 1 căn)
+
+  return notifyRoles(['ACCOUNTANT'], {
+    type: NOTIFICATION_TYPES.INVOICE_APPROVAL,
+    title: `Đến kỳ tính phí tháng ${periodLabel(period)}`,
+    content: `Đã đến ngày tính phí kỳ ${periodLabel(period)}. Vào "Tính phí" để tạo thông báo phí Nháp và trình duyệt.`,
+    link: '/app/invoices/generate',
+  });
 }
 
 /**
- * BR-F8 — hằng ngày: hóa đơn UNPAID có hạn thanh toán trước 00:00 hôm nay (giờ VN) → OVERDUE.
- * Hạn là ngày cuối được trả, nên hóa đơn hạn hôm nay chưa quá hạn. Cập nhật có điều kiện status nên chạy lại an toàn.
+ * BR-F8 — hằng ngày: thông báo đã phát hành, chưa trả đủ, có hạn đóng trước 00:00 hôm nay (giờ VN) → OVERDUE.
+ * Hạn là ngày cuối được trả, nên thông báo hạn hôm nay chưa quá hạn. Cập nhật có điều kiện status nên chạy lại an toàn.
  */
 export async function markOverdueInvoices(now = new Date()) {
   const res = await Invoice.updateMany(

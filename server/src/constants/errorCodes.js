@@ -104,6 +104,8 @@ export const ERROR_CODES = Object.freeze({
   },
   // Module B: sinh hóa đơn mà bảng giá kỳ đó thiếu mức giá cần dùng (vd chưa khai giá gửi xe đạp) — không tính 0đ âm thầm
   FEE_PRICE_MISSING: { status: 422, message: 'Chưa có đơn giá áp dụng cho kỳ này, hãy bổ sung trong Bảng phí' },
+  // Mô đun 4: chỉ sửa / tính lại thông báo phí khi còn Nháp (đã trình duyệt hoặc phát hành thì không sửa trực tiếp)
+  INVOICE_NOT_DRAFT: { status: 409, message: 'Thông báo phí không còn ở trạng thái Nháp, không sửa được' },
   // Module A (Vũ Việt): trạng thái nghiệp vụ xung đột (hợp đồng, xe...)
   EMAIL_EXISTS: { status: 409, message: 'Email đã được sử dụng bởi tài khoản khác' },
   CONTRACT_ACTIVE_EXISTS: { status: 409, message: 'Căn hộ đã có hợp đồng cùng loại đang hiệu lực' },

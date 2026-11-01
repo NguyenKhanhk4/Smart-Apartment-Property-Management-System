@@ -71,9 +71,10 @@ async function parkingItems(apartment, period, prices) {
  * Phí tiện ích phát sinh trong kỳ `prev` chưa gộp hóa đơn (invoiceId null) do Module D ghi:
  * gói tháng (month = prev), vé lẻ (billingMonth = prev), booking có phí (ngày đặt thuộc prev).
  * Trả về các dòng + id bản ghi để gắn invoiceId khi lưu.
+ * `invoiceId`: khi tính lại 1 thông báo Nháp, lấy cả bản ghi đã gắn vào chính thông báo đó.
  */
-export async function collectAmenityCharges(apartmentId, prev) {
-  const unbilled = { apartmentId, fee: { $gt: 0 }, invoiceId: null };
+export async function collectAmenityCharges(apartmentId, prev, { invoiceId = null } = {}) {
+  const unbilled = { apartmentId, fee: { $gt: 0 }, invoiceId: invoiceId ? { $in: [null, invoiceId] } : null };
   const [passes, visits, bookings] = await Promise.all([
     AmenityPass.find({ ...unbilled, month: prev, status: AMENITY_PASS_STATUS.ACTIVE })
       .populate('amenityId', 'name')
@@ -140,8 +141,9 @@ export async function collectAmenityCharges(apartmentId, prev) {
  * Bản nháp hóa đơn kỳ `period` cho 1 căn (apartment cần có buildingId đã populate `code`).
  * Căn chưa có hợp đồng mua bán hiệu lực → payer null, không có dòng phí (bỏ qua khi sinh).
  * @param {Map<string, object>} prices bảng giá kỳ `period` (getPriceTable)
+ * @param {{ invoiceId?: import('mongoose').Types.ObjectId }} [opts] tính lại thông báo Nháp đã có
  */
-export async function buildInvoiceDraft(apartment, period, prices) {
+export async function buildInvoiceDraft(apartment, period, prices, { invoiceId = null } = {}) {
   const building = apartment.buildingId;
   const base = {
     apartmentId: apartment._id,
@@ -156,7 +158,7 @@ export async function buildInvoiceDraft(apartment, period, prices) {
   const payer = await getPayer(apartment._id, periodStart(period));
   if (!payer) return { ...base, payer: null, items: [], totalAmount: 0, charges: null };
 
-  const charges = await collectAmenityCharges(apartment._id, shiftPeriod(period, -1));
+  const charges = await collectAmenityCharges(apartment._id, shiftPeriod(period, -1), { invoiceId });
   const items = [...apartmentItems(apartment, prices), ...(await parkingItems(apartment, period, prices)), ...charges.items];
   return {
     ...base,

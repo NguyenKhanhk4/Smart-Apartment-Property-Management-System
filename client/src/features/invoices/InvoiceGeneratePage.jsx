@@ -10,7 +10,7 @@ import { useAction, useApi } from '../../hooks/useApi';
 import { FEE_CATEGORIES, INVOICE_PREVIEW_STATUS, INVOICE_STATUS, PAYER_SOURCES } from '../../constants/enums';
 import { formatMoney } from '../../utils/format';
 
-// UC-B02 — Xem trước và lập hóa đơn tháng. Cron tự lập lúc 00:30 ngày 1; trang này để kiểm tra số liệu và lập bù.
+// Mô đun 4 — UC26: Xem trước và tính phí tháng → thông báo phí Nháp. Kế toán kiểm tra, sửa rồi trình Trưởng BQL duyệt.
 const periodLabel = (p) => `${p.slice(5)}/${p.slice(0, 4)}`;
 // Chỉ lập tới kỳ hiện tại (phí tiện ích kỳ trước phải chốt xong); xem trước được cả kỳ sau
 const isFuture = (d) => d.isAfter(dayjs(), 'month');
@@ -117,8 +117,8 @@ export default function InvoiceGeneratePage() {
         r.status === 'NEW' &&
         !future && (
           <Popconfirm
-            title={`Lập hóa đơn ${r.buildingCode}-${r.apartmentCode}?`}
-            description={`${formatMoney(r.totalAmount)} · người trả sẽ nhận thông báo`}
+            title={`Tính phí ${r.buildingCode}-${r.apartmentCode}?`}
+            description={`${formatMoney(r.totalAmount)} · tạo thông báo Nháp, chưa gửi cư dân`}
             onConfirm={() => generateOne(r.apartmentId).catch(() => {})}
           >
             <Button size="small" loading={generatingOne}>
@@ -140,18 +140,18 @@ export default function InvoiceGeneratePage() {
   return (
     <>
       <PageHeader
-        title="Lập hóa đơn tháng"
-        subtitle="Hệ thống tự lập hóa đơn lúc 00:30 ngày 1 hằng tháng: phí vệ sinh, gửi xe của kỳ này và phí tiện ích kỳ trước. Xem trước để kiểm tra, lập bù cho căn mới bàn giao hoặc sau khi hủy hóa đơn."
-        breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Lập hóa đơn' }]}
+        title="Tính phí tháng"
+        subtitle="Tính phí vệ sinh, gửi xe của kỳ này và phí tiện ích kỳ trước thành thông báo phí Nháp. Nháp chưa gửi cư dân: kiểm tra, thêm khoản thu khác rồi trình Trưởng BQL duyệt & phát hành."
+        breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Tính phí' }]}
         extra={
           <Popconfirm
-            title={`Lập hóa đơn kỳ ${periodLabel(period)} cho cả đợt?`}
-            description={`${summary?.new ?? 0} căn sẽ được lập (toàn bộ các tòa), căn đã có hóa đơn được bỏ qua.`}
+            title={`Tính phí kỳ ${periodLabel(period)} cho cả đợt?`}
+            description={`${summary?.new ?? 0} căn sẽ có thông báo Nháp (toàn bộ các tòa), căn đã có thông báo được bỏ qua.`}
             onConfirm={() => generateAll().catch(() => {})}
             disabled={future || !summary?.new}
           >
             <Button type="primary" icon={<ThunderboltOutlined />} loading={generatingAll} disabled={future || !summary?.new}>
-              Lập cả đợt
+              Tính phí cả đợt
             </Button>
           </Popconfirm>
         }
@@ -203,8 +203,8 @@ export default function InvoiceGeneratePage() {
           showIcon
           message={
             batchResult.summary
-              ? `Đã lập ${batchResult.summary.created} hóa đơn (${formatMoney(batchResult.summary.totalAmount)}); bỏ qua ${batchResult.summary.existing} căn đã có, ${batchResult.summary.noPayer} căn chưa có HĐ mua bán.`
-              : 'Sinh hóa đơn thất bại'
+              ? `Đã tạo ${batchResult.summary.created} thông báo Nháp (${formatMoney(batchResult.summary.totalAmount)}); bỏ qua ${batchResult.summary.existing} căn đã có, ${batchResult.summary.noPayer} căn chưa có HĐ mua bán.`
+              : 'Tính phí thất bại'
           }
           description={
             batchResult.summary?.failed?.length
