@@ -20,6 +20,8 @@ import {
   App,
   Tooltip,
 } from 'antd';
+import PhoneAccountNotice from '../../components/PhoneAccountNotice';
+import { usePhoneAccount } from '../../hooks/usePhoneAccount';
 import { PHONE_RULES } from '../../utils/phone';
 import {
   PlusOutlined,
@@ -39,6 +41,59 @@ import { useAuth } from '../../hooks/useAuth';
 import { useApi, useAction } from '../../hooks/useApi';
 import { contractsApi, buildingsApi } from '../../api/moduleA.api';
 import ApartmentSelect from '../../components/ApartmentSelect';
+
+// SĐT nhập trước để biết có tài khoản chưa; tài khoản có sẵn không nhận họ tên, email, ngày sinh mới (BR-X5)
+function PartyFields({ prefix, title, check, namePlaceholder, emailPlaceholder, phonePlaceholder, idPlaceholder }) {
+  return (
+    <Card size="small" title={title} className="mb-4 bg-gray-50/50 dark:bg-gray-800">
+      <Row gutter={16}>
+        <Col span={12}>
+          <Form.Item name={`${prefix}Phone`} label="Số điện thoại" rules={PHONE_RULES}>
+            <Input placeholder={phonePlaceholder} />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item name={`${prefix}IdNumber`} label="Số CCCD">
+            <Input placeholder={idPlaceholder} />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <PhoneAccountNotice check={check} />
+
+      {!check.isExisting && (
+        <Row gutter={16}>
+          <Col span={8}>
+            <Form.Item
+              name={`${prefix}FullName`}
+              label="Họ và tên"
+              rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}
+            >
+              <Input placeholder={namePlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item
+              name={`${prefix}Email`}
+              label="Email"
+              rules={[
+                { required: true, message: 'Vui lòng nhập email' },
+                { type: 'email', message: 'Email không hợp lệ' },
+              ]}
+            >
+              <Input placeholder={emailPlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item name={`${prefix}Dob`} label="Ngày sinh">
+              <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+            </Form.Item>
+          </Col>
+        </Row>
+      )}
+    </Card>
+  );
+}
 
 export default function ContractsPage() {
   const { hasRole } = useAuth();
@@ -86,6 +141,8 @@ export default function ContractsPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createForm] = Form.useForm();
   const selectedType = Form.useWatch('type', createForm);
+  const partyPrefix = selectedType === CONTRACT_TYPES.LEASE ? 'tenant' : 'owner';
+  const check = usePhoneAccount(Form.useWatch(`${partyPrefix}Phone`, createForm));
   const [contractFileList, setContractFileList] = useState([]);
 
   // Modal Extend/Update state
@@ -112,6 +169,7 @@ export default function ContractsPage() {
       onDone: () => {
         setCreateModalOpen(false);
         createForm.resetFields();
+        check.reset();
         setContractFileList([]);
         reloadContracts();
       },
@@ -142,6 +200,7 @@ export default function ContractsPage() {
   // Handlers
   const handleOpenCreateModal = () => {
     createForm.resetFields();
+    check.reset();
     createForm.setFieldsValue({
       type: CONTRACT_TYPES.SALE,
       startDate: dayjs(),
@@ -163,31 +222,27 @@ export default function ContractsPage() {
       }
       formData.append('tenantPaysFees', String(Boolean(values.tenantPaysFees)));
 
-      if (values.type === CONTRACT_TYPES.SALE) {
-        const ownerData = {
-          fullName: values.ownerFullName,
-          email: values.ownerEmail,
-          phone: values.ownerPhone,
-          idNumber: values.ownerIdNumber || '',
-          dateOfBirth: values.ownerDob ? values.ownerDob.format('YYYY-MM-DD') : null,
-        };
-        formData.append('owner', JSON.stringify(ownerData));
-      } else {
-        const tenantData = {
-          fullName: values.tenantFullName,
-          email: values.tenantEmail,
-          phone: values.tenantPhone,
-          idNumber: values.tenantIdNumber || '',
-          dateOfBirth: values.tenantDob ? values.tenantDob.format('YYYY-MM-DD') : null,
-        };
-        formData.append('tenant', JSON.stringify(tenantData));
-      }
+      if (check.blockReason) return;
+      const dob = values[`${partyPrefix}Dob`];
+      const partyData = {
+        phone: values[`${partyPrefix}Phone`],
+        idNumber: values[`${partyPrefix}IdNumber`] || '',
+        ...(check.isExisting
+          ? { userId: check.userId }
+          : {
+              fullName: values[`${partyPrefix}FullName`],
+              email: values[`${partyPrefix}Email`],
+              dateOfBirth: dob ? dob.format('YYYY-MM-DD') : null,
+            }),
+      };
+      formData.append(partyPrefix, JSON.stringify(partyData));
 
       if (contractFileList[0]?.originFileObj) {
         formData.append('file', contractFileList[0].originFileObj);
       }
 
-      await createContract(formData);
+      // Lỗi đã được báo; kiểm tra lại vì SĐT có thể vừa có tài khoản
+      await createContract(formData).catch(() => check.reload());
     } catch {
       // Form validation error
     }
@@ -490,6 +545,7 @@ export default function ContractsPage() {
         open={createModalOpen}
         onCancel={() => setCreateModalOpen(false)}
         onOk={handleSaveCreate}
+        okButtonProps={{ disabled: Boolean(check.blockReason) }}
         confirmLoading={creating}
         width={680}
         destroyOnClose
@@ -560,98 +616,28 @@ export default function ContractsPage() {
             </Form.Item>
           )}
 
-          {/* Thông tin Chủ sở hữu khi SALE */}
           {selectedType === CONTRACT_TYPES.SALE && (
-            <Card size="small" title="Thông tin Chủ sở hữu" className="mb-4 bg-gray-50/50 dark:bg-gray-800">
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item
-                    name="ownerFullName"
-                    label="Họ và tên"
-                    rules={[{ required: true, message: 'Vui lòng nhập họ tên chủ sở hữu' }]}
-                  >
-                    <Input placeholder="Vd: Nguyễn Văn A" />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item
-                    name="ownerEmail"
-                    label="Email"
-                    rules={[
-                      { required: true, message: 'Vui lòng nhập email' },
-                      { type: 'email', message: 'Email không hợp lệ' },
-                    ]}
-                  >
-                    <Input placeholder="Vd: nva@gmail.com" />
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Form.Item name="ownerPhone" label="Số điện thoại" rules={PHONE_RULES}>
-                    <Input placeholder="0912345678" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="ownerIdNumber" label="Số CCCD">
-                    <Input placeholder="001200000001" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="ownerDob" label="Ngày sinh">
-                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </Card>
+            <PartyFields
+              prefix="owner"
+              title="Thông tin Chủ sở hữu"
+              check={check}
+              namePlaceholder="Vd: Nguyễn Văn A"
+              emailPlaceholder="Vd: nva@gmail.com"
+              phonePlaceholder="0912345678"
+              idPlaceholder="001200000001"
+            />
           )}
 
-          {/* Thông tin Người thuê khi LEASE */}
           {selectedType === CONTRACT_TYPES.LEASE && (
-            <Card size="small" title="Thông tin Người thuê" className="mb-4 bg-gray-50/50 dark:bg-gray-800">
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item
-                    name="tenantFullName"
-                    label="Họ và tên"
-                    rules={[{ required: true, message: 'Vui lòng nhập họ tên người thuê' }]}
-                  >
-                    <Input placeholder="Vd: Trần Thị B" />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item
-                    name="tenantEmail"
-                    label="Email"
-                    rules={[
-                      { required: true, message: 'Vui lòng nhập email' },
-                      { type: 'email', message: 'Email không hợp lệ' },
-                    ]}
-                  >
-                    <Input placeholder="Vd: ttb@gmail.com" />
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Form.Item name="tenantPhone" label="Số điện thoại" rules={PHONE_RULES}>
-                    <Input placeholder="0987654321" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="tenantIdNumber" label="Số CCCD">
-                    <Input placeholder="001200000002" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="tenantDob" label="Ngày sinh">
-                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </Card>
+            <PartyFields
+              prefix="tenant"
+              title="Thông tin Người thuê"
+              check={check}
+              namePlaceholder="Vd: Trần Thị B"
+              emailPlaceholder="Vd: ttb@gmail.com"
+              phonePlaceholder="0987654321"
+              idPlaceholder="001200000002"
+            />
           )}
 
           <Form.Item label="File đính kèm (hợp đồng có chữ ký / công chứng, jpg/png ≤ 5MB)">

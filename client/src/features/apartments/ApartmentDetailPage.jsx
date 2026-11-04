@@ -17,6 +17,8 @@ import {
   Statistic,
   Tooltip,
 } from 'antd';
+import PhoneAccountNotice from '../../components/PhoneAccountNotice';
+import { usePhoneAccount } from '../../hooks/usePhoneAccount';
 import { PHONE_RULES } from '../../utils/phone';
 import {
   ArrowLeftOutlined,
@@ -100,16 +102,21 @@ export default function ApartmentDetailPage() {
   // Modal Thêm thành viên
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addForm] = Form.useForm();
+  const check = usePhoneAccount(Form.useWatch('phone', addForm));
 
   const [addMemberAction, addingMember] = useAction(
     async (values) => {
       const payload = {
         apartmentId: id,
-        email: values.email,
-        fullName: values.fullName,
-        phone: values.phone || null,
+        phone: values.phone,
         idNumber: values.idNumber || null,
-        dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format('YYYY-MM-DD') : null,
+        ...(check.isExisting
+          ? { userId: check.userId }
+          : {
+              email: values.email,
+              fullName: values.fullName,
+              dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format('YYYY-MM-DD') : null,
+            }),
       };
       return residentsApi.addMember(payload);
     },
@@ -123,6 +130,7 @@ export default function ApartmentDetailPage() {
       onDone: () => {
         setAddModalOpen(false);
         addForm.resetFields();
+        check.reset();
         reloadResidents();
         reloadApt();
       },
@@ -489,7 +497,10 @@ export default function ApartmentDetailPage() {
                       <Button
                         type="primary"
                         icon={<PlusOutlined />}
-                        onClick={() => setAddModalOpen(true)}
+                        onClick={() => {
+                          check.reset();
+                          setAddModalOpen(true);
+                        }}
                       >
                         Thêm thành viên
                       </Button>
@@ -556,29 +567,16 @@ export default function ApartmentDetailPage() {
         open={addModalOpen}
         onCancel={() => setAddModalOpen(false)}
         onOk={() => addForm.submit()}
+        okButtonProps={{ disabled: Boolean(check.blockReason) }}
         confirmLoading={addingMember}
         destroyOnClose
       >
-        <Form form={addForm} layout="vertical" onFinish={(v) => addMemberAction(v).catch(() => {})} className="mt-4">
-          <Form.Item
-            name="email"
-            label="Email tài khoản"
-            rules={[
-              { required: true, message: 'Vui lòng nhập email' },
-              { type: 'email', message: 'Email không đúng định dạng' },
-            ]}
-          >
-            <Input placeholder="Vd: member@gmail.com" />
-          </Form.Item>
-
-          <Form.Item
-            name="fullName"
-            label="Họ và tên"
-            rules={[{ required: true, message: 'Vui lòng nhập họ và tên' }]}
-          >
-            <Input placeholder="Vd: Nguyễn Văn Thành" />
-          </Form.Item>
-
+        <Form
+          form={addForm}
+          layout="vertical"
+          onFinish={(v) => !check.blockReason && addMemberAction(v).catch(() => check.reload())}
+          className="mt-4"
+        >
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
@@ -592,9 +590,35 @@ export default function ApartmentDetailPage() {
             </Col>
           </Row>
 
-          <Form.Item name="dateOfBirth" label="Ngày sinh">
-            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder="Chọn ngày sinh" />
-          </Form.Item>
+          <PhoneAccountNotice check={check} />
+
+          {/* Tài khoản có sẵn không nhận họ tên, email, ngày sinh mới (BR-X5) */}
+          {!check.isExisting && (
+            <>
+              <Form.Item
+                name="email"
+                label="Email tài khoản"
+                rules={[
+                  { required: true, message: 'Vui lòng nhập email' },
+                  { type: 'email', message: 'Email không đúng định dạng' },
+                ]}
+              >
+                <Input placeholder="Vd: member@gmail.com" />
+              </Form.Item>
+
+              <Form.Item
+                name="fullName"
+                label="Họ và tên"
+                rules={[{ required: true, message: 'Vui lòng nhập họ và tên' }]}
+              >
+                <Input placeholder="Vd: Nguyễn Văn Thành" />
+              </Form.Item>
+
+              <Form.Item name="dateOfBirth" label="Ngày sinh">
+                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder="Chọn ngày sinh" />
+              </Form.Item>
+            </>
+          )}
         </Form>
       </Modal>
 

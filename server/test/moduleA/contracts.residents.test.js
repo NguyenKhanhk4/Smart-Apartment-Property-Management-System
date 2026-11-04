@@ -1,7 +1,7 @@
 // Hợp đồng & thành viên căn hộ: ngày theo giờ VN, xung đột 409, cập nhật có điều kiện, không lộ mật khẩu.
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AuditLog, Contract, Resident, User } from '../../src/models/index.js';
+import { AuditLog, Contract, Notification, Resident, User } from '../../src/models/index.js';
 import * as contracts from '../../src/modules/contracts/contracts.service.js';
 import { remindExpiringLeases } from '../../src/modules/contracts/contracts.jobs.js';
 import { getPayer } from '../../src/modules/contracts/contracts.queries.js';
@@ -94,6 +94,110 @@ test('addMember: response không chứa passwordHash / tokenVersion; email lỗi
   assert.equal(json.user.email, 'member@test.local');
   // SMTP chưa cấu hình trong test → email không gửi được → lễ tân cần mật khẩu để báo trực tiếp
   assert.match(res.temporaryPassword, /^[A-Za-z0-9]{10}$/);
+});
+
+test('createContract: SĐT đã có tài khoản mà chưa xác nhận → 409, không tạo gì; không báo gì cho người đó', async () => {
+  const receptionist = asUser(await createReceptionist());
+  const stranger = await createResidentUser();
+  const apartment = await createApartment(null, { status: 'VACANT' });
+
+  await assert.rejects(
+    contracts.createContract(receptionist, {
+      apartmentId: apartment._id,
+      type: 'SALE',
+      startDate: new Date('2026-11-01'),
+      owner: { phone: stranger.phone, email: 'chu.that@example.com', fullName: 'Chủ Thật', idNumber: '001200000001' },
+    }),
+    { errorCode: 'ACCOUNT_CONFIRM_REQUIRED', status: 409 },
+  );
+
+  assert.equal(await Contract.countDocuments(), 0);
+  assert.equal(await Resident.countDocuments({ userId: stranger._id }), 0);
+  assert.equal(await Notification.countDocuments({ userId: stranger._id }), 0);
+  assert.equal(await User.countDocuments({ email: 'chu.that@example.com' }), 0);
+});
+
+test('createContract: đã xác nhận (userId + SĐT khớp) → gắn đúng tài khoản, không ghi đè họ tên, email, ngày sinh', async () => {
+  const receptionist = asUser(await createReceptionist());
+  const owner = await createResidentUser({ dateOfBirth: new Date('1990-01-01') });
+  const apartment = await createApartment(null, { status: 'VACANT' });
+
+  const { contract } = await contracts.createContract(receptionist, {
+    apartmentId: apartment._id,
+    type: 'SALE',
+    startDate: new Date('2026-11-01'),
+    owner: { userId: String(owner._id), phone: owner.phone, fullName: 'Tên Khác', email: 'khac@example.com', dateOfBirth: '2001-02-03' },
+  });
+
+  assert.equal(String(contract.ownerId), String(owner._id));
+  const saved = await User.findById(owner._id).lean();
+  assert.equal(saved.fullName, owner.fullName);
+  assert.equal(saved.email, owner.email);
+  assert.equal(saved.dateOfBirth.getTime(), new Date('1990-01-01').getTime());
+});
+
+test('createContract: userId không khớp SĐT đã đối chiếu → 409 ACCOUNT_CONFIRM_REQUIRED', async () => {
+  const receptionist = asUser(await createReceptionist());
+  const [a, b] = [await createResidentUser(), await createResidentUser()];
+  const apartment = await createApartment(null, { status: 'VACANT' });
+
+  await assert.rejects(
+    contracts.createContract(receptionist, {
+      apartmentId: apartment._id,
+      type: 'SALE',
+      startDate: new Date('2026-11-01'),
+      owner: { userId: String(a._id), phone: b.phone },
+    }),
+    { errorCode: 'ACCOUNT_CONFIRM_REQUIRED' },
+  );
+  assert.equal(await Contract.countDocuments(), 0);
+});
+
+test('addMember: tài khoản có sẵn đã xác nhận → thêm vào căn, không đổi ngày sinh (BR-X5); chưa xác nhận → 409', async () => {
+  const receptionist = asUser(await createReceptionist());
+  const { apartment } = await saleWithOwner();
+  const member = await createResidentUser({ dateOfBirth: new Date('1990-01-01') });
+
+  await assert.rejects(
+    residents.addMember(receptionist, { apartmentId: apartment._id, phone: member.phone, email: 'x@example.com', fullName: 'X' }),
+    { errorCode: 'ACCOUNT_CONFIRM_REQUIRED' },
+  );
+  assert.equal(await Resident.countDocuments({ userId: member._id }), 0);
+
+  await residents.addMember(receptionist, {
+    apartmentId: apartment._id,
+    userId: String(member._id),
+    phone: member.phone,
+    dateOfBirth: '2001-02-03',
+  });
+
+  assert.equal(await Resident.countDocuments({ userId: member._id, isActive: true }), 1);
+  const saved = await User.findById(member._id).lean();
+  assert.equal(saved.dateOfBirth.getTime(), new Date('1990-01-01').getTime());
+});
+
+test('lookupAccountByPhone: chưa có / cư dân (đã che email, CCCD) / nội bộ (không lộ danh tính)', async () => {
+  const receptionist = asUser(await createReceptionist());
+  const { apartment } = await saleWithOwner();
+  await residents.addMember(receptionist, {
+    apartmentId: apartment._id,
+    email: 'thanhvien@example.com',
+    phone: '0912000009',
+    fullName: 'Thành Viên',
+    idNumber: '001200001234',
+  });
+  const manager = await createManager();
+
+  assert.deepEqual(await residents.lookupAccountByPhone('+84912000008'), { phone: '0912000008', exists: false });
+
+  const found = await residents.lookupAccountByPhone('+84912000009');
+  assert.equal(found.phone, '0912000009');
+  assert.equal(found.isResident, true);
+  assert.equal(found.fullName, 'Thành Viên');
+  assert.equal(found.email, 't***@example.com');
+  assert.equal(found.idNumber, '********1234');
+
+  assert.deepEqual(await residents.lookupAccountByPhone(manager.phone), { phone: manager.phone, exists: true, isResident: false });
 });
 
 test('tempPasswordForResponse: chỉ trả mật khẩu tạm khi gửi email thất bại', () => {

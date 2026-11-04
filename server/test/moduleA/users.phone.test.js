@@ -142,6 +142,26 @@ test('tài khoản nội bộ: thiếu hoặc sai SĐT trả 400, trùng SĐT tr
   assert.equal((await internal(manager, { ...staff, phone: '0912345679' })).status, 201);
 });
 
+test('API tra SĐT và thêm thành viên: phân quyền, validate; có userId thì không bắt buộc họ tên, email', async () => {
+  const receptionist = await createUser('STAFF', { roleTitle: 'RECEPTIONIST' });
+  const resident = await createUser('RESIDENT', { phone: '0912345671' });
+  const lookup = (actor, phone) => app.request('GET', `/residents/lookup?phone=${encodeURIComponent(phone)}`, { user: asUser(actor) });
+  const addMember = (body) => app.request('POST', '/residents', { user: asUser(receptionist), body });
+  const apartmentId = '0123456789abcdef01234567';
+
+  const found = await lookup(receptionist, '+84912345671');
+  assert.equal(found.status, 200);
+  assert.equal(found.body.data.userId, String(resident._id));
+  assert.equal(found.body.data.exists, true);
+  assert.equal((await lookup(resident, '0912345671')).status, 403);
+  assert.equal((await lookup(receptionist, '123')).status, 400);
+  assert.equal((await app.request('GET', '/residents/lookup?phone=0912345671')).status, 401);
+
+  assert.equal((await addMember({ apartmentId, phone: '0912345672' })).status, 400);
+  // Qua được validate, dừng ở bước tìm căn hộ
+  assert.equal((await addMember({ apartmentId, phone: '0912345671', userId: String(resident._id) })).status, 404);
+});
+
 test('hồ sơ: không xóa được SĐT của mình; đổi sang SĐT đã có trả 409', async () => {
   const me = await createUser('RESIDENT', { phone: '0912345671' });
   await createUser('RESIDENT', { phone: '0912345672' });
