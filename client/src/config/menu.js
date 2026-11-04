@@ -76,6 +76,7 @@ const MyInvoiceDetailPage = lazy(() => import('../features/invoices/MyInvoiceDet
 const PaymentListPage = lazy(() => import('../features/payments/PaymentListPage'));
 const AdminReceiptPage = lazy(() => import('../features/payments/ReceiptPage'));
 const MyReceiptPage = lazy(() => import('../features/payments/MyReceiptPage'));
+const PaymentResultPage = lazy(() => import('../features/payments/PaymentResultPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -505,6 +506,8 @@ export const residentMenu = [
   { key: 'my-invoices', label: 'Phí dịch vụ', icon: DollarOutlined, path: 'invoices', component: MyInvoicesPage },
   { key: 'my-invoice-detail', label: 'Chi tiết phí', path: 'invoices/:id', component: MyInvoiceDetailPage, hideInMenu: true },
   { key: 'my-receipt', label: 'Biên lai', path: 'payments/:id/receipt', component: MyReceiptPage, hideInMenu: true },
+  // payOS trả về sau khi thanh toán (PAYOS_RETURN_URL / PAYOS_CANCEL_URL). Đường tĩnh 'result' ưu tiên hơn ':id'
+  { key: 'payment-result', label: 'Kết quả thanh toán', path: 'payments/result', component: PaymentResultPage, hideInMenu: true },
   // Thẻ cư dân (UC-D11): mã chữ; trang Gia đình chỉ chủ hộ, mở từ nút trong "Mã của tôi"
   { key: 'my-code', label: 'Mã của tôi', icon: IdcardOutlined, path: 'my-code', component: MyCodePage },
   { key: 'family', label: 'Gia đình', path: 'my-code/family', component: FamilyPage, hideInMenu: true },

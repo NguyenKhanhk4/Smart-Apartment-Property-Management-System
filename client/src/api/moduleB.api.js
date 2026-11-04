@@ -49,4 +49,10 @@ export const paymentApi = {
   /** body: { invoiceId | apartmentId + payerId, method: CASH | BANK_TRANSFER, amount, bankRef?, note?, paidAt? } */
   recordOffline: (body) => http.post('/payments/offline', body),
   receipt: (id) => http.get(`/payments/${id}/receipt`),
+
+  // payOS (UC29) — cư dân là Người nộp phí
+  /** body: { invoiceIds } → { paymentId, orderCode, amount, checkoutUrl, qrCode, expiredAt, status } */
+  payosCreate: (body) => http.post('/payments/payos/create', body),
+  /** Trạng thái giao dịch (còn chờ thì server hỏi thẳng payOS) */
+  payosStatus: (orderCode) => http.get(`/payments/payos/${orderCode}`),
 };

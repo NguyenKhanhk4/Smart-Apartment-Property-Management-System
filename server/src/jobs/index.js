@@ -9,6 +9,7 @@ import { billingReminders, markOverdueInvoices } from '../modules/invoices/invoi
 import { completeBookings, expireBookingHolds } from '../modules/bookings/bookings.jobs.js';
 import { expireGatePasses } from '../modules/gatePasses/gatePasses.jobs.js';
 import { remindExpiringLeases } from '../modules/contracts/contracts.jobs.js';
+import { reconcilePayosPayments } from '../modules/payments/payments.payos.js';
 
 /**
  * Đăng ký mọi cron job (node-cron, múi giờ Asia/Ho_Chi_Minh — srs_final.md §2.4).
@@ -30,6 +31,8 @@ export const JOBS = [
   { name: CRON_JOBS.BILLING_REMIND, schedule: '0 8 * * *', handler: billingReminders },
   // BR-F8 — 00:15 hằng ngày chuyển hóa đơn quá hạn thanh toán sang OVERDUE
   { name: CRON_JOBS.INVOICE_OVERDUE, schedule: '15 0 * * *', handler: markOverdueInvoices },
+  // UC29 — mỗi 5 phút hỏi payOS các giao dịch còn chờ (phòng webhook không về); quá 15 phút chưa rõ → Cần đối soát
+  { name: CRON_JOBS.PAYMENT_RECONCILE, schedule: '*/5 * * * *', handler: reconcilePayosPayments },
   // BR-O5 / BR-O14 — mỗi 5 phút: booking quá giờ check-in → NO_SHOW, đã dùng xong → COMPLETED
   { name: CRON_JOBS.BOOKING_COMPLETE, schedule: '*/5 * * * *', handler: completeBookings },
   // Người 4 — mỗi phút hủy giữ chỗ quá hạn thanh toán (chỉ có tác dụng khi BOOKING_PAYMENT_HOLD_MINUTES > 0)

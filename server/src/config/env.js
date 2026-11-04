@@ -44,6 +44,13 @@ const buildSchema = (isTest, isProd) =>
     SMTP_USER: Joi.string().allow('').default(''),
     SMTP_PASS: Joi.string().allow('').default(''),
     MAIL_FROM: Joi.string().allow('').default(''),
+    // payOS (Mô đun 4 — UC29): thiếu 1 trong 3 khóa → tắt thanh toán online, API báo PAYOS_DISABLED
+    PAYOS_CLIENT_ID: Joi.string().trim().allow('').default(''),
+    PAYOS_API_KEY: Joi.string().trim().allow('').default(''),
+    PAYOS_CHECKSUM_KEY: Joi.string().trim().allow('').default(''),
+    PAYOS_RETURN_URL: Joi.string().trim().allow('').default(''),
+    PAYOS_CANCEL_URL: Joi.string().trim().allow('').default(''),
+    PAYOS_API_URL: Joi.string().trim().default('https://api-merchant.payos.vn'),
     // false = không chạy node-cron trong process này (vd chạy nhiều instance)
     ENABLE_CRON: Joi.boolean().default(true),
   }).unknown(true);
@@ -94,6 +101,19 @@ export function parseEnv(source) {
       from: value.MAIL_FROM || value.SMTP_USER,
       enabled: Boolean(value.SMTP_USER && value.SMTP_PASS),
     },
+    payos: (() => {
+      const resultUrl = `${value.CLIENT_URL.split(',')[0].trim()}/r/payments/result`;
+      return {
+        clientId: value.PAYOS_CLIENT_ID,
+        apiKey: value.PAYOS_API_KEY,
+        checksumKey: value.PAYOS_CHECKSUM_KEY,
+        returnUrl: value.PAYOS_RETURN_URL || resultUrl,
+        cancelUrl: value.PAYOS_CANCEL_URL || resultUrl,
+        apiUrl: value.PAYOS_API_URL.replace(/\/+$/, ''),
+        // Test không bao giờ gọi payOS thật (test tự bật bằng cấu hình giả)
+        enabled: !isTest && Boolean(value.PAYOS_CLIENT_ID && value.PAYOS_API_KEY && value.PAYOS_CHECKSUM_KEY),
+      };
+    })(),
     enableCron: value.ENABLE_CRON && !isTest,
     timezone: 'Asia/Ho_Chi_Minh',
   };

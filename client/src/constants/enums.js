@@ -307,6 +307,7 @@ export const CRON_JOBS = {
   INVOICE_GENERATE: { label: 'Tạo hóa đơn định kỳ', color: 'green' },
   INVOICE_OVERDUE: { label: 'Quét hóa đơn quá hạn', color: 'red' },
   BILLING_REMIND: { label: 'Nhắc tính phí / duyệt thông báo phí', color: 'gold' },
+  PAYMENT_RECONCILE: { label: 'Đối soát giao dịch payOS', color: 'blue' },
   BOOKING_COMPLETE: { label: 'Hoàn tất / không đến booking tiện ích', color: 'cyan' },
   WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
   TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },

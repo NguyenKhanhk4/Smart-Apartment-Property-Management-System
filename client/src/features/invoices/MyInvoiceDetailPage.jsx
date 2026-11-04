@@ -8,6 +8,7 @@ import SurfaceCard from '../../components/resident/SurfaceCard';
 import { FEE_CATEGORIES, INVOICE_STATUS, PAYMENT_METHODS } from '../../constants/enums';
 import { useApi } from '../../hooks/useApi';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format';
+import PayosButton from '../payments/PayosButton';
 import { INVOICE_TONE, OUTSTANDING_STATUSES, outstandingOf, periodLabel } from './invoiceShared';
 
 // Mô đun 4 — UC28: chi tiết thông báo phí cho cư dân. Nút thanh toán online (payOS) thêm ở bước thanh toán.
@@ -50,6 +51,7 @@ export default function MyInvoiceDetailPage() {
             {!d.isPayer && due && (
               <Alert type="info" showIcon message="Người nộp phí của căn hộ sẽ thanh toán thông báo này." />
             )}
+            {d.isPayer && due && outstanding > 0 && <PayosButton invoiceIds={[d._id]} amount={outstanding} block />}
 
             <SurfaceCard className="p-4 md:p-5">
               <div className="flex items-center justify-between gap-2 flex-wrap mb-2">

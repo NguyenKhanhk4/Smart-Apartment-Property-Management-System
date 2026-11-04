@@ -408,6 +408,7 @@ export const CRON_JOBS = Object.freeze({
   INVOICE_GENERATE: 'INVOICE_GENERATE',
   INVOICE_OVERDUE: 'INVOICE_OVERDUE',
   BILLING_REMIND: 'BILLING_REMIND', // nhắc Kế toán đến kỳ tính phí + nhắc Trưởng BQL duyệt quá hạn (X8)
+  PAYMENT_RECONCILE: 'PAYMENT_RECONCILE', // payOS: tra cứu giao dịch chờ kết quả, quá 15 phút → Cần đối soát
   BOOKING_COMPLETE: 'BOOKING_COMPLETE',
   WORK_ORDER_GENERATE: 'WORK_ORDER_GENERATE',
   TICKET_ESCALATE: 'TICKET_ESCALATE',

@@ -11,6 +11,7 @@ import { INVOICE_STATUS } from '../../constants/enums';
 import { useApi } from '../../hooks/useApi';
 import { useResident } from '../../hooks/useResident';
 import { formatDate, formatMoney } from '../../utils/format';
+import PayosButton from '../payments/PayosButton';
 import { INVOICE_TONE, OUTSTANDING_STATUSES, outstandingOf, periodLabel } from './invoiceShared';
 
 // Mô đun 4 — UC28: cư dân xem thông báo phí của căn đang chọn (chỉ thông báo đã phát hành).
@@ -41,6 +42,8 @@ export default function MyInvoicesPage() {
   });
   const items = res.data ?? [];
   const summary = res.raw?.summary;
+  // Các kỳ còn nợ mà mình là Người nộp phí (trên trang đang xem) → thanh toán gộp 1 lần qua payOS
+  const payable = filter === 'unpaid' ? items.filter((i) => i.isPayer && OUTSTANDING_STATUSES.includes(i.status) && outstandingOf(i) > 0) : [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,6 +55,11 @@ export default function MyInvoicesPage() {
           {summary.overdue > 0 && <SummaryTile label="Trong đó quá hạn" value={formatMoney(summary.overdue)} tone="warn" />}
           <SummaryTile label="Số dư trả trước" value={formatMoney(summary.prepaidBalance)} />
         </div>
+      )}
+      {payable.length > 0 && (
+        <PayosButton invoiceIds={payable.map((i) => i._id)} amount={payable.reduce((s, i) => s + outstandingOf(i), 0)}>
+          Thanh toán online {payable.length} kỳ · {formatMoney(payable.reduce((s, i) => s + outstandingOf(i), 0))}
+        </PayosButton>
       )}
 
       <SegmentedTabs
