@@ -1,5 +1,5 @@
 import { Form, Input, Modal, Typography } from 'antd';
-import { workOrderApi } from '../../api/moduleD.api';
+import { workOrderApi } from '../../api/equipment.api';
 import { useAction } from '../../hooks/useApi';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
 import { toFiles } from '../../utils/upload';

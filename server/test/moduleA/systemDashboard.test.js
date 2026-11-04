@@ -2,7 +2,7 @@
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { JOBS } from '../../src/jobs/index.js';
-import { getDashboard } from '../../src/modules/adminDashboard/adminDashboard.service.js';
+import { getDashboard } from '../../src/modules/systemDashboard/systemDashboard.service.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 
 before(connectTestDB);

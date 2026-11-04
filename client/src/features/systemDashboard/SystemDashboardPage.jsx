@@ -29,7 +29,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { adminApi } from '../../api/moduleA.api';
+import { systemDashboardApi } from '../../api/moduleA.api';
 import PageHeader from '../../components/PageHeader';
 import { useApi } from '../../hooks/useApi';
 import { CRON_JOBS, roleLabelOf } from '../../constants/enums';
@@ -39,11 +39,11 @@ import { ChartCard, StatCard, StatRow } from '../reports/components';
 
 
 /**
- * UC-A11: Dashboard thống kê hệ thống dành cho Admin
+ * UC-A11: Dashboard thống kê hệ thống dành cho Trưởng BQL
  * Không chứa bất kỳ dữ liệu tài chính hoặc số tiền nào (BR-R6).
  */
 export default function SystemDashboardPage() {
-  const { data, loading, reload } = useApi(() => adminApi.getDashboard(), []);
+  const { data, loading, reload } = useApi(() => systemDashboardApi.getDashboard(), []);
 
   const { totalActive, totalLocked, totalAccounts, roleChartData } = useMemo(() => {
     const byRole = data?.accounts?.byRole || [];

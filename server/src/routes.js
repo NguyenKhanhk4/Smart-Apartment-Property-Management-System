@@ -26,7 +26,7 @@ import apartmentRoutes from './modules/apartments/apartments.routes.js';
 import contractRoutes from './modules/contracts/contracts.routes.js';
 import residentRoutes from './modules/residents/residents.routes.js';
 import vehicleRoutes from './modules/vehicles/vehicles.routes.js';
-import adminDashboardRoutes from './modules/adminDashboard/adminDashboard.routes.js';
+import systemDashboardRoutes from './modules/systemDashboard/systemDashboard.routes.js';
 import feeTypeRoutes from './modules/feeTypes/feeTypes.routes.js';
 import invoiceRoutes from './modules/invoices/invoices.routes.js';
 import paymentRoutes from './modules/payments/payments.routes.js';
@@ -65,9 +65,11 @@ router.use('/notifications', notificationRoutes);
 router.use('/reports', reportRoutes);
 router.use('/lookups', lookupRoutes);
 
-// Module D — Thanh Bình (Tài sản & bảo trì, Tiện ích & đặt chỗ)
+// Người 1 — Vũ Việt (Mô đun 10: Thiết bị & bảo trì)
 router.use('/assets', assetRoutes);
 router.use('/work-orders', workOrderRoutes);
+
+// Module D — Thanh Bình (Tiện ích & đặt chỗ)
 router.use('/amenities', amenityRoutes);
 router.use('/member-codes', memberCodeRoutes);
 router.use('/amenity-passes', amenityPassRoutes);
@@ -82,7 +84,7 @@ router.use('/apartments', apartmentRoutes);
 router.use('/contracts', contractRoutes);
 router.use('/residents', residentRoutes);
 router.use('/vehicles', vehicleRoutes);
-router.use('/admin', adminDashboardRoutes);
+router.use('/system-dashboard', systemDashboardRoutes);
 router.use('/gate-passes', gatePassRoutes);
 router.use('/plates', platesRouter);
 router.use('/parking-cards', parkingCardRoutes);

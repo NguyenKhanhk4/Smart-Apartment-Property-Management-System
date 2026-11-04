@@ -12,7 +12,8 @@
     "db:seed": "node scripts/seed.js",
     "test": "node --import ./test/setup.js --test \"test/**/*.test.js\"",
     "db:backfill-priority": "node scripts/backfillTicketPriorityRank.js",
-    "db:migrate-audit-targets": "node scripts/migrateAuditTargets.js"
+    "db:migrate-audit-targets": "node scripts/migrateAuditTargets.js",
+    "db:set-manager": "node scripts/set-manager.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

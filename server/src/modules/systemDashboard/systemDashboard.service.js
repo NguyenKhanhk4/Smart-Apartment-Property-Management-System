@@ -5,7 +5,7 @@ import { Apartment, AuditLog, Building, Contract, CronRun, User } from '../../mo
 import { DAY_MS, VN_OFFSET_MS, periodStart, startOfVnDay, toVnYmd } from '../../utils/time.js';
 
 /**
- * UC-A11: Thống kê số liệu hệ thống cho Admin
+ * UC-A11: Thống kê số liệu hệ thống cho Trưởng BQL
  */
 export async function getDashboard() {
   const now = new Date();

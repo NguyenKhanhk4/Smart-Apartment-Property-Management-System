@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { App, Avatar, Button, Card, DatePicker, Form, Input, Tabs, Upload, Tag } from 'antd';
+import { PHONE_RULES } from '../../utils/phone';
 import {
   CameraOutlined,
   KeyOutlined,
@@ -169,12 +170,7 @@ export default function ProfilePage() {
               <Form.Item
                 name="phone"
                 label="Số điện thoại"
-                rules={[
-                  {
-                    pattern: /^(0|\+84)\d{9,10}$/,
-                    message: 'Số điện thoại không hợp lệ',
-                  },
-                ]}
+                rules={PHONE_RULES}
               >
                 <Input size="large" prefix={<PhoneOutlined className="text-ink-3" />} placeholder="Chưa cập nhật" />
               </Form.Item>

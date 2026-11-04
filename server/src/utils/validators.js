@@ -30,6 +30,13 @@ export const period = () =>
     .pattern(/^\d{4}-(0[1-9]|1[0-2])$/)
     .messages({ 'string.pattern.base': '{{#label}} phải có dạng YYYY-MM' });
 
+/** Đưa SĐT về một dạng để so khớp: +84912345678, 84912345678 → 0912345678 */
+export function normalizePhone(phone) {
+  if (typeof phone !== 'string') return phone;
+  const value = phone.trim().replace(/^\+/, '');
+  return value.startsWith('84') ? `0${value.slice(2)}` : value;
+}
+
 /** Query dạng ?status=A,B hoặc ?status=A&status=B → mảng */
 export const csvEnum = (allowed) =>
   Joi.alternatives().try(

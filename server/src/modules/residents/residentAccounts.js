@@ -6,41 +6,46 @@ import { Resident, User } from '../../models/index.js';
 import { sendMail } from '../../services/mail.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { generateTemporaryPassword } from '../../utils/password.js';
+import { normalizePhone } from '../../utils/validators.js';
 import { parseDateOfBirth } from '../memberCodes/memberCodes.service.js';
+import { assertPhoneAndEmailFree, findUserByPhone, uniqueConflictError } from '../users/userLookup.js';
 import { buildIdNumberFields } from './idCrypto.js';
 
 const escapeHtml = (text) =>
   String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 /**
- * Tìm tài khoản cư dân theo userId hoặc email; chưa có thì tạo mới với mật khẩu tạm.
- * Email thuộc tài khoản nội bộ → 409 EMAIL_EXISTS. `updateDateOfBirth`: user đã có thì cập nhật ngày sinh nếu được gửi.
+ * Lấy tài khoản cư dân đã được lễ tân xác nhận (userId), hoặc tạo mới với mật khẩu tạm khi SĐT chưa có tài khoản.
+ * SĐT đã có tài khoản mà chưa xác nhận → 409 ACCOUNT_CONFIRM_REQUIRED, tránh gõ nhầm số gắn nhầm người.
+ * Không ghi đè thông tin của tài khoản có sẵn (BR-X5). Tạo mới cần họ tên và email vì đăng nhập còn dùng email đến UC01.
+ * SĐT thuộc tài khoản nội bộ → 409 PHONE_EXISTS.
  * @returns {{ user, tempPass: string|null }} tempPass chỉ có khi vừa tạo tài khoản
  */
-export async function findOrCreateResidentUser(
-  { userId, email, fullName, phone, dateOfBirth },
-  session = null,
-  { updateDateOfBirth = false } = {},
-) {
+export async function findOrCreateResidentUser({ userId, email, fullName, phone, dateOfBirth }, session = null) {
   if (userId) {
     const user = await User.findById(userId).session(session);
     if (!user) throw ApiError.notFound('Tài khoản cư dân không tồn tại');
     if (user.role !== ROLES.RESIDENT) throw ApiError.badRequest('Chỉ tài khoản cư dân mới có thể đứng tên / làm thành viên căn hộ');
+    // SĐT gửi kèm là số lễ tân đã đối chiếu: phải vẫn thuộc đúng tài khoản này
+    if (phone && normalizePhone(phone) !== user.phone) throw new ApiError('ACCOUNT_CONFIRM_REQUIRED');
     return { user, tempPass: null };
   }
 
-  const normEmail = email.trim().toLowerCase();
-  const existing = await User.findOne({ email: normEmail }).session(session);
+  if (!phone) throw ApiError.field('phone', 'Số điện thoại là bắt buộc');
+
+  const existing = await findUserByPhone(phone, session);
   if (existing) {
     if (existing.role !== ROLES.RESIDENT) {
-      throw new ApiError('EMAIL_EXISTS', 'Email đã thuộc tài khoản nội bộ, không thể gắn làm cư dân');
+      throw new ApiError('PHONE_EXISTS', 'Số điện thoại đã thuộc tài khoản nội bộ, không thể gắn làm cư dân');
     }
-    if (updateDateOfBirth && dateOfBirth) {
-      existing.dateOfBirth = parseDateOfBirth(dateOfBirth);
-      await existing.save({ session });
-    }
-    return { user: existing, tempPass: null };
+    throw new ApiError('ACCOUNT_CONFIRM_REQUIRED', undefined, {
+      details: [{ field: 'phone', message: 'Số điện thoại này đã có tài khoản' }],
+    });
   }
+
+  if (!email || !fullName) throw ApiError.badRequest('Tạo tài khoản mới cần họ tên và email');
+  const normEmail = email.trim().toLowerCase();
+  await assertPhoneAndEmailFree({ phone, email: normEmail }, session);
 
   const tempPass = generateTemporaryPassword();
   const [user] = await User.create(
@@ -48,15 +53,18 @@ export async function findOrCreateResidentUser(
       {
         fullName: fullName.trim(),
         email: normEmail,
-        phone: phone?.trim() || null,
+        phone,
         dateOfBirth: dateOfBirth ? parseDateOfBirth(dateOfBirth) : null,
         passwordHash: await bcrypt.hash(tempPass, 10),
+        activatedAt: new Date(),
         role: ROLES.RESIDENT,
         isActive: true,
       },
     ],
     { session },
-  );
+  ).catch((err) => {
+    throw uniqueConflictError(err) ?? err;
+  });
   return { user, tempPass };
 }
 

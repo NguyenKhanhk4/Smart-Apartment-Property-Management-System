@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { AUDIT_ACTIONS, AUDIT_TARGETS, BOARD_TITLES, ROLES } from '../../constants/enums.js';
 import { Resident, User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { assertPhoneAndEmailFree, uniqueConflictError } from './userLookup.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { sendMail } from '../../services/mail.service.js';
@@ -28,12 +29,12 @@ export async function updateMe(userId, { fullName, phone, dateOfBirth }) {
   if (!user) throw ApiError.notFound('Không tìm thấy tài khoản');
 
   if (fullName !== undefined) user.fullName = fullName.trim();
-  if (phone !== undefined) user.phone = phone ? phone.trim() : null;
+  if (phone !== undefined) user.phone = phone;
   if (dateOfBirth !== undefined) {
     user.dateOfBirth = parseDateOfBirth(dateOfBirth);
   }
 
-  await user.save();
+  await saveUnique(() => user.save());
   return toPublicUser(user);
 }
 
@@ -86,7 +87,7 @@ export async function changePassword(userId, { currentPassword, newPassword }) {
 }
 
 /**
- * UC-A04: Danh sách tài khoản nội bộ (Admin)
+ * UC-A04: Danh sách tài khoản nội bộ (Trưởng BQL)
  */
 export async function listInternal(query = {}) {
   const filter = { role: { $ne: ROLES.RESIDENT } };
@@ -137,29 +138,29 @@ async function saveUnique(write) {
     if (err.keyPattern?.boardTitle || err.message?.includes('uniq_active_chairman')) {
       throw new ApiError('CHAIRMAN_ALREADY_EXISTS');
     }
-    if (err.keyPattern?.email) throw new ApiError('EMAIL_EXISTS');
-    throw err;
+    throw uniqueConflictError(err) ?? err;
   }
 }
 
 /**
- * UC-A04: Tạo tài khoản nội bộ (Admin). Mật khẩu tạm gửi qua email; chỉ trả về API khi gửi email thất bại.
+ * UC-A04: Tạo tài khoản nội bộ (Trưởng BQL). Mật khẩu tạm gửi qua email; chỉ trả về API khi gửi email thất bại.
  */
-export async function createInternal(adminUser, { fullName, email, phone, role, roleTitle, boardTitle }, { ip } = {}) {
+export async function createInternal(managerUser, { fullName, email, phone, role, roleTitle, boardTitle }, { ip } = {}) {
   const normalizedEmail = email.trim().toLowerCase();
   const titleForRole = role === ROLES.STAFF ? roleTitle : null;
   const boardForRole = role === ROLES.BOARD ? boardTitle : null;
 
   await assertSingleHolder({ role, boardTitle: boardForRole });
-  if (await User.exists({ email: normalizedEmail })) throw new ApiError('EMAIL_EXISTS');
+  await assertPhoneAndEmailFree({ phone, email: normalizedEmail });
 
   const temporaryPassword = generateTemporaryPassword();
   const newUser = await saveUnique(async () =>
     User.create({
       fullName: fullName.trim(),
       email: normalizedEmail,
-      phone: phone?.trim() || null,
+      phone,
       passwordHash: await bcrypt.hash(temporaryPassword, 10),
+      activatedAt: new Date(),
       role,
       roleTitle: titleForRole,
       boardTitle: boardForRole,
@@ -169,7 +170,7 @@ export async function createInternal(adminUser, { fullName, email, phone, role, 
 
   await logAudit({
     action: AUDIT_ACTIONS.ROLE_ASSIGNED,
-    user: adminUser,
+    user: managerUser,
     targetType: AUDIT_TARGETS.USER,
     targetId: newUser._id,
     metadata: { role, roleTitle: titleForRole, boardTitle: boardForRole },
@@ -190,14 +191,13 @@ export async function createInternal(adminUser, { fullName, email, phone, role, 
 }
 
 /**
- * UC-A04: Cập nhật tài khoản nội bộ (Admin). Không sửa tài khoản cư dân / Admin khác qua API này.
+ * UC-A04: Cập nhật tài khoản nội bộ (Trưởng BQL). Không sửa tài khoản cư dân qua API này.
  * Đổi vai trò / chức danh → tăng tokenVersion để phiên đăng nhập cũ (quyền cũ) hết hiệu lực.
  */
-export async function updateInternal(adminUser, targetId, { fullName, phone, role, roleTitle, boardTitle }, { ip } = {}) {
+export async function updateInternal(managerUser, targetId, { fullName, phone, role, roleTitle, boardTitle }, { ip } = {}) {
   const target = await User.findById(targetId).select('+tokenVersion');
   if (!target) throw ApiError.notFound('Không tìm thấy tài khoản');
   if (target.role === ROLES.RESIDENT) throw ApiError.badRequest('Không sửa tài khoản RESIDENT qua API này');
-  if (target.role === ROLES.ADMIN) throw ApiError.forbidden('Không được sửa tài khoản Quản trị viên khác');
 
   const newRole = role ?? target.role;
   const newRoleTitle = newRole === ROLES.STAFF ? (roleTitle !== undefined ? roleTitle : target.roleTitle) : null;
@@ -205,12 +205,18 @@ export async function updateInternal(adminUser, targetId, { fullName, phone, rol
   const roleChanged = newRole !== target.role;
   const titleChanged = newRoleTitle !== target.roleTitle || newBoardTitle !== target.boardTitle;
 
+  // Không tự đổi vai trò của chính mình: Trưởng BQL là duy nhất, tự đổi sẽ không còn ai quản trị (BR-X2)
+  const isSelf = String(managerUser.id ?? managerUser._id) === String(targetId);
+  if (isSelf && (roleChanged || titleChanged)) {
+    throw ApiError.badRequest('Không thể tự đổi vai trò của chính mình');
+  }
+
   if (target.isActive && (roleChanged || titleChanged)) {
     await assertSingleHolder({ role: newRole, boardTitle: newBoardTitle, excludeId: target._id });
   }
 
   if (fullName !== undefined) target.fullName = fullName.trim();
-  if (phone !== undefined) target.phone = phone ? phone.trim() : null;
+  if (phone !== undefined) target.phone = phone;
   target.role = newRole;
   target.roleTitle = newRoleTitle;
   target.boardTitle = newBoardTitle;
@@ -221,7 +227,7 @@ export async function updateInternal(adminUser, targetId, { fullName, phone, rol
   if (roleChanged || titleChanged) {
     await logAudit({
       action: AUDIT_ACTIONS.ROLE_ASSIGNED,
-      user: adminUser,
+      user: managerUser,
       targetType: AUDIT_TARGETS.USER,
       targetId: target._id,
       metadata: { role: newRole, roleTitle: newRoleTitle, boardTitle: newBoardTitle },
@@ -233,10 +239,10 @@ export async function updateInternal(adminUser, targetId, { fullName, phone, rol
 }
 
 /**
- * UC-A04: Khóa / mở khóa tài khoản (Admin)
+ * UC-A04: Khóa / mở khóa tài khoản (Trưởng BQL)
  */
-export async function setStatus(adminUser, targetId, { isActive }, { ip } = {}) {
-  if (String(adminUser.id) === String(targetId)) {
+export async function setStatus(managerUser, targetId, { isActive }, { ip } = {}) {
+  if (String(managerUser.id) === String(targetId)) {
     throw ApiError.badRequest('Không thể tự khóa tài khoản của chính mình');
   }
 
@@ -255,7 +261,7 @@ export async function setStatus(adminUser, targetId, { isActive }, { ip } = {}) 
 
   await logAudit({
     action: isActive ? AUDIT_ACTIONS.ACCOUNT_UNLOCKED : AUDIT_ACTIONS.ACCOUNT_LOCKED,
-    user: adminUser,
+    user: managerUser,
     targetType: AUDIT_TARGETS.USER,
     targetId: target._id,
     ip,

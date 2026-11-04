@@ -18,7 +18,7 @@ export async function startApp() {
       body: body ? JSON.stringify(body) : undefined,
     }).then(async (res) => ({ status: res.status, body: await res.json() }));
 
-  return { request, close: () => new Promise((resolve) => server.close(resolve)) };
+  return { base, request, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
 /** Access token đúng shape middleware authenticate yêu cầu */

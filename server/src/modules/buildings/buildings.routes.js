@@ -9,7 +9,7 @@ import * as service from './buildings.service.js';
 
 // Module A — Vũ Việt. UC-A05: Quản lý tòa nhà (Block)
 const router = Router();
-const VIEWERS = ['ADMIN', 'MANAGER', 'STAFF:RECEPTIONIST'];
+const VIEWERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
 
 const buildingFields = {
   code: Joi.string().trim().uppercase().max(20),
@@ -61,7 +61,7 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
  * /buildings:
  *   post:
  *     tags: [Tòa nhà & Căn hộ]
- *     summary: Tạo mới tòa nhà (Admin) — UC-A05
+ *     summary: Tạo mới tòa nhà (Trưởng BQL) — UC-A05
  *     requestBody:
  *       required: true
  *       content:
@@ -78,7 +78,7 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
 router.post(
   '/',
   authenticate,
-  authorize('ADMIN'),
+  authorize('MANAGER'),
   validate({ body: createBuildingBody }),
   async (req, res) => {
     const building = await service.createBuilding(req.validated.body, req.user, req.ip);
@@ -91,14 +91,14 @@ router.post(
  * /buildings/{id}:
  *   put:
  *     tags: [Tòa nhà & Căn hộ]
- *     summary: Cập nhật thông tin tòa nhà (Admin) — UC-A05
+ *     summary: Cập nhật thông tin tòa nhà (Trưởng BQL) — UC-A05
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
 router.put(
   '/:id',
   authenticate,
-  authorize('ADMIN'),
+  authorize('MANAGER'),
   validate({ params: idParams, body: updateBuildingBody }),
   async (req, res) => {
     const building = await service.updateBuilding(
@@ -116,14 +116,14 @@ router.put(
  * /buildings/{id}:
  *   delete:
  *     tags: [Tòa nhà & Căn hộ]
- *     summary: Xóa tòa nhà chưa có căn hộ (Admin) — UC-A05
+ *     summary: Xóa tòa nhà chưa có căn hộ (Trưởng BQL) — UC-A05
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
 router.delete(
   '/:id',
   authenticate,
-  authorize('ADMIN'),
+  authorize('MANAGER'),
   validate({ params: idParams }),
   async (req, res) => {
     const result = await service.deleteBuilding(req.validated.params.id, req.user, req.ip);

@@ -24,6 +24,7 @@ export async function createUser(role, { roleTitle = null, boardTitle = null, ..
   return User.create({
     fullName: `${role} ${n}`,
     email: `user${n}@test.local`,
+    phone: `09${String(n).padStart(8, '0')}`,
     passwordHash: 'x',
     role,
     roleTitle,

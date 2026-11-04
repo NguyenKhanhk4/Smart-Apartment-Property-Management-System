@@ -67,6 +67,8 @@ export const ERROR_MESSAGES = {
   DUPLICATE_VALUE: 'Dữ liệu bị trùng.',
   CONCURRENT_UPDATE: 'Dữ liệu vừa được người khác cập nhật, vui lòng tải lại trang.',
   EMAIL_EXISTS: 'Email đã được sử dụng bởi tài khoản khác.',
+  PHONE_EXISTS: 'Số điện thoại đã được sử dụng bởi tài khoản khác.',
+  ACCOUNT_CONFIRM_REQUIRED: 'Số điện thoại này đã có tài khoản, vui lòng kiểm tra và xác nhận đúng người.',
   CONTRACT_ACTIVE_EXISTS: 'Căn hộ đã có hợp đồng cùng loại đang hiệu lực.',
   STATUS_CONFLICT: 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại.',
   TOO_MANY_REQUESTS: 'Bạn thao tác quá nhiều lần, vui lòng thử lại sau ít phút.',

@@ -4,7 +4,7 @@ import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { created, ok } from '../../utils/response.js';
-import { idParams, objectId, ymd } from '../../utils/validators.js';
+import { idParams, objectId, phoneVn, ymd } from '../../utils/validators.js';
 import * as occupantReportsService from '../occupantReports/occupantReports.service.js';
 import * as service from './residents.service.js';
 
@@ -13,9 +13,10 @@ const router = Router();
 
 const addMemberBody = Joi.object({
   apartmentId: objectId().required(),
-  email: Joi.string().trim().lowercase().email().required(),
-  fullName: Joi.string().trim().min(2).max(100).required(),
-  phone: Joi.string().trim().allow('', null),
+  userId: objectId(), // Tài khoản có sẵn lễ tân đã xác nhận
+  email: Joi.string().trim().lowercase().email().when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
+  fullName: Joi.string().trim().min(2).max(100).when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
+  phone: phoneVn().required(),
   idNumber: Joi.string().trim().allow('', null),
   dateOfBirth: ymd().allow('', null),
 });
@@ -55,6 +56,25 @@ router.get(
     }
     const list = await occupantReportsService.listResidentChanges(req.validated.query);
     return ok(res, list);
+  },
+);
+
+/**
+ * @openapi
+ * /residents/lookup:
+ *   get:
+ *     tags: [Cư dân]
+ *     summary: Tra tài khoản theo SĐT để đối chiếu trước khi gắn vào căn hộ — UC-A06, UC-A07
+ *     parameters:
+ *       - { in: query, name: phone, required: true, schema: { type: string } }
+ */
+router.get(
+  '/lookup',
+  authenticate,
+  authorize('STAFF:RECEPTIONIST', 'MANAGER'),
+  validate({ query: Joi.object({ phone: phoneVn().required() }) }),
+  async (req, res) => {
+    ok(res, await service.lookupAccountByPhone(req.validated.query.phone));
   },
 );
 
