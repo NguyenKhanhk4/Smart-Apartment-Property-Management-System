@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { Alert, Button, Skeleton } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { invoiceApi } from '../../api/moduleB.api';
@@ -93,7 +93,15 @@ export default function MyInvoiceDetailPage() {
                   <Row
                     key={p._id}
                     label={`${formatDateTime(p.paidAt)} · ${PAYMENT_METHODS[p.method]?.label ?? p.method}${p.receiptNo ? ` · ${p.receiptNo}` : ''}`}
-                    value={formatMoney(p.allocatedAmount)}
+                    value={
+                      d.isPayer ? (
+                        <Link to={`/r/payments/${p._id}/receipt`} viewTransition>
+                          {formatMoney(p.allocatedAmount)} · Biên lai
+                        </Link>
+                      ) : (
+                        formatMoney(p.allocatedAmount)
+                      )
+                    }
                   />
                 ))}
               </SurfaceCard>

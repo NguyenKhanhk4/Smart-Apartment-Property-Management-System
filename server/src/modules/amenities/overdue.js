@@ -5,13 +5,16 @@ import { Invoice } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 
 /**
- * Căn có hóa đơn quá hạn không? Tính cả hóa đơn UNPAID đã qua hạn mà cron quá hạn (INVOICE_OVERDUE) chưa kịp
+ * Căn có hóa đơn quá hạn không? Tính cả hóa đơn UNPAID / PARTIALLY_PAID đã qua hạn mà cron quá hạn (INVOICE_OVERDUE) chưa kịp
  * chuyển trạng thái, để việc chặn không phụ thuộc giờ chạy cron.
  */
 export function hasOverdueInvoice(apartmentId, now = new Date()) {
   return Invoice.exists({
     apartmentId,
-    $or: [{ status: INVOICE_STATUS.OVERDUE }, { status: INVOICE_STATUS.UNPAID, dueDate: { $lt: now } }],
+    $or: [
+      { status: INVOICE_STATUS.OVERDUE },
+      { status: { $in: [INVOICE_STATUS.UNPAID, INVOICE_STATUS.PARTIALLY_PAID] }, dueDate: { $lt: now } },
+    ],
   }).then(Boolean);
 }
 

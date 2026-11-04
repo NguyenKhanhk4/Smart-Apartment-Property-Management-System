@@ -7,6 +7,7 @@ import {
   DEBT_STATUS,
   FUND_TX_TYPES,
   INVOICE_STATUS,
+  INVOICE_OUTSTANDING_STATUSES,
   INVOICE_UNPUBLISHED_STATUSES,
   PAYMENT_STATUS,
   REVIEW_STATUS,
@@ -78,20 +79,23 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
       }
     : '$totalAmount';
   const notCancelled = { $ne: ['$status', INVOICE_STATUS.CANCELLED] };
-  const isPaid = { $eq: ['$status', INVOICE_STATUS.PAID] };
-  const isOutstanding = { $in: ['$status', [INVOICE_STATUS.UNPAID, INVOICE_STATUS.OVERDUE]] };
+  const isOutstanding = { $in: ['$status', [...INVOICE_OUTSTANDING_STATUSES]] };
   const sumIf = (cond, value = '$amount') => ({ $sum: { $cond: [cond, value, 0] } });
+  // Trả một phần: tiền đã thu chia theo tỉ lệ cho từng nhóm phí (đã thu / tổng của thông báo)
+  const paidRatio = { $cond: [{ $gt: ['$totalAmount', 0] }, { $divide: ['$paidAmount', '$totalAmount'] }, 0] };
+  const unpaidOf = { $subtract: ['$amount', '$paid'] };
   const moneyGroup = {
     billed: sumIf(notCancelled),
-    collected: sumIf(isPaid),
-    outstanding: sumIf(isOutstanding),
-    overdueAmount: sumIf({ $eq: ['$status', INVOICE_STATUS.OVERDUE] }),
+    collected: sumIf(notCancelled, '$paid'),
+    outstanding: sumIf(isOutstanding, unpaidOf),
+    overdueAmount: sumIf({ $eq: ['$status', INVOICE_STATUS.OVERDUE] }, unpaidOf),
     invoiceCount: sumIf(notCancelled, 1),
   };
 
   const [facets] = await Invoice.aggregate([
     { $match: match },
-    { $addFields: { amount: amountExpr } },
+    { $addFields: { amount: amountExpr, paidRatio } },
+    { $addFields: { paid: { $round: [{ $multiply: ['$amount', '$paidRatio'] }, 0] } } },
     {
       $facet: {
         byStatus: [{ $group: { _id: '$status', count: { $sum: 1 }, amount: { $sum: '$amount' } } }],
@@ -112,8 +116,12 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
             $group: {
               _id: '$items.feeCategory',
               billed: { $sum: '$items.amount' },
-              collected: { $sum: { $cond: [isPaid, '$items.amount', 0] } },
-              outstanding: { $sum: { $cond: [isOutstanding, '$items.amount', 0] } },
+              collected: { $sum: { $round: [{ $multiply: ['$items.amount', '$paidRatio'] }, 0] } },
+              outstanding: {
+                $sum: {
+                  $cond: [isOutstanding, { $round: [{ $multiply: ['$items.amount', { $subtract: [1, '$paidRatio'] }] }, 0] }, 0],
+                },
+              },
             },
           },
           { $sort: { _id: 1 } },
@@ -122,13 +130,16 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
     },
   ]);
 
-  // Theo phương thức thanh toán — chỉ giao dịch SUCCESS của hóa đơn trong kỳ
+  // Theo phương thức thanh toán — phần tiền giao dịch SUCCESS đã phân bổ vào thông báo phí trong kỳ
+  // (một lần thu có thể trả nhiều kỳ; tiền thừa vào Số dư trả trước không tính ở đây)
   const byMethod = await Payment.aggregate([
     { $match: { status: PAYMENT_STATUS.SUCCESS } },
-    { $lookup: { from: 'invoices', localField: 'invoiceId', foreignField: '_id', as: 'inv' } },
+    { $unwind: '$allocations' },
+    { $lookup: { from: 'invoices', localField: 'allocations.invoiceId', foreignField: '_id', as: 'inv' } },
     { $unwind: '$inv' },
     { $match: Object.fromEntries(Object.entries(match).map(([k, v]) => [`inv.${k}`, v])) },
-    { $group: { _id: '$method', count: { $sum: 1 }, amount: { $sum: '$amount' } } },
+    { $group: { _id: '$method', payments: { $addToSet: '$_id' }, amount: { $sum: '$allocations.amount' } } },
+    { $project: { count: { $size: '$payments' }, amount: 1 } },
     { $sort: { amount: -1 } },
   ]);
 
@@ -146,6 +157,7 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
       issued: Object.values(statusCount).reduce((a, b) => a + b, 0),
       paid: statusCount.PAID,
       unpaid: statusCount.UNPAID,
+      partiallyPaid: statusCount.PARTIALLY_PAID,
       overdue: statusCount.OVERDUE,
       cancelled: statusCount.CANCELLED,
       billed: totals.billed,
@@ -185,7 +197,7 @@ export async function debtReport({ buildingId }) {
         _id: '$apartmentId',
         buildingId: { $first: '$buildingId' },
         invoiceCount: { $sum: 1 },
-        outstanding: { $sum: '$totalAmount' },
+        outstanding: { $sum: { $subtract: ['$totalAmount', '$paidAmount'] } },
         oldestDueDate: { $min: '$dueDate' },
         periods: { $push: '$period' },
       },

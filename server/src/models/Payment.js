@@ -49,6 +49,8 @@ const paymentSchema = new Schema(
 
 paymentSchema.index({ orderCode: 1 }, { unique: true, sparse: true });
 paymentSchema.index({ receiptNo: 1 }, { unique: true, sparse: true });
+// Chặn ghi nhận trùng 1 giao dịch ngân hàng (mã trên sao kê)
+paymentSchema.index({ bankRef: 1 }, { unique: true, partialFilterExpression: { bankRef: { $type: 'string' } } });
 paymentSchema.index({ invoiceId: 1, status: 1 });
 paymentSchema.index({ 'allocations.invoiceId': 1 });
 paymentSchema.index({ apartmentId: 1, payerId: 1, paidAt: -1 });

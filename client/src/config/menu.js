@@ -73,6 +73,9 @@ const InvoiceListPage = lazy(() => import('../features/invoices/InvoiceListPage'
 const InvoiceDetailPage = lazy(() => import('../features/invoices/InvoiceDetailPage'));
 const MyInvoicesPage = lazy(() => import('../features/invoices/MyInvoicesPage'));
 const MyInvoiceDetailPage = lazy(() => import('../features/invoices/MyInvoiceDetailPage'));
+const PaymentListPage = lazy(() => import('../features/payments/PaymentListPage'));
+const AdminReceiptPage = lazy(() => import('../features/payments/ReceiptPage'));
+const MyReceiptPage = lazy(() => import('../features/payments/MyReceiptPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -344,6 +347,23 @@ export const adminMenu = [
     component: InvoiceDetailPage,
     hideInMenu: true,
   },
+  {
+    key: 'payments',
+    group: 'Tài chính',
+    label: 'Giao dịch thu',
+    icon: DollarOutlined,
+    path: 'payments',
+    roles: ['ACCOUNTANT', 'MANAGER'],
+    component: PaymentListPage,
+  },
+  {
+    key: 'payment-receipt',
+    label: 'Biên lai',
+    path: 'payments/:id/receipt',
+    roles: ['ACCOUNTANT', 'MANAGER'],
+    component: AdminReceiptPage,
+    hideInMenu: true,
+  },
 
   // ===== Module A (Vũ Việt) =====
   {
@@ -484,6 +504,7 @@ export const residentMenu = [
   // Mô đun 4 — thông báo phí của căn đang chọn (UC28)
   { key: 'my-invoices', label: 'Phí dịch vụ', icon: DollarOutlined, path: 'invoices', component: MyInvoicesPage },
   { key: 'my-invoice-detail', label: 'Chi tiết phí', path: 'invoices/:id', component: MyInvoiceDetailPage, hideInMenu: true },
+  { key: 'my-receipt', label: 'Biên lai', path: 'payments/:id/receipt', component: MyReceiptPage, hideInMenu: true },
   // Thẻ cư dân (UC-D11): mã chữ; trang Gia đình chỉ chủ hộ, mở từ nút trong "Mã của tôi"
   { key: 'my-code', label: 'Mã của tôi', icon: IdcardOutlined, path: 'my-code', component: MyCodePage },
   { key: 'family', label: 'Gia đình', path: 'my-code/family', component: FamilyPage, hideInMenu: true },
