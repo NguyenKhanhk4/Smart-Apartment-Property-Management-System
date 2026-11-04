@@ -502,6 +502,7 @@ export const AUDIT_TARGETS = Object.freeze({
   PARKING_CARD: 'parking_cards',
   FEE_TYPE: 'fee_types',
   INVOICE: 'invoices',
+  PAYMENT: 'payments',
   AMENITY: 'amenities',
   AMENITY_PASS: 'amenity_passes',
   AMENITY_VISIT: 'amenity_visits',

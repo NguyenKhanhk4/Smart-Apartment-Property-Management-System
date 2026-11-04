@@ -41,3 +41,12 @@ export const invoiceApi = {
   /** body: { invoiceIds | period, reason } */
   returnBack: (body) => http.post('/invoices/return', body),
 };
+
+// ===== Mô đun 4: Thanh toán (UC30 thu tiền mặt / chuyển khoản, UC35 biên lai) =====
+export const paymentApi = {
+  /** Quản trị — params: { page, limit, sort, method (CSV), status, apartmentId, payerId, from, to, q }. Kèm totals */
+  list: (params) => http.get('/payments', { params }),
+  /** body: { invoiceId | apartmentId + payerId, method: CASH | BANK_TRANSFER, amount, bankRef?, note?, paidAt? } */
+  recordOffline: (body) => http.post('/payments/offline', body),
+  receipt: (id) => http.get(`/payments/${id}/receipt`),
+};

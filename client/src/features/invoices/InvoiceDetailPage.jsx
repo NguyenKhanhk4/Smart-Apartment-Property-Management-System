@@ -19,6 +19,7 @@ import {
   ArrowLeftOutlined,
   CheckOutlined,
   DeleteOutlined,
+  DollarOutlined,
   PlusOutlined,
   ReloadOutlined,
   RollbackOutlined,
@@ -32,7 +33,8 @@ import { INVOICE_STATUS, PAYER_SOURCES, PAYMENT_METHODS, PREPAID_TX_TYPES } from
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate, formatDateTime, formatMoney, moneyInputProps } from '../../utils/format';
-import { aptLabel, itemColumns, outstandingOf, periodLabel } from './invoiceShared';
+import RecordPaymentModal from '../payments/RecordPaymentModal';
+import { aptLabel, itemColumns, OUTSTANDING_STATUSES, outstandingOf, periodLabel } from './invoiceShared';
 
 // Mô đun 4 — chi tiết thông báo phí cho Kế toán / Trưởng BQL.
 // Nháp: Kế toán thêm / xóa khoản thu khác, Tính lại, Trình duyệt. Chờ duyệt: Trưởng BQL Duyệt & Phát hành / Trả lại.
@@ -44,12 +46,14 @@ export default function InvoiceDetailPage() {
   const isManager = hasRole('MANAGER');
   const [adding, setAdding] = useState(false);
   const [returning, setReturning] = useState(false);
+  const [collecting, setCollecting] = useState(false);
   const [form] = Form.useForm();
 
   const inv = useApi(() => invoiceApi.get(id), [id]);
   const d = inv.data;
   const isDraft = d?.status === 'DRAFT';
   const isPending = d?.status === 'PENDING_APPROVAL';
+  const canCollect = isAccountant && OUTSTANDING_STATUSES.includes(d?.status);
   const reload = inv.reload;
 
   const [addItem, addingItem] = useAction((v) => invoiceApi.addItem(id, v), {
@@ -81,6 +85,15 @@ export default function InvoiceDetailPage() {
     { title: 'Tổng lần thu', dataIndex: 'amount', width: 140, align: 'right', render: formatMoney },
     { title: 'Phân bổ vào thông báo này', dataIndex: 'allocatedAmount', width: 190, align: 'right', render: formatMoney },
     { title: 'Người ghi nhận', render: (_, p) => p.confirmedBy?.fullName ?? 'payOS tự động' },
+    {
+      title: '',
+      width: 100,
+      render: (_, p) => (
+        <Button size="small" type="link" onClick={() => navigate(`/app/payments/${p._id}/receipt`)}>
+          Biên lai
+        </Button>
+      ),
+    },
   ];
 
   return (
@@ -129,6 +142,11 @@ export default function InvoiceDetailPage() {
                   </Button>
                 </Popconfirm>
               </>
+            )}
+            {canCollect && (
+              <Button type="primary" icon={<DollarOutlined />} onClick={() => setCollecting(true)}>
+                Ghi nhận thu tiền
+              </Button>
             )}
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/app/invoices', { viewTransition: true })}>
               Danh sách
@@ -271,6 +289,8 @@ export default function InvoiceDetailPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <RecordPaymentModal open={collecting} invoice={d} onClose={() => setCollecting(false)} onDone={() => setCollecting(false)} />
 
       <ReasonModal
         open={returning}
