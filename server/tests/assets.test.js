@@ -1,4 +1,4 @@
-// Module D — UC-D01: Quản lý tài sản chung & chu kỳ bảo trì
+// Người 1 (Mô đun 10) — UC-D01: Quản lý tài sản chung & chu kỳ bảo trì
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import request from 'supertest';
 import { connectTestDB, clearTestDB, closeTestDB } from './helpers/db.js';

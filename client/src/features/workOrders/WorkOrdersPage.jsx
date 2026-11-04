@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button, Card, Flex, Input, Popconfirm, Select, Switch, Table, Tabs, Tag, Typography } from 'antd';
-import { workOrderApi } from '../../api/moduleD.api';
+import { workOrderApi } from '../../api/equipment.api';
 import { lookupApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';

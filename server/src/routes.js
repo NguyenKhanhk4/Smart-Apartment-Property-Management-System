@@ -57,9 +57,11 @@ router.use('/notifications', notificationRoutes);
 router.use('/reports', reportRoutes);
 router.use('/lookups', lookupRoutes);
 
-// Module D — Thanh Bình (Tài sản & bảo trì, Tiện ích & đặt chỗ)
+// Người 1 — Vũ Việt (Mô đun 10: Thiết bị & bảo trì)
 router.use('/assets', assetRoutes);
 router.use('/work-orders', workOrderRoutes);
+
+// Module D — Thanh Bình (Tiện ích & đặt chỗ)
 router.use('/amenities', amenityRoutes);
 router.use('/member-codes', memberCodeRoutes);
 router.use('/amenity-passes', amenityPassRoutes);

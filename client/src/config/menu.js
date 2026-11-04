@@ -60,10 +60,12 @@ const VehicleRequestsPage = lazy(() => import('../features/vehicles/VehicleReque
 const MyVehiclesPage = lazy(() => import('../features/vehicles/MyVehiclesPage'));
 const SystemDashboardPage = lazy(() => import('../features/adminDashboard/SystemDashboardPage'));
 
-// ===== Module D (Thanh Bình) =====
+// ===== Người 1 — Vũ Việt (Mô đun 10: Thiết bị & bảo trì) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
 const AssetDetailPage = lazy(() => import('../features/assets/AssetDetailPage'));
 const WorkOrdersPage = lazy(() => import('../features/workOrders/WorkOrdersPage'));
+
+// ===== Module D (Thanh Bình) =====
 const AmenitiesPage = lazy(() => import('../features/amenities/AmenitiesPage'));
 const MyCodePage = lazy(() => import('../features/memberCodes/MyCodePage'));
 const FamilyPage = lazy(() => import('../features/memberCodes/FamilyPage'));

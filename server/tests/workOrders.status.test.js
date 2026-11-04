@@ -1,4 +1,4 @@
-// Module D — UC-D04: KTV bắt đầu / hoàn thành work order (hoàn thành chạy trong MongoDB transaction → replica set)
+// Người 1 (Mô đun 10) — UC-D04: KTV bắt đầu / hoàn thành work order (hoàn thành chạy trong MongoDB transaction → replica set)
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import { connectTestDB, clearTestDB, closeTestDB } from './helpers/db.js';

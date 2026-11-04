@@ -12,7 +12,7 @@ import { csvEnum, idParams, objectId } from '../../utils/validators.js';
 import { generateMaintenanceWorkOrders } from './workOrders.jobs.js';
 import * as service from './workOrders.service.js';
 
-// Module D — Thanh Bình. UC-D02: tự động tạo work order; UC-D03: danh sách, phân công / giao lại.
+// Người 1 — Vũ Việt (Mô đun 10). UC-D02: tự động tạo work order; UC-D03: danh sách, phân công / giao lại.
 // Thứ tự khai báo: đường dẫn cố định (/assignees, /jobs/...) phải đứng TRƯỚC /:id.
 const router = Router();
 const VIEWERS = ['MANAGER', 'STAFF:TECHNICIAN'];

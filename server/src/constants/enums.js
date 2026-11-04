@@ -127,7 +127,7 @@ export const EXPENSE_CATEGORIES = Object.freeze({
   OTHER: 'OTHER',
 });
 
-// ===== Tài sản, bảo trì, tiện ích (Module D) =====
+// ===== Thiết bị, bảo trì (Người 1, Mô đun 10) =====
 export const ASSET_CATEGORIES = Object.freeze({
   ELEVATOR: 'ELEVATOR',
   PUMP: 'PUMP',
@@ -146,6 +146,7 @@ export const WORK_ORDER_STATUS = Object.freeze({
   DONE: 'DONE',
 });
 
+// ===== Tiện ích (Module D) =====
 // BR-O12: booking tự xác nhận APPROVED khi đặt → CHECKED_IN (lễ tân) → COMPLETED (hết giờ, tính phí BR-O5);
 // hoặc CANCELLED / NO_SHOW (không tính phí).
 // PENDING, REJECTED: luồng duyệt cũ, Module D KHÔNG còn tạo mới — giữ để dữ liệu & báo cáo UC-E14 cũ không lỗi.

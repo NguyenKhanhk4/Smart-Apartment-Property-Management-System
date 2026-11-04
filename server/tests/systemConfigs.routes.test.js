@@ -51,6 +51,7 @@ describe('system-configs & complaint-categories (UC-E01)', () => {
     const log = await AuditLog.findOne({ action: 'CONFIG_CHANGED' }).lean();
     expect(log.metadata).toMatchObject({ key: 'SLA_HOURS_URGENT', before: 24, after: 12 });
     expect(String(log.performedBy)).toBe(String(manager._id));
+    expect(log.ip).toBeTruthy();
   });
 
   it('validate giá trị: số ≤ 0, sai kiểu, mảng có số ≤ 0, tỷ lệ > 1 → VALIDATION_ERROR', async () => {

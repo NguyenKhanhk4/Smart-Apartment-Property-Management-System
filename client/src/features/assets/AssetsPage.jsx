@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { App, Button, Card, DatePicker, Flex, Form, Input, InputNumber, Modal, Popconfirm, Select, Switch, Table, Tag, Typography } from 'antd';
 import { PlusOutlined, ScanOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { assetApi, workOrderApi } from '../../api/moduleD.api';
+import { assetApi, workOrderApi } from '../../api/equipment.api';
 import { lookupApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';

@@ -102,6 +102,7 @@ router.patch(
       targetType: 'system_configs',
       targetId: config._id,
       metadata: { key: config.key, before, after: config.value },
+      ip: req.ip,
     });
     ok(res, config, 'Đã cập nhật tham số');
   },

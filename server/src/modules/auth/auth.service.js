@@ -118,3 +118,18 @@ export async function refresh({ refreshToken }) {
     refreshToken: newRefreshToken,
   };
 }
+
+/**
+ * Đăng xuất: tăng tokenVersion để thu hồi mọi refresh token của tài khoản (BR-S04).
+ * Xác định người dùng bằng refresh token để vẫn thu hồi được khi access token đã hết hạn.
+ * Token không hợp lệ hoặc đã bị thu hồi thì bỏ qua: không ảnh hưởng phiên mới hơn của tài khoản.
+ */
+export async function logout({ refreshToken }) {
+  const decoded = verifyRefreshToken(refreshToken);
+  if (!decoded?.sub) return;
+
+  const user = await User.findById(decoded.sub).select('+tokenVersion');
+  if (!user || user.tokenVersion !== decoded.tv) return;
+
+  await User.updateOne({ _id: user._id }, { $inc: { tokenVersion: 1 } });
+}

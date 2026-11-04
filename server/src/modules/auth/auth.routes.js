@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { authenticate } from '../../middlewares/auth.js';
 import { validate } from '../../middlewares/validate.js';
 import { created, ok } from '../../utils/response.js';
 import * as authService from './auth.service.js';
@@ -123,12 +122,23 @@ router.post('/refresh', validate({ body: refreshBody }), async (req, res) => {
  * /auth/logout:
  *   post:
  *     tags: [Xác thực & Tài khoản]
- *     summary: Đăng xuất hệ thống — UC-A02
+ *     summary: Đăng xuất, thu hồi refresh token trên mọi thiết bị — UC-A02
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [refreshToken]
+ *             properties:
+ *               refreshToken: { type: string }
  *     responses:
  *       200:
- *         description: Đăng xuất thành công
+ *         description: Đăng xuất thành công (kể cả khi token đã hết hạn hoặc đã bị thu hồi)
  */
-router.post('/logout', authenticate, (_req, res) => {
+router.post('/logout', validate({ body: refreshBody }), async (req, res) => {
+  await authService.logout(req.validated.body);
   ok(res, null, 'Đăng xuất thành công');
 });
 
