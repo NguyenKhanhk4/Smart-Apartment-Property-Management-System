@@ -1,7 +1,7 @@
 // Tạo hoặc thay Trưởng BQL khi cài đặt (BR-S01). UC03 không cho tạo role này trên giao diện.
 // Tài khoản Trưởng BQL cũ và tài khoản ADMIN còn sót lại bị khóa, không bị xóa (BR-S12).
 //
-//   MANAGER_PASSWORD='MatKhau123' npm run db:set-manager -- --email a@b.vn --name "Nguyễn Văn A" --phone 0901234567
+//   MANAGER_PASSWORD='MatKhau123' npm run db:set-manager -- --phone 0901234567 --email a@b.vn --name "Nguyễn Văn A"
 //
 // Mật khẩu lấy từ biến môi trường để không lưu trong lịch sử lệnh; bắt buộc khi tạo tài khoản mới.
 // Sau khi có kích hoạt tài khoản (UC11), tài khoản mới sẽ tự đặt mật khẩu và không cần biến này nữa.
@@ -13,23 +13,27 @@ import { AUDIT_ACTIONS, ROLES } from '../src/constants/enums.js';
 import { User } from '../src/models/index.js';
 import { logAudit } from '../src/services/auditLog.service.js';
 import { withTransaction } from '../src/utils/transaction.js';
+import { normalizePhone } from '../src/utils/validators.js';
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{8,100}$/;
 
-/** Trả về { user, lockedCount } với lockedCount là số tài khoản quản trị cũ vừa bị khóa */
-export async function setManager({ email, fullName, phone, password }) {
-  if (!email) throw new Error('Thiếu --email');
+/** Tìm theo SĐT. Trả về { user, lockedCount } với lockedCount là số tài khoản quản trị cũ vừa bị khóa */
+export async function setManager({ phone, email, fullName, password }) {
+  if (!phone) throw new Error('Thiếu --phone');
   if (password && !PASSWORD_RULE.test(password)) {
     throw new Error('Mật khẩu tối thiểu 8 ký tự, có cả chữ và số');
   }
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmail = email?.trim().toLowerCase();
   const passwordHash = password ? await bcrypt.hash(password, 10) : null;
 
   return withTransaction(async (session) => {
-    let user = await User.findOne({ email: normalizedEmail }).select('+passwordHash +tokenVersion').session(session);
+    let user = await User.findOne({ phone: normalizePhone(phone) })
+      .select('+passwordHash +tokenVersion')
+      .session(session);
     if (user?.role === ROLES.RESIDENT) throw new Error('Không dùng tài khoản cư dân làm Trưởng BQL');
-    if (!user && (!fullName || !passwordHash)) {
-      throw new Error('Tạo tài khoản mới cần --name và biến môi trường MANAGER_PASSWORD');
+    // Email vẫn cần cho tài khoản mới vì đăng nhập dùng email cho đến UC01
+    if (!user && (!fullName || !normalizedEmail || !passwordHash)) {
+      throw new Error('Tạo tài khoản mới cần --name, --email và biến môi trường MANAGER_PASSWORD');
     }
 
     // Khóa trước khi gán để không vi phạm index "chỉ 1 Trưởng BQL đang hoạt động" (BR-R1)
@@ -44,8 +48,9 @@ export async function setManager({ email, fullName, phone, password }) {
     if (user) {
       user.set({ role: ROLES.MANAGER, roleTitle: null, boardTitle: null, isActive: true });
       if (fullName) user.fullName = fullName.trim();
-      if (phone) user.phone = phone.trim();
+      if (normalizedEmail) user.email = normalizedEmail;
       if (passwordHash) user.passwordHash = passwordHash;
+      if (user.passwordHash && !user.activatedAt) user.activatedAt = new Date();
       user.tokenVersion = (user.tokenVersion ?? 0) + 1;
       await user.save({ session });
     } else {
@@ -54,8 +59,9 @@ export async function setManager({ email, fullName, phone, password }) {
           {
             email: normalizedEmail,
             fullName: fullName.trim(),
-            phone: phone?.trim() || null,
+            phone,
             passwordHash,
+            activatedAt: new Date(),
             role: ROLES.MANAGER,
             isActive: true,
           },
@@ -85,9 +91,9 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   await connectDB();
   try {
     const { user, lockedCount } = await setManager({
+      phone: values.phone,
       email: values.email,
       fullName: values.name,
-      phone: values.phone,
       password: process.env.MANAGER_PASSWORD,
     });
     console.log(`Trưởng BQL: ${user.email}. Đã khóa ${lockedCount} tài khoản quản trị cũ.`);

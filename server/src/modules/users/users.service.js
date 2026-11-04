@@ -4,6 +4,7 @@ import { AUDIT_ACTIONS, BOARD_TITLES, ROLES } from '../../constants/enums.js';
 import { env } from '../../config/env.js';
 import { Resident, User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { assertPhoneAndEmailFree, phoneTakenError } from './userLookup.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { sendMail } from '../../services/mail.service.js';
@@ -53,7 +54,7 @@ export async function updateMe(userId, { fullName, phone, dateOfBirth }) {
   if (!user) throw ApiError.notFound('Không tìm thấy tài khoản');
 
   if (fullName !== undefined) user.fullName = fullName.trim();
-  if (phone !== undefined) user.phone = phone ? phone.trim() : null;
+  if (phone !== undefined) user.phone = phone;
   if (dateOfBirth !== undefined) {
     user.dateOfBirth = parseDateOfBirth(dateOfBirth);
   }
@@ -157,6 +158,8 @@ export async function createInternal(adminUser, { fullName, email, phone, role, 
     if (activeChairman) throw ApiError.badRequest('Đã có 1 Trưởng BQT đang hoạt động');
   }
 
+  await assertPhoneAndEmailFree({ phone, email: normalizedEmail });
+
   const temporaryPassword = generateTemporaryPassword(10);
   const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
@@ -165,8 +168,9 @@ export async function createInternal(adminUser, { fullName, email, phone, role, 
     newUser = await User.create({
       fullName: fullName.trim(),
       email: normalizedEmail,
-      phone: phone?.trim() || null,
+      phone,
       passwordHash,
+      activatedAt: new Date(),
       role,
       roleTitle: titleForRole,
       boardTitle: boardForRole,
@@ -180,9 +184,7 @@ export async function createInternal(adminUser, { fullName, email, phone, role, 
       if (err.keyPattern?.boardTitle || err.message?.includes('uniq_active_chairman')) {
         throw ApiError.badRequest('Đã có 1 Trưởng BQT đang hoạt động');
       }
-      throw ApiError.badRequest('Email đã được sử dụng', [
-        { field: 'email', message: 'Email đã được sử dụng' },
-      ]);
+      throw phoneTakenError();
     }
     throw err;
   }
@@ -250,7 +252,7 @@ export async function updateInternal(adminUser, targetId, { fullName, phone, rol
   }
 
   if (fullName !== undefined) target.fullName = fullName.trim();
-  if (phone !== undefined) target.phone = phone ? phone.trim() : null;
+  if (phone !== undefined) target.phone = phone;
 
   const titleChanged = newRoleTitle !== target.roleTitle || newBoardTitle !== target.boardTitle;
 

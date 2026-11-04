@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Joi from 'joi';
 import { validate } from '../../middlewares/validate.js';
 import { created, ok } from '../../utils/response.js';
+import { phoneVn } from '../../utils/validators.js';
 import * as authService from './auth.service.js';
 
 // Module A — Vũ Việt. UC-A01 (Đăng ký), UC-A02 (Đăng nhập, làm mới token, đăng xuất)
@@ -10,7 +11,7 @@ const router = Router();
 const registerBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100).required(),
   email: Joi.string().trim().lowercase().email().required(),
-  phone: Joi.string().trim().pattern(/^(0|\+84)\d{9,10}$/).allow('', null),
+  phone: phoneVn().required(),
   password: Joi.string()
     .min(8)
     .max(100)
@@ -50,7 +51,7 @@ const refreshBody = Joi.object({
  *         application/json:
  *           schema:
  *             type: object
- *             required: [fullName, email, password, confirmPassword]
+ *             required: [fullName, email, phone, password, confirmPassword]
  *             properties:
  *               fullName: { type: string, example: "Nguyễn Văn A" }
  *               email: { type: string, format: email, example: "cudan@sapms.vn" }

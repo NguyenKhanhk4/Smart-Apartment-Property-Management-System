@@ -4,7 +4,7 @@ import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { created, ok } from '../../utils/response.js';
-import { idParams, objectId } from '../../utils/validators.js';
+import { idParams, objectId, phoneVn } from '../../utils/validators.js';
 import * as service from './residents.service.js';
 
 // Module A — Vũ Việt. UC-A07, UC-A08: Quản lý cư dân & Căn hộ của tôi
@@ -14,7 +14,7 @@ const addMemberBody = Joi.object({
   apartmentId: objectId().required(),
   email: Joi.string().trim().lowercase().email().required(),
   fullName: Joi.string().trim().min(2).max(100).required(),
-  phone: Joi.string().trim().allow('', null),
+  phone: phoneVn().required(),
   idNumber: Joi.string().trim().allow('', null),
   dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
 });

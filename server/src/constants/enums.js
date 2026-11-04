@@ -12,6 +12,13 @@ export const ROLES = Object.freeze({
   BOARD: 'BOARD',
 });
 
+// Hành động trên điều khoản dữ liệu cá nhân (BR-X7)
+export const CONSENT_ACTIONS = Object.freeze({
+  ACCEPTED: 'ACCEPTED',
+  DECLINED: 'DECLINED',
+  WITHDRAWN: 'WITHDRAWN',
+});
+
 // Chức danh của STAFF
 export const ROLE_TITLES = Object.freeze({
   RECEPTIONIST: 'RECEPTIONIST',

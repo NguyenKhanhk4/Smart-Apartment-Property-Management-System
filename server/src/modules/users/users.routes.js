@@ -7,7 +7,7 @@ import { validate } from '../../middlewares/validate.js';
 import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
-import { idParams } from '../../utils/validators.js';
+import { idParams, phoneVn } from '../../utils/validators.js';
 import * as usersService from './users.service.js';
 
 // Module A — Vũ Việt. UC-A03 (Hồ sơ cá nhân), UC-A04 (Quản lý tài khoản nội bộ)
@@ -15,7 +15,7 @@ const router = Router();
 
 const updateMeBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100),
-  phone: Joi.string().trim().pattern(/^(0|\+84)\d{9,10}$/).allow('', null),
+  phone: phoneVn(),
   dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
 }).min(1);
 
@@ -50,7 +50,7 @@ const listInternalQuery = Joi.object({
 const createInternalBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100).required(),
   email: Joi.string().trim().lowercase().email().required(),
-  phone: Joi.string().trim().pattern(/^(0|\+84)\d{9,10}$/).allow('', null),
+  phone: phoneVn().required(),
   role: Joi.string()
     .valid(ROLES.MANAGER, ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD)
     .required(),
@@ -68,7 +68,7 @@ const createInternalBody = Joi.object({
 
 const updateInternalBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100),
-  phone: Joi.string().trim().pattern(/^(0|\+84)\d{9,10}$/).allow('', null),
+  phone: phoneVn(),
   role: Joi.string().valid(ROLES.MANAGER, ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD),
   roleTitle: Joi.string().valid(...values(ROLE_TITLES), null),
   boardTitle: Joi.string().valid(...values(BOARD_TITLES), null),
@@ -189,7 +189,7 @@ router.get('/internal', authenticate, authorize('MANAGER'), validate({ query: li
  *         application/json:
  *           schema:
  *             type: object
- *             required: [fullName, email, role]
+ *             required: [fullName, email, phone, role]
  *             properties:
  *               fullName: { type: string }
  *               email: { type: string }

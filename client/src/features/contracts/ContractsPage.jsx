@@ -21,6 +21,7 @@ import {
   App,
   Tooltip,
 } from 'antd';
+import { PHONE_RULES } from '../../utils/phone';
 import {
   FileTextOutlined,
   PlusOutlined,
@@ -172,7 +173,7 @@ export default function ContractsPage() {
         const ownerData = {
           fullName: values.ownerFullName,
           email: values.ownerEmail,
-          phone: values.ownerPhone || '',
+          phone: values.ownerPhone,
           idNumber: values.ownerIdNumber || '',
           dateOfBirth: values.ownerDob ? values.ownerDob.format('YYYY-MM-DD') : null,
         };
@@ -181,7 +182,7 @@ export default function ContractsPage() {
         const tenantData = {
           fullName: values.tenantFullName,
           email: values.tenantEmail,
-          phone: values.tenantPhone || '',
+          phone: values.tenantPhone,
           idNumber: values.tenantIdNumber || '',
           dateOfBirth: values.tenantDob ? values.tenantDob.format('YYYY-MM-DD') : null,
         };
@@ -615,7 +616,7 @@ export default function ContractsPage() {
 
               <Row gutter={16}>
                 <Col span={8}>
-                  <Form.Item name="ownerPhone" label="Số điện thoại">
+                  <Form.Item name="ownerPhone" label="Số điện thoại" rules={PHONE_RULES}>
                     <Input placeholder="0912345678" />
                   </Form.Item>
                 </Col>
@@ -662,7 +663,7 @@ export default function ContractsPage() {
 
               <Row gutter={16}>
                 <Col span={8}>
-                  <Form.Item name="tenantPhone" label="Số điện thoại">
+                  <Form.Item name="tenantPhone" label="Số điện thoại" rules={PHONE_RULES}>
                     <Input placeholder="0987654321" />
                   </Form.Item>
                 </Col>

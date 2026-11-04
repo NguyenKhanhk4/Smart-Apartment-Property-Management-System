@@ -50,12 +50,15 @@ describe('Quyền của MANAGER sau khi gộp role', () => {
 describe('setManager (script cài đặt)', () => {
   it('tạo Trưởng BQL mới, đăng nhập được, có ghi Audit Log', async () => {
     const { user, lockedCount } = await setManager({
+      phone: '+84901234567',
       email: ' Moi@Test.Local ',
       fullName: 'Trưởng BQL Mới',
       password: 'MatKhau123',
     });
 
+    expect(user.phone).toBe('0901234567');
     expect(user.email).toBe('moi@test.local');
+    expect(user.activatedAt).toBeInstanceOf(Date);
     expect(lockedCount).toBe(0);
     const saved = await User.findById(user._id).select('+passwordHash').lean();
     expect(await bcrypt.compare('MatKhau123', saved.passwordHash)).toBe(true);
@@ -67,6 +70,7 @@ describe('setManager (script cài đặt)', () => {
     // Tài khoản cũ từ trước khi gộp role; ghi trực tiếp vì model không còn nhận role này
     const { insertedId: oldAdminId } = await User.collection.insertOne({
       email: 'admin.cu@test.local',
+      phone: '0900000999',
       fullName: 'Admin cũ',
       passwordHash: 'x',
       role: 'ADMIN',
@@ -74,7 +78,12 @@ describe('setManager (script cài đặt)', () => {
       tokenVersion: 0,
     });
 
-    const { lockedCount } = await setManager({ email: 'moi@test.local', fullName: 'Mới', password: 'MatKhau123' });
+    const { lockedCount } = await setManager({
+      phone: '0901234567',
+      email: 'moi@test.local',
+      fullName: 'Mới',
+      password: 'MatKhau123',
+    });
 
     expect(lockedCount).toBe(2);
     const oldManagerNow = await User.findById(oldManager._id).select('+tokenVersion').lean();
@@ -84,9 +93,9 @@ describe('setManager (script cài đặt)', () => {
   });
 
   it('nâng nhân viên có sẵn lên, giữ mật khẩu nếu không truyền, xóa chức danh cũ', async () => {
-    const staff = await createUser('STAFF', { roleTitle: 'SECURITY', email: 'nv@test.local' });
+    const staff = await createUser('STAFF', { roleTitle: 'SECURITY', phone: '0901234567' });
 
-    const { user } = await setManager({ email: 'nv@test.local' });
+    const { user } = await setManager({ phone: '0901234567' });
 
     expect(String(user._id)).toBe(String(staff._id));
     expect(user.role).toBe('MANAGER');
@@ -95,9 +104,9 @@ describe('setManager (script cài đặt)', () => {
   });
 
   it('chạy lại với cùng người không khóa chính họ', async () => {
-    await setManager({ email: 'moi@test.local', fullName: 'Mới', password: 'MatKhau123' });
+    await setManager({ phone: '0901234567', email: 'moi@test.local', fullName: 'Mới', password: 'MatKhau123' });
 
-    const { user, lockedCount } = await setManager({ email: 'moi@test.local' });
+    const { user, lockedCount } = await setManager({ phone: '0901234567' });
 
     expect(lockedCount).toBe(0);
     expect(user.isActive).toBe(true);
@@ -105,11 +114,12 @@ describe('setManager (script cài đặt)', () => {
 
   it('từ chối cư dân, thiếu thông tin khi tạo mới, mật khẩu yếu; không khóa ai khi lỗi', async () => {
     const manager = await createManager();
-    await createUser('RESIDENT', { email: 'cudan@test.local' });
+    await createUser('RESIDENT', { phone: '0901111111' });
 
-    await expect(setManager({ email: 'cudan@test.local' })).rejects.toThrow(/cư dân/);
-    await expect(setManager({ email: 'moi@test.local', fullName: 'Mới' })).rejects.toThrow(/MANAGER_PASSWORD/);
-    await expect(setManager({ email: 'moi@test.local', fullName: 'Mới', password: 'ngan' })).rejects.toThrow(/Mật khẩu/);
+    await expect(setManager({})).rejects.toThrow(/--phone/);
+    await expect(setManager({ phone: '0901111111' })).rejects.toThrow(/cư dân/);
+    await expect(setManager({ phone: '0902222222', fullName: 'Mới' })).rejects.toThrow(/MANAGER_PASSWORD/);
+    await expect(setManager({ phone: '0902222222', fullName: 'Mới', password: 'ngan' })).rejects.toThrow(/Mật khẩu/);
 
     expect((await User.findById(manager._id).lean()).isActive).toBe(true);
   });

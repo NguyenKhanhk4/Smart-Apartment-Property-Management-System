@@ -13,6 +13,20 @@ export const period = () =>
     .pattern(/^\d{4}-(0[1-9]|1[0-2])$/)
     .messages({ 'string.pattern.base': '{{#label}} phải có dạng YYYY-MM' });
 
+/** SĐT Việt Nam (tiền tố 0 / 84 / +84): di động 3/5/7/8/9 + 8 số, hoặc máy bàn 2x + 8 số */
+export const phoneVn = () =>
+  Joi.string()
+    .trim()
+    .pattern(/^(?:\+?84|0)(?:[35789]\d{8}|2\d{9})$/)
+    .messages({ 'string.pattern.base': '{{#label}} không phải số điện thoại hợp lệ' });
+
+/** Đưa SĐT về một dạng để so khớp: +84912345678, 84912345678 → 0912345678 */
+export function normalizePhone(phone) {
+  if (typeof phone !== 'string') return phone;
+  const value = phone.trim().replace(/^\+/, '');
+  return value.startsWith('84') ? `0${value.slice(2)}` : value;
+}
+
 /** Query dạng ?status=A,B hoặc ?status=A&status=B → mảng */
 export const csvEnum = (allowed) =>
   Joi.alternatives().try(

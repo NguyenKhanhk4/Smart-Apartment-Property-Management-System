@@ -15,6 +15,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
+import { PHONE_RULES } from '../../utils/phone';
 import {
   CheckCircleOutlined,
   CopyOutlined,
@@ -114,7 +115,7 @@ function CreateAccountModal({ open, onClose, onDone }) {
           <Form.Item
             name="phone"
             label="Số điện thoại"
-            rules={[{ pattern: /^(0|\+84)\d{9,10}$/, message: 'Số điện thoại không hợp lệ' }]}
+            rules={PHONE_RULES}
           >
             <Input placeholder="vd: 0901234567" />
           </Form.Item>
@@ -241,7 +242,7 @@ function EditAccountModal({ user, open, onClose, onDone }) {
         <Form.Item
           name="phone"
           label="Số điện thoại"
-          rules={[{ pattern: /^(0|\+84)\d{9,10}$/, message: 'Số điện thoại không hợp lệ' }]}
+          rules={PHONE_RULES}
         >
           <Input />
         </Form.Item>

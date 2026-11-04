@@ -36,12 +36,14 @@ const now = new Date();
 const daysAgo = (n, hour = 9) => new Date(startOfVnDay(new Date(now.getTime() - n * DAY_MS)).getTime() + hour * HOUR_MS);
 
 // ===== Tài khoản =====
+let phoneSeq = 10000000; // SĐT là duy nhất (BR-S01)
 const mkUser = (email, fullName, role, extra = {}) => ({
   email,
   fullName,
   role,
   passwordHash,
-  phone: `09${between(10000000, 99999999)}`,
+  activatedAt: now,
+  phone: `09${(phoneSeq += 1)}`,
   ...extra,
 });
 const users = await M.User.insertMany([
@@ -113,7 +115,7 @@ await M.Resident.insertMany(
 // cudan1 (căn đầu) là chủ hộ có vợ và con nhỏ (chưa có ngày sinh: chủ hộ tự nhập ở mục Gia đình).
 // Căn thứ 7 đang cho thuê: chủ sở hữu "không ở" (cusohuu7) không có quyền tiện ích, người thuê (nguoithue7) là chủ hộ.
 // Tạo trực tiếp (không qua mkUser) để không tiêu thụ bộ sinh số ngẫu nhiên → dữ liệu demo phía sau giữ nguyên
-const demoUser = (email, fullName, phone) => ({ email, fullName, role: 'RESIDENT', passwordHash, phone });
+const demoUser = (email, fullName, phone) => ({ email, fullName, role: 'RESIDENT', passwordHash, activatedAt: now, phone });
 const householdUsers = await M.User.insertMany([
   demoUser('vo.cudan1@sapms.vn', 'Vợ cư dân An', '0900000001'),
   demoUser('con.cudan1@sapms.vn', 'Bé An', '0900000002'),

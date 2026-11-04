@@ -20,6 +20,7 @@ import {
   Badge,
   Tooltip,
 } from 'antd';
+import { PHONE_RULES } from '../../utils/phone';
 import {
   ArrowLeftOutlined,
   TeamOutlined,
@@ -551,7 +552,7 @@ export default function ApartmentDetailPage() {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="phone" label="Số điện thoại">
+              <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
                 <Input placeholder="0912345678" />
               </Form.Item>
             </Col>

@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { ROLES } from '../../constants/enums.js';
 import { User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { assertPhoneAndEmailFree, phoneTakenError } from '../users/userLookup.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from './auth.tokens.js';
 
 /**
@@ -30,12 +31,7 @@ export function toPublicUser(user) {
 export async function register({ fullName, email, phone, password }) {
   const normalizedEmail = email.trim().toLowerCase();
 
-  const existing = await User.findOne({ email: normalizedEmail });
-  if (existing) {
-    throw ApiError.badRequest('Email đã được sử dụng', [
-      { field: 'email', message: 'Email đã được sử dụng' },
-    ]);
-  }
+  await assertPhoneAndEmailFree({ phone, email: normalizedEmail });
 
   const passwordHash = await bcrypt.hash(password, 10);
 
@@ -43,18 +39,15 @@ export async function register({ fullName, email, phone, password }) {
     const user = await User.create({
       fullName: fullName.trim(),
       email: normalizedEmail,
-      phone: phone?.trim() || null,
+      phone,
       passwordHash,
+      activatedAt: new Date(),
       role: ROLES.RESIDENT,
     });
 
     return { user: toPublicUser(user) };
   } catch (err) {
-    if (err.code === 11000) {
-      throw ApiError.badRequest('Email đã được sử dụng', [
-        { field: 'email', message: 'Email đã được sử dụng' },
-      ]);
-    }
+    if (err.code === 11000) throw phoneTakenError();
     throw err;
   }
 }
@@ -66,7 +59,8 @@ export async function login({ email, password }) {
   const normalizedEmail = email.trim().toLowerCase();
   const user = await User.findOne({ email: normalizedEmail }).select('+passwordHash +tokenVersion');
 
-  if (!user) {
+  // Chưa kích hoạt thì chưa có mật khẩu (UC01 sẽ chuyển sang trang kích hoạt)
+  if (!user?.passwordHash) {
     throw new ApiError('AUTH_INVALID_CREDENTIALS');
   }
 

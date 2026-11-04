@@ -20,6 +20,7 @@ import { sendMail } from '../../services/mail.service.js';
 import { notify } from '../../services/notification.service.js';
 import { uploadToCloudinary } from '../../services/upload.service.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { assertPhoneAndEmailFree, findUserByPhone } from '../users/userLookup.js';
 import { paginate } from '../../utils/pagination.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { ensureCodes, parseDateOfBirth } from '../memberCodes/memberCodes.service.js';
@@ -154,14 +155,19 @@ export async function createContract(receptionistUser, data, file, ip) {
           throw ApiError.badRequest('Chỉ tài khoản cư dân mới có thể đứng tên hợp đồng');
         }
       } else {
-        const normEmail = owner.email.trim().toLowerCase();
-        ownerUser = await User.findOne({ email: normEmail }).session(session);
+        if (!owner.phone) throw ApiError.badRequest('Số điện thoại chủ sở hữu là bắt buộc');
+        ownerUser = await findUserByPhone(owner.phone, session);
         if (ownerUser) {
           if (ownerUser.role !== ROLES.RESIDENT) {
-            throw ApiError.badRequest('Email của tài khoản nội bộ không được gắn làm cư dân');
+            throw ApiError.badRequest('Số điện thoại của tài khoản nội bộ không được gắn làm cư dân');
           }
         } else {
-          // Tạo tài khoản cư dân mới
+          // Tạo tài khoản cư dân mới; email vẫn bắt buộc vì đăng nhập dùng email cho đến UC01
+          if (!owner.email || !owner.fullName) {
+            throw ApiError.badRequest('Tạo tài khoản mới cần họ tên và email của chủ sở hữu');
+          }
+          const normEmail = owner.email.trim().toLowerCase();
+          await assertPhoneAndEmailFree({ phone: owner.phone, email: normEmail }, session);
           const tempPass = generateTemporaryPassword(10);
           const passwordHash = await bcrypt.hash(tempPass, 10);
           const dob = owner.dateOfBirth ? parseDateOfBirth(owner.dateOfBirth) : null;
@@ -171,9 +177,10 @@ export async function createContract(receptionistUser, data, file, ip) {
               {
                 fullName: owner.fullName.trim(),
                 email: normEmail,
-                phone: owner.phone?.trim() || null,
+                phone: owner.phone,
                 dateOfBirth: dob,
                 passwordHash,
+                activatedAt: new Date(),
                 role: ROLES.RESIDENT,
                 isActive: true,
               },
@@ -303,14 +310,18 @@ export async function createContract(receptionistUser, data, file, ip) {
         if (tenantUser.role !== ROLES.RESIDENT) {
           throw ApiError.badRequest('Chỉ tài khoản cư dân mới có thể đứng tên hợp đồng thuê');
         }
-      } else if (tenant?.email) {
-        const normEmail = tenant.email.trim().toLowerCase();
-        tenantUser = await User.findOne({ email: normEmail }).session(session);
+      } else if (tenant?.phone) {
+        tenantUser = await findUserByPhone(tenant.phone, session);
         if (tenantUser) {
           if (tenantUser.role !== ROLES.RESIDENT) {
-            throw ApiError.badRequest('Email của tài khoản nội bộ không được gắn làm cư dân');
+            throw ApiError.badRequest('Số điện thoại của tài khoản nội bộ không được gắn làm cư dân');
           }
         } else {
+          if (!tenant.email || !tenant.fullName) {
+            throw ApiError.badRequest('Tạo tài khoản mới cần họ tên và email của người thuê');
+          }
+          const normEmail = tenant.email.trim().toLowerCase();
+          await assertPhoneAndEmailFree({ phone: tenant.phone, email: normEmail }, session);
           const tempPass = generateTemporaryPassword(10);
           const passwordHash = await bcrypt.hash(tempPass, 10);
           const dob = tenant.dateOfBirth ? parseDateOfBirth(tenant.dateOfBirth) : null;
@@ -320,9 +331,10 @@ export async function createContract(receptionistUser, data, file, ip) {
               {
                 fullName: tenant.fullName.trim(),
                 email: normEmail,
-                phone: tenant.phone?.trim() || null,
+                phone: tenant.phone,
                 dateOfBirth: dob,
                 passwordHash,
+                activatedAt: new Date(),
                 role: ROLES.RESIDENT,
                 isActive: true,
               },
@@ -333,7 +345,7 @@ export async function createContract(receptionistUser, data, file, ip) {
           if (!env.isProd) console.log('[module-a] mật khẩu tạm', tenantUser.email, tempPass);
         }
       } else {
-        throw ApiError.badRequest('Thông tin người thuê là bắt buộc đối với hợp đồng cho thuê');
+        throw ApiError.badRequest('Số điện thoại người thuê là bắt buộc đối với hợp đồng cho thuê');
       }
 
       // BR-A5: Người thuê ≠ chủ sở hữu

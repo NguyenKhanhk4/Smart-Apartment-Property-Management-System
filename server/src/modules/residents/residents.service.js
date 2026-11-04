@@ -18,6 +18,7 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { sendMail } from '../../services/mail.service.js';
 import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { assertPhoneAndEmailFree, findUserByPhone } from '../users/userLookup.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { getHousehold } from '../household/household.service.js';
 import { ensureCodes, parseDateOfBirth } from '../memberCodes/memberCodes.service.js';
@@ -170,12 +171,12 @@ export async function addMember(receptionistUser, data, ip) {
 
   // Kiểm tra tài khoản User
   const normEmail = email.trim().toLowerCase();
-  let user = await User.findOne({ email: normEmail });
+  let user = await findUserByPhone(phone);
   let createdNewUser = null;
 
   if (user) {
     if (user.role !== ROLES.RESIDENT) {
-      throw ApiError.badRequest('Email của tài khoản nội bộ không được gắn làm cư dân');
+      throw ApiError.badRequest('Số điện thoại của tài khoản nội bộ không được gắn làm cư dân');
     }
 
     const alreadyActive = await Resident.findOne({
@@ -192,6 +193,8 @@ export async function addMember(receptionistUser, data, ip) {
       await user.save();
     }
   } else {
+    await assertPhoneAndEmailFree({ phone, email: normEmail });
+
     const tempPass = generateTemporaryPassword(10);
     const passwordHash = await bcrypt.hash(tempPass, 10);
     const parsedDob = dateOfBirth ? parseDateOfBirth(dateOfBirth) : null;
@@ -199,9 +202,10 @@ export async function addMember(receptionistUser, data, ip) {
     user = await User.create({
       fullName: fullName.trim(),
       email: normEmail,
-      phone: phone?.trim() || null,
+      phone,
       dateOfBirth: parsedDob,
       passwordHash,
+      activatedAt: new Date(),
       role: ROLES.RESIDENT,
       isActive: true,
     });
