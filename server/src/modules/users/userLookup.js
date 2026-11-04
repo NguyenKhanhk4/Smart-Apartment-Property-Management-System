@@ -9,12 +9,20 @@ export const phoneTakenError = () =>
 const emailTakenError = () =>
   new ApiError('EMAIL_EXISTS', undefined, { details: [{ field: 'email', message: 'Email đã được sử dụng' }] });
 
+/** Lỗi trùng SĐT / email từ unique index → mã lỗi nghiệp vụ; lỗi khác trả null */
+export function uniqueConflictError(err) {
+  if (err?.code !== 11000) return null;
+  if (err.keyPattern?.phone) return phoneTakenError();
+  if (err.keyPattern?.email || err.message?.includes('uniq_email')) return emailTakenError();
+  return null;
+}
+
 export const findUserByPhone = (phone, session = null) =>
   User.findOne({ phone: normalizePhone(phone) }).session(session);
 
 /**
- * Chặn trùng khi tạo tài khoản mới. Email không còn unique trong DB, nhưng đăng nhập vẫn tìm theo email
- * cho đến UC01 nên vẫn phải chặn trùng ở đây để một email không trỏ tới 2 tài khoản.
+ * Chặn trùng khi tạo tài khoản mới, trả lỗi theo field trước khi ghi.
+ * 2 request đồng thời có thể cùng qua bước này: unique index chặn, `uniqueConflictError` đổi sang mã lỗi nghiệp vụ.
  */
 export async function assertPhoneAndEmailFree({ phone, email }, session = null) {
   if (await findUserByPhone(phone, session)) throw phoneTakenError();

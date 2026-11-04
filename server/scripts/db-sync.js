@@ -19,9 +19,16 @@ if (existing.has('users')) {
     const phone = normalizePhone(u.phone);
     byPhone.set(phone, [...(byPhone.get(phone) ?? []), u]);
   }
+  const byEmail = new Map();
+  for (const u of accounts.filter((account) => account.email)) {
+    const email = u.email.trim().toLowerCase();
+    byEmail.set(email, [...(byEmail.get(email) ?? []), u]);
+  }
   const missing = accounts.filter((u) => !u.phone);
   const duplicated = [...byPhone].filter(([, group]) => group.length > 1);
-  if (missing.length || duplicated.length) {
+  const duplicatedEmails = [...byEmail].filter(([, group]) => group.length > 1);
+  if (missing.length || duplicated.length || duplicatedEmails.length) {
+    duplicatedEmails.forEach(([email, group]) => console.error(`Trùng email ${email}: ${group.map((u) => u.phone ?? u._id).join(', ')}`));
     missing.forEach((u) => console.error(`Thiếu SĐT: ${u.email ?? u._id}`));
     duplicated.forEach(([phone, group]) => console.error(`Trùng SĐT ${phone}: ${group.map((u) => u.email ?? u._id).join(', ')}`));
     console.error('\nHãy sửa các tài khoản trên rồi chạy lại. Dữ liệu tài khoản chưa bị thay đổi.');

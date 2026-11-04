@@ -8,18 +8,29 @@
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import bcrypt from 'bcryptjs';
+import Joi from 'joi';
 import { connectDB, disconnectDB } from '../src/config/db.js';
 import { AUDIT_ACTIONS, ROLES } from '../src/constants/enums.js';
 import { User } from '../src/models/index.js';
 import { logAudit } from '../src/services/auditLog.service.js';
 import { withTransaction } from '../src/utils/transaction.js';
-import { normalizePhone } from '../src/utils/validators.js';
+import { normalizePhone, phoneVn } from '../src/utils/validators.js';
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{8,100}$/;
+// Cùng quy tắc với API tạo tài khoản nội bộ (users.routes.js)
+const inputRules = {
+  phone: [phoneVn(), 'Số điện thoại không hợp lệ'],
+  email: [Joi.string().trim().email(), 'Email không hợp lệ'],
+  fullName: [Joi.string().trim().min(2).max(100), 'Họ tên phải có 2–100 ký tự'],
+};
 
 /** Tìm theo SĐT. Trả về { user, lockedCount } với lockedCount là số tài khoản quản trị cũ vừa bị khóa */
 export async function setManager({ phone, email, fullName, password }) {
   if (!phone) throw new Error('Thiếu --phone');
+  for (const [field, value] of Object.entries({ phone, email, fullName })) {
+    const [rule, message] = inputRules[field];
+    if (value !== undefined && rule.validate(value).error) throw new Error(message);
+  }
   if (password && !PASSWORD_RULE.test(password)) {
     throw new Error('Mật khẩu tối thiểu 8 ký tự, có cả chữ và số');
   }
@@ -34,6 +45,11 @@ export async function setManager({ phone, email, fullName, password }) {
     // Email vẫn cần cho tài khoản mới vì đăng nhập dùng email cho đến UC01
     if (!user && (!fullName || !normalizedEmail || !passwordHash)) {
       throw new Error('Tạo tài khoản mới cần --name, --email và biến môi trường MANAGER_PASSWORD');
+    }
+    // Tính cả tài khoản đã khóa: đăng nhập tìm theo email nên 1 email chỉ được thuộc 1 tài khoản
+    if (normalizedEmail) {
+      const taken = await User.exists({ email: normalizedEmail, ...(user && { _id: { $ne: user._id } }) }).session(session);
+      if (taken) throw new Error('Email đã thuộc tài khoản khác');
     }
 
     // Khóa trước khi gán để không vi phạm index "chỉ 1 Trưởng BQL đang hoạt động" (BR-R1)

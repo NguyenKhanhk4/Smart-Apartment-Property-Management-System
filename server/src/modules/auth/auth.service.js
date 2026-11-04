@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { ROLES } from '../../constants/enums.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { assertPhoneAndEmailFree, phoneTakenError } from '../users/userLookup.js';
+import { assertPhoneAndEmailFree, uniqueConflictError } from '../users/userLookup.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from './auth.tokens.js';
 import { User } from '../../models/index.js';
 
@@ -47,8 +47,7 @@ export async function register({ fullName, email, phone, password }) {
 
     return { user: toPublicUser(user) };
   } catch (err) {
-    if (err.code === 11000) throw phoneTakenError();
-    throw err;
+    throw uniqueConflictError(err) ?? err;
   }
 }
 

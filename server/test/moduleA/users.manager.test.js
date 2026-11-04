@@ -53,13 +53,13 @@ test('vẫn đổi được vai trò của nhân viên khác', async () => {
 test('setManager: tạo Trưởng BQL mới, đăng nhập được, có ghi Audit Log', async () => {
   const { user, lockedCount } = await setManager({
     phone: '+84901234567',
-    email: ' Moi@Test.Local ',
+    email: ' Moi@Example.com ',
     fullName: 'Trưởng BQL Mới',
     password: 'MatKhau123',
   });
 
   assert.equal(user.phone, '0901234567');
-  assert.equal(user.email, 'moi@test.local');
+  assert.equal(user.email, 'moi@example.com');
   assert.ok(user.activatedAt instanceof Date);
   assert.equal(lockedCount, 0);
   const saved = await User.findById(user._id).select('+passwordHash').lean();
@@ -72,7 +72,7 @@ test('setManager: khóa Trưởng BQL cũ, thu hồi phiên của họ', async (
 
   const { lockedCount } = await setManager({
     phone: '0901234567',
-    email: 'moi@test.local',
+    email: 'moi@example.com',
     fullName: 'Mới',
     password: 'MatKhau123',
   });
@@ -95,12 +95,38 @@ test('setManager: nâng nhân viên có sẵn lên, giữ mật khẩu nếu kh�
 });
 
 test('setManager: chạy lại với cùng người không khóa chính họ', async () => {
-  await setManager({ phone: '0901234567', email: 'moi@test.local', fullName: 'Mới', password: 'MatKhau123' });
+  await setManager({ phone: '0901234567', email: 'moi@example.com', fullName: 'Mới', password: 'MatKhau123' });
 
   const { user, lockedCount } = await setManager({ phone: '0901234567' });
 
   assert.equal(lockedCount, 0);
   assert.equal(user.isActive, true);
+});
+
+test('setManager: từ chối SĐT, email, họ tên sai định dạng trước khi đụng tới dữ liệu', async () => {
+  const manager = await createManager();
+  const valid = { phone: '0902222222', email: 'moi@example.com', fullName: 'Mới', password: 'MatKhau123' };
+
+  await assert.rejects(setManager({ ...valid, phone: '12345' }), /Số điện thoại/);
+  await assert.rejects(setManager({ ...valid, email: 'khong-phai-email' }), /Email/);
+  await assert.rejects(setManager({ ...valid, fullName: 'A' }), /Họ tên/);
+
+  assert.equal((await User.findById(manager._id).lean()).isActive, true);
+  assert.equal(await User.countDocuments(), 1);
+});
+
+test('setManager: email đã thuộc tài khoản khác, kể cả đã khóa → từ chối, không khóa ai; email của chính mình vẫn được', async () => {
+  const manager = await createManager({ email: 'dang.dung@example.com' });
+  await createUser('STAFF', { roleTitle: 'SECURITY', email: 'da.khoa@example.com', isActive: false });
+  const staff = await createUser('STAFF', { roleTitle: 'TECHNICIAN', phone: '0903333333', email: 'ktv@example.com' });
+  const newAccount = { phone: '0902222222', fullName: 'Mới', password: 'MatKhau123' };
+
+  await assert.rejects(setManager({ ...newAccount, email: 'DANG.DUNG@example.com' }), /Email đã thuộc/);
+  await assert.rejects(setManager({ ...newAccount, email: 'da.khoa@example.com' }), /Email đã thuộc/);
+  assert.equal((await User.findById(manager._id).lean()).isActive, true);
+
+  const { user } = await setManager({ phone: '0903333333', email: 'ktv@example.com' });
+  assert.equal(String(user._id), String(staff._id));
 });
 
 test('setManager: từ chối cư dân, thiếu thông tin khi tạo mới, mật khẩu yếu; không khóa ai khi lỗi', async () => {

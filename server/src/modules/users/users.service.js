@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { AUDIT_ACTIONS, AUDIT_TARGETS, BOARD_TITLES, ROLES } from '../../constants/enums.js';
 import { Resident, User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { assertPhoneAndEmailFree, phoneTakenError } from './userLookup.js';
+import { assertPhoneAndEmailFree, uniqueConflictError } from './userLookup.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { sendMail } from '../../services/mail.service.js';
@@ -34,7 +34,7 @@ export async function updateMe(userId, { fullName, phone, dateOfBirth }) {
     user.dateOfBirth = parseDateOfBirth(dateOfBirth);
   }
 
-  await user.save();
+  await saveUnique(() => user.save());
   return toPublicUser(user);
 }
 
@@ -138,8 +138,7 @@ async function saveUnique(write) {
     if (err.keyPattern?.boardTitle || err.message?.includes('uniq_active_chairman')) {
       throw new ApiError('CHAIRMAN_ALREADY_EXISTS');
     }
-    if (err.keyPattern?.phone) throw phoneTakenError();
-    throw err;
+    throw uniqueConflictError(err) ?? err;
   }
 }
 

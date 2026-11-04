@@ -2,6 +2,7 @@
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { User } from '../../src/models/index.js';
+import { register as registerAccount } from '../../src/modules/auth/auth.service.js';
 import { normalizePhone } from '../../src/utils/validators.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { asUser, createManager, createUser } from '../helpers/fixtures.js';
@@ -81,6 +82,32 @@ test('đăng nhập: tài khoản chưa có mật khẩu trả 401, không lỗi
   assert.equal(res.body.errorCode, 'AUTH_INVALID_CREDENTIALS');
 });
 
+test('User: email là duy nhất; nhiều tài khoản có email null vẫn được', async () => {
+  await User.create({ ...base, phone: '0912345671', email: 'a@example.com' });
+  await assert.rejects(User.create({ ...base, phone: '0912345672', email: 'A@example.com' }), { code: 11000 });
+
+  await User.create({ ...base, phone: '0912345673', email: null });
+  await User.create({ ...base, phone: '0912345674', email: null });
+});
+
+test('đăng ký đồng thời cùng email khác SĐT → 1 tài khoản, lần kia 409 EMAIL_EXISTS', async () => {
+  const account = (phone) => ({ fullName: 'Cư Dân', email: 'cung@example.com', phone, password: PASSWORD });
+
+  const results = await Promise.allSettled([
+    registerAccount(account('0912345671')),
+    registerAccount(account('0912345672')),
+    registerAccount(account('0912345673')),
+  ]);
+
+  assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
+  for (const { reason } of results.filter((r) => r.status === 'rejected')) {
+    assert.equal(reason.errorCode, 'EMAIL_EXISTS');
+    assert.equal(reason.status, 409);
+    assert.equal(reason.details?.[0]?.field, 'email');
+  }
+  assert.equal(await User.countDocuments({ email: 'cung@example.com' }), 1);
+});
+
 test('đăng ký: thiếu SĐT trả 400; thành công thì đã kích hoạt và lưu dạng chuẩn hóa', async () => {
   assert.equal((await register(registerBody)).status, 400);
 
@@ -122,7 +149,9 @@ test('hồ sơ: không xóa được SĐT của mình; đổi sang SĐT đã có
 
   assert.equal((await patchMe({ phone: '' })).status, 400);
   assert.equal((await patchMe({ phone: null })).status, 400);
-  assert.equal((await patchMe({ phone: '0912345672' })).status, 409);
+  const taken = await patchMe({ phone: '0912345672' });
+  assert.equal(taken.status, 409);
+  assert.equal(taken.body.errorCode, 'PHONE_EXISTS');
   assert.equal((await patchMe({ phone: '+84912345673' })).status, 200);
   assert.equal((await User.findById(me._id).lean()).phone, '0912345673');
 });

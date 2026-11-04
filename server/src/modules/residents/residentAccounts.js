@@ -7,7 +7,7 @@ import { sendMail } from '../../services/mail.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { generateTemporaryPassword } from '../../utils/password.js';
 import { parseDateOfBirth } from '../memberCodes/memberCodes.service.js';
-import { assertPhoneAndEmailFree, findUserByPhone } from '../users/userLookup.js';
+import { assertPhoneAndEmailFree, findUserByPhone, uniqueConflictError } from '../users/userLookup.js';
 import { buildIdNumberFields } from './idCrypto.js';
 
 const escapeHtml = (text) =>
@@ -64,7 +64,9 @@ export async function findOrCreateResidentUser(
       },
     ],
     { session },
-  );
+  ).catch((err) => {
+    throw uniqueConflictError(err) ?? err;
+  });
   return { user, tempPass };
 }
 

@@ -35,7 +35,11 @@ const userSchema = new Schema(
   schemaOptions('users'),
 );
 
-userSchema.index({ email: 1 }, { sparse: true });
+// Đăng nhập còn tìm theo email đến UC01 nên email phải duy nhất; tài khoản không có email thì không bị tính
+userSchema.index(
+  { email: 1 },
+  { name: 'uniq_email', unique: true, partialFilterExpression: { email: { $type: 'string' } } },
+);
 userSchema.index({ role: 1, isActive: 1 });
 userSchema.index({ role: 1, roleTitle: 1 });
 
