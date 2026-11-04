@@ -6,6 +6,7 @@ import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { Amenity, Apartment, Building } from '../../models/index.js';
 import { getActiveApartmentIds } from '../../services/residency.service.js';
+import { visibilityFilter } from '../amenities/amenities.service.js';
 import { escapeRegex } from '../../utils/pagination.js';
 import { ok } from '../../utils/response.js';
 import { objectId } from '../../utils/validators.js';
@@ -64,10 +65,11 @@ router.get(
  * /lookups/amenities:
  *   get:
  *     tags: [Lookup]
- *     summary: Danh sách tiện ích (id, tên) cho bộ lọc thống kê
+ *     summary: Danh sách tiện ích (id, tên) cho ô chọn — cư dân chỉ thấy tiện ích đang mở, dùng chung hoặc thuộc tòa mình
  */
-router.get('/amenities', authenticate, async (_req, res) => {
-  ok(res, await Amenity.find().select('name capacityPerSlot isActive').sort({ name: 1 }).lean());
+router.get('/amenities', authenticate, async (req, res) => {
+  const filter = await visibilityFilter(req.user);
+  ok(res, await Amenity.find(filter).select('name capacityPerSlot isActive').sort({ name: 1 }).lean());
 });
 
 export default router;

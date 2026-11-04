@@ -20,6 +20,7 @@ import { ageGroupOf, formatVnd, passFee } from '../amenities/pricing.js';
 import { getBookingConfig } from '../amenities/slot.utils.js';
 import { assertHead, assertMember } from '../household/household.service.js';
 import { ensureCodes, resolveApartmentId } from '../memberCodes/memberCodes.service.js';
+import { amenityVisibleTo } from '../amenities/access.queries.js';
 
 export { getActivePass } from './passes.queries.js';
 
@@ -55,9 +56,6 @@ function priceFor(amenity, dateOfBirth, month, cfg) {
   return { ageGroup, fee: passFee(amenity, ageGroup), error: null };
 }
 
-/** Tiện ích riêng tòa chỉ dành cho căn thuộc tòa đó; chung toàn khu thì mọi căn */
-const amenityVisibleTo = (amenity, apartment) =>
-  !amenity.buildingId || String(amenity.buildingId) === String(apartment.buildingId?._id ?? apartment.buildingId);
 
 const isUniqueViolation = (err) => [err?.code, err?.cause?.code, err?.errorResponse?.code].includes(11000);
 

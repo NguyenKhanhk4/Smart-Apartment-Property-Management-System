@@ -3,8 +3,10 @@ import {
   NOTIFICATION_TYPES,
   ROLES,
   ROLE_TITLES,
+  WORK_ORDER_OPEN_STATUSES as OPEN_WO_STATUSES,
   WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
+import { isRole } from '../../middlewares/authorize.js';
 import { Asset, User, WorkOrder } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
@@ -12,10 +14,9 @@ import { uploadToCloudinary } from '../../services/upload.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { withTransaction } from '../../utils/transaction.js';
-import { DAY_MS, startOfVnDay } from '../../utils/time.js';
+import { DAY_MS, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { computeNextMaintenance } from '../assets/assets.service.js';
 
-export const OPEN_WO_STATUSES = [WORK_ORDER_STATUS.PENDING, WORK_ORDER_STATUS.IN_PROGRESS];
 
 const TECHNICIAN = { role: ROLES.STAFF, roleTitle: ROLE_TITLES.TECHNICIAN, isActive: true };
 const ASSET_POPULATE = {
@@ -32,11 +33,10 @@ export const isOverdue = (wo, now = new Date()) =>
 
 const withOverdue = (wo, now) => ({ ...wo, isOverdue: isOverdue(wo, now) });
 
-const dateVn = (date) =>
-  date ? new Date(date).toLocaleDateString('en-GB', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—';
+const dateVn = fmtDateVn;
 
 /** Manager thấy tất cả; KTV chỉ thấy work order được giao cho mình */
-const isTechnician = (user) => user.role === ROLES.STAFF && user.roleTitle === ROLE_TITLES.TECHNICIAN;
+const isTechnician = (user) => isRole(user, 'STAFF:TECHNICIAN');
 
 // ===== UC-D03 bước 1: danh sách work order =====
 export async function listWorkOrders(user, query) {

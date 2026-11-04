@@ -1,39 +1,32 @@
 import { useState } from 'react';
-import { Avatar, Button, Card, DatePicker, Flex, Form, Input, Modal, Select, Table, Tag, Tooltip, Typography } from 'antd';
+import { App, Avatar, Button, Card, DatePicker, Flex, Select, Table, Tag, Tooltip, Typography } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
 import { amenityPassApi } from '../../api/moduleD.api';
 import { lookupApi } from '../../api/moduleE.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
 import { AGE_GROUPS, AMENITY_ACCESS_MODES, AMENITY_PASS_STATUS, enumOptions } from '../../constants/enums';
-import { useAction, useApi } from '../../hooks/useApi';
+import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDateTime, formatMoney } from '../../utils/format';
+import ReasonModal from '../../components/ReasonModal';
 
 const monthLabel = (m) => `${m.slice(5)}/${m.slice(0, 4)}`;
 
 // UC-D09 — Trưởng BQL / Lễ tân xem gói tháng của mọi hộ. Chỉ Trưởng BQL hủy được (bắt buộc lý do, ghi audit).
 export default function AmenityPassesPage() {
+  const { message } = App.useApp();
   const { hasRole } = useAuth();
   const isManager = hasRole('MANAGER');
   const [filters, setFilters] = useState({ page: 1, limit: 20, sort: '-month', status: 'ACTIVE' });
   const [aptSearch, setAptSearch] = useState('');
   const [cancelling, setCancelling] = useState(null);
-  const [form] = Form.useForm();
   const set = (patch) => setFilters((f) => ({ ...f, page: 1, ...patch }));
 
   const { data = [], pagination, loading, reload } = useApi(() => amenityPassApi.list(filters), [filters]);
   const { data: amenities = [] } = useApi(() => lookupApi.amenities(), []);
   const { data: apartments = [] } = useApi(() => lookupApi.apartments({ q: aptSearch }), [aptSearch]);
 
-  const [cancel, cancelling$] = useAction((v) => amenityPassApi.cancel(cancelling._id, v.reason), {
-    success: 'Đã hủy gói tháng',
-    onDone: () => {
-      setCancelling(null);
-      form.resetFields();
-      reload();
-    },
-  });
 
   const columns = [
     {
@@ -177,28 +170,24 @@ export default function AmenityPassesPage() {
         />
       </Card>
 
-      <Modal
-        title={cancelling ? `Hủy gói ${cancelling.amenityId?.name} — ${cancelling.userId?.fullName}${cancelling.memberCode ? ` (${cancelling.memberCode})` : ''}` : ''}
+      <ReasonModal
         open={Boolean(cancelling)}
-        onCancel={() => setCancelling(null)}
-        onOk={() => form.submit()}
+        title={cancelling ? `Hủy gói ${cancelling.amenityId?.name} — ${cancelling.userId?.fullName}${cancelling.memberCode ? ` (${cancelling.memberCode})` : ''}` : ''}
+        hint={
+          cancelling &&
+          `Gói tháng ${monthLabel(cancelling.month)} · ${formatMoney(cancelling.fee)}. Người dùng gói và chủ hộ sẽ nhận thông báo; thao tác được ghi nhật ký.`
+        }
+        label="Lý do hủy"
         okText="Hủy gói"
-        okButtonProps={{ danger: true }}
-        cancelText="Đóng"
-        confirmLoading={cancelling$}
-        destroyOnHidden
-      >
-        {cancelling && (
-          <Typography.Paragraph type="secondary">
-            Gói tháng {monthLabel(cancelling.month)} · {formatMoney(cancelling.fee)}. Người dùng gói và chủ hộ sẽ nhận thông báo; thao tác được ghi nhật ký.
-          </Typography.Paragraph>
-        )}
-        <Form form={form} layout="vertical" preserve={false} onFinish={cancel}>
-          <Form.Item name="reason" label="Lý do hủy" rules={[{ required: true, min: 5, max: 500, message: 'Nhập lý do 5–500 ký tự' }]}>
-            <Input.TextArea rows={3} maxLength={500} showCount />
-          </Form.Item>
-        </Form>
-      </Modal>
+        minLength={5}
+        action={(reason) => amenityPassApi.cancel(cancelling._id, reason)}
+        onClose={() => setCancelling(null)}
+        onDone={() => {
+          message.success('Đã hủy gói tháng');
+          setCancelling(null);
+          reload();
+        }}
+      />
     </>
   );
 }

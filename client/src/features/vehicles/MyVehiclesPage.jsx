@@ -14,7 +14,7 @@ import {
   Space,
   Spin,
   Tag,
-  message,
+  App,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -29,13 +29,21 @@ import { residentsApi, vehicleApi } from '../../api/moduleA.api';
 import EnumTag from '../../components/EnumTag';
 import { VEHICLE_STATUS, VEHICLE_TYPES, enumOptions } from '../../constants/enums';
 import { useAction, useApi } from '../../hooks/useApi';
+import { useResident } from '../../hooks/useResident';
 import { formatDate } from '../../utils/format';
 
 export default function MyVehiclesPage() {
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const [, startTransition] = useTransition();
 
   const [selectedAptId, setSelectedAptId] = useState(null);
+  // Căn đang chọn đồng bộ với ô chọn căn trên header (useResident): mặc định theo header, đổi ở đây thì header đổi theo
+  const { apartmentId: headerAptId, setApartmentId: setHeaderAptId } = useResident();
+  const pickApartment = (id) => {
+    setSelectedAptId(id);
+    setHeaderAptId(id);
+  };
   const [registerModalOpen, setRegisterModalOpen] = useState(false);
   const [selectedType, setSelectedType] = useState('MOTORBIKE');
   const [cancellingId, setCancellingId] = useState(null);
@@ -54,7 +62,10 @@ export default function MyVehiclesPage() {
 
   // Xác định căn hộ đang chọn
   const activeApartment =
-    apartments.find((a) => (a.apartmentId || a._id) === selectedAptId) || apartments[0] || null;
+    apartments.find((a) => (a.apartmentId || a._id) === selectedAptId) ||
+    apartments.find((a) => (a.apartmentId || a._id) === headerAptId) ||
+    apartments[0] ||
+    null;
   const activeAptId = activeApartment ? activeApartment.apartmentId || activeApartment._id : null;
   const isFamilyMember = activeApartment?.relation === 'FAMILY_MEMBER';
 
@@ -102,7 +113,7 @@ export default function MyVehiclesPage() {
       message.success('Đã gửi yêu cầu xử lý hủy vé gửi xe thành công');
       reloadVehicles();
     } catch (err) {
-      message.error(err.response?.data?.message || 'Thao tác không thành công');
+      message.error(err?.message || 'Thao tác không thành công');
     } finally {
       setCancellingId(null);
     }
@@ -193,7 +204,7 @@ export default function MyVehiclesPage() {
             <Select
               className="w-56"
               value={activeAptId}
-              onChange={(val) => setSelectedAptId(val)}
+              onChange={pickApartment}
               options={apartments.map((a) => ({
                 value: a.apartmentId || a._id,
                 label: `Căn ${a.code || a.apartmentCode} - Tòa ${a.buildingName || a.buildingCode || ''}`,
@@ -378,7 +389,7 @@ export default function MyVehiclesPage() {
         <Form
           form={form}
           layout="vertical"
-          onFinish={registerAction}
+          onFinish={(v) => registerAction(v).catch(() => {})}
           initialValues={{ type: 'MOTORBIKE' }}
           className="mt-4"
         >

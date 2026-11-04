@@ -7,7 +7,7 @@ import { validate } from '../../middlewares/validate.js';
 import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
-import { idParams, phoneVn } from '../../utils/validators.js';
+import { idParams, phoneVn, ymd } from '../../utils/validators.js';
 import * as usersService from './users.service.js';
 
 // Module A — Vũ Việt. UC-A03 (Hồ sơ cá nhân), UC-A04 (Quản lý tài khoản nội bộ)
@@ -16,7 +16,7 @@ const router = Router();
 const updateMeBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100),
   phone: phoneVn(),
-  dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
+  dateOfBirth: ymd().allow('', null),
 }).min(1);
 
 const changePasswordBody = Joi.object({

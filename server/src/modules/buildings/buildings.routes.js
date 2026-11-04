@@ -61,7 +61,7 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
  * /buildings:
  *   post:
  *     tags: [Tòa nhà & Căn hộ]
- *     summary: Tạo mới tòa nhà (Admin) — UC-A05
+ *     summary: Tạo mới tòa nhà (Trưởng BQL) — UC-A05
  *     requestBody:
  *       required: true
  *       content:
@@ -91,7 +91,7 @@ router.post(
  * /buildings/{id}:
  *   put:
  *     tags: [Tòa nhà & Căn hộ]
- *     summary: Cập nhật thông tin tòa nhà (Admin) — UC-A05
+ *     summary: Cập nhật thông tin tòa nhà (Trưởng BQL) — UC-A05
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
@@ -116,7 +116,7 @@ router.put(
  * /buildings/{id}:
  *   delete:
  *     tags: [Tòa nhà & Căn hộ]
- *     summary: Xóa tòa nhà chưa có căn hộ (Admin) — UC-A05
+ *     summary: Xóa tòa nhà chưa có căn hộ (Trưởng BQL) — UC-A05
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */

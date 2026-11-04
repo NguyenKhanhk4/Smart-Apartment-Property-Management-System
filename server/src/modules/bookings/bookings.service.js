@@ -1,24 +1,34 @@
 // UC-D06 — Xem lịch trống, đặt tiện ích (tự xác nhận APPROVED, BR-O12), xem lịch sử và hủy. CHỈ tiện ích accessMode = BOOKING.
 // Quyền đặt lấy từ household.service (thành viên CÓ QUYỀN của căn): chủ sở hữu "không ở" không đặt được.
-// Lễ tân đặt hộ / hủy hộ làm ở bước 10 (UC-D07).
-import { AMENITY_ACCESS_MODES, BOOKING_STATUS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
+// UC-D07 (cùng file): lịch trong ngày, check-in (lễ tân / bảo vệ), lễ tân hủy kèm lý do, lễ tân đặt hộ tại quầy.
+import { AMENITY_ACCESS_MODES, AUDIT_ACTIONS, AUDIT_TARGETS, BOOKING_ACTIVE_STATUSES as ACTIVE, BOOKING_STATUS, CONFIG_KEYS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
 import { Amenity, Apartment, Booking, MemberCode } from '../../models/index.js';
+import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
+import { getConfig } from '../../services/systemConfig.service.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { paginate } from '../../utils/pagination.js';
-import { DAY_MS } from '../../utils/time.js';
+import { escapeRegex, paginate } from '../../utils/pagination.js';
+import { DAY_MS, MINUTE_MS, fmtDateVn, fmtTimeVn } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
-import { getAmenity, ACTIVE_BOOKING_STATUSES as ACTIVE } from '../amenities/amenities.service.js';
+import { getAmenity } from '../amenities/amenities.service.js';
+import { amenityVisibleTo, canIncurCharges } from '../amenities/access.queries.js';
 import { assertNoOverdue, hasOverdueInvoice } from '../amenities/overdue.js';
 import { accessModeOf, formatVnd } from '../amenities/pricing.js';
 import { atTime, buildSlotGrid, getBookingConfig, toVnYmd, vnDayStart } from '../amenities/slot.utils.js';
 import { getActivePass } from '../amenityPasses/passes.queries.js';
 import { assertMember, getMyHouseholds } from '../household/household.service.js';
-import { resolveApartmentId } from '../memberCodes/memberCodes.service.js';
+import { ensureCodes, resolveApartmentId, resolveMemberCode } from '../memberCodes/memberCodes.service.js';
+import { checkInWindow, findDayBookings, isInCheckInWindow, loadBookingView, presentDayBookings, vnHHmm } from './bookings.queries.js';
+import { holdExpiry } from './booking.payment.js';
+import { signBookingQr, verifyBookingQr } from './bookingQr.js';
 
-const MINUTE_MS = 60 * 1000;
+// Booking cư dân còn hủy / đổi lịch được (trước giờ bắt đầu): đã xác nhận hoặc đang giữ chỗ chờ thanh toán
+const CHANGEABLE = [BOOKING_STATUS.APPROVED, BOOKING_STATUS.PENDING_PAYMENT];
+/** Vé QR chỉ cấp cho booking đã xác nhận (chờ thanh toán / đã check-in / đã hủy thì không) */
+const qrTokenOf = (booking) => (booking.status === BOOKING_STATUS.APPROVED ? signBookingQr(String(booking._id)) : null);
+
 const LINK = '/r/amenities/bookings';
-const dateVn = (d) => toVnYmd(d).split('-').reverse().join('/'); // 2026-10-08 → 08/10/2026
+const dateVn = fmtDateVn; // 08/10/2026
 
 /** Khóa lý do hiển thị trên lưới slot */
 export const LOCK_MESSAGES = {
@@ -28,14 +38,10 @@ export const LOCK_MESSAGES = {
   FULL: 'Đã hết chỗ',
 };
 
-function badRequest(field, message) {
-  return ApiError.badRequest(message, [{ field, message }]);
-}
-
 /** "YYYY-MM-DD" hợp lệ (có thật) → 00:00 giờ VN của ngày đó */
 function parseDay(date) {
   if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) || toVnYmd(vnDayStart(date)) !== date) {
-    throw badRequest('date', 'Ngày không hợp lệ (dạng YYYY-MM-DD)');
+    throw ApiError.field('date', 'Ngày không hợp lệ (dạng YYYY-MM-DD)');
   }
   return vnDayStart(date);
 }
@@ -46,15 +52,6 @@ const daysFromToday = (dayStart, now) => Math.round((dayStart.getTime() - vnDayS
 /** Slot coi là đã qua khi hết thời gian cho phép check-in: startAt + NO_SHOW_GRACE_MINUTES (BR-O14) */
 const isSlotPast = (startAt, now, cfg) => now.getTime() >= startAt.getTime() + cfg.noShowGraceMinutes * MINUTE_MS;
 
-/** Tiện ích riêng tòa chỉ dành cho căn thuộc tòa đó; chung toàn khu thì mọi căn */
-const amenityVisibleTo = (amenity, apartment) =>
-  !amenity.buildingId || String(amenity.buildingId) === String(apartment.buildingId?._id ?? apartment.buildingId);
-
-async function canIncurCharges(userId, apartmentId, isHead) {
-  if (isHead) return true; // BR-O26: chủ hộ luôn được
-  const code = await MemberCode.findOne({ userId, apartmentId, isActive: true }).select('canIncurCharges').lean();
-  return Boolean(code?.canIncurCharges);
-}
 
 /** Booking chưa dùng của căn: đã xác nhận / đang dùng và chưa kết thúc (BR-O3). CANCELLED, NO_SHOW, COMPLETED không tính */
 const unusedFilter = (apartmentId, now) => ({
@@ -173,10 +170,37 @@ export async function getSlots(user, amenityId, { date, apartmentId }, { now = n
 // ===================================================================================================
 // Đặt chỗ
 // ===================================================================================================
-export async function createBooking(user, { apartmentId, amenityId, date, slotStart }, { now = new Date() } = {}) {
+/** Cư dân tự đặt */
+export const createBooking = (user, body, opts) => placeBooking({ ...body, bookerId: user.id }, opts);
+
+/** Người chịu phí thay (đặt hộ tại quầy): phải cùng căn; có quyền phát sinh phí thì mới đỡ được cho người đặt */
+async function resolvePayer(payerCode, apartmentId) {
+  const record = await resolveMemberCode(payerCode);
+  if (String(record.apartmentId) !== String(apartmentId)) {
+    throw new ApiError('BOOKING_WRONG_HOUSEHOLD', 'Người chịu phí phải thuộc cùng căn hộ với người được đặt hộ');
+  }
+  const { me } = await assertMember(record.userId, apartmentId);
+  return { userId: record.userId, canCharge: await canIncurCharges(record.userId, apartmentId, me.isHead) };
+}
+
+/**
+ * Lõi đặt chỗ, dùng cho cả cư dân tự đặt và lễ tân đặt hộ — mọi kiểm tra áp cho `bookerId` (người được đặt).
+ * `staff` có = lễ tân đặt hộ (createdByStaff); `payer` = người chịu phí thay khi `bookerId` không có quyền phí;
+ * `checkInNow` + đang trong khung check-in → tạo luôn ở trạng thái CHECKED_IN.
+ */
+/**
+ * `replacing` = booking cũ khi đổi lịch: không tính vào giới hạn / chỗ của slot mới, đã thanh toán thì chuyển sang booking mới.
+ * Giữ chỗ chờ thanh toán (BOOKING_PAYMENT_HOLD_MINUTES > 0): booking có phí cư dân tự đặt → PENDING_PAYMENT + holdExpiresAt.
+ */
+async function placeBooking(
+  { bookerId, apartmentId, amenityId, date, slotStart },
+  { now = new Date(), staff = null, payer = null, checkInNow = false, replacing = null, notifyTitle } = {},
+) {
   // Thành viên CÓ QUYỀN của căn (chủ sở hữu "không ở" bị từ chối ở đây → 403)
-  const { me } = await assertMember(user.id, apartmentId);
+  const { me } = await assertMember(bookerId, apartmentId);
   const cfg = await getBookingConfig();
+  const holdMinutes = Number(await getConfig(CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES));
+  const notReplaced = replacing ? { _id: { $ne: replacing._id } } : {};
   let usedPass = null;
 
   const created = await withTransaction(async (session) => {
@@ -194,23 +218,23 @@ export async function createBooking(user, { apartmentId, amenityId, date, slotSt
     // 2. Slot khớp lưới, trong BOOKING_ADVANCE_DAYS, chưa qua
     const dayStart = parseDay(date);
     const slot = buildSlotGrid(amenity).find((s) => s.slotStart === slotStart);
-    if (!slot) throw badRequest('slotStart', 'Khung giờ không khớp lưới của tiện ích');
+    if (!slot) throw ApiError.field('slotStart', 'Khung giờ không khớp lưới của tiện ích');
     const offset = daysFromToday(dayStart, now);
-    if (offset < 0) throw badRequest('date', 'Ngày đã qua');
-    if (offset > cfg.advanceDays) throw badRequest('date', `Chỉ đặt trước tối đa ${cfg.advanceDays} ngày`);
+    if (offset < 0) throw ApiError.field('date', 'Ngày đã qua');
+    if (offset > cfg.advanceDays) throw ApiError.field('date', `Chỉ đặt trước tối đa ${cfg.advanceDays} ngày`);
     const startAt = atTime(dayStart, slot.slotStart);
     const endAt = atTime(dayStart, slot.slotEnd);
-    if (isSlotPast(startAt, now, cfg)) throw badRequest('slotStart', 'Khung giờ đã qua');
+    if (isSlotPast(startAt, now, cfg)) throw ApiError.field('slotStart', 'Khung giờ đã qua');
 
     // 3. Căn không nợ quá hạn (BR-F8)
     await assertNoOverdue(apartmentId, now);
 
     // 4. Giới hạn booking chưa dùng của căn (BR-O3)
-    const unused = await Booking.countDocuments(unusedFilter(apartmentId, now)).session(session);
+    const unused = await Booking.countDocuments({ ...unusedFilter(apartmentId, now), ...notReplaced }).session(session);
     if (unused >= cfg.maxActivePerApartment) throw new ApiError('BOOKING_LIMIT_EXCEEDED');
 
     // 5. Căn chưa đặt slot này
-    const sameSlot = { amenityId, startAt, status: { $in: ACTIVE } };
+    const sameSlot = { amenityId, startAt, status: { $in: ACTIVE }, ...notReplaced };
     if (await Booking.exists({ ...sameSlot, apartmentId }).session(session)) {
       throw new ApiError('BOOKING_SLOT_CONFLICT', 'Căn hộ đã đặt khung giờ này');
     }
@@ -219,12 +243,38 @@ export async function createBooking(user, { apartmentId, amenityId, date, slotSt
     if ((await Booking.countDocuments(sameSlot).session(session)) >= amenity.capacityPerSlot) throw new ApiError('BOOKING_SLOT_CONFLICT');
 
     // 7. Phí snapshot: có gói tháng còn hiệu lực → 0, ngược lại phí/lượt (BR-O13). Phí > 0 phải là chủ hộ hoặc được bật quyền (BR-O26)
-    usedPass = await getActivePass(user.id, amenityId, startAt);
+    usedPass = await getActivePass(bookerId, amenityId, startAt);
     const fee = usedPass ? 0 : amenity.feePerBooking;
-    if (fee > 0 && !(await canIncurCharges(user.id, apartmentId, me.isHead))) throw new ApiError('CHARGE_NOT_ALLOWED');
+    let chargedTo = null;
+    if (fee > 0) {
+      if (await canIncurCharges(bookerId, apartmentId, me.isHead)) chargedTo = bookerId;
+      else if (payer?.canCharge) chargedTo = payer.userId;
+      else throw new ApiError('CHARGE_NOT_ALLOWED');
+    }
 
+    // Giữ chỗ chờ thanh toán; đổi lịch booking đã trả tiền thì giữ nguyên trạng thái đã thanh toán
+    const prepaid = Boolean(replacing?.paidAt);
+    const holdExpiresAt = holdExpiry({ fee, holdMinutes, byStaff: Boolean(staff), prepaid, now });
+
+    // Lễ tân đặt hộ + "check-in ngay": trong khung thì vào thẳng CHECKED_IN, ngoài khung vẫn đặt bình thường (APPROVED)
+    const draft = { date: dayStart, slotStart: slot.slotStart, slotEnd: slot.slotEnd, startAt, endAt };
+    const immediate = Boolean(staff) && checkInNow && isInCheckInWindow(draft, cfg, now);
     const [doc] = await Booking.create(
-      [{ amenityId, apartmentId, bookedBy: user.id, date: dayStart, slotStart: slot.slotStart, slotEnd: slot.slotEnd, startAt, endAt, fee, passId: usedPass?._id ?? null }],
+      [
+        {
+          amenityId,
+          apartmentId,
+          bookedBy: bookerId,
+          ...draft,
+          fee,
+          passId: usedPass?._id ?? null,
+          chargedTo,
+          createdByStaff: staff?.id ?? null,
+          ...(immediate && { status: BOOKING_STATUS.CHECKED_IN, checkedInAt: now, checkedInBy: staff.id }),
+          ...(holdExpiresAt && { status: BOOKING_STATUS.PENDING_PAYMENT, holdExpiresAt }),
+          ...(prepaid && { paidAt: replacing.paidAt, paymentRef: replacing.paymentRef }),
+        },
+      ],
       { session },
     );
 
@@ -242,21 +292,36 @@ export async function createBooking(user, { apartmentId, amenityId, date, slotSt
   }
   // Khóa ở trên chỉ theo TIỆN ÍCH: cùng một căn đặt đồng thời 2 tiện ích khác nhau có thể cùng vượt giới hạn (BR-O3).
   // Kiểm tra lại sau khi ghi; vượt thì hoàn tác booking vừa tạo (có thể cả 2 cùng hoàn tác — an toàn hơn là vượt giới hạn).
-  if ((await Booking.countDocuments(unusedFilter(apartmentId, now))) > cfg.maxActivePerApartment) {
+  if ((await Booking.countDocuments({ ...unusedFilter(apartmentId, now), ...notReplaced })) > cfg.maxActivePerApartment) {
     await Booking.deleteOne({ _id: created.booking._id });
     throw new ApiError('BOOKING_LIMIT_EXCEEDED');
   }
 
   const { booking, amenity } = created;
   const feeText = booking.fee > 0 ? `Phí ${formatVnd(booking.fee)}` : usedPass ? 'Miễn phí theo gói tháng' : 'Miễn phí';
-  await notify(user.id, {
+  const checkedIn = booking.status === BOOKING_STATUS.CHECKED_IN;
+  const held = booking.status === BOOKING_STATUS.PENDING_PAYMENT;
+  const holdText = held ? ` Đang giữ chỗ đến ${fmtTimeVn(booking.holdExpiresAt)}, vui lòng thanh toán trước giờ này.` : '';
+  await notify(bookerId, {
     type: NOTIFICATION_TYPES.BOOKING,
-    title: 'Đặt tiện ích thành công',
-    content: `${amenity.name} · ${dateVn(booking.date)} ${booking.slotStart}–${booking.slotEnd}. ${feeText}.`,
+    title: notifyTitle ?? (staff ? 'Lễ tân đã đặt tiện ích giúp bạn' : held ? 'Đã giữ chỗ tiện ích' : 'Đặt tiện ích thành công'),
+    content: `${amenity.name} · ${dateVn(booking.date)} ${booking.slotStart}–${booking.slotEnd}. ${feeText}.${checkedIn ? ' Đã check-in.' : ''}${holdText}`,
     refId: booking._id,
     link: LINK,
   });
-  return presentBooking(booking, amenity);
+  return { ...presentBooking(booking, amenity), qrToken: qrTokenOf(booking), ...(staff && { checkedIn }) };
+}
+
+// ===================================================================================================
+// Đặt hộ tại quầy (UC-D07): lễ tân nhập mã cư dân của người đến
+// ===================================================================================================
+export async function createCounterBooking(staff, { memberCode, payerCode, amenityId, date, slotStart, checkInNow = false }, { now = new Date() } = {}) {
+  const record = await resolveMemberCode(memberCode);
+  const payer = payerCode ? await resolvePayer(payerCode, record.apartmentId) : null;
+  return placeBooking(
+    { bookerId: record.userId, apartmentId: record.apartmentId, amenityId, date, slotStart },
+    { now, staff, payer, checkInNow },
+  );
 }
 
 const presentBooking = (booking, amenity) => ({
@@ -268,17 +333,18 @@ const presentBooking = (booking, amenity) => ({
 // Hủy (cư dân): miễn phí trước giờ bắt đầu (BR-O4)
 // ===================================================================================================
 export async function cancelBooking(user, id, { reason } = {}, { now = new Date() } = {}) {
+  if (user.role === ROLES.STAFF) return cancelByStaff(user, id, { reason }, { now });
   const booking = await Booking.findById(id).lean();
   const mine = booking ? await getMyHouseholds(user.id) : [];
   // Căn khác (hoặc không có quyền trong căn đó) → coi như không tồn tại
   if (!booking || !mine.some((h) => String(h.apartment._id) === String(booking.apartmentId))) throw ApiError.notFound('Không tìm thấy booking');
-  if (booking.status !== BOOKING_STATUS.APPROVED) throw new ApiError('BOOKING_INVALID_STATUS');
+  if (!CHANGEABLE.includes(booking.status)) throw new ApiError('BOOKING_INVALID_STATUS');
   const startAt = booking.startAt ?? atTime(booking.date, booking.slotStart);
   if (now.getTime() >= startAt.getTime()) throw new ApiError('BOOKING_CANCEL_TOO_LATE');
 
   // Điều kiện trạng thái hiện tại: hai người cùng hủy / lễ tân check-in đồng thời chỉ một bên thắng
   const cancelled = await Booking.findOneAndUpdate(
-    { _id: id, status: BOOKING_STATUS.APPROVED },
+    { _id: id, status: { $in: CHANGEABLE } },
     { $set: { status: BOOKING_STATUS.CANCELLED, cancelledAt: now, cancelledBy: user.id, cancelReason: reason?.trim() || null } },
     { returnDocument: 'after' },
   ).lean();
@@ -329,9 +395,249 @@ export async function listMyBookings(user, { apartmentId, scope = 'upcoming', pa
       ...b,
       amenity: b.amenityId && { _id: b.amenityId._id, name: b.amenityId.name, imageUrl: b.amenityId.imageUrl ?? null, location: b.amenityId.location ?? null },
       amenityId: b.amenityId?._id ?? b.amenityId,
-      canCancel: b.status === BOOKING_STATUS.APPROVED && Boolean(b.startAt) && b.startAt.getTime() > now.getTime(),
+      canCancel: CHANGEABLE.includes(b.status) && Boolean(b.startAt) && b.startAt.getTime() > now.getTime(),
+      canReschedule: CHANGEABLE.includes(b.status) && Boolean(b.startAt) && b.startAt.getTime() > now.getTime(),
+      qrToken: qrTokenOf(b),
       isMine: String(b.bookedBy?._id ?? b.bookedBy) === String(user.id),
     })),
     pagination,
   };
+}
+
+// ===================================================================================================
+// Lễ tân hủy: bắt buộc lý do, chỉ booking APPROVED, người đặt không bị tính phí (BR-O16)
+// ===================================================================================================
+const MIN_STAFF_REASON = 5;
+
+async function cancelByStaff(user, id, { reason } = {}, { now }) {
+  const text = reason?.trim();
+  if (!text || text.length < MIN_STAFF_REASON) throw ApiError.field('reason', `Lý do hủy là bắt buộc (tối thiểu ${MIN_STAFF_REASON} ký tự)`);
+  const booking = await Booking.findById(id).lean();
+  if (!booking) throw ApiError.notFound('Không tìm thấy booking');
+  if (!CHANGEABLE.includes(booking.status)) throw new ApiError('BOOKING_INVALID_STATUS');
+
+  // Điều kiện trạng thái hiện tại + ghi audit cùng giao dịch: hủy và check-in đồng thời chỉ một bên thắng
+  const cancelled = await withTransaction(async (session) => {
+    const doc = await Booking.findOneAndUpdate(
+      { _id: id, status: { $in: CHANGEABLE } },
+      { $set: { status: BOOKING_STATUS.CANCELLED, cancelledAt: now, cancelledBy: user.id, cancelReason: text } },
+      { returnDocument: 'after', session },
+    ).lean();
+    if (!doc) throw new ApiError('BOOKING_INVALID_STATUS');
+    await logAudit(
+      {
+        action: AUDIT_ACTIONS.BOOKING_CANCELLED_BY_STAFF,
+        user,
+        targetType: AUDIT_TARGETS.BOOKING,
+        targetId: doc._id,
+        metadata: {
+          amenityId: doc.amenityId,
+          apartmentId: doc.apartmentId,
+          bookedBy: doc.bookedBy ?? doc.requestedBy ?? null,
+          date: toVnYmd(doc.date),
+          slot: `${doc.slotStart}–${doc.slotEnd}`,
+          fee: doc.fee,
+          reason: text,
+        },
+      },
+      { session },
+    );
+    return doc;
+  });
+
+  const amenity = await Amenity.findById(cancelled.amenityId).select('name').lean();
+  const recipient = cancelled.bookedBy ?? cancelled.requestedBy;
+  if (recipient) {
+    await notify(recipient, {
+      type: NOTIFICATION_TYPES.BOOKING,
+      title: 'Lễ tân đã hủy booking của bạn',
+      content: `${amenity?.name ?? 'Tiện ích'} · ${dateVn(cancelled.date)} ${cancelled.slotStart}–${cancelled.slotEnd}. Lý do: ${text}. Bạn không bị tính phí.`,
+      refId: cancelled._id,
+      link: LINK,
+    });
+  }
+  return loadBookingView(cancelled._id, await getBookingConfig());
+}
+
+// ===================================================================================================
+// Check-in (lễ tân / bảo vệ): BR-O14
+// ===================================================================================================
+/**
+ * APPROVED và now ∈ [max(startAt − CHECKIN_EARLY_MINUTES, giờ lễ tân mở cửa), startAt + NO_SHOW_GRACE_MINUTES] → CHECKED_IN.
+ * `code` (tùy chọn): mã cư dân của người đến — phải thuộc đúng căn đã đặt, khác căn → BOOKING_WRONG_HOUSEHOLD.
+ */
+export async function checkInBooking(user, id, { code } = {}, { now = new Date() } = {}) {
+  const booking = await Booking.findById(id).lean();
+  if (!booking) throw ApiError.notFound('Không tìm thấy booking');
+  if (booking.status !== BOOKING_STATUS.APPROVED) throw new ApiError('BOOKING_INVALID_STATUS');
+
+  if (code) {
+    const record = await resolveMemberCode(code);
+    if (String(record.apartmentId) !== String(booking.apartmentId)) throw new ApiError('BOOKING_WRONG_HOUSEHOLD');
+  }
+
+  const cfg = await getBookingConfig();
+  const { opensAt, closesAt } = checkInWindow(booking, cfg);
+  if (now.getTime() < opensAt.getTime()) {
+    throw new ApiError('BOOKING_CHECKIN_OUT_OF_WINDOW', `Chưa đến giờ check-in, mở lúc ${vnHHmm(opensAt)}`);
+  }
+  if (now.getTime() > closesAt.getTime()) {
+    throw new ApiError('BOOKING_CHECKIN_OUT_OF_WINDOW', `Đã quá hạn check-in (hạn chót ${vnHHmm(closesAt)})`);
+  }
+
+  // Điều kiện trạng thái: check-in 2 lần / vừa bị hủy chỉ một bên thắng
+  const updated = await Booking.findOneAndUpdate(
+    { _id: id, status: BOOKING_STATUS.APPROVED },
+    { $set: { status: BOOKING_STATUS.CHECKED_IN, checkedInAt: now, checkedInBy: user.id } },
+    { returnDocument: 'after' },
+  ).lean();
+  if (!updated) throw new ApiError('BOOKING_INVALID_STATUS');
+  return loadBookingView(updated._id, cfg);
+}
+
+// ===================================================================================================
+// Lịch trong ngày (lễ tân, bảo vệ, Trưởng BQL)
+// ===================================================================================================
+/** Bỏ dấu + hạ chữ thường để tìm "nguyen van" ra "Nguyễn Văn" */
+const fold = (text) =>
+  String(text ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase();
+
+const idOf = (ref) => String(ref?._id ?? ref);
+
+/**
+ * Booking của một ngày (mặc định hôm nay, giờ VN), mọi trạng thái, sắp theo giờ.
+ * q: mã căn / mã cư dân / tên người đặt / SĐT. Mã cư dân khớp thì lấy booking của CẢ căn đó
+ * (người đi cùng gia đình thường là người đến check-in).
+ */
+export async function getSchedule(user, { date, amenityId, q } = {}, { now = new Date() } = {}) {
+  const ymd = date ?? toVnYmd(now);
+  parseDay(ymd);
+  const cfg = await getBookingConfig();
+
+  const rows = await findDayBookings(ymd, amenityId ? { amenityId } : {});
+  // Mã cư dân sinh lười theo hộ → đồng bộ cho các căn có booking hôm đó để cột "Mã" và ô tìm kiếm có dữ liệu
+  const apartmentIds = [...new Set(rows.map((b) => idOf(b.apartmentId)))];
+  await Promise.all(apartmentIds.map((id) => ensureCodes(id)));
+
+  let matched = rows;
+  const text = String(q ?? '').trim();
+  if (text) {
+    const needle = fold(text);
+    const byCode = new Set(
+      (await MemberCode.find({ apartmentId: { $in: apartmentIds }, isActive: true, code: new RegExp(escapeRegex(text), 'i') }).select('apartmentId').lean()).map((c) =>
+        String(c.apartmentId),
+      ),
+    );
+    matched = rows.filter((b) => {
+      const apt = b.apartmentId;
+      const aptText = `${apt?.code ?? ''} ${apt?.buildingId?.code ?? ''}-${apt?.code ?? ''}`;
+      return (
+        byCode.has(idOf(apt)) ||
+        fold(aptText).includes(needle) ||
+        fold(b.bookedBy?.fullName).includes(needle) ||
+        fold(b.bookedBy?.phone).includes(needle)
+      );
+    });
+  }
+
+  // Danh sách tiện ích đặt chỗ cho ô lọc (Bảo vệ không có quyền gọi /amenities)
+  const amenities = await Amenity.find({ isActive: true, accessMode: { $in: [AMENITY_ACCESS_MODES.BOOKING, null] } })
+    .select('name')
+    .sort({ name: 1 })
+    .lean();
+
+  return {
+    date: ymd,
+    serverTime: now,
+    amenities,
+    rules: {
+      checkinEarlyMinutes: cfg.checkinEarlyMinutes,
+      noShowGraceMinutes: cfg.noShowGraceMinutes,
+      receptionOpen: cfg.receptionOpen,
+      receptionClose: cfg.receptionClose,
+    },
+    bookings: await presentDayBookings(matched, cfg),
+  };
+}
+
+// ===================================================================================================
+// Vé QR (Người 4): Lễ tân / Bảo vệ quét mã trên điện thoại cư dân → check-in theo đúng quy tắc khung giờ BR-O14
+// ===================================================================================================
+export async function checkInByQr(user, { token }, opts) {
+  const id = verifyBookingQr(token);
+  if (!id) throw new ApiError('BOOKING_QR_INVALID');
+  return checkInBooking(user, id, {}, opts);
+}
+
+// ===================================================================================================
+// Thanh toán giữ chỗ (Người 4): cổng thanh toán (Người 3, actor = null) hoặc Lễ tân thu tại quầy gọi hàm này
+// ===================================================================================================
+export async function confirmBookingPayment(actor, id, { paymentRef } = {}, { now = new Date() } = {}) {
+  // Có điều kiện: còn giữ chỗ và chưa hết hạn — trùng với cron hủy giữ chỗ quá hạn thì chỉ một bên thắng
+  const paid = await Booking.findOneAndUpdate(
+    { _id: id, status: BOOKING_STATUS.PENDING_PAYMENT, holdExpiresAt: { $gt: now } },
+    { $set: { status: BOOKING_STATUS.APPROVED, paidAt: now, paymentRef: paymentRef?.trim() || null } },
+    { returnDocument: 'after' },
+  ).lean();
+  if (!paid) {
+    const current = await Booking.findById(id).select('status').lean();
+    if (!current) throw ApiError.notFound('Không tìm thấy booking');
+    if (current.status === BOOKING_STATUS.PENDING_PAYMENT) throw new ApiError('BOOKING_HOLD_EXPIRED');
+    throw new ApiError('BOOKING_INVALID_STATUS');
+  }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.BOOKING_PAYMENT_CONFIRMED,
+    user: actor,
+    targetType: AUDIT_TARGETS.BOOKING,
+    targetId: paid._id,
+    metadata: { fee: paid.fee, paymentRef: paid.paymentRef },
+  });
+  const amenity = await Amenity.findById(paid.amenityId).select('name imageUrl location').lean();
+  await notify(paid.bookedBy, {
+    type: NOTIFICATION_TYPES.BOOKING,
+    title: 'Đã thanh toán, đặt tiện ích thành công',
+    content: `${amenity?.name ?? 'Tiện ích'} · ${dateVn(paid.date)} ${paid.slotStart}–${paid.slotEnd}. Mở vé QR trong Lịch sử đặt để check-in.`,
+    refId: paid._id,
+    link: LINK,
+  });
+  return { ...presentBooking(paid, amenity), qrToken: qrTokenOf(paid) };
+}
+
+// ===================================================================================================
+// Đổi lịch (Người 4): sang slot khác của cùng tiện ích trước giờ bắt đầu; kiểm tra như đặt mới, booking cũ hủy sau cùng
+// ===================================================================================================
+export async function rescheduleBooking(user, id, { date, slotStart }, { now = new Date() } = {}) {
+  const old = await Booking.findById(id).lean();
+  const mine = old ? await getMyHouseholds(user.id) : [];
+  if (!old || !mine.some((h) => String(h.apartment._id) === String(old.apartmentId))) throw ApiError.notFound('Không tìm thấy booking');
+  if (!CHANGEABLE.includes(old.status)) throw new ApiError('BOOKING_INVALID_STATUS');
+  const startAt = old.startAt ?? atTime(old.date, old.slotStart);
+  if (now.getTime() >= startAt.getTime()) throw new ApiError('BOOKING_CANCEL_TOO_LATE', 'Đã đến giờ bắt đầu, không thể đổi lịch');
+
+  const moved = await placeBooking(
+    { bookerId: old.bookedBy ?? user.id, apartmentId: old.apartmentId, amenityId: old.amenityId, date, slotStart },
+    { now, replacing: old, notifyTitle: 'Đã đổi lịch tiện ích' },
+  );
+  // Booking cũ vừa bị hủy / check-in ở nơi khác → hoàn tác booking mới để không giữ 2 chỗ
+  const cancelled = await Booking.findOneAndUpdate(
+    { _id: old._id, status: { $in: CHANGEABLE } },
+    {
+      $set: {
+        status: BOOKING_STATUS.CANCELLED,
+        cancelledAt: now,
+        cancelledBy: user.id,
+        cancelReason: `Đổi lịch sang ${dateVn(moved.date)} ${moved.slotStart}–${moved.slotEnd}`,
+      },
+    },
+  );
+  if (!cancelled) {
+    await Booking.deleteOne({ _id: moved._id });
+    throw new ApiError('BOOKING_INVALID_STATUS');
+  }
+  return moved;
 }

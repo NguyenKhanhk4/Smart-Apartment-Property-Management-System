@@ -22,6 +22,7 @@ import {
   ToolOutlined,
   CoffeeOutlined,
   IdcardOutlined,
+  FileTextOutlined,
   UsergroupAddOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -31,6 +32,7 @@ import { APARTMENT_STATUS, RELATION_TYPES } from '../../constants/enums';
 import { formatDate } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi } from '../../hooks/useApi';
+import { useResident } from '../../hooks/useResident';
 import { residentsApi } from '../../api/moduleA.api';
 
 export default function MyApartmentPage() {
@@ -45,12 +47,18 @@ export default function MyApartmentPage() {
   } = useApi(residentsApi.myApartments, []);
 
   const [selectedAptId, setSelectedAptId] = useState(null);
+  // Căn đang chọn đồng bộ với ô chọn căn trên header (useResident): mặc định theo header, đổi ở đây thì header đổi theo
+  const { apartmentId: headerAptId, setApartmentId: setHeaderAptId } = useResident();
+  const pickApartment = (id) => {
+    setSelectedAptId(id);
+    setHeaderAptId(id);
+  };
 
-  // Lấy căn hộ đang chọn hoặc mặc định căn đầu tiên
+  // Lấy căn hộ đang chọn, không có thì theo header, cuối cùng là căn đầu tiên
   const activeAptId =
-    selectedAptId && apartments.some((a) => a.apartmentId === selectedAptId)
-      ? selectedAptId
-      : apartments[0]?.apartmentId ?? null;
+    [selectedAptId, headerAptId].find((id) => id && apartments.some((a) => a.apartmentId === id)) ??
+    apartments[0]?.apartmentId ??
+    null;
 
   // Căn hộ hiện tại đang chọn
   const currentApartment = apartments.find((a) => a.apartmentId === activeAptId);
@@ -111,7 +119,7 @@ export default function MyApartmentPage() {
         <div className="overflow-x-auto pb-1">
           <Segmented
             value={activeAptId}
-            onChange={setSelectedAptId}
+            onChange={pickApartment}
             options={apartments.map((a) => ({
               label: (
                 <span className="px-2 py-1 flex items-center gap-1.5">
@@ -243,6 +251,7 @@ export default function MyApartmentPage() {
                 description={
                   <div className="text-xs text-gray-400 space-x-3 mt-0.5">
                     {m.phone && <span>SĐT: {m.phone}</span>}
+                    {m.idNumber && <span>CCCD: {m.idNumber}</span>}
                     {m.dateOfBirth && <span>Ngày sinh: {formatDate(m.dateOfBirth)}</span>}
                     <span>Ngày dọn vào: {formatDate(m.moveInDate)}</span>
                   </div>
@@ -262,6 +271,18 @@ export default function MyApartmentPage() {
           Dịch vụ & Tiện ích căn hộ
         </div>
         <Row gutter={[12, 12]}>
+          {/* Gia đình (cấp quyền phát sinh phí, ngày sinh) — chỉ chủ hộ; không còn nút ở "Mã của tôi" */}
+          {currentApartment?.isHead && (
+            <Col xs={12} sm={6}>
+              <Button
+                block
+                icon={<TeamOutlined className="text-emerald-500" />}
+                onClick={() => navigate(`/r/my-code/family?apartmentId=${activeAptId}`)}
+              >
+                Quản lý gia đình
+              </Button>
+            </Col>
+          )}
           <Col xs={12} sm={6}>
             <Button
               block
@@ -296,6 +317,15 @@ export default function MyApartmentPage() {
               onClick={() => navigate('/r/guests')}
             >
               Sổ khách
+            </Button>
+          </Col>
+          <Col xs={12} sm={6}>
+            <Button
+              block
+              icon={<FileTextOutlined className="text-cyan-600" />}
+              onClick={() => navigate('/r/gate-passes')}
+            >
+              Đơn chuyển đồ
             </Button>
           </Col>
         </Row>

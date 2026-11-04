@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   Button,
   Card,
@@ -109,7 +110,8 @@ export default function AnnouncementsPage() {
   const canPublish = hasRole('MANAGER', 'STAFF:RECEPTIONIST');
   const [page, setPage] = useState(1);
   const [q, setQ] = useState();
-  const [open, setOpen] = useState(false);
+  const [searchParams] = useSearchParams();
+  const [open, setOpen] = useState(() => canPublish && searchParams.get('new') === '1'); // từ nút "Đăng bảng tin" ở trang chủ lễ tân
   const [expanded, setExpanded] = useState({});
   const { data = [], pagination, loading, reload } = useApi(
     () => announcementApi.list({ page, limit: 10, q }),

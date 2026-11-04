@@ -28,8 +28,9 @@ export function getPagination(query = {}) {
   return { page, limit, skip: (page - 1) * limit };
 }
 
-// "-createdAt" → { createdAt: -1 }
+// "-createdAt" → { createdAt: -1 }; object (vd { isPinned: -1, createdAt: -1 }) giữ nguyên để service sắp nhiều field
 export function getSort(sort = '-createdAt') {
+  if (sort && typeof sort === 'object') return sort;
   const desc = sort.startsWith('-');
   return { [desc ? sort.slice(1) : sort]: desc ? -1 : 1 };
 }

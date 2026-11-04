@@ -107,14 +107,3 @@ export const radius = {
   modal: 14,
   full: 9999,
 };
-
-export const shadows = {
-  soft: '0 1px 2px rgba(15, 27, 45, 0.06), 0 1px 1px rgba(15, 27, 45, 0.04)',
-  elevated: '0 8px 24px rgba(15, 27, 45, 0.06), 0 2px 6px rgba(15, 27, 45, 0.04)',
-  cardHover: '0 10px 28px rgba(15, 27, 45, 0.08), 0 2px 6px rgba(15, 27, 45, 0.04)',
-};
-
-export const morphTransition = {
-  duration: 0.55,
-  ease: [0.65, 0, 0.35, 1], // PowerPoint Morph Easing
-};

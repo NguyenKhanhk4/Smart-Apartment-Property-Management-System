@@ -9,11 +9,15 @@ export { Apartment } from './Apartment.js';
 export { Contract } from './Contract.js';
 export { Resident } from './Resident.js';
 export { Vehicle } from './Vehicle.js';
+export { GatePass } from './GatePass.js';
+export { ParkingCard } from './ParkingCard.js';
 
 // Module B — Phí, hóa đơn, thanh toán, công nợ
 export { FeeType } from './FeeType.js';
 export { Invoice } from './Invoice.js';
 export { Payment } from './Payment.js';
+export { PrepaidBalance } from './PrepaidBalance.js';
+export { PrepaidTransaction } from './PrepaidTransaction.js';
 export { InvoiceAdjustment } from './InvoiceAdjustment.js';
 export { DebtFollowup } from './DebtFollowup.js';
 
@@ -33,6 +37,8 @@ export { Amenity } from './Amenity.js';
 export { Booking } from './Booking.js';
 export { MemberCode } from './MemberCode.js';
 export { AmenityPass } from './AmenityPass.js';
+export { AmenityVisit } from './AmenityVisit.js';
+export { DutyShift } from './DutyShift.js';
 
 // Module E — Ticket, sổ khách, bảng tin, thông báo, tham số hệ thống
 export { ComplaintCategory } from './ComplaintCategory.js';

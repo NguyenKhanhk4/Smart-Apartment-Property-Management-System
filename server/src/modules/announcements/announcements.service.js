@@ -9,7 +9,7 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { findResidentUserIds, notify } from '../../services/notification.service.js';
 import { getActiveApartmentIds } from '../../services/residency.service.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { escapeRegex, getPagination } from '../../utils/pagination.js';
+import { escapeRegex, paginate } from '../../utils/pagination.js';
 
 const POPULATE = [{ path: 'createdBy', select: 'fullName role roleTitle' }];
 
@@ -89,17 +89,7 @@ export async function list(user, query) {
   if (query.q) filter.title = new RegExp(escapeRegex(query.q), 'i');
 
   // Bài ghim lên đầu, sau đó mới nhất trước
-  const { page, limit, skip } = getPagination(query);
-  const [items, total] = await Promise.all([
-    Announcement.find(filter)
-      .sort({ isPinned: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate(POPULATE)
-      .lean(),
-    Announcement.countDocuments(filter),
-  ]);
-  return { items, pagination: { page, limit, total } };
+  return paginate(Announcement, filter, { ...query, sort: { isPinned: -1, createdAt: -1 } }, { populate: POPULATE });
 }
 
 export async function getById(user, id) {

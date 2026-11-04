@@ -101,7 +101,7 @@ router.patch('/:id/read', validate({ params: idParams }), async (req, res) => {
   const doc = await Notification.findOneAndUpdate(
     { _id: req.params.id, userId: req.user.id },
     { $set: { isRead: true, readAt: new Date() } },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (!doc) throw ApiError.notFound('Không tìm thấy thông báo');
   ok(res, doc);

@@ -1,5 +1,5 @@
 // Tạo hoặc thay Trưởng BQL khi cài đặt (BR-S01). UC03 không cho tạo role này trên giao diện.
-// Tài khoản Trưởng BQL cũ và tài khoản ADMIN còn sót lại bị khóa, không bị xóa (BR-S12).
+// Tài khoản Trưởng BQL cũ bị khóa, không bị xóa (BR-S12).
 //
 //   MANAGER_PASSWORD='MatKhau123' npm run db:set-manager -- --phone 0901234567 --email a@b.vn --name "Nguyễn Văn A"
 //
@@ -37,10 +37,10 @@ export async function setManager({ phone, email, fullName, password }) {
     }
 
     // Khóa trước khi gán để không vi phạm index "chỉ 1 Trưởng BQL đang hoạt động" (BR-R1)
-    const oldAdmins = { isActive: true, role: { $in: [ROLES.MANAGER, 'ADMIN'] } };
-    if (user) oldAdmins._id = { $ne: user._id };
+    const oldHolders = { isActive: true, role: ROLES.MANAGER };
+    if (user) oldHolders._id = { $ne: user._id };
     const { modifiedCount: lockedCount } = await User.updateMany(
-      oldAdmins,
+      oldHolders,
       { $set: { isActive: false }, $inc: { tokenVersion: 1 } },
       { session },
     );

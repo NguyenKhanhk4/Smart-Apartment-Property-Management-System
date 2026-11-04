@@ -1,9 +1,9 @@
 import bcrypt from 'bcryptjs';
 import { ROLES } from '../../constants/enums.js';
-import { User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { assertPhoneAndEmailFree, phoneTakenError } from '../users/userLookup.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from './auth.tokens.js';
+import { User } from '../../models/index.js';
 
 /**
  * Chuẩn hóa đối tượng user trả về cho client (không bao giờ lộ passwordHash, tokenVersion)

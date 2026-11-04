@@ -10,7 +10,7 @@ import { APARTMENT_STATUS, RELATION_TYPES } from '../../constants/enums.js';
 import { Apartment, MemberCode, Resident } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 
-const USER_FIELDS = 'fullName avatarUrl phone isActive dateOfBirth'; // dateOfBirth: chờ Module A (hiện chưa có trong schema)
+const USER_FIELDS = 'fullName avatarUrl phone isActive dateOfBirth';
 
 const sameId = (a, b) => String(a) === String(b);
 const stayedSince = (r) => new Date(r.moveInDate ?? r.createdAt ?? 0).getTime();
@@ -61,7 +61,7 @@ export async function getHousehold(apartmentId) {
     .map((r) => ({
       ...personOf(r),
       relationType: r.relationType,
-      // Ưu tiên ngày sinh của Module A khi đã có; chưa có thì dùng bản lưu ở member_codes
+      // Nguồn chính: users.dateOfBirth; member_codes.dateOfBirth chỉ còn ở dữ liệu cũ
       dateOfBirth: r.userId.dateOfBirth ?? dobs.get(String(r.userId._id)) ?? null,
       isHead: Boolean(headRow) && sameId(r._id, headRow._id),
       moveInAt: stayedSince(r),

@@ -44,6 +44,18 @@ const mineQuerySchema = Joi.object({
   status: Joi.string().valid(...values(VEHICLE_STATUS)),
 });
 
+const approveBodySchema = Joi.object({
+  cardNumber: Joi.string()
+    .trim()
+    .min(1)
+    .max(50)
+    .required()
+    .messages({
+      'string.empty': 'Số thẻ gửi xe là bắt buộc khi duyệt phương tiện',
+      'any.required': 'Số thẻ gửi xe là bắt buộc khi duyệt phương tiện',
+    }),
+});
+
 const rejectBodySchema = Joi.object({
   reason: Joi.string()
     .trim()
@@ -182,9 +194,9 @@ router.patch(
   '/:id/approve',
   authenticate,
   authorize(...RECEPTIONIST_ONLY),
-  validate({ params: idParams }),
+  validate({ params: idParams, body: approveBodySchema }),
   async (req, res) => {
-    const data = await service.approve(req.params.id, req.user);
+    const data = await service.approve(req.params.id, req.user, req.validated.body, req.ip);
     ok(res, data);
   },
 );
@@ -239,7 +251,7 @@ router.patch(
   authorize(...RECEPTIONIST_ONLY),
   validate({ params: idParams }),
   async (req, res) => {
-    const data = await service.confirmCancel(req.params.id, req.user);
+    const data = await service.confirmCancel(req.params.id, req.user, req.ip);
     ok(res, data);
   },
 );

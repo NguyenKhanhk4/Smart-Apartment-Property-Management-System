@@ -1,8 +1,7 @@
-import { AUDIT_ACTIONS } from '../../constants/enums.js';
-import { Apartment } from '../../models/Apartment.js';
-import { Building } from '../../models/Building.js';
+import { AUDIT_ACTIONS, AUDIT_TARGETS } from '../../constants/enums.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { Apartment, Building } from '../../models/index.js';
 
 /**
  * Danh sách toàn bộ tòa nhà kèm số lượng căn hộ mỗi tòa (UC-A05)
@@ -37,7 +36,7 @@ export async function getBuildingById(id) {
 /**
  * Tạo tòa nhà mới (Trưởng BQL) — BR-A4
  */
-export async function createBuilding({ code, name, address, totalFloors }, adminUser, ip) {
+export async function createBuilding({ code, name, address, totalFloors }, managerUser, ip) {
   const normalizedCode = code.trim().toUpperCase();
   const normalizedName = name.trim();
 
@@ -48,10 +47,10 @@ export async function createBuilding({ code, name, address, totalFloors }, admin
   ]);
 
   if (existingCode) {
-    throw ApiError.badRequest('Mã tòa nhà đã tồn tại');
+    throw new ApiError('DUPLICATE_VALUE', 'Mã tòa nhà đã tồn tại');
   }
   if (existingName) {
-    throw ApiError.badRequest('Tên tòa nhà đã tồn tại');
+    throw new ApiError('DUPLICATE_VALUE', 'Tên tòa nhà đã tồn tại');
   }
 
   const building = await Building.create({
@@ -63,8 +62,8 @@ export async function createBuilding({ code, name, address, totalFloors }, admin
 
   await logAudit({
     action: AUDIT_ACTIONS.BUILDING_CHANGED,
-    user: adminUser,
-    targetType: 'Building',
+    user: managerUser,
+    targetType: AUDIT_TARGETS.BUILDING,
     targetId: building._id,
     metadata: {
       action: 'CREATE',
@@ -81,7 +80,7 @@ export async function createBuilding({ code, name, address, totalFloors }, admin
 /**
  * Cập nhật thông tin tòa nhà (Trưởng BQL) — BR-A4
  */
-export async function updateBuilding(id, data, adminUser, ip) {
+export async function updateBuilding(id, data, managerUser, ip) {
   const building = await Building.findById(id);
   if (!building) {
     throw ApiError.notFound('Tòa nhà không tồn tại');
@@ -95,12 +94,12 @@ export async function updateBuilding(id, data, adminUser, ip) {
     if (normalizedCode !== building.code) {
       const aptCount = await Apartment.countDocuments({ buildingId: id });
       if (aptCount > 0) {
-        throw ApiError.badRequest('Không thể đổi mã tòa khi tòa đã có căn hộ');
+        throw new ApiError('STATUS_CONFLICT', 'Không thể đổi mã tòa khi tòa đã có căn hộ');
       }
 
       const existingCode = await Building.findOne({ code: normalizedCode, _id: { $ne: id } });
       if (existingCode) {
-        throw ApiError.badRequest('Mã tòa nhà đã tồn tại');
+        throw new ApiError('DUPLICATE_VALUE', 'Mã tòa nhà đã tồn tại');
       }
       changes.code = { from: building.code, to: normalizedCode };
       building.code = normalizedCode;
@@ -113,7 +112,7 @@ export async function updateBuilding(id, data, adminUser, ip) {
     if (normalizedName !== building.name) {
       const existingName = await Building.findOne({ name: normalizedName, _id: { $ne: id } });
       if (existingName) {
-        throw ApiError.badRequest('Tên tòa nhà đã tồn tại');
+        throw new ApiError('DUPLICATE_VALUE', 'Tên tòa nhà đã tồn tại');
       }
       changes.name = { from: building.name, to: normalizedName };
       building.name = normalizedName;
@@ -150,8 +149,8 @@ export async function updateBuilding(id, data, adminUser, ip) {
   if (Object.keys(changes).length > 0) {
     await logAudit({
       action: AUDIT_ACTIONS.BUILDING_CHANGED,
-      user: adminUser,
-      targetType: 'Building',
+      user: managerUser,
+      targetType: AUDIT_TARGETS.BUILDING,
       targetId: building._id,
       metadata: { action: 'UPDATE', changes },
       ip,
@@ -164,7 +163,7 @@ export async function updateBuilding(id, data, adminUser, ip) {
 /**
  * Xóa tòa nhà (Trưởng BQL) — BR-A4
  */
-export async function deleteBuilding(id, adminUser, ip) {
+export async function deleteBuilding(id, managerUser, ip) {
   const building = await Building.findById(id);
   if (!building) {
     throw ApiError.notFound('Tòa nhà không tồn tại');
@@ -180,8 +179,8 @@ export async function deleteBuilding(id, adminUser, ip) {
 
   await logAudit({
     action: AUDIT_ACTIONS.BUILDING_CHANGED,
-    user: adminUser,
-    targetType: 'Building',
+    user: managerUser,
+    targetType: AUDIT_TARGETS.BUILDING,
     targetId: building._id,
     metadata: {
       action: 'DELETE',

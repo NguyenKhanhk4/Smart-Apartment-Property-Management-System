@@ -1,11 +1,12 @@
 // Tiện ích thời gian cho tiện ích & booking (Module D, UC-D05..D08). Mọi giờ "HH:mm" và ngày "YYYY-MM-DD" là giờ Việt Nam.
-import { CONFIG_KEYS, DEFAULT_CONFIGS } from '../../constants/enums.js';
+import { CONFIG_KEYS, CONFIG_DEFAULTS } from '../../constants/enums.js';
 import { getConfigs } from '../../services/systemConfig.service.js';
+import { addMinutes, toVnYmd, vnDayStart } from '../../utils/time.js';
+
+// vnDayStart / toVnYmd / addMinutes nằm ở utils/time — export lại để các module tiện ích đang import từ đây vẫn chạy
+export { addMinutes, toVnYmd, vnDayStart };
 
 export const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
-const YMD = /^\d{4}-\d{2}-\d{2}$/;
-const MINUTE_MS = 60 * 1000;
-const VN_OFFSET_MS = 7 * 60 * MINUTE_MS;
 
 export const isHHMM = (v) => typeof v === 'string' && HHMM.test(v);
 
@@ -18,18 +19,6 @@ export function toMinutes(hhmm) {
 /** 510 → "08:30" */
 export const toHHMM = (minutes) =>
   `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-
-/** "2026-10-08" → 00:00 ngày đó giờ VN (= 2026-10-07T17:00:00.000Z) */
-export function vnDayStart(ymd) {
-  if (!YMD.test(ymd)) throw new Error(`Ngày không đúng dạng YYYY-MM-DD: ${ymd}`);
-  const [y, m, d] = ymd.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d) - VN_OFFSET_MS);
-}
-
-/** Date → "YYYY-MM-DD" theo giờ VN */
-export const toVnYmd = (date) => new Date(new Date(date).getTime() + VN_OFFSET_MS).toISOString().slice(0, 10);
-
-export const addMinutes = (date, minutes) => new Date(new Date(date).getTime() + minutes * MINUTE_MS);
 
 /** Mốc thật của "HH:mm" trong ngày `dayStart` (00:00 giờ VN) */
 export const atTime = (dayStart, hhmm) => addMinutes(dayStart, toMinutes(hhmm));
@@ -44,7 +33,7 @@ export function buildSlotGrid({ openTime, closeTime, slotDurationMinutes }) {
   return slots;
 }
 
-const DEFAULTS = Object.fromEntries(DEFAULT_CONFIGS.map((c) => [c.key, c.value]));
+const DEFAULTS = CONFIG_DEFAULTS;
 const positiveInt = (v, fallback) =>
   (typeof v === 'number' || typeof v === 'string') && Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : fallback;
 

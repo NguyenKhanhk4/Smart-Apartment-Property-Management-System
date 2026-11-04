@@ -4,10 +4,10 @@ import { ApiError } from '../../utils/ApiError.js';
 import { normalizePhone } from '../../utils/validators.js';
 
 export const phoneTakenError = () =>
-  ApiError.badRequest('Số điện thoại đã được sử dụng', [{ field: 'phone', message: 'Số điện thoại đã được sử dụng' }]);
+  new ApiError('PHONE_EXISTS', undefined, { details: [{ field: 'phone', message: 'Số điện thoại đã được sử dụng' }] });
 
 const emailTakenError = () =>
-  ApiError.badRequest('Email đã được sử dụng', [{ field: 'email', message: 'Email đã được sử dụng' }]);
+  new ApiError('EMAIL_EXISTS', undefined, { details: [{ field: 'email', message: 'Email đã được sử dụng' }] });
 
 export const findUserByPhone = (phone, session = null) =>
   User.findOne({ phone: normalizePhone(phone) }).session(session);

@@ -12,7 +12,7 @@ import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { idParams, objectId, phoneVn } from '../../utils/validators.js';
+import { idParams, objectId, phoneVn, ymd } from '../../utils/validators.js';
 import * as service from './contracts.service.js';
 
 // Module A — Vũ Việt. UC-A06: Quản lý hợp đồng (Contracts)
@@ -35,7 +35,7 @@ const personSchema = Joi.object({
   email: Joi.string().trim().email(),
   phone: phoneVn(),
   idNumber: Joi.string().trim().allow('', null),
-  dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
+  dateOfBirth: ymd().allow('', null),
 });
 
 const createContractBody = Joi.object({
@@ -172,14 +172,14 @@ router.patch(
  * /contracts/{id}/terminate:
  *   patch:
  *     tags: [Hợp đồng]
- *     summary: Chấm dứt sớm hợp đồng (Lễ tân) — UC-A06
+ *     summary: Chấm dứt sớm hợp đồng (Trưởng BQL) — UC-A06
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
 router.patch(
   '/:id/terminate',
   authenticate,
-  authorize('STAFF:RECEPTIONIST'),
+  authorize('MANAGER'),
   validate({ params: idParams }),
   async (req, res) => {
     const result = await service.terminateContract(req.validated.params.id, req.user, req.ip);

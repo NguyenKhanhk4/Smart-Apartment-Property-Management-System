@@ -1,14 +1,19 @@
 import { lazy } from 'react';
 import {
   AppstoreOutlined,
+  ProjectOutlined,
   BankOutlined,
   CarOutlined,
   CoffeeOutlined,
   BarChartOutlined,
   BellOutlined,
+  CalendarOutlined,
+  ScanOutlined,
   CheckSquareOutlined,
   ClusterOutlined,
   DashboardOutlined,
+  DollarOutlined,
+  FieldTimeOutlined,
   FileTextOutlined,
   FundOutlined,
   HomeOutlined,
@@ -48,6 +53,7 @@ export const MENU_GROUPS = [
 ];
 
 const HomePage = lazy(() => import('../features/home/HomePage'));
+const ResidentHomePage = lazy(() => import('../features/home/ResidentHomePage'));
 
 // ===== Module A (Vũ Việt) =====
 const ProfilePage = lazy(() => import('../features/profile/ProfilePage'));
@@ -58,7 +64,15 @@ const ApartmentDetailPage = lazy(() => import('../features/apartments/ApartmentD
 const MyApartmentPage = lazy(() => import('../features/residents/MyApartmentPage'));
 const VehicleRequestsPage = lazy(() => import('../features/vehicles/VehicleRequestsPage'));
 const MyVehiclesPage = lazy(() => import('../features/vehicles/MyVehiclesPage'));
-const SystemDashboardPage = lazy(() => import('../features/adminDashboard/SystemDashboardPage'));
+const SystemDashboardPage = lazy(() => import('../features/systemDashboard/SystemDashboardPage'));
+
+// ===== Module B =====
+const FeeTypesPage = lazy(() => import('../features/feeTypes/FeeTypesPage'));
+const InvoiceGeneratePage = lazy(() => import('../features/invoices/InvoiceGeneratePage'));
+const InvoiceListPage = lazy(() => import('../features/invoices/InvoiceListPage'));
+const InvoiceDetailPage = lazy(() => import('../features/invoices/InvoiceDetailPage'));
+const MyInvoicesPage = lazy(() => import('../features/invoices/MyInvoicesPage'));
+const MyInvoiceDetailPage = lazy(() => import('../features/invoices/MyInvoiceDetailPage'));
 
 // ===== Người 1 — Vũ Việt (Mô đun 10: Thiết bị & bảo trì) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -71,7 +85,9 @@ const MyCodePage = lazy(() => import('../features/memberCodes/MyCodePage'));
 const FamilyPage = lazy(() => import('../features/memberCodes/FamilyPage'));
 const MyPassesPage = lazy(() => import('../features/amenityPasses/MyPassesPage'));
 const AmenityPassesPage = lazy(() => import('../features/amenityPasses/AmenityPassesPage'));
-const AmenityListPage = lazy(() => import('../features/bookings/AmenityListPage'));
+const AmenityDeskPage = lazy(() => import('../features/amenityVisits/AmenityDeskPage'));
+const BookingSchedulePage = lazy(() => import('../features/bookings/BookingSchedulePage'));
+const UtilitiesPage = lazy(() => import('../features/bookings/UtilitiesPage'));
 const AmenityBookingPage = lazy(() => import('../features/bookings/AmenityBookingPage'));
 const MyBookingsPage = lazy(() => import('../features/bookings/MyBookingsPage'));
 
@@ -89,6 +105,17 @@ const FundDashboardPage = lazy(() => import('../features/reports/FundDashboardPa
 const OperationsDashboardPage = lazy(() => import('../features/reports/OperationsDashboardPage'));
 const AmenityUsagePage = lazy(() => import('../features/reports/AmenityUsagePage'));
 
+// ===== Sự cố & Tiện ích (Người 4) =====
+const DutyShiftsPage = lazy(() => import('../features/dutyShifts/DutyShiftsPage'));
+const TicketBoardPage = lazy(() => import('../features/tickets/TicketBoardPage'));
+
+// ===== Gate Pass & Kiểm soát xe (Người 2) =====
+const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
+const ResidentGatePassesPage = lazy(() => import('../features/gatePasses/ResidentGatePassesPage'));
+const SecurityGatePage = lazy(() => import('../features/security-gate/SecurityGatePage'));
+const ParkingCardsPage = lazy(() => import('../features/vehicles/ParkingCardsPage'));
+const OccupantChangesPage = lazy(() => import('../features/residents/OccupantChangesPage'));
+
 // Giao diện nội bộ (/app/*) — hiện ở sidebar
 export const adminMenu = [
   { key: 'home', label: 'Trang chủ', icon: HomeOutlined, path: 'home', component: HomePage },
@@ -97,7 +124,7 @@ export const adminMenu = [
   {
     key: 'tickets',
     group: 'Cư dân & dịch vụ',
-    label: 'Phản ánh',
+    label: 'Sự cố & phản ánh',
     icon: ToolOutlined,
     path: 'tickets',
     roles: ['MANAGER', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN'],
@@ -158,6 +185,26 @@ export const adminMenu = [
     roles: ['STAFF:TECHNICIAN'],
     component: WorkOrdersPage,
   },
+  // Kanban điều phối sự cố của Trưởng BQL (Người 4)
+  {
+    key: 'ticket-board',
+    group: 'Kỹ thuật & vận hành',
+    label: 'Điều phối sự cố',
+    icon: ProjectOutlined,
+    path: 'ticket-board',
+    roles: ['MANAGER'],
+    component: TicketBoardPage,
+  },
+  // Lịch ca trực Kỹ thuật / Bảo vệ (Người 4): Trưởng BQL xếp ca, nhân viên xem lịch
+  {
+    key: 'duty-shifts',
+    group: 'Kỹ thuật & vận hành',
+    label: 'Lịch ca trực',
+    icon: FieldTimeOutlined,
+    path: 'duty-shifts',
+    roles: ['MANAGER', 'STAFF:TECHNICIAN', 'STAFF:SECURITY'],
+    component: DutyShiftsPage,
+  },
   // Tiện ích (UC-D05)
   {
     key: 'amenities',
@@ -177,6 +224,26 @@ export const adminMenu = [
     path: 'amenity-passes',
     roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
     component: AmenityPassesPage,
+  },
+  // Quầy tiện ích (UC-D10): lễ tân tra mã, ghi lượt vào; Trưởng BQL chỉ xem. Bảo vệ dùng phần check-in ở Lịch đặt tiện ích
+  {
+    key: 'amenity-desk',
+    group: 'Tiện ích & khách',
+    label: 'Quầy tiện ích',
+    icon: ScanOutlined,
+    path: 'amenity-desk',
+    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
+    component: AmenityDeskPage,
+  },
+  // Lịch đặt tiện ích trong ngày (UC-D07): lễ tân mọi thao tác, bảo vệ check-in, Trưởng BQL chỉ xem
+  {
+    key: 'booking-schedule',
+    group: 'Tiện ích & khách',
+    label: 'Lịch đặt tiện ích',
+    icon: CalendarOutlined,
+    path: 'booking-schedule',
+    roles: ['STAFF:RECEPTIONIST', 'STAFF:SECURITY', 'MANAGER'],
+    component: BookingSchedulePage,
   },
   // Sổ khách (UC-E08)
   {
@@ -243,6 +310,43 @@ export const adminMenu = [
     component: AmenityUsagePage,
   },
 
+  // ===== Module B — Phí & hóa đơn (UC-B01, UC-B02) =====
+  {
+    key: 'fee-types',
+    group: 'Tài chính',
+    label: 'Bảng phí',
+    icon: DollarOutlined,
+    path: 'fee-types',
+    roles: ['MANAGER', 'ACCOUNTANT'],
+    component: FeeTypesPage,
+  },
+  {
+    key: 'invoice-generate',
+    group: 'Tài chính',
+    label: 'Tính phí',
+    icon: FileTextOutlined,
+    path: 'invoices/generate',
+    roles: ['ACCOUNTANT', 'MANAGER'],
+    component: InvoiceGeneratePage,
+  },
+  {
+    key: 'invoices',
+    group: 'Tài chính',
+    label: 'Thông báo phí',
+    icon: FileTextOutlined,
+    path: 'invoices',
+    roles: ['ACCOUNTANT', 'MANAGER'],
+    component: InvoiceListPage,
+  },
+  {
+    key: 'invoice-detail',
+    label: 'Chi tiết thông báo phí',
+    path: 'invoices/:id',
+    roles: ['ACCOUNTANT', 'MANAGER'],
+    component: InvoiceDetailPage,
+    hideInMenu: true,
+  },
+
   // ===== Module A (Vũ Việt) =====
   {
     key: 'contracts',
@@ -306,12 +410,70 @@ export const adminMenu = [
     roles: ['MANAGER'],
     component: SystemDashboardPage,
   },
+  // ===== Gate Pass & Kiểm soát xe (Người 2) =====
+  {
+    key: 'gate-passes',
+    group: 'Cư dân & dịch vụ',
+    label: 'Duyệt Gate Pass',
+    icon: FileTextOutlined,
+    path: 'gate-passes',
+    roles: ['MANAGER'],
+    component: ManagerGatePassesPage,
+  },
+  {
+    key: 'security-gate',
+    group: 'Tiện ích & khách',
+    label: 'Gate Pass & Tra biển số',
+    icon: ScanOutlined,
+    path: 'security-gate',
+    roles: ['STAFF:SECURITY', 'MANAGER'],
+    component: SecurityGatePage,
+  },
+  {
+    key: 'parking-cards',
+    group: 'Cư dân & dịch vụ',
+    label: 'Thẻ cần thu hồi',
+    icon: IdcardOutlined,
+    path: 'parking-cards',
+    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
+    component: ParkingCardsPage,
+  },
+  {
+    key: 'resident-changes',
+    group: 'Cư dân & dịch vụ',
+    label: 'Biến động nhân khẩu',
+    icon: TeamOutlined,
+    path: 'resident-changes',
+    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
+    component: OccupantChangesPage,
+  },
 ];
 
-// Giao diện cư dân (/r/*) — hiện ở thanh điều hướng dưới cùng, nên giữ tối đa 5 mục.
-// Thông báo vào qua chuông trên header nên ẩn khỏi thanh dưới.
+// Sidebar riêng của Lễ tân (trang chủ mới): nhóm lại các mục có sẵn trong adminMenu theo `key`, kèm khóa badge số việc chờ.
+// Chỉ đổi cách sắp xếp hiển thị; route và quyền vẫn lấy từ adminMenu.
+export const receptionNav = [
+  { items: [{ key: 'home' }] },
+  {
+    group: 'Vận hành hằng ngày',
+    items: [
+      { key: 'guests', badge: 'guestsPending', badgeTone: 'neutral' },
+      { key: 'booking-schedule', badge: 'bookingsWaiting' },
+      { key: 'amenity-desk' },
+      { key: 'tickets', badge: 'ticketsNew' },
+      { key: 'vehicle-requests', badge: 'vehiclesPending' },
+      { key: 'parking-cards' },
+      { key: 'resident-changes' },
+      { key: 'contracts' },
+    ],
+  },
+  { group: 'Cư dân và dịch vụ', items: [{ key: 'amenity-passes' }, { key: 'announcements' }] },
+  { group: 'Cấu hình', items: [{ key: 'buildings' }] },
+];
+
+// Giao diện cư dân (/r/*). Mục nào hiện ở đâu do residentBottomNav / residentWebNav bên dưới quyết định
+// (theo `key`), không còn do hideInMenu. Thông báo vào qua chuông trên header.
 export const residentMenu = [
-  { key: 'home', label: 'Trang chủ', icon: HomeOutlined, path: 'home', component: HomePage },
+  { key: 'home', label: 'Trang chủ', icon: HomeOutlined, path: 'home', component: ResidentHomePage },
   { key: 'tickets', label: 'Phản ánh', icon: ToolOutlined, path: 'tickets', component: ResidentTicketsPage },
   {
     key: 'ticket-detail',
@@ -321,13 +483,16 @@ export const residentMenu = [
     hideInMenu: true,
   },
   { key: 'guests', label: 'Khách', icon: UsergroupAddOutlined, path: 'guests', component: ResidentGuestsPage },
+  // Mô đun 4 — thông báo phí của căn đang chọn (UC28)
+  { key: 'my-invoices', label: 'Phí dịch vụ', icon: DollarOutlined, path: 'invoices', component: MyInvoicesPage },
+  { key: 'my-invoice-detail', label: 'Chi tiết phí', path: 'invoices/:id', component: MyInvoiceDetailPage, hideInMenu: true },
   // Thẻ cư dân (UC-D11): mã chữ; trang Gia đình chỉ chủ hộ, mở từ nút trong "Mã của tôi"
   { key: 'my-code', label: 'Mã của tôi', icon: IdcardOutlined, path: 'my-code', component: MyCodePage },
   { key: 'family', label: 'Gia đình', path: 'my-code/family', component: FamilyPage, hideInMenu: true },
   // Gói tháng tiện ích (UC-D09): mở từ "Mã của tôi" / "Gia đình" (thanh dưới đã khá chật)
   { key: 'my-passes', label: 'Gói tháng', path: 'my-code/passes', component: MyPassesPage, hideInMenu: true },
   // Đặt tiện ích (UC-D06). 'amenities/bookings' (đường dẫn tĩnh) được ưu tiên hơn 'amenities/:id'
-  { key: 'amenities', label: 'Tiện ích', icon: CoffeeOutlined, path: 'amenities', component: AmenityListPage },
+  { key: 'amenities', label: 'Tiện ích', icon: CoffeeOutlined, path: 'amenities', component: UtilitiesPage },
   { key: 'my-bookings', label: 'Lịch sử đặt', path: 'amenities/bookings', component: MyBookingsPage, hideInMenu: true },
   { key: 'amenity-booking', label: 'Đặt tiện ích', path: 'amenities/:id', component: AmenityBookingPage, hideInMenu: true },
   {
@@ -370,4 +535,16 @@ export const residentMenu = [
     component: ProfilePage,
     hideInMenu: true,
   },
+  {
+    key: 'gate-passes',
+    label: 'Đơn chuyển đồ',
+    icon: FileTextOutlined,
+    path: 'gate-passes',
+    component: ResidentGatePassesPage,
+  },
 ];
+
+// Thanh điều hướng dưới (mobile): 5 mục, mục giữa là nút nổi "Mã của tôi". Bảng tin vào qua "Xem tất cả" ở trang chủ.
+export const residentBottomNav = ['home', 'amenities', 'my-code', 'tickets', 'guests'];
+// Thanh điều hướng ngang (web ≥768px). "Mã của tôi" là nút riêng bên phải nên không nằm trong danh sách này.
+export const residentWebNav = ['home', 'my-invoices', 'amenities', 'tickets', 'guests', 'announcements'];

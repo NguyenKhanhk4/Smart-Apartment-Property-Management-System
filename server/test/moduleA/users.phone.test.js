@@ -1,0 +1,128 @@
+// N1: 1 SĐT = 1 tài khoản (BR-S01, BR-X5); email không bắt buộc; có trạng thái chờ kích hoạt
+import { after, afterEach, before, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { User } from '../../src/models/index.js';
+import { normalizePhone } from '../../src/utils/validators.js';
+import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
+import { asUser, createManager, createUser } from '../helpers/fixtures.js';
+import { startApp } from '../helpers/http.js';
+
+let app;
+const PASSWORD = 'MatKhau123';
+const base = { fullName: 'Người Thử', passwordHash: 'x', role: 'RESIDENT' };
+const staff = { fullName: 'Kế Toán', email: 'kt@example.com', role: 'ACCOUNTANT' };
+const registerBody = { fullName: 'Cư Dân', email: 'cd@example.com', password: PASSWORD, confirmPassword: PASSWORD };
+const register = (body) => app.request('POST', '/auth/register', { body });
+const internal = (actor, body) => app.request('POST', '/users/internal', { user: asUser(actor), body });
+
+before(async () => {
+  await connectTestDB();
+  app = await startApp();
+});
+afterEach(clearTestDB);
+after(async () => {
+  await app.close();
+  await closeTestDB();
+});
+
+test('normalizePhone: đưa các tiền tố về 0', () => {
+  assert.equal(normalizePhone('+84912345678'), '0912345678');
+  assert.equal(normalizePhone('84912345678'), '0912345678');
+  assert.equal(normalizePhone(' 0912345678 '), '0912345678');
+});
+
+test('normalizePhone: giữ nguyên giá trị không phải chuỗi', () => {
+  assert.equal(normalizePhone(null), null);
+  assert.equal(normalizePhone(undefined), undefined);
+});
+
+test('User: bắt buộc có SĐT và lưu ở dạng đã chuẩn hóa', async () => {
+  await assert.rejects(User.create({ ...base }), /Số điện thoại là bắt buộc/);
+
+  const user = await User.create({ ...base, phone: '+84912345678' });
+  assert.equal(user.phone, '0912345678');
+});
+
+test('User: SĐT là duy nhất kể cả khi viết khác tiền tố', async () => {
+  await User.create({ ...base, phone: '0912345678' });
+
+  await assert.rejects(User.create({ ...base, phone: '+84912345678' }), { code: 11000 });
+});
+
+test('User: email và mật khẩu không bắt buộc; nhiều tài khoản không có email', async () => {
+  const a = await User.create({ fullName: 'A', role: 'RESIDENT', phone: '0912345671' });
+  await User.create({ fullName: 'B', role: 'RESIDENT', phone: '0912345672' });
+
+  assert.equal(a.activatedAt, null);
+  assert.equal((await User.findById(a._id).select('+failedLoginCount').lean()).failedLoginCount, 0);
+});
+
+test('User: không lộ bộ đếm và thời điểm khóa khi đọc thông thường', async () => {
+  const { _id } = await User.create({ ...base, phone: '0912345678' });
+  const plain = await User.findById(_id).lean();
+
+  assert.equal('failedLoginCount' in plain, false);
+  assert.equal('lockedUntil' in plain, false);
+  assert.equal('passwordHash' in plain, false);
+});
+
+test('User: consents chỉ nhận hành động hợp lệ', async () => {
+  const invalid = { action: 'KHAC', policyVersion: '1.0', createdAt: new Date() };
+
+  await assert.rejects(User.create({ ...base, phone: '0912345678', consents: [invalid] }));
+});
+
+test('đăng nhập: tài khoản chưa có mật khẩu trả 401, không lỗi 500', async () => {
+  await User.create({ fullName: 'Chờ', role: 'RESIDENT', phone: '0912345678', email: 'cho@example.com' });
+
+  const res = await app.request('POST', '/auth/login', { body: { email: 'cho@example.com', password: PASSWORD } });
+
+  assert.equal(res.status, 401);
+  assert.equal(res.body.errorCode, 'AUTH_INVALID_CREDENTIALS');
+});
+
+test('đăng ký: thiếu SĐT trả 400; thành công thì đã kích hoạt và lưu dạng chuẩn hóa', async () => {
+  assert.equal((await register(registerBody)).status, 400);
+
+  const res = await register({ ...registerBody, phone: '+84912345678' });
+
+  assert.equal(res.status, 201);
+  const saved = await User.findOne({ email: 'cd@example.com' }).lean();
+  assert.equal(saved.phone, '0912345678');
+  assert.ok(saved.activatedAt instanceof Date);
+});
+
+test('đăng ký: trùng SĐT → 409 PHONE_EXISTS, trùng email → 409 EMAIL_EXISTS', async () => {
+  await createUser('RESIDENT', { phone: '0912345678', email: 'co@example.com' });
+
+  const samePhone = await register({ ...registerBody, phone: '84912345678' });
+  const sameEmail = await register({ ...registerBody, email: 'CO@example.com', phone: '0912345679' });
+
+  assert.equal(samePhone.status, 409);
+  assert.equal(samePhone.body.errorCode, 'PHONE_EXISTS');
+  assert.equal(sameEmail.status, 409);
+  assert.equal(sameEmail.body.errorCode, 'EMAIL_EXISTS');
+});
+
+test('tài khoản nội bộ: thiếu hoặc sai SĐT trả 400, trùng SĐT trả 409', async () => {
+  const manager = await createManager({ phone: '0912345678' });
+
+  assert.equal((await internal(manager, staff)).status, 400);
+  assert.equal((await internal(manager, { ...staff, phone: '123' })).status, 400);
+  const duplicated = await internal(manager, { ...staff, phone: '0912345678' });
+  assert.equal(duplicated.status, 409);
+  assert.equal(duplicated.body.errorCode, 'PHONE_EXISTS');
+  assert.equal((await internal(manager, { ...staff, phone: '0912345679' })).status, 201);
+});
+
+test('hồ sơ: không xóa được SĐT của mình; đổi sang SĐT đã có trả 409', async () => {
+  const me = await createUser('RESIDENT', { phone: '0912345671' });
+  await createUser('RESIDENT', { phone: '0912345672' });
+  const patchMe = (body) => app.request('PATCH', '/users/me', { user: asUser(me), body });
+
+  assert.equal((await patchMe({ phone: '' })).status, 400);
+  assert.equal((await patchMe({ phone: null })).status, 400);
+  assert.equal((await patchMe({ phone: '0912345672' })).status, 409);
+  assert.equal((await patchMe({ phone: '+84912345673' })).status, 200);
+  assert.equal((await User.findById(me._id).lean()).phone, '0912345673');
+});

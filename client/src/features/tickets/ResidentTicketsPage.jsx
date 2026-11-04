@@ -5,14 +5,14 @@ import { PlusOutlined, RightOutlined } from '@ant-design/icons';
 import { ticketApi } from '../../api/moduleE.api';
 import { useApi } from '../../hooks/useApi';
 import EnumTag from '../../components/EnumTag';
-import { PRIORITIES, TICKET_STATUS } from '../../constants/enums';
+import { PRIORITIES, TICKET_FINAL_STATUSES, TICKET_OPEN_STATUSES, TICKET_STATUS, TICKET_TYPES } from '../../constants/enums';
 import { fromNow } from '../../utils/format';
 import TicketCreateModal from './TicketCreateModal';
 
 const TABS = [
-  { value: 'open', label: 'Đang xử lý', status: 'NEW,ASSIGNED,IN_PROGRESS' },
-  { value: 'confirm', label: 'Chờ xác nhận', status: 'WAITING_CONFIRM' },
-  { value: 'done', label: 'Đã đóng', status: 'CLOSED,REJECTED' },
+  { value: 'open', label: 'Đang xử lý', status: TICKET_OPEN_STATUSES.join(',') },
+  { value: 'confirm', label: 'Chờ nghiệm thu', status: 'WAITING_CONFIRM' },
+  { value: 'done', label: 'Đã đóng', status: TICKET_FINAL_STATUSES.join(',') },
 ];
 
 // UC-E02, E05 — Cư dân xem phản ánh của căn hộ mình, tạo mới, vào chi tiết để xác nhận/đánh giá
@@ -34,7 +34,7 @@ export default function ResidentTicketsPage() {
           Phản ánh
         </Typography.Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-          Tạo phản ánh
+          Gửi mới
         </Button>
       </Flex>
       <Segmented
@@ -60,6 +60,7 @@ export default function ResidentTicketsPage() {
                     {t.code} · {t.category?.name} · {fromNow(t.createdAt)}
                   </Typography.Text>
                   <Flex gap={4} wrap>
+                    <EnumTag map={TICKET_TYPES} value={t.type} />
                     <EnumTag map={TICKET_STATUS} value={t.status} />
                     <EnumTag map={PRIORITIES} value={t.priority} />
                   </Flex>

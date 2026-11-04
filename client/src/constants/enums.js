@@ -61,11 +61,54 @@ export const PRIORITIES = {
 
 export const TICKET_STATUS = {
   NEW: { label: 'Mới', color: 'blue' },
-  ASSIGNED: { label: 'Đã phân công', color: 'cyan' },
+  ASSIGNED: { label: 'Đã nhận', color: 'cyan' },
+  WAITING_QUOTE_APPROVAL: { label: 'Chờ đồng ý phí', color: 'purple' },
   IN_PROGRESS: { label: 'Đang xử lý', color: 'processing' },
-  WAITING_CONFIRM: { label: 'Chờ xác nhận', color: 'gold' },
-  CLOSED: { label: 'Đã đóng', color: 'success' },
+  WAITING_PARTS: { label: 'Chờ linh kiện', color: 'orange' },
+  WAITING_CONFIRM: { label: 'Chờ nghiệm thu', color: 'gold' },
+  CLOSED: { label: 'Đã nghiệm thu', color: 'success' },
   REJECTED: { label: 'Từ chối', color: 'default' },
+};
+
+// Nhóm trạng thái — giống hệt server/src/constants/enums.js (test enumParity kiểm tra). Không tự liệt kê ở từng trang.
+// Đang mở = chưa xử lý xong; WAITING_CONFIRM (chờ nghiệm thu) và nhóm kết thúc nằm ngoài.
+export const TICKET_OPEN_STATUSES = ['NEW', 'ASSIGNED', 'WAITING_QUOTE_APPROVAL', 'IN_PROGRESS', 'WAITING_PARTS'];
+export const TICKET_FINAL_STATUSES = ['CLOSED', 'REJECTED'];
+
+// Lịch sử xử lý ticket
+export const TICKET_HISTORY_ACTIONS = {
+  CREATED: { label: 'Tạo phản ánh', color: 'blue' },
+  ASSIGNED: { label: 'Phân công', color: 'blue' },
+  REASSIGNED: { label: 'Phân công lại', color: 'blue' },
+  CLAIMED: { label: 'Kỹ thuật viên nhận', color: 'blue' },
+  PROGRESS: { label: 'Cập nhật tiến độ', color: 'blue' },
+  QUOTE_REQUESTED: { label: 'Gửi báo giá', color: 'purple' },
+  QUOTE_ACCEPTED: { label: 'Cư dân đồng ý phí', color: 'green' },
+  QUOTE_DECLINED: { label: 'Cư dân từ chối phí', color: 'gray' },
+  WAITING_PARTS: { label: 'Chờ linh kiện', color: 'orange' },
+  RESOLVED: { label: 'Đã xử lý xong', color: 'blue' },
+  CONFIRMED: { label: 'Cư dân nghiệm thu', color: 'green' },
+  REOPENED: { label: 'Cư dân chưa đồng ý', color: 'orange' },
+  ESCALATED: { label: 'Hệ thống leo thang', color: 'red' },
+  SLA_ALERTED: { label: 'Cảnh báo trễ hạn', color: 'red' },
+  AUTO_CLOSED: { label: 'Hệ thống tự đóng', color: 'green' },
+  REJECTED: { label: 'Từ chối', color: 'gray' },
+};
+
+// ===== Sự cố & tiện ích (Người 4) =====
+export const TICKET_TYPES = {
+  INCIDENT: { label: 'Sự cố kỹ thuật', color: 'volcano' },
+  COMPLAINT: { label: 'Phản ánh', color: 'geekblue' },
+};
+
+export const TICKET_SCOPES = {
+  COMMON_AREA: { label: 'Khu vực chung', color: 'default' },
+  IN_APARTMENT: { label: 'Trong căn hộ', color: 'magenta' },
+};
+
+export const DUTY_ROLE_TITLES = {
+  TECHNICIAN: { label: 'Kỹ thuật viên', color: 'orange' },
+  SECURITY: { label: 'Bảo vệ', color: 'volcano' },
 };
 
 export const GUEST_STATUS = {
@@ -88,6 +131,8 @@ export const NOTIFICATION_TYPES = {
   MAINTENANCE: { label: 'Bảo trì', color: 'volcano' },
   FUND_APPROVAL: { label: 'Quỹ bảo trì', color: 'purple' },
   INVOICE_ADJUSTMENT: { label: 'Điều chỉnh HĐ', color: 'gold' },
+  INVOICE_APPROVAL: { label: 'Duyệt thông báo phí', color: 'geekblue' },
+  PAYMENT_RECEIPT: { label: 'Biên lai', color: 'green' },
   ANNOUNCEMENT: { label: 'Bảng tin', color: 'blue' },
   GUEST: { label: 'Khách', color: 'geekblue' },
   SYSTEM: { label: 'Hệ thống', color: 'default' },
@@ -99,19 +144,56 @@ export const FEE_CATEGORIES = {
   PARKING: { label: 'Phí gửi xe', color: 'blue' },
   AMENITY: { label: 'Phí tiện ích', color: 'purple' },
   ADJUSTMENT: { label: 'Điều chỉnh', color: 'gold' },
+  OTHER: { label: 'Khoản thu khác', color: 'magenta' },
+};
+
+// ===== Module B — Phí & đơn giá (UC-B01) =====
+export const FEE_CALC_METHODS = {
+  PER_M2: { label: 'Theo m²', color: 'green', unit: 'm²' },
+  PER_APARTMENT: { label: 'Theo căn', color: 'cyan', unit: 'căn' },
+  PER_VEHICLE: { label: 'Theo xe', color: 'blue', unit: 'xe' },
+};
+
+export const FEE_TYPE_STATES = {
+  ACTIVE: { label: 'Đang áp dụng', color: 'green' },
+  UPCOMING: { label: 'Sắp áp dụng', color: 'gold' },
+  ENDED: { label: 'Đã kết thúc', color: 'default' },
+};
+
+// Kết quả xem trước khi sinh hóa đơn (UC-B02)
+export const INVOICE_PREVIEW_STATUS = {
+  NEW: { label: 'Sẽ lập', color: 'blue' },
+  EXISTS: { label: 'Đã có hóa đơn', color: 'green' },
+  NO_PAYER: { label: 'Chưa có HĐ mua bán', color: 'default' },
+  ERROR: { label: 'Lỗi', color: 'red' },
+};
+
+export const PAYER_SOURCES = {
+  OWNER: { label: 'Chủ sở hữu', color: 'geekblue' },
+  TENANT: { label: 'Người thuê', color: 'purple' },
 };
 
 export const PAYMENT_METHODS = {
-  VNPAY: { label: 'VNPay', color: 'blue' },
+  PAYOS: { label: 'payOS (VietQR)', color: 'blue' },
   CASH: { label: 'Tiền mặt', color: 'green' },
   BANK_TRANSFER: { label: 'Chuyển khoản', color: 'cyan' },
 };
 
+// Vòng đời thông báo phí (Mô đun 4): Nháp → Chờ duyệt → Đã phát hành → Thanh toán một phần → Đã thanh toán
 export const INVOICE_STATUS = {
+  DRAFT: { label: 'Nháp', color: 'default' },
+  PENDING_APPROVAL: { label: 'Chờ duyệt', color: 'gold' },
   UNPAID: { label: 'Chưa thanh toán', color: 'blue' },
+  PARTIALLY_PAID: { label: 'Thanh toán một phần', color: 'cyan' },
   PAID: { label: 'Đã thanh toán', color: 'green' },
   OVERDUE: { label: 'Quá hạn', color: 'red' },
   CANCELLED: { label: 'Đã hủy', color: 'default' },
+};
+
+export const PREPAID_TX_TYPES = {
+  DEPOSIT: { label: 'Tiền thừa ghi vào số dư', color: 'green' },
+  APPLY: { label: 'Trừ vào thông báo phí', color: 'blue' },
+  REFUND: { label: 'Hoàn tiền', color: 'orange' },
 };
 
 export const WORK_ORDER_STATUS = {
@@ -120,21 +202,38 @@ export const WORK_ORDER_STATUS = {
   DONE: { label: 'Hoàn thành', color: 'success' },
 };
 
+export const WORK_ORDER_OPEN_STATUSES = ['PENDING', 'IN_PROGRESS'];
+
 export const WORK_ORDER_TYPES = {
   SCHEDULED: { label: 'Bảo trì định kỳ', color: 'geekblue' },
   TICKET_LINKED: { label: 'Theo phản ánh', color: 'orange' },
 };
 
 // ===== Module D =====
-// PENDING, REJECTED: dữ liệu luồng duyệt cũ (không còn tạo mới — BR-O12)
+// PENDING, REJECTED: dữ liệu luồng duyệt cũ (không còn tạo mới — BR-O12). `tone` dùng cho StatusBadge ở giao diện cư dân
 export const BOOKING_STATUS = {
-  APPROVED: { label: 'Đã xác nhận', color: 'blue' },
-  CHECKED_IN: { label: 'Đã check-in', color: 'processing' },
-  COMPLETED: { label: 'Hoàn tất', color: 'success' },
+  PENDING_PAYMENT: { label: 'Chờ thanh toán', color: 'gold', tone: 'warn' },
+  APPROVED: { label: 'Đã xác nhận', color: 'blue', tone: 'ok' },
+  CHECKED_IN: { label: 'Đã check-in', color: 'processing', tone: 'info' },
+  COMPLETED: { label: 'Đã dùng', color: 'success', tone: 'neutral' },
+  CANCELLED: { label: 'Đã hủy', color: 'default', tone: 'neutral' },
+  NO_SHOW: { label: 'Không đến', color: 'warning', tone: 'warn' },
+  PENDING: { label: 'Chờ duyệt (cũ)', color: 'default', tone: 'neutral' },
+  REJECTED: { label: 'Từ chối (cũ)', color: 'default', tone: 'neutral' },
+};
+// Booking đang chiếm slot; PENDING / REJECTED là dữ liệu luồng duyệt cũ, không đưa vào ô chọn / báo cáo
+export const BOOKING_ACTIVE_STATUSES = ['PENDING_PAYMENT', 'APPROVED', 'CHECKED_IN'];
+export const BOOKING_LEGACY_STATUSES = ['PENDING', 'REJECTED'];
+
+// Lượt vào tiện ích WALK_IN (UC-D10)
+export const VISIT_CHARGE_TYPES = {
+  PASS: { label: 'Gói tháng', color: 'cyan' },
+  SINGLE: { label: 'Vé lẻ', color: 'blue' },
+  FREE: { label: 'Miễn phí', color: 'green' },
+};
+export const VISIT_STATUS = {
+  VALID: { label: 'Hợp lệ', color: 'success' },
   CANCELLED: { label: 'Đã hủy', color: 'default' },
-  NO_SHOW: { label: 'Không đến', color: 'warning' },
-  PENDING: { label: 'Chờ duyệt', color: 'gold' },
-  REJECTED: { label: 'Từ chối', color: 'red' },
 };
 
 // Kiểu tiện ích (accessMode). Bản ghi cũ không có accessMode coi là BOOKING
@@ -149,6 +248,12 @@ export const AGE_GROUPS = {
   CHILD_FREE: { label: 'Trẻ nhỏ (miễn phí)', color: 'green' },
   CHILD: { label: 'Trẻ em', color: 'cyan' },
   ADULT: { label: 'Người lớn', color: 'default' },
+};
+
+export const CONSENT_ACTIONS = {
+  ACCEPTED: { label: 'Đã đồng ý', color: 'success' },
+  DECLINED: { label: 'Từ chối', color: 'default' },
+  WITHDRAWN: { label: 'Đã rút đồng ý', color: 'warning' },
 };
 
 export const RELATION_TYPES = {
@@ -167,6 +272,56 @@ export const ASSET_CATEGORIES = {
   PUMP: { label: 'Máy bơm', color: 'cyan' },
   FIRE_SYSTEM: { label: 'PCCC', color: 'red' },
   OTHER: { label: 'Khác', color: 'default' },
+};
+
+// ===== Gate Pass, thẻ gửi xe, biến động nhân khẩu (Người 2) =====
+export const GATE_PASS_DIRECTIONS = {
+  IN: { label: 'Chuyển đồ vào (IN)', color: 'blue' },
+  OUT: { label: 'Chuyển đồ ra (OUT)', color: 'volcano' },
+};
+
+export const GATE_PASS_STATUS = {
+  AWAITING_OWNER: { label: 'Chờ chủ hộ xác nhận', color: 'gold' },
+  PENDING: { label: 'Chờ BQL duyệt', color: 'processing' },
+  APPROVED: { label: 'Đã duyệt', color: 'success' },
+  USED: { label: 'Đã qua cổng', color: 'cyan' },
+  REJECTED: { label: 'Từ chối', color: 'error' },
+  EXPIRED: { label: 'Hết hạn', color: 'default' },
+};
+
+export const PLATE_LOOKUP_RESULTS = {
+  REGISTERED_VEHICLE: { label: 'Xe đã đăng ký', color: 'success' },
+  MATCHES_GATE_PASS: { label: 'Khớp Gate Pass hôm nay', color: 'processing' },
+  UNKNOWN: { label: 'Không có trong hệ thống', color: 'error' },
+};
+
+export const PARKING_CARD_STATUS = {
+  ACTIVE: { label: 'Đang hoạt động', color: 'success' },
+  DISABLED_TO_COLLECT: { label: 'Cần thu hồi', color: 'warning' },
+  RETURNED: { label: 'Đã thu hồi', color: 'default' },
+  LOST: { label: 'Mất thẻ', color: 'error' },
+};
+
+export const OCCUPANT_CHANGE_TYPES = {
+  MOVE_IN: { label: 'Vào ở', color: 'green' },
+  MOVE_OUT: { label: 'Chuyển đi', color: 'volcano' },
+};
+
+// ===== Hệ thống =====
+export const CRON_JOBS = {
+  INVOICE_GENERATE: { label: 'Tạo hóa đơn định kỳ', color: 'green' },
+  INVOICE_OVERDUE: { label: 'Quét hóa đơn quá hạn', color: 'red' },
+  BILLING_REMIND: { label: 'Nhắc tính phí / duyệt thông báo phí', color: 'gold' },
+  BOOKING_COMPLETE: { label: 'Hoàn tất / không đến booking tiện ích', color: 'cyan' },
+  WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
+  TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },
+  TICKET_AUTO_CLOSE: { label: 'Tự đóng phản ánh chờ nghiệm thu', color: 'default' },
+  CONTRACT_EXPIRE: { label: 'Quét hợp đồng thuê hết hạn', color: 'purple' },
+  FUND_LOW_BALANCE: { label: 'Cảnh báo số dư quỹ thấp', color: 'gold' },
+  GATE_PASS_EXPIRE: { label: 'Hết hạn Gate Pass', color: 'default' },
+  CONTRACT_EXPIRY_REMIND: { label: 'Nhắc hợp đồng thuê sắp hết hạn', color: 'purple' },
+  TICKET_SLA_ALERT: { label: 'Cảnh báo SLA sự cố / phản ánh', color: 'red' },
+  BOOKING_HOLD_EXPIRE: { label: 'Hủy giữ chỗ quá hạn thanh toán', color: 'default' },
 };
 
 // Dùng cho <Select options={enumOptions(ROLES)} />

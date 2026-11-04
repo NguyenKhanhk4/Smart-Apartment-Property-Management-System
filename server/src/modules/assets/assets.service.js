@@ -1,10 +1,8 @@
-import { WORK_ORDER_STATUS } from '../../constants/enums.js';
+import { WORK_ORDER_OPEN_STATUSES as OPEN_WO_STATUSES, WORK_ORDER_STATUS } from '../../constants/enums.js';
 import { Asset, Building, WorkOrder } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { DAY_MS, endOfVnDay, startOfVnDay } from '../../utils/time.js';
-
-export const OPEN_WO_STATUSES = [WORK_ORDER_STATUS.PENDING, WORK_ORDER_STATUS.IN_PROGRESS];
 
 const LIST_POPULATE = [{ path: 'buildingId', select: 'code name' }];
 

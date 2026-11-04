@@ -27,6 +27,33 @@
   --color-side-text: #c8d1de;
   --color-side-line: #1a293e;
   --color-side-hover: #162842;
+
+  /* Giao diện cư dân (/r) theo bản thiết kế mới — tách khỏi token admin, chỉ có bản sáng.
+     Dùng: bg-r-bg, text-r-muted, border-r-border... */
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --color-r-navy: #1f2b47;
+  --color-r-gold: #c9a24a;
+  --color-r-gold-icon: #b8892e;
+  --color-r-bg: #f5f2ec;
+  --color-r-surface: #ffffff;
+  --color-r-border: #e6e0d6;
+  --color-r-divider: #ede8df;
+  --color-r-border-control: #d9d2c5;
+  --color-r-segment: #ece6db;
+  --color-r-text: #1e2330;
+  --color-r-muted: #5e6573;
+  --color-r-subtle: #6b7180;
+  --color-r-link: #1f5fa8;
+  --color-r-danger: #c2362f;
+  --color-r-danger-text: #b0302a;
+  --color-r-info-bg: #e7eef8;
+  --color-r-info-fg: #1f4f8f;
+  --color-r-warn-bg: #fbf1dc;
+  --color-r-warn-fg: #8a5a0b;
+  --color-r-ok-bg: #e5f3ea;
+  --color-r-ok-fg: #1e6b3e;
+  --color-r-neutral-bg: #edeae4;
+  --color-r-neutral-fg: #4a4f5a;
 }
 
 @layer base {

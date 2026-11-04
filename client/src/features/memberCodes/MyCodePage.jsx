@@ -1,68 +1,59 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Alert, Button, Empty, Flex, Segmented, Spin, Typography } from 'antd';
-import { TagsOutlined, TeamOutlined } from '@ant-design/icons';
-import { memberCodeApi } from '../../api/moduleD.api';
-import { useApi } from '../../hooks/useApi';
-import { vtName } from '../../motion/viewTransition';
-import MemberCard from './MemberCard';
+import { Link } from 'react-router';
+import { Alert, Empty, Segmented, Spin } from 'antd';
+import { InfoCircleOutlined, RightOutlined } from '@ant-design/icons';
+import { useResident } from '../../hooks/useResident';
+import ResidentCard from './ResidentCard';
 
-// UC-D11 — "Mã của tôi": thẻ thành viên (ảnh + mã chữ). Ở nhiều căn thì chọn căn.
+// UC-D11 — "Mã của tôi": thẻ cư dân (ảnh + mã chữ) để đọc cho lễ tân / bảo vệ. Ở nhiều căn thì chọn căn.
+// Gói tháng nằm ở Tiện ích › Gói tháng; quản lý gia đình ở Căn hộ của tôi.
 export default function MyCodePage() {
-  const navigate = useNavigate();
-  const { data: cards = [], loading } = useApi(() => memberCodeApi.mine(), []);
-  const [picked, setPicked] = useState(null);
-  const card = useMemo(() => cards.find((c) => c.apartment._id === picked) ?? cards[0], [cards, picked]);
-  const apartmentId = card?.apartment._id;
+  const { cards, card, apartmentId, setApartmentId, loading } = useResident();
 
   return (
-    <Flex vertical gap={12}>
-      <Typography.Title level={4} style={{ margin: 0, ...vtName('my-code-title') }}>
-        Mã của tôi
-      </Typography.Title>
+    <div className="max-w-[440px] mx-auto flex flex-col gap-4">
+      <h1 className="hidden md:block m-0 text-[28px] font-semibold">Mã của tôi</h1>
 
       {cards.length > 1 && (
         <Segmented
           block
           value={apartmentId}
-          onChange={setPicked}
+          onChange={setApartmentId}
           options={cards.map((c) => ({ value: c.apartment._id, label: `Căn ${c.apartment.code}` }))}
         />
       )}
 
       <Spin spinning={loading}>
         {card ? (
-          <Flex vertical gap={12}>
-            <MemberCard key={`${apartmentId}-${card.code}`} person={card} />
+          <div className="flex flex-col gap-4">
+            <ResidentCard key={`${apartmentId}-${card.code}`} person={card} />
+
+            <div className="flex gap-3 px-4 py-3.5 bg-r-info-bg text-r-info-fg rounded-[14px] text-[13px] leading-normal">
+              <InfoCircleOutlined style={{ fontSize: 20, marginTop: 1 }} />
+              <span>Đọc mã này cho lễ tân hoặc bảo vệ khi vào tiện ích. Nhân viên sẽ đối chiếu ảnh đại diện với người đến.</span>
+            </div>
+
             {!card.isHead && (
               <Alert
                 type="info"
                 showIcon
-                message={card.canIncurCharges ? 'Bạn được phát sinh phí tiện ích' : 'Bạn chưa được phát sinh phí tiện ích'}
+                title={card.canIncurCharges ? 'Bạn được phát sinh phí tiện ích' : 'Bạn chưa được phát sinh phí tiện ích'}
                 description={
                   card.canIncurCharges
                     ? 'Phí tiện ích bạn sử dụng sẽ cộng vào hóa đơn của căn hộ.'
-                    : 'Bạn vẫn dùng được tiện ích miễn phí và gói của mình. Muốn dùng tiện ích có phí, nhờ chủ hộ bật quyền trong mục Gia đình.'
+                    : 'Bạn vẫn dùng được tiện ích miễn phí và gói của mình. Muốn dùng tiện ích có phí, nhờ chủ hộ bật quyền trong mục Căn hộ và gia đình.'
                 }
               />
             )}
-            <Button
-              block
-              icon={<TagsOutlined />}
-              onClick={() => navigate(`/r/my-code/passes?apartmentId=${apartmentId}`, { viewTransition: true })}
+
+            <Link
+              to="/r/profile"
+              viewTransition
+              className="flex items-center justify-between px-4 py-3.5 bg-white border border-r-border rounded-[14px] text-r-text! text-[15px] no-underline"
             >
-              {card.isHead ? 'Gói tháng tiện ích' : 'Gói tháng của tôi'}
-            </Button>
-            {card.isHead && (
-              <Button
-                block
-                icon={<TeamOutlined />}
-                onClick={() => navigate(`/r/my-code/family?apartmentId=${apartmentId}`, { viewTransition: true })}
-              >
-                Quản lý gia đình
-              </Button>
-            )}
-          </Flex>
+              <span>Cập nhật ảnh đại diện</span>
+              <RightOutlined style={{ fontSize: 14, color: '#8A8F99' }} />
+            </Link>
+          </div>
         ) : (
           !loading && (
             <Empty
@@ -77,6 +68,6 @@ export default function MyCodePage() {
           )
         )}
       </Spin>
-    </Flex>
+    </div>
   );
 }

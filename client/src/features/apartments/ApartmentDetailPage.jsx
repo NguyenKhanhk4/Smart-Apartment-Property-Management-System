@@ -15,9 +15,6 @@ import {
   Row,
   Col,
   Statistic,
-  Descriptions,
-  Empty,
-  Badge,
   Tooltip,
 } from 'antd';
 import { PHONE_RULES } from '../../utils/phone';
@@ -30,7 +27,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   CrownOutlined,
-  BankOutlined,
+  EyeOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -52,9 +49,23 @@ import { apartmentsApi, contractsApi, residentsApi, vehicleApi } from '../../api
 export default function ApartmentDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { hasRole } = useAuth();
 
-  const isReceptionist = user?.role === 'STAFF' && user?.roleTitle === 'RECEPTIONIST';
+  const isReceptionist = hasRole('STAFF:RECEPTIONIST');
+  const canRevealIdNumber = hasRole('STAFF:RECEPTIONIST', 'MANAGER');
+  const [revealedIds, setRevealedIds] = useState({});
+
+  const handleRevealIdNumber = async (residentId) => {
+    try {
+      const res = await residentsApi.revealIdNumber(residentId);
+      const plain = res?.data?.idNumber || null;
+      if (plain) {
+        setRevealedIds((prev) => ({ ...prev, [residentId]: plain }));
+      }
+    } catch {
+      // handled by axiosClient
+    }
+  };
 
   // Load apartment details
   const {
@@ -207,8 +218,26 @@ export default function ApartmentDetailPage() {
       title: 'Số CCCD',
       dataIndex: 'idNumber',
       key: 'idNumber',
-      width: 150,
-      render: (val) => (val ? <code className="text-xs">{val}</code> : '—'),
+      width: 170,
+      render: (val, r) => {
+        const displayVal = revealedIds[r._id] || val;
+        if (!displayVal) return '—';
+        return (
+          <Space size={4}>
+            <code className="text-xs">{displayVal}</code>
+            {canRevealIdNumber && !revealedIds[r._id] && (
+              <Tooltip title="Xem đầy đủ CCCD (có ghi Audit Log)">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<EyeOutlined />}
+                  onClick={() => handleRevealIdNumber(r._id)}
+                />
+              </Tooltip>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: 'Ngày dọn vào',
@@ -238,7 +267,7 @@ export default function ApartmentDetailPage() {
                   <Popconfirm
                     title="Gỡ thành viên"
                     description={`Bạn có chắc chắn muốn gỡ ${r.fullName} khỏi căn hộ?`}
-                    onConfirm={() => removeMemberAction(r._id)}
+                    onConfirm={() => removeMemberAction(r._id).catch(() => {})}
                     okText="Gỡ"
                     cancelText="Hủy"
                     okButtonProps={{ danger: true }}
@@ -530,7 +559,7 @@ export default function ApartmentDetailPage() {
         confirmLoading={addingMember}
         destroyOnClose
       >
-        <Form form={addForm} layout="vertical" onFinish={addMemberAction} className="mt-4">
+        <Form form={addForm} layout="vertical" onFinish={(v) => addMemberAction(v).catch(() => {})} className="mt-4">
           <Form.Item
             name="email"
             label="Email tài khoản"
@@ -578,7 +607,7 @@ export default function ApartmentDetailPage() {
         confirmLoading={updatingMember}
         destroyOnClose
       >
-        <Form form={editForm} layout="vertical" onFinish={updateMemberAction} className="mt-4">
+        <Form form={editForm} layout="vertical" onFinish={(v) => updateMemberAction(v).catch(() => {})} className="mt-4">
           <Form.Item name="idNumber" label="Số CCCD">
             <Input placeholder="Nhập số CCCD mới" />
           </Form.Item>

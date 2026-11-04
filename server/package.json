@@ -8,10 +8,11 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "lint": "eslint .",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "db:sync": "node scripts/db-sync.js",
     "db:seed": "node scripts/seed.js",
+    "test": "node --import ./test/setup.js --test \"test/**/*.test.js\"",
+    "db:backfill-priority": "node scripts/backfillTicketPriorityRank.js",
+    "db:migrate-audit-targets": "node scripts/migrateAuditTargets.js",
     "db:set-manager": "node scripts/set-manager.js"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
     "dotenv": "^18.0.2",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.2",
     "helmet": "^8.3.0",
     "joi": "^18.2.9",
     "jsonwebtoken": "^9.0.3",
@@ -39,9 +41,7 @@
     "eslint": "^10.11.0",
     "globals": "^17.12.0",
     "mongodb-memory-server": "^11.3.0",
-    "nodemon": "^3.1.14",
-    "supertest": "^7.2.2",
-    "vitest": "^5.0.1"
+    "nodemon": "^3.1.14"
   },
   "engines": {
     "node": ">=20.19"
