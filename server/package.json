@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:sync": "node scripts/db-sync.js",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "node scripts/seed.js",
+    "db:set-manager": "node scripts/set-manager.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -12,7 +12,7 @@ import { listApartmentResidents } from '../residents/residents.service.js';
 
 // Module A — Vũ Việt. UC-A05, UC-A07: Quản lý căn hộ & Cư dân
 const router = Router();
-const VIEWERS = ['ADMIN', 'MANAGER', 'STAFF:RECEPTIONIST'];
+const VIEWERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
 
 const listQuery = Joi.object({
   ...paginationQuery,
@@ -108,7 +108,7 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
 router.post(
   '/',
   authenticate,
-  authorize('ADMIN'),
+  authorize('MANAGER'),
   validate({ body: createApartmentBody }),
   async (req, res) => {
     const apartment = await service.createApartment(req.validated.body, req.user, req.ip);
@@ -128,7 +128,7 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  authorize('ADMIN'),
+  authorize('MANAGER'),
   validate({ params: idParams, body: updateApartmentBody }),
   async (req, res) => {
     const apartment = await service.updateApartment(
@@ -153,7 +153,7 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  authorize('ADMIN'),
+  authorize('MANAGER'),
   validate({ params: idParams }),
   async (req, res) => {
     const result = await service.deleteApartment(req.validated.params.id, req.user, req.ip);

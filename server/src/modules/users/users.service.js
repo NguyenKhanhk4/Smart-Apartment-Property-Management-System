@@ -111,7 +111,7 @@ export async function changePassword(userId, { currentPassword, newPassword }) {
 }
 
 /**
- * UC-A04: Danh sách tài khoản nội bộ (Admin)
+ * UC-A04: Danh sách tài khoản nội bộ (Trưởng BQL)
  */
 export async function listInternal(query = {}) {
   const filter = { role: { $ne: ROLES.RESIDENT } };
@@ -137,7 +137,7 @@ export async function listInternal(query = {}) {
 }
 
 /**
- * UC-A04: Tạo tài khoản nội bộ (Admin)
+ * UC-A04: Tạo tài khoản nội bộ (Trưởng BQL)
  */
 export async function createInternal(adminUser, { fullName, email, phone, role, roleTitle, boardTitle }, { ip } = {}) {
   const normalizedEmail = email.trim().toLowerCase();
@@ -215,7 +215,7 @@ export async function createInternal(adminUser, { fullName, email, phone, role, 
 }
 
 /**
- * UC-A04: Cập nhật tài khoản nội bộ (Admin)
+ * UC-A04: Cập nhật tài khoản nội bộ (Trưởng BQL)
  */
 export async function updateInternal(adminUser, targetId, { fullName, phone, role, roleTitle, boardTitle }, { ip } = {}) {
   const target = await User.findById(targetId);
@@ -228,6 +228,12 @@ export async function updateInternal(adminUser, targetId, { fullName, phone, rol
   const newRole = role ?? target.role;
   const newRoleTitle = newRole === ROLES.STAFF ? (roleTitle !== undefined ? roleTitle : target.roleTitle) : null;
   const newBoardTitle = newRole === ROLES.BOARD ? (boardTitle !== undefined ? boardTitle : target.boardTitle) : null;
+
+  // Không tự đổi vai trò của chính mình: Trưởng BQL là duy nhất, tự đổi sẽ không còn ai quản trị (BR-X2)
+  const isSelf = String(adminUser.id ?? adminUser._id) === String(targetId);
+  if (isSelf && (newRole !== target.role || newRoleTitle !== target.roleTitle || newBoardTitle !== target.boardTitle)) {
+    throw ApiError.badRequest('Không thể tự đổi vai trò của chính mình');
+  }
 
   // Kiểm tra BR-R1 nếu chuyển thành MANAGER hoặc kích hoạt MANAGER
   if (newRole === ROLES.MANAGER && (roleChanged || !target.isActive)) {
@@ -281,7 +287,7 @@ export async function updateInternal(adminUser, targetId, { fullName, phone, rol
 }
 
 /**
- * UC-A04: Khóa / mở khóa tài khoản (Admin)
+ * UC-A04: Khóa / mở khóa tài khoản (Trưởng BQL)
  */
 export async function setStatus(adminUser, targetId, { isActive }, { ip } = {}) {
   const currentAdminId = String(adminUser.id ?? adminUser._id);

@@ -45,7 +45,7 @@ const JOB_LABELS = {
 };
 
 function formatRoleLabel(item) {
-  if (item.role === 'ADMIN') return 'Quản trị viên';
+  if (item.role === 'MANAGER') return 'Trưởng BQL';
   if (item.role === 'RESIDENT') return 'Cư dân';
   if (item.role === 'STAFF') {
     const titles = {
@@ -68,7 +68,7 @@ function formatRoleLabel(item) {
 }
 
 /**
- * UC-A11: Dashboard thống kê hệ thống dành cho Admin
+ * UC-A11: Dashboard thống kê hệ thống dành cho Trưởng BQL
  * Không chứa bất kỳ dữ liệu tài chính hoặc số tiền nào (BR-R6).
  */
 export default function SystemDashboardPage() {

@@ -35,7 +35,7 @@ export async function getBuildingById(id) {
 }
 
 /**
- * Tạo tòa nhà mới (Admin) — BR-A4
+ * Tạo tòa nhà mới (Trưởng BQL) — BR-A4
  */
 export async function createBuilding({ code, name, address, totalFloors }, adminUser, ip) {
   const normalizedCode = code.trim().toUpperCase();
@@ -79,7 +79,7 @@ export async function createBuilding({ code, name, address, totalFloors }, admin
 }
 
 /**
- * Cập nhật thông tin tòa nhà (Admin) — BR-A4
+ * Cập nhật thông tin tòa nhà (Trưởng BQL) — BR-A4
  */
 export async function updateBuilding(id, data, adminUser, ip) {
   const building = await Building.findById(id);
@@ -162,7 +162,7 @@ export async function updateBuilding(id, data, adminUser, ip) {
 }
 
 /**
- * Xóa tòa nhà (Admin) — BR-A4
+ * Xóa tòa nhà (Trưởng BQL) — BR-A4
  */
 export async function deleteBuilding(id, adminUser, ip) {
   const building = await Building.findById(id);

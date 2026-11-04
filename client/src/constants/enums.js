@@ -7,7 +7,6 @@ export const ROLES = {
   ACCOUNTANT: { label: 'Kế toán', color: 'green' },
   MANAGER: { label: 'Trưởng BQL', color: 'gold' },
   BOARD: { label: 'Ban quản trị', color: 'purple' },
-  ADMIN: { label: 'Quản trị viên', color: 'red' },
 };
 
 export const ROLE_TITLES = {

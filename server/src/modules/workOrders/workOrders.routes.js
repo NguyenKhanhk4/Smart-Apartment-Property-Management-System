@@ -91,7 +91,7 @@ router.get('/assignees', authenticate, authorize('MANAGER'), async (_req, res) =
  *     summary: Chạy thủ công cron quét tài sản đến hạn và tạo work order bảo trì định kỳ (UC-D02), ghi cron_runs
  *     description: Trả về bản ghi cron_runs; affectedCount = số work order mới tạo.
  */
-router.post('/jobs/generate/run', authenticate, authorize('MANAGER', 'ADMIN'), async (_req, res) =>
+router.post('/jobs/generate/run', authenticate, authorize('MANAGER'), async (_req, res) =>
   ok(
     res,
     await runTrackedJob(CRON_JOBS.WORK_ORDER_GENERATE, () => generateMaintenanceWorkOrders(), {

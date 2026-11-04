@@ -1,7 +1,7 @@
 import { CONFIG_SCOPES, values } from '../constants/enums.js';
 import { ObjectId, Schema, model, schemaOptions } from './_shared.js';
 
-// system_configs — tham số hệ thống: BUSINESS (Manager sửa) / TECHNICAL (Admin sửa)
+// system_configs — tham số hệ thống, Trưởng BQL sửa. scope chỉ để phân nhóm: BUSINESS / TECHNICAL
 const systemConfigSchema = new Schema(
   {
     key: { type: String, required: true, unique: true, trim: true, uppercase: true },

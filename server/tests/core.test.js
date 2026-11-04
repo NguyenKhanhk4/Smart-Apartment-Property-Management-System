@@ -83,12 +83,12 @@ describe('authenticate', () => {
   it('token sai secret → 401', async () => {
     const res = await request(app)
       .get('/me')
-      .set('Authorization', `Bearer ${sign({ sub: 'x', role: 'ADMIN' }, 'wrong-secret')}`);
+      .set('Authorization', `Bearer ${sign({ sub: 'x', role: 'MANAGER' }, 'wrong-secret')}`);
     expect(res.status).toBe(401);
   });
 
   it('token hết hạn → 401 với message hết hạn', async () => {
-    const expired = sign({ sub: 'x', role: 'ADMIN' }, env.jwt.accessSecret, { expiresIn: -10 });
+    const expired = sign({ sub: 'x', role: 'MANAGER' }, env.jwt.accessSecret, { expiresIn: -10 });
     const res = await request(app).get('/me').set('Authorization', `Bearer ${expired}`);
     expect(res.status).toBe(401);
     expect(res.body.message).toMatch(/hết hạn/);
@@ -115,7 +115,6 @@ describe('authorize', () => {
   it.each([
     ['technician', tokenOf('STAFF', 'TECHNICIAN'), 200],
     ['manager', tokenOf('MANAGER'), 200],
-    ['admin', tokenOf('ADMIN'), 403],
     ['receptionist', tokenOf('STAFF', 'RECEPTIONIST'), 403],
     ['resident', tokenOf('RESIDENT'), 403],
   ])('/technician với %s → %i', async (_name, token, status) => {
@@ -124,8 +123,12 @@ describe('authorize', () => {
     if (status === 403) expect(res.body.errorCode).toBe('FORBIDDEN_ROLE');
   });
 
-  it('ADMIN không tự có quyền nghiệp vụ của BOARD (BR-R3)', async () => {
-    expect((await call('/board', tokenOf('ADMIN'))).status).toBe(403);
+  it('role ADMIN cũ không còn hợp lệ: token cũ bị từ chối', async () => {
+    expect((await call('/board', tokenOf('ADMIN'))).status).toBe(401);
+  });
+
+  it('authorize theo đúng spec: MANAGER không tự có quyền của route chỉ dành cho BOARD', async () => {
+    expect((await call('/board', tokenOf('MANAGER'))).status).toBe(403);
     expect((await call('/board', tokenOf('BOARD', null, 'MEMBER'))).status).toBe(200);
   });
 
@@ -136,7 +139,7 @@ describe('authorize', () => {
 
   it('hasPermission: STAFF chung cho mọi chức danh', () => {
     expect(hasPermission({ role: 'STAFF', roleTitle: 'SECURITY' }, ['STAFF'])).toBe(true);
-    expect(hasPermission({ role: 'ADMIN' }, ['STAFF'])).toBe(false);
+    expect(hasPermission({ role: 'MANAGER' }, ['STAFF'])).toBe(false);
     expect(hasPermission({ role: 'BOARD' }, ['STAFF'])).toBe(false);
   });
 

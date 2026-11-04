@@ -278,7 +278,7 @@ function EditAccountModal({ user, open, onClose, onDone }) {
   );
 }
 
-// UC-A04: Quản lý danh sách tài khoản nội bộ (/app/internal-accounts, ADMIN)
+// UC-A04: Quản lý danh sách tài khoản nội bộ (/app/internal-accounts, Trưởng BQL)
 export default function InternalAccountsPage() {
   const { user: currentAdmin } = useAuth();
   const { message } = App.useApp();

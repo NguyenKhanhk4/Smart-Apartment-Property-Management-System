@@ -23,25 +23,20 @@ describe('system-configs & complaint-categories (UC-E01)', () => {
     expect(await getConfigs(['SLA_HOURS_URGENT', 'PAYMENT_TERM_DAYS'])).toEqual({ SLA_HOURS_URGENT: 10, PAYMENT_TERM_DAYS: 15 });
   });
 
-  it('GET: Manager chỉ thấy BUSINESS, Admin chỉ TECHNICAL, role khác 403', async () => {
+  it('GET: Trưởng BQL thấy mọi tham số, role khác 403', async () => {
     const manager = await createManager();
-    const admin = await createUser('ADMIN');
     const m = await call(manager)('get', '/api/system-configs');
     expect(m.status).toBe(200);
-    expect(m.body.data.every((c) => c.scope === 'BUSINESS')).toBe(true);
-    expect(m.body.data.length).toBeGreaterThan(5);
-    const a = await call(admin)('get', '/api/system-configs');
-    expect(a.body.data.map((c) => c.key)).toEqual(['UPLOAD_MAX_SIZE_MB']);
+    expect(m.body.data.map((c) => c.key)).toEqual(expect.arrayContaining(['SLA_HOURS_URGENT', 'UPLOAD_MAX_SIZE_MB']));
     for (const role of ['ACCOUNTANT', 'BOARD', 'RESIDENT']) {
       expect((await call(await createUser(role))('get', '/api/system-configs')).status).toBe(403);
     }
   });
 
-  it('PATCH: đúng scope theo role (Manager ↔ BUSINESS, Admin ↔ TECHNICAL), ghi audit CONFIG_CHANGED', async () => {
+  it('PATCH: Trưởng BQL sửa được mọi tham số, role khác 403, ghi audit CONFIG_CHANGED', async () => {
     const manager = await createManager();
-    const admin = await createUser('ADMIN');
-    expect((await call(manager)('patch', '/api/system-configs/UPLOAD_MAX_SIZE_MB', { value: 10 })).status).toBe(403);
-    expect((await call(admin)('patch', '/api/system-configs/SLA_HOURS_URGENT', { value: 10 })).status).toBe(403);
+    expect((await call(manager)('patch', '/api/system-configs/UPLOAD_MAX_SIZE_MB', { value: 10 })).status).toBe(200);
+    expect((await call(await createUser('ACCOUNTANT'))('patch', '/api/system-configs/SLA_HOURS_URGENT', { value: 10 })).status).toBe(403);
     expect((await call(manager)('patch', '/api/system-configs/KHONG_CO', { value: 10 })).status).toBe(404);
 
     const ok = await call(manager)('patch', '/api/system-configs/sla_hours_urgent', { value: 12 });

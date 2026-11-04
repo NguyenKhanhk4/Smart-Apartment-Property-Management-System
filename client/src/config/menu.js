@@ -30,7 +30,7 @@ import {
 //     label: 'Tòa nhà',                 // chữ trên menu
 //     icon: BankOutlined,               // component icon của @ant-design/icons
 //     path: 'buildings',                // tương đối: /app/buildings hoặc /r/buildings
-//     roles: ['ADMIN', 'MANAGER'],      // spec như authorize() backend; bỏ trống = ai đăng nhập cũng xem được
+//     roles: ['MANAGER', 'ACCOUNTANT'],      // spec như authorize() backend; bỏ trống = ai đăng nhập cũng xem được
 //     component: lazy(() => import('../features/buildings/BuildingListPage')),
 //     hideInMenu: true,                 // (tuỳ chọn) có route nhưng không hiện trên menu, vd trang chi tiết
 //     group: 'Tài chính',               // (tuỳ chọn, chỉ /app) nhóm hiển thị trên sidebar — dùng 1 trong MENU_GROUPS
@@ -268,7 +268,7 @@ export const adminMenu = [
     label: 'Tòa nhà & Căn hộ',
     icon: BankOutlined,
     path: 'buildings',
-    roles: ['ADMIN', 'MANAGER', 'STAFF:RECEPTIONIST'],
+    roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
     component: BuildingsPage,
   },
   {
@@ -277,7 +277,7 @@ export const adminMenu = [
     label: 'Tài khoản nội bộ',
     icon: TeamOutlined,
     path: 'internal-accounts',
-    roles: ['ADMIN'],
+    roles: ['MANAGER'],
     component: InternalAccountsPage,
   },
   {
@@ -303,7 +303,7 @@ export const adminMenu = [
     label: 'Dashboard hệ thống',
     icon: DashboardOutlined,
     path: 'system-dashboard',
-    roles: ['ADMIN'],
+    roles: ['MANAGER'],
     component: SystemDashboardPage,
   },
 ];

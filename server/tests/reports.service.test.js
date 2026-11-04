@@ -179,12 +179,11 @@ describe('reports.service', () => {
     const app = createApp();
     const call = (user) => (url) => request(app).get(url).set('Authorization', `Bearer ${tokenFor(user)}`);
 
-    it('BR-R3/RBAC: ADMIN và cư dân không xem báo cáo; BOARD xem thu phí/quỹ nhưng không xem vận hành', async () => {
-      const admin = await createUser('ADMIN');
+    it('RBAC: cư dân không xem báo cáo; BOARD xem thu phí/quỹ nhưng không xem vận hành', async () => {
       const resident = await createUser('RESIDENT');
       const board = await createUser('BOARD', { boardTitle: 'MEMBER' });
       const accountant = await createUser('ACCOUNTANT');
-      for (const u of [admin, resident]) {
+      for (const u of [resident]) {
         for (const url of ['/api/reports/billing-summary', '/api/reports/fund', '/api/reports/tickets', '/api/reports/export?type=debts&format=xlsx']) {
           expect((await call(u)(url)).status, `${u.role} ${url}`).toBe(403);
         }

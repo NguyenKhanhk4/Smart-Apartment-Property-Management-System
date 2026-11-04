@@ -18,12 +18,12 @@ const router = Router();
  *       200:
  *         description: Dữ liệu thống kê hệ thống (tài khoản, cơ sở, cron jobs, audit log)
  *       403:
- *         description: Chỉ quản trị viên (ADMIN) mới có quyền truy cập
+ *         description: Chỉ Trưởng BQL mới có quyền truy cập
  */
 router.get(
   '/dashboard',
   authenticate,
-  authorize(ROLES.ADMIN),
+  authorize(ROLES.MANAGER),
   async (_req, res) => {
     const data = await service.getDashboard();
     ok(res, data);

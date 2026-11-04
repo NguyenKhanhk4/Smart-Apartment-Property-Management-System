@@ -10,7 +10,6 @@ export const ROLES = Object.freeze({
   ACCOUNTANT: 'ACCOUNTANT',
   MANAGER: 'MANAGER',
   BOARD: 'BOARD',
-  ADMIN: 'ADMIN',
 });
 
 // Chức danh của STAFF
@@ -332,6 +331,6 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.PASS_EXPIRY_REMIND_DAYS, value: 3, scope: 'BUSINESS', description: 'Nhắc gia hạn gói tháng trong N ngày cuối tháng — BR-O22' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, value: 500, scope: 'BUSINESS', description: 'Sức chứa bãi xe máy' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_CAR, value: 100, scope: 'BUSINESS', description: 'Sức chứa bãi ô tô' },
-  // TECHNICAL — Admin sửa
+  // TECHNICAL — tham số kỹ thuật, Trưởng BQL sửa
   { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 5, scope: 'TECHNICAL', description: 'Dung lượng ảnh tối đa (MB) — NFR-10' },
 ]);

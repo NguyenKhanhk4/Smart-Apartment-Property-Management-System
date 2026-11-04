@@ -142,12 +142,12 @@ describe('guests.service', () => {
     const app = createApp();
     const call = (user) => (m, url, body) => request(app)[m](url).send(body).set('Authorization', `Bearer ${tokenFor(user)}`);
 
-    it('chỉ bảo vệ được check-in/walk-in; cư dân/lễ tân/admin bị 403', async () => {
+    it('chỉ bảo vệ được check-in/walk-in; cư dân/lễ tân/kế toán bị 403', async () => {
       const h = await createHousehold();
       const receptionist = await createReceptionist();
-      const admin = await createUser('ADMIN');
+      const accountant = await createUser('ACCOUNTANT');
       const body = { guestName: 'Khách', apartmentId: String(h.apartment._id) };
-      for (const u of [h.user, receptionist, admin]) {
+      for (const u of [h.user, receptionist, accountant]) {
         expect((await call(u)('post', '/api/guests/walk-in', body)).status).toBe(403);
       }
       const guard = await createSecurity();

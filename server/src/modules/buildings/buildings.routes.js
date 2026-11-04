@@ -9,7 +9,7 @@ import * as service from './buildings.service.js';
 
 // Module A — Vũ Việt. UC-A05: Quản lý tòa nhà (Block)
 const router = Router();
-const VIEWERS = ['ADMIN', 'MANAGER', 'STAFF:RECEPTIONIST'];
+const VIEWERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
 
 const buildingFields = {
   code: Joi.string().trim().uppercase().max(20),
@@ -78,7 +78,7 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
 router.post(
   '/',
   authenticate,
-  authorize('ADMIN'),
+  authorize('MANAGER'),
   validate({ body: createBuildingBody }),
   async (req, res) => {
     const building = await service.createBuilding(req.validated.body, req.user, req.ip);
@@ -98,7 +98,7 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  authorize('ADMIN'),
+  authorize('MANAGER'),
   validate({ params: idParams, body: updateBuildingBody }),
   async (req, res) => {
     const building = await service.updateBuilding(
@@ -123,7 +123,7 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  authorize('ADMIN'),
+  authorize('MANAGER'),
   validate({ params: idParams }),
   async (req, res) => {
     const result = await service.deleteBuilding(req.validated.params.id, req.user, req.ip);

@@ -63,7 +63,7 @@ export async function getApartmentById(id) {
 }
 
 /**
- * Tạo căn hộ mới (Admin) — BR-A4
+ * Tạo căn hộ mới (Trưởng BQL) — BR-A4
  */
 export async function createApartment({ buildingId, code, floor, area }, adminUser, ip) {
   const building = await Building.findById(buildingId);
@@ -119,7 +119,7 @@ export async function createApartment({ buildingId, code, floor, area }, adminUs
 }
 
 /**
- * Cập nhật căn hộ (Admin) — BR-A4
+ * Cập nhật căn hộ (Trưởng BQL) — BR-A4
  */
 export async function updateApartment(id, data, adminUser, ip) {
   // BR-A4: Không cho sửa status trực tiếp
@@ -186,7 +186,7 @@ export async function updateApartment(id, data, adminUser, ip) {
 }
 
 /**
- * Xóa căn hộ (Admin) — BR-A4
+ * Xóa căn hộ (Trưởng BQL) — BR-A4
  */
 export async function deleteApartment(id, adminUser, ip) {
   const apartment = await Apartment.findById(id);

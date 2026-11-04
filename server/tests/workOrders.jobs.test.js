@@ -8,7 +8,6 @@ import {
   createReceptionist,
   createResident,
   createTechnician,
-  createUser,
   tokenFor,
 } from './helpers/fixtures.js';
 
@@ -242,12 +241,6 @@ describe('workOrders.jobs (UC-D02)', () => {
       expect(again.status).toBe(200);
       expect(again.body.data.affectedCount).toBe(0);
       expect(await WorkOrder.countDocuments()).toBe(2);
-    });
-
-    it('ADMIN → 200', async () => {
-      await setup();
-      const admin = await createUser('ADMIN');
-      expect((await run(tokenFor(admin))).status).toBe(200);
     });
 
     it('KTV / Lễ tân / Cư dân → 403; không token → 401; không tạo work order, không ghi cron_runs', async () => {

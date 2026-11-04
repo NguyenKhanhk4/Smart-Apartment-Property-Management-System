@@ -116,11 +116,11 @@ describe('announcements.service', () => {
     const app = createApp();
     const call = (user) => (m, url, body) => request(app)[m](url).send(body).set('Authorization', `Bearer ${tokenFor(user)}`);
 
-    it('cư dân/KTV/ADMIN không đăng được bài; PATCH không nhận field lạ (mass assignment)', async () => {
+    it('cư dân/kế toán không đăng được bài; PATCH không nhận field lạ (mass assignment)', async () => {
       const h = await createHousehold();
-      const admin = await createUser('ADMIN');
+      const accountant = await createUser('ACCOUNTANT');
       const manager = await createManager();
-      for (const u of [h.user, admin]) {
+      for (const u of [h.user, accountant]) {
         expect((await call(u)('post', '/api/announcements', body({ targetScope: 'ALL' }))).status).toBe(403);
       }
       const created = await call(manager)('post', '/api/announcements', body({ targetScope: 'ALL' }));

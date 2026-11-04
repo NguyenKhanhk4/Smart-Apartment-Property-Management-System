@@ -339,8 +339,8 @@ describe('tickets.service', () => {
   describe('routes', () => {
     const app = createApp();
 
-    it('ADMIN không có quyền nghiệp vụ ticket (BR-R3); BOARD/ACCOUNTANT cũng không', async () => {
-      for (const role of ['ADMIN', 'BOARD', 'ACCOUNTANT']) {
+    it('BOARD/ACCOUNTANT không có quyền nghiệp vụ ticket', async () => {
+      for (const role of ['BOARD', 'ACCOUNTANT']) {
         const u = await createResident({ role });
         const res = await request(app).get('/api/tickets').set('Authorization', `Bearer ${tokenFor(u)}`);
         expect(res.status).toBe(403);

@@ -8,10 +8,9 @@ const TITLES_BY_ROLE = {
 
 /**
  * Kiểm tra user có khớp ít nhất một spec không (srs_final.md §2.3).
- *   'RESIDENT' | 'ACCOUNTANT' | 'MANAGER' | 'ADMIN' | 'STAFF' | 'BOARD' → đúng role đó
+ *   'RESIDENT' | 'ACCOUNTANT' | 'MANAGER' | 'STAFF' | 'BOARD' → đúng role đó
  *   'STAFF:TECHNICIAN'  → STAFF có roleTitle TECHNICIAN (RECEPTIONIST / SECURITY / TECHNICIAN)
  *   'BOARD:CHAIRMAN'    → BOARD có boardTitle CHAIRMAN (CHAIRMAN / MEMBER)
- * ADMIN KHÔNG tự có quyền nghiệp vụ của role khác (BR-R3).
  */
 export function hasPermission(user, specs) {
   if (!user) return false;

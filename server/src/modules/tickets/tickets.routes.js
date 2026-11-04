@@ -107,7 +107,7 @@ router.get('/assignees', authenticate, authorize(...DISPATCHERS), async (_req, r
 router.post(
   '/jobs/:job/run',
   authenticate,
-  authorize('MANAGER', 'ADMIN'),
+  authorize('MANAGER'),
   validate({ params: Joi.object({ job: Joi.string().valid('escalate', 'auto-close').required() }) }),
   async (req, res) => {
     const [name, handler] =

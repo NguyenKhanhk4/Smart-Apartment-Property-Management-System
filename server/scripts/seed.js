@@ -45,7 +45,6 @@ const mkUser = (email, fullName, role, extra = {}) => ({
   ...extra,
 });
 const users = await M.User.insertMany([
-  mkUser('admin@sapms.vn', 'Quản trị hệ thống', 'ADMIN'),
   mkUser('manager@sapms.vn', 'Nguyễn Văn Quản', 'MANAGER'),
   mkUser('accountant@sapms.vn', 'Trần Thị Kế Toán', 'ACCOUNTANT'),
   mkUser('letan@sapms.vn', 'Lê Thị Lễ Tân', 'STAFF', { roleTitle: 'RECEPTIONIST' }),
