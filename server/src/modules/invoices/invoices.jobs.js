@@ -1,4 +1,7 @@
 import { CONFIG_KEYS, INVOICE_STATUS, NOTIFICATION_TYPES } from '../../constants/enums.js';
+
+// Đã phát hành, chưa trả đủ, chưa bị đánh dấu quá hạn
+const DUE_STATUSES = [INVOICE_STATUS.UNPAID, INVOICE_STATUS.PARTIALLY_PAID];
 import { Invoice } from '../../models/index.js';
 import { notifyRoles } from '../../services/notification.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
@@ -35,7 +38,7 @@ export async function billingReminders(now = new Date()) {
  */
 export async function markOverdueInvoices(now = new Date()) {
   const res = await Invoice.updateMany(
-    { status: INVOICE_STATUS.UNPAID, dueDate: { $lt: startOfVnDay(now) } },
+    { status: { $in: DUE_STATUSES }, dueDate: { $lt: startOfVnDay(now) } },
     { $set: { status: INVOICE_STATUS.OVERDUE } },
   );
   return res.modifiedCount;
