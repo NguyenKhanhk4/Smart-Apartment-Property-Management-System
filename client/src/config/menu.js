@@ -77,6 +77,8 @@ const PaymentListPage = lazy(() => import('../features/payments/PaymentListPage'
 const AdminReceiptPage = lazy(() => import('../features/payments/ReceiptPage'));
 const MyReceiptPage = lazy(() => import('../features/payments/MyReceiptPage'));
 const PaymentResultPage = lazy(() => import('../features/payments/PaymentResultPage'));
+const DebtLedgerPage = lazy(() => import('../features/debts/DebtLedgerPage'));
+const DebtApartmentPage = lazy(() => import('../features/debts/DebtApartmentPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -363,6 +365,23 @@ export const adminMenu = [
     path: 'payments/:id/receipt',
     roles: ['ACCOUNTANT', 'MANAGER'],
     component: AdminReceiptPage,
+    hideInMenu: true,
+  },
+  {
+    key: 'debts',
+    group: 'Tài chính',
+    label: 'Sổ công nợ',
+    icon: FundOutlined,
+    path: 'debts',
+    roles: ['ACCOUNTANT', 'MANAGER'],
+    component: DebtLedgerPage,
+  },
+  {
+    key: 'debt-apartment',
+    label: 'Công nợ căn hộ',
+    path: 'debts/apartments/:id',
+    roles: ['ACCOUNTANT', 'MANAGER'],
+    component: DebtApartmentPage,
     hideInMenu: true,
   },
 

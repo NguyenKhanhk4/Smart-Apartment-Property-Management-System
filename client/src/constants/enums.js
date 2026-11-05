@@ -191,6 +191,30 @@ export const INVOICE_STATUS = {
   CANCELLED: { label: 'Đã hủy', color: 'default' },
 };
 
+// Công nợ (UC31): hồ sơ nợ quá hạn của 1 Người nộp phí tại 1 căn
+export const DEBT_STATUS = {
+  REMINDING: { label: 'Đang nhắc nợ', color: 'orange' },
+  LONG_OVERDUE: { label: 'Nợ quá hạn dài', color: 'magenta' },
+  RESOLVED: { label: 'Đã trả hết', color: 'green' },
+};
+
+// Tình trạng một dòng sổ công nợ (căn + Người nộp phí), lấy mức nặng nhất
+export const LEDGER_STATUS = {
+  PAID: { label: 'Đã thanh toán', color: 'green' },
+  UNPAID: { label: 'Chưa thanh toán', color: 'blue' },
+  PARTIALLY_PAID: { label: 'Thanh toán một phần', color: 'cyan' },
+  OVERDUE: { label: 'Quá hạn', color: 'red' },
+  LONG_OVERDUE: { label: 'Nợ quá hạn dài', color: 'magenta' },
+};
+
+export const CONTACT_METHODS = {
+  PHONE: { label: 'Gọi điện', color: 'blue' },
+  SMS: { label: 'Tin nhắn', color: 'cyan' },
+  EMAIL: { label: 'Email', color: 'geekblue' },
+  IN_PERSON: { label: 'Gặp trực tiếp', color: 'purple' },
+  LETTER: { label: 'Gửi văn bản', color: 'default' },
+};
+
 export const PREPAID_TX_TYPES = {
   DEPOSIT: { label: 'Tiền thừa ghi vào số dư', color: 'green' },
   APPLY: { label: 'Trừ vào thông báo phí', color: 'blue' },
@@ -308,6 +332,7 @@ export const CRON_JOBS = {
   INVOICE_OVERDUE: { label: 'Quét hóa đơn quá hạn', color: 'red' },
   BILLING_REMIND: { label: 'Nhắc tính phí / duyệt thông báo phí', color: 'gold' },
   PAYMENT_RECONCILE: { label: 'Đối soát giao dịch payOS', color: 'blue' },
+  DEBT_REMIND: { label: 'Nhắc nợ quá hạn', color: 'red' },
   BOOKING_COMPLETE: { label: 'Hoàn tất / không đến booking tiện ích', color: 'cyan' },
   WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
   TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },

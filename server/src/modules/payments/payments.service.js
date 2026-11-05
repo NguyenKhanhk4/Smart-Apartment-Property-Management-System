@@ -22,6 +22,7 @@ import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { fmtDateTimeVn, periodLabel, toVnYmd } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { formatVnd } from '../amenities/pricing.js';
+import { closeCaseIfCleared } from '../debts/debts.cases.js';
 import { isDuplicateOn } from '../invoices/invoices.service.js';
 
 const MAX_ATTEMPTS = 3;
@@ -131,6 +132,8 @@ export async function applyPayment({ paymentId, apartmentId, payerId, amount, pa
       { session },
     );
   }
+  // Trả hết các khoản quá hạn → đóng hồ sơ nợ ngay (không đợi cron nhắc nợ hôm sau)
+  if (allocations.length) await closeCaseIfCleared(apartmentId, payerId, { session });
   return {
     allocations: allocations.map((a) => ({ invoiceId: a.invoice._id, amount: a.amount, code: a.invoice.code, period: a.invoice.period })),
     credit,

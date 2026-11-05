@@ -262,15 +262,29 @@ for (const period of periods) {
 await M.Invoice.insertMany(invoices);
 await M.Payment.insertMany(payments);
 
-const overdueApartments = [...new Set(invoices.filter((i) => i.status === 'OVERDUE').map((i) => String(i.apartmentId)))];
+// Hồ sơ nợ quá hạn (UC31): 1 căn đã nhắc đủ 3 lần → Nợ quá hạn dài, có lời hẹn trả; các căn còn lại cron DEBT_REMIND tự mở khi chạy
+const overdueApartments = [...new Set(invoices.filter((i) => i.status === 'OVERDUE' && i.payerId).map((i) => String(i.apartmentId)))];
 await M.DebtFollowup.insertMany(
-  overdueApartments.slice(0, 3).map((apartmentId) => ({
-    apartmentId,
-    invoiceIds: invoices.filter((i) => String(i.apartmentId) === apartmentId && i.status === 'OVERDUE').map((i) => i._id),
-    assignedTo: U.letan._id,
-    assignedBy: U.manager._id,
-    activities: [{ at: daysAgo(2), by: U.letan._id, method: 'PHONE', note: 'Đã gọi, hẹn cuối tuần thanh toán', promisedDate: daysAgo(-3) }],
-  })),
+  overdueApartments.slice(0, 1).map((apartmentId) => {
+    const inv = invoices.filter((i) => String(i.apartmentId) === apartmentId && i.status === 'OVERDUE');
+    const amount = inv.reduce((sum, i) => sum + i.totalAmount - (i.paidAmount ?? 0), 0);
+    const reminders = [12, 9, 6].map((d) => ({ at: daysAgo(d, 8), amount, invoiceCodes: inv.map((i) => i.code) }));
+    return {
+      apartmentId,
+      buildingId: inv[0].buildingId,
+      payerId: inv[0].payerId,
+      status: 'LONG_OVERDUE',
+      openedAt: daysAgo(12, 8),
+      reminderCount: 3,
+      lastRemindedAt: reminders.at(-1).at,
+      reminders,
+      longOverdueAt: daysAgo(3, 8),
+      promisedDate: startOfVnDay(daysAgo(-5)),
+      activities: [
+        { at: daysAgo(2), by: U.manager._id, method: 'PHONE', response: 'Cư dân xin lùi vì đang đi công tác', promisedDate: startOfVnDay(daysAgo(-5)) },
+      ],
+    };
+  }),
 );
 
 // ===== Quỹ bảo trì =====

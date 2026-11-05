@@ -30,6 +30,7 @@ import adminDashboardRoutes from './modules/adminDashboard/adminDashboard.routes
 import feeTypeRoutes from './modules/feeTypes/feeTypes.routes.js';
 import invoiceRoutes from './modules/invoices/invoices.routes.js';
 import paymentRoutes from './modules/payments/payments.routes.js';
+import debtRoutes from './modules/debts/debts.routes.js';
 import gatePassRoutes, { platesRouter } from './modules/gatePasses/gatePasses.routes.js';
 import parkingCardRoutes from './modules/parkingCards/parkingCards.routes.js';
 import dutyShiftRoutes from './modules/dutyShifts/dutyShifts.routes.js';
@@ -91,6 +92,7 @@ router.use('/parking-cards', parkingCardRoutes);
 router.use('/fee-types', feeTypeRoutes);
 router.use('/invoices', invoiceRoutes);
 router.use('/payments', paymentRoutes);
+router.use('/debts', debtRoutes);
 
 // Người 4 — Sự cố & Tiện ích (lịch ca trực)
 router.use('/duty-shifts', dutyShiftRoutes);
