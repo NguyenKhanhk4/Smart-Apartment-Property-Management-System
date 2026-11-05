@@ -21,7 +21,7 @@ import {
   decryptIdNumber,
   maskIdNumber,
 } from './idCrypto.js';
-import { findOrCreateResidentUser, linkResident, welcomeNewResident } from './residentAccounts.js';
+import { findOrCreateResidentUser, inviteNewResident, linkResident } from './residentAccounts.js';
 import { toPublicUser } from '../auth/auth.service.js';
 import { findUserByPhone } from '../users/userLookup.js';
 
@@ -120,7 +120,7 @@ export async function lookupAccountByPhone(phone) {
 /**
  * Thêm thành viên hộ gia đình (Lễ tân) — UC-A07
  * - Luôn là FAMILY_MEMBER (OWNER/TENANT do Hợp đồng tạo). Căn hộ phải OWNED hoặc RENTED.
- * - Chưa có tài khoản thì tạo mới + gửi mail mật khẩu tạm; mật khẩu chỉ trả về khi gửi mail thất bại.
+ * - Chưa có tài khoản thì tạo mới ở trạng thái chờ kích hoạt và gửi mail mời kích hoạt.
  */
 export async function addMember(receptionistUser, data, ip) {
   const { apartmentId, idNumber } = data;
@@ -181,7 +181,7 @@ export async function addMember(receptionistUser, data, ip) {
     );
   });
 
-  const temporaryPassword = await welcomeNewResident(account);
+  const activationInviteSent = await inviteNewResident(account);
   await notify(account.user._id, {
     type: NOTIFICATION_TYPES.SYSTEM,
     title: 'Đã thêm vào căn hộ',
@@ -191,7 +191,7 @@ export async function addMember(receptionistUser, data, ip) {
   });
   await syncMemberCodes(apartmentId);
 
-  return { resident: savedResident, user: toPublicUser(account.user), temporaryPassword };
+  return { resident: savedResident, user: toPublicUser(account.user), activationInviteSent };
 }
 
 async function syncMemberCodes(apartmentId) {

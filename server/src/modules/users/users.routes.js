@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { BOARD_TITLES, ROLES, ROLE_TITLES, values } from '../../constants/enums.js';
+import { BOARD_TITLES, CONSENT_ACTIONS, ROLES, ROLE_TITLES, values } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
@@ -18,6 +18,10 @@ const updateMeBody = Joi.object({
   phone: phoneVn(),
   dateOfBirth: ymd().allow('', null),
 }).min(1);
+
+const updateConsentBody = Joi.object({
+  action: Joi.string().valid(CONSENT_ACTIONS.ACCEPTED, CONSENT_ACTIONS.WITHDRAWN).required(),
+});
 
 const changePasswordBody = Joi.object({
   currentPassword: Joi.string().required(),
@@ -117,6 +121,17 @@ router.get('/me', authenticate, async (req, res) => {
 router.patch('/me', authenticate, validate({ body: updateMeBody }), async (req, res) => {
   const user = await usersService.updateMe(req.user.id, req.validated.body);
   ok(res, user, 'Cập nhật thông tin thành công');
+});
+
+/**
+ * @openapi
+ * /users/me/consent:
+ *   patch:
+ *     tags: [Tài khoản nội bộ]
+ *     summary: Đồng ý hoặc rút lại đồng ý về dữ liệu cá nhân — BR-X7
+ */
+router.patch('/me/consent', authenticate, validate({ body: updateConsentBody }), async (req, res) => {
+  ok(res, await usersService.updateConsent(req.user.id, req.validated.body, { ip: req.ip }));
 });
 
 /**

@@ -4,6 +4,7 @@
 
 // Module A — Tài khoản, tòa nhà, căn hộ, cư dân, hợp đồng, xe
 export { User } from './User.js';
+export { VerificationCode } from './VerificationCode.js';
 export { Building } from './Building.js';
 export { Apartment } from './Apartment.js';
 export { Contract } from './Contract.js';

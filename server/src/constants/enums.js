@@ -19,6 +19,19 @@ export const CONSENT_ACTIONS = Object.freeze({
   WITHDRAWN: 'WITHDRAWN',
 });
 
+// Phiên bản điều khoản dữ liệu cá nhân đang áp dụng; đổi nội dung điều khoản thì tăng số này
+export const CONSENT_POLICY_VERSION = '1.0';
+
+// Mã xác minh: dùng để làm gì và cấp qua đâu (BR-X4, BR-S05)
+export const VERIFICATION_PURPOSES = Object.freeze({
+  ACTIVATION: 'ACTIVATION',
+  PASSWORD_RESET: 'PASSWORD_RESET',
+});
+export const VERIFICATION_CHANNELS = Object.freeze({
+  EMAIL_OTP: 'EMAIL_OTP',
+  DESK_CODE: 'DESK_CODE',
+});
+
 // Chức danh của STAFF
 export const ROLE_TITLES = Object.freeze({
   RECEPTIONIST: 'RECEPTIONIST',
@@ -468,6 +481,8 @@ export const AUDIT_ACTIONS = Object.freeze({
   RESIDENT_ASSIGNED: 'RESIDENT_ASSIGNED',
   RESIDENT_REMOVED: 'RESIDENT_REMOVED',
   RESIDENT_UPDATED: 'RESIDENT_UPDATED',
+  ACCOUNT_ACTIVATED: 'ACCOUNT_ACTIVATED',
+  CONSENT_CHANGED: 'CONSENT_CHANGED',
   VEHICLE_APPROVED: 'VEHICLE_APPROVED',
   VEHICLE_REJECTED: 'VEHICLE_REJECTED',
   VEHICLE_CANCELLED: 'VEHICLE_CANCELLED',

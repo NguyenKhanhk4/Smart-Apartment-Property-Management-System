@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const registeredSuccess = location.state?.registered;
+  const activated = location.state?.activated;
 
   const enter = (session) => {
     startSession(session);
@@ -46,11 +46,11 @@ export default function LoginPage() {
       <div className="w-8 h-0.5 bg-gold mt-2 mb-2" />
       <p className="m-0 mb-6 text-[13px] text-ink-2">Nhập thông tin tài khoản để truy cập hệ thống.</p>
 
-      {registeredSuccess && (
+      {activated && (
         <Alert
           type="success"
           showIcon
-          message="Đăng ký tài khoản thành công! Vui lòng đăng nhập."
+          title="Tài khoản đã được kích hoạt. Vui lòng đăng nhập."
           className="mb-4"
           closable
         />
@@ -82,9 +82,9 @@ export default function LoginPage() {
       </Form>
 
       <div className="mt-4 text-center text-[13px] text-ink-2">
-        Chưa có tài khoản?{' '}
-        <Link to="/register" className="font-semibold text-navy hover:text-gold transition-colors">
-          Đăng ký
+        Lần đầu sử dụng?{' '}
+        <Link to="/activate" className="font-semibold text-navy hover:text-gold transition-colors">
+          Kích hoạt tài khoản
         </Link>
       </div>
 

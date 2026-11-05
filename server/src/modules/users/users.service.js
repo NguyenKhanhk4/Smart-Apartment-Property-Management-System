@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { AUDIT_ACTIONS, AUDIT_TARGETS, BOARD_TITLES, ROLES } from '../../constants/enums.js';
+import { AUDIT_ACTIONS, AUDIT_TARGETS, BOARD_TITLES, CONSENT_ACTIONS, CONSENT_POLICY_VERSION, ROLES } from '../../constants/enums.js';
 import { Resident, User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { assertPhoneAndEmailFree, uniqueConflictError } from './userLookup.js';
@@ -36,6 +36,32 @@ export async function updateMe(userId, { fullName, phone, dateOfBirth }) {
 
   await saveUnique(() => user.save());
   return toPublicUser(user);
+}
+
+/**
+ * BR-X7: đồng ý hoặc rút lại đồng ý trong hồ sơ. Giữ toàn bộ lịch sử, ghi audit log.
+ * Đồng ý lại khi đang đồng ý thì không ghi thêm; chưa đồng ý thì không có gì để rút.
+ */
+export async function updateConsent(userId, { action }, { ip } = {}) {
+  const user = await User.findById(userId);
+  if (!user) throw ApiError.notFound('Không tìm thấy tài khoản');
+  const current = user.consents.at(-1)?.action;
+  if (action === CONSENT_ACTIONS.WITHDRAWN && current !== CONSENT_ACTIONS.ACCEPTED) {
+    throw new ApiError('STATUS_CONFLICT', 'Bạn chưa đồng ý với điều khoản nên không có gì để rút lại');
+  }
+  if (action === current) return toPublicUser(user);
+
+  const entry = { action, policyVersion: CONSENT_POLICY_VERSION, createdAt: new Date() };
+  await User.updateOne({ _id: userId }, { $push: { consents: entry } });
+  await logAudit({
+    action: AUDIT_ACTIONS.CONSENT_CHANGED,
+    user: { id: userId },
+    targetType: AUDIT_TARGETS.USER,
+    targetId: userId,
+    metadata: { action, policyVersion: CONSENT_POLICY_VERSION },
+    ip,
+  });
+  return toPublicUser(await User.findById(userId));
 }
 
 /**

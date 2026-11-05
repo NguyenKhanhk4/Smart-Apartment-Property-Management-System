@@ -2,8 +2,10 @@
 import { http } from './axiosClient';
 
 export const authApi = {
-  /** body { fullName, email, phone, password, confirmPassword } → { user } */
-  register: (body) => http.post('/auth/register', body),
+  /** UC11. body { phone, apartmentCode?, email } → gửi OTP qua email */
+  startActivation: (body) => http.post('/auth/activation/start', body),
+  /** UC11. body { phone, code, password, confirmPassword, consent: 'ACCEPTED' | 'DECLINED' } */
+  confirmActivation: (body) => http.post('/auth/activation/confirm', body),
   /** body { email, password } → { user, accessToken, refreshToken } (hợp đồng với Module A) */
   login: (body) => http.post('/auth/login', body),
   /** body { refreshToken } → { accessToken, refreshToken } */

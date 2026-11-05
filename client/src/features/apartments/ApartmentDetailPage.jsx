@@ -122,10 +122,9 @@ export default function ApartmentDetailPage() {
     },
     {
       success: (res) => {
-        if (res?.data?.temporaryPassword) {
-          return `Thêm thành viên thành công! Mật khẩu tạm của cư dân: ${res.data.temporaryPassword}`;
-        }
-        return 'Thêm thành viên vào căn hộ thành công';
+        return res?.data?.activationInviteSent === false
+          ? 'Đã thêm thành viên. Chưa gửi được email mời, hãy hướng dẫn cư dân vào trang Kích hoạt tài khoản.'
+          : 'Thêm thành viên vào căn hộ thành công';
       },
       onDone: () => {
         setAddModalOpen(false);

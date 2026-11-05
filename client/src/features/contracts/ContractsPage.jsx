@@ -161,10 +161,9 @@ export default function ContractsPage() {
     async (formData) => contractsApi.create(formData),
     {
       success: (res) => {
-        if (res?.data?.temporaryPassword) {
-          return `Tạo hợp đồng thành công! Mật khẩu tạm của cư dân mới: ${res.data.temporaryPassword}`;
-        }
-        return 'Tạo hợp đồng thành công';
+        return res?.data?.activationInviteSent === false
+          ? 'Đã tạo hợp đồng. Chưa gửi được email mời, hãy hướng dẫn cư dân vào trang Kích hoạt tài khoản.'
+          : 'Tạo hợp đồng thành công';
       },
       onDone: () => {
         setCreateModalOpen(false);

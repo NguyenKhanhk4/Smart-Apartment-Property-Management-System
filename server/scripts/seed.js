@@ -33,6 +33,7 @@ if (RESET) {
 await ensureDefaultConfigs();
 const passwordHash = await bcrypt.hash(PASSWORD, 10);
 const now = new Date();
+const acceptedConsent = { action: 'ACCEPTED', policyVersion: '1.0', createdAt: now };
 const daysAgo = (n, hour = 9) => new Date(startOfVnDay(new Date(now.getTime() - n * DAY_MS)).getTime() + hour * HOUR_MS);
 
 // ===== Tài khoản =====
@@ -43,6 +44,7 @@ const mkUser = (email, fullName, role, extra = {}) => ({
   role,
   passwordHash,
   activatedAt: now,
+  consents: [acceptedConsent],
   phone: `09${(phoneSeq += 1)}`,
   ...extra,
 });
@@ -115,7 +117,7 @@ await M.Resident.insertMany(
 // cudan1 (căn đầu) là chủ hộ có vợ và con nhỏ (chưa có ngày sinh: chủ hộ tự nhập ở mục Gia đình).
 // Căn thứ 7 đang cho thuê: chủ sở hữu "không ở" (cusohuu7) không có quyền tiện ích, người thuê (nguoithue7) là chủ hộ.
 // Tạo trực tiếp (không qua mkUser) để không tiêu thụ bộ sinh số ngẫu nhiên → dữ liệu demo phía sau giữ nguyên
-const demoUser = (email, fullName, phone) => ({ email, fullName, role: 'RESIDENT', passwordHash, activatedAt: now, phone });
+const demoUser = (email, fullName, phone) => ({ email, fullName, role: 'RESIDENT', passwordHash, activatedAt: now, consents: [acceptedConsent], phone });
 const householdUsers = await M.User.insertMany([
   demoUser('vo.cudan1@sapms.vn', 'Vợ cư dân An', '0900000001'),
   demoUser('con.cudan1@sapms.vn', 'Bé An', '0900000002'),
@@ -157,6 +159,21 @@ await M.Resident.insertMany([
   { userId: householdUsers[3]._id, apartmentId: rentedApartment._id, relationType: 'TENANT', contractId: rentedLeaseContract._id, moveInDate: daysAgo(120) },
   { userId: householdUsers[4]._id, apartmentId: apartments[2]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[2]._id, moveInDate: daysAgo(300) },
 ]);
+// Cư dân chờ kích hoạt để thử UC11: SĐT 0900000006, email chokichhoat@sapms.vn, mã căn lấy từ căn đầu tiên
+const pendingUser = await M.User.create({
+  email: 'chokichhoat@sapms.vn',
+  fullName: 'Cư dân chờ kích hoạt',
+  role: 'RESIDENT',
+  phone: '0900000006',
+});
+await M.Resident.create({
+  userId: pendingUser._id,
+  apartmentId: apartments[0]._id,
+  relationType: 'FAMILY_MEMBER',
+  contractId: contracts[0]._id,
+  moveInDate: daysAgo(10),
+});
+
 const vehicles = await M.Vehicle.insertMany(
   occupied.slice(0, 20).map((a, i) => ({
     apartmentId: a._id,

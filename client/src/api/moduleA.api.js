@@ -6,6 +6,7 @@ import { apiClient, http } from './axiosClient';
 export const usersApi = {
   me: () => http.get('/users/me'),
   updateMe: (body) => http.patch('/users/me', body),
+  updateConsent: (action) => http.patch('/users/me/consent', { action }),
   updateAvatar: (file) => {
     const form = new FormData();
     form.append('avatar', file);

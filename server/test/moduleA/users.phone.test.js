@@ -2,7 +2,7 @@
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { User } from '../../src/models/index.js';
-import { register as registerAccount } from '../../src/modules/auth/auth.service.js';
+import { createInternal } from '../../src/modules/users/users.service.js';
 import { normalizePhone } from '../../src/utils/validators.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { asUser, createManager, createUser } from '../helpers/fixtures.js';
@@ -12,8 +12,6 @@ let app;
 const PASSWORD = 'MatKhau123';
 const base = { fullName: 'Người Thử', passwordHash: 'x', role: 'RESIDENT' };
 const staff = { fullName: 'Kế Toán', email: 'kt@example.com', role: 'ACCOUNTANT' };
-const registerBody = { fullName: 'Cư Dân', email: 'cd@example.com', password: PASSWORD, confirmPassword: PASSWORD };
-const register = (body) => app.request('POST', '/auth/register', { body });
 const internal = (actor, body) => app.request('POST', '/users/internal', { user: asUser(actor), body });
 
 before(async () => {
@@ -90,13 +88,14 @@ test('User: email là duy nhất; nhiều tài khoản có email null vẫn đư
   await User.create({ ...base, phone: '0912345674', email: null });
 });
 
-test('đăng ký đồng thời cùng email khác SĐT → 1 tài khoản, lần kia 409 EMAIL_EXISTS', async () => {
-  const account = (phone) => ({ fullName: 'Cư Dân', email: 'cung@example.com', phone, password: PASSWORD });
+test('tạo đồng thời cùng email khác SĐT → 1 tài khoản, lần kia 409 EMAIL_EXISTS', async () => {
+  const manager = asUser(await createManager());
+  const account = (phone) => ({ ...staff, email: 'cung@example.com', phone });
 
   const results = await Promise.allSettled([
-    registerAccount(account('0912345671')),
-    registerAccount(account('0912345672')),
-    registerAccount(account('0912345673')),
+    createInternal(manager, account('0912345671')),
+    createInternal(manager, account('0912345672')),
+    createInternal(manager, account('0912345673')),
   ]);
 
   assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
@@ -106,29 +105,6 @@ test('đăng ký đồng thời cùng email khác SĐT → 1 tài khoản, lần
     assert.equal(reason.details?.[0]?.field, 'email');
   }
   assert.equal(await User.countDocuments({ email: 'cung@example.com' }), 1);
-});
-
-test('đăng ký: thiếu SĐT trả 400; thành công thì đã kích hoạt và lưu dạng chuẩn hóa', async () => {
-  assert.equal((await register(registerBody)).status, 400);
-
-  const res = await register({ ...registerBody, phone: '+84912345678' });
-
-  assert.equal(res.status, 201);
-  const saved = await User.findOne({ email: 'cd@example.com' }).lean();
-  assert.equal(saved.phone, '0912345678');
-  assert.ok(saved.activatedAt instanceof Date);
-});
-
-test('đăng ký: trùng SĐT → 409 PHONE_EXISTS, trùng email → 409 EMAIL_EXISTS', async () => {
-  await createUser('RESIDENT', { phone: '0912345678', email: 'co@example.com' });
-
-  const samePhone = await register({ ...registerBody, phone: '84912345678' });
-  const sameEmail = await register({ ...registerBody, email: 'CO@example.com', phone: '0912345679' });
-
-  assert.equal(samePhone.status, 409);
-  assert.equal(samePhone.body.errorCode, 'PHONE_EXISTS');
-  assert.equal(sameEmail.status, 409);
-  assert.equal(sameEmail.body.errorCode, 'EMAIL_EXISTS');
 });
 
 test('tài khoản nội bộ: thiếu hoặc sai SĐT trả 400, trùng SĐT trả 409', async () => {
