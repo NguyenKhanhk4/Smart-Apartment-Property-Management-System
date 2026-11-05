@@ -34,9 +34,9 @@ export async function getBuildingById(id) {
 }
 
 /**
- * Tạo tòa nhà mới (Admin) — BR-A4
+ * Tạo tòa nhà mới (Trưởng BQL) — BR-A4
  */
-export async function createBuilding({ code, name, address, totalFloors }, adminUser, ip) {
+export async function createBuilding({ code, name, address, totalFloors }, managerUser, ip) {
   const normalizedCode = code.trim().toUpperCase();
   const normalizedName = name.trim();
 
@@ -62,7 +62,7 @@ export async function createBuilding({ code, name, address, totalFloors }, admin
 
   await logAudit({
     action: AUDIT_ACTIONS.BUILDING_CHANGED,
-    user: adminUser,
+    user: managerUser,
     targetType: AUDIT_TARGETS.BUILDING,
     targetId: building._id,
     metadata: {
@@ -78,9 +78,9 @@ export async function createBuilding({ code, name, address, totalFloors }, admin
 }
 
 /**
- * Cập nhật thông tin tòa nhà (Admin) — BR-A4
+ * Cập nhật thông tin tòa nhà (Trưởng BQL) — BR-A4
  */
-export async function updateBuilding(id, data, adminUser, ip) {
+export async function updateBuilding(id, data, managerUser, ip) {
   const building = await Building.findById(id);
   if (!building) {
     throw ApiError.notFound('Tòa nhà không tồn tại');
@@ -149,7 +149,7 @@ export async function updateBuilding(id, data, adminUser, ip) {
   if (Object.keys(changes).length > 0) {
     await logAudit({
       action: AUDIT_ACTIONS.BUILDING_CHANGED,
-      user: adminUser,
+      user: managerUser,
       targetType: AUDIT_TARGETS.BUILDING,
       targetId: building._id,
       metadata: { action: 'UPDATE', changes },
@@ -161,9 +161,9 @@ export async function updateBuilding(id, data, adminUser, ip) {
 }
 
 /**
- * Xóa tòa nhà (Admin) — BR-A4
+ * Xóa tòa nhà (Trưởng BQL) — BR-A4
  */
-export async function deleteBuilding(id, adminUser, ip) {
+export async function deleteBuilding(id, managerUser, ip) {
   const building = await Building.findById(id);
   if (!building) {
     throw ApiError.notFound('Tòa nhà không tồn tại');
@@ -179,7 +179,7 @@ export async function deleteBuilding(id, adminUser, ip) {
 
   await logAudit({
     action: AUDIT_ACTIONS.BUILDING_CHANGED,
-    user: adminUser,
+    user: managerUser,
     targetType: AUDIT_TARGETS.BUILDING,
     targetId: building._id,
     metadata: {

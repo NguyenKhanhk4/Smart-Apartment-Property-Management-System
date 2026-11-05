@@ -45,7 +45,7 @@ export default function BuildingsPage() {
   const navigate = useNavigate();
   const { hasRole } = useAuth();
   const { message } = App.useApp();
-  const isAdmin = hasRole('ADMIN');
+  const isManager = hasRole('MANAGER');
   // Trang chi tiết căn hộ (route apartment-detail) chỉ dành cho Trưởng BQL / Lễ tân
   const canOpenApartment = hasRole('MANAGER', 'STAFF:RECEPTIONIST');
 
@@ -265,7 +265,7 @@ export default function BuildingsPage() {
       width: 130,
       render: (count) => <Badge count={count ?? 0} showZero overflowCount={999} style={{ backgroundColor: '#108ee9' }} />,
     },
-    ...(isAdmin
+    ...(isManager
       ? [
           {
             title: 'Thao tác',
@@ -366,7 +366,7 @@ export default function BuildingsPage() {
           >
             Chi tiết
           </Button>
-          {isAdmin && (
+          {isManager && (
             <>
               <Button
                 size="small"
@@ -412,7 +412,7 @@ export default function BuildingsPage() {
             >
               Làm mới
             </Button>
-            {isAdmin && activeTab === 'buildings' && (
+            {isManager && activeTab === 'buildings' && (
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -421,7 +421,7 @@ export default function BuildingsPage() {
                 Thêm tòa nhà
               </Button>
             )}
-            {isAdmin && activeTab === 'apartments' && (
+            {isManager && activeTab === 'apartments' && (
               <Button
                 type="primary"
                 icon={<PlusOutlined />}

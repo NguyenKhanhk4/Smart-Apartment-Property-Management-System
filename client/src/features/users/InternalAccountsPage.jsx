@@ -15,6 +15,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
+import { PHONE_RULES } from '../../utils/phone';
 import {
   CheckCircleOutlined,
   CopyOutlined,
@@ -46,7 +47,7 @@ const INTERNAL_ROLES = {
   BOARD: ROLES.BOARD,
 };
 
-// Modal tạo mới tài khoản nội bộ (Admin)
+// Modal tạo mới tài khoản nội bộ (Trưởng BQL)
 function CreateAccountModal({ open, onClose, onDone }) {
   const [form] = Form.useForm();
   const selectedRole = Form.useWatch('role', form);
@@ -114,7 +115,7 @@ function CreateAccountModal({ open, onClose, onDone }) {
           <Form.Item
             name="phone"
             label="Số điện thoại"
-            rules={[{ pattern: /^(0|\+84)\d{9,10}$/, message: 'Số điện thoại không hợp lệ' }]}
+            rules={PHONE_RULES}
           >
             <Input placeholder="vd: 0901234567" />
           </Form.Item>
@@ -187,7 +188,7 @@ function CreateAccountModal({ open, onClose, onDone }) {
   );
 }
 
-// Modal sửa tài khoản nội bộ (Admin)
+// Modal sửa tài khoản nội bộ (Trưởng BQL)
 function EditAccountModal({ user, open, onClose, onDone }) {
   const [form] = Form.useForm();
   const selectedRole = Form.useWatch('role', form);
@@ -242,7 +243,7 @@ function EditAccountModal({ user, open, onClose, onDone }) {
         <Form.Item
           name="phone"
           label="Số điện thoại"
-          rules={[{ pattern: /^(0|\+84)\d{9,10}$/, message: 'Số điện thoại không hợp lệ' }]}
+          rules={PHONE_RULES}
         >
           <Input />
         </Form.Item>
@@ -279,9 +280,9 @@ function EditAccountModal({ user, open, onClose, onDone }) {
   );
 }
 
-// UC-A04: Quản lý danh sách tài khoản nội bộ (/app/internal-accounts, ADMIN)
+// UC-A04: Quản lý danh sách tài khoản nội bộ (/app/internal-accounts, Trưởng BQL)
 export default function InternalAccountsPage() {
-  const { user: currentAdmin } = useAuth();
+  const { user: currentUser } = useAuth();
   const { message } = App.useApp();
 
   const [filters, setFilters] = useState({ page: 1, limit: 15 });
@@ -319,7 +320,7 @@ export default function InternalAccountsPage() {
       render: (text, record) => (
         <div>
           <span className="font-semibold text-ink dark:text-[#EEF1F6]">{text}</span>
-          {record._id === currentAdmin?.id && (
+          {record._id === currentUser?.id && (
             <Tag color="cyan" className="ml-2 text-[10px]">
               Tài khoản của bạn
             </Tag>
@@ -362,7 +363,7 @@ export default function InternalAccountsPage() {
       key: 'action',
       width: 140,
       render: (_, record) => {
-        const isSelf = record._id === currentAdmin?.id;
+        const isSelf = record._id === currentUser?.id;
 
         return (
           <Space orientation="horizontal" size="small">

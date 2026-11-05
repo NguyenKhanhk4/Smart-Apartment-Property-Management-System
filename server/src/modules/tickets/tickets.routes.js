@@ -165,7 +165,7 @@ router.get('/assignees', authenticate, authorize(...DISPATCHERS), async (_req, r
 router.post(
   '/jobs/:job/run',
   authenticate,
-  authorize('MANAGER', 'ADMIN'),
+  authorize('MANAGER'),
   validate({ params: Joi.object({ job: Joi.string().valid(...Object.keys(MANUAL_JOBS)).required() }) }),
   async (req, res) => {
     const [name, handler] = MANUAL_JOBS[req.params.job];

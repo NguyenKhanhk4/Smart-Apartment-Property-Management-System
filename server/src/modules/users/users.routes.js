@@ -15,7 +15,7 @@ const router = Router();
 
 const updateMeBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100),
-  phone: phoneVn().allow('', null),
+  phone: phoneVn(),
   dateOfBirth: ymd().allow('', null),
 }).min(1);
 
@@ -50,7 +50,7 @@ const listInternalQuery = Joi.object({
 const createInternalBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100).required(),
   email: Joi.string().trim().lowercase().email().required(),
-  phone: phoneVn().allow('', null),
+  phone: phoneVn().required(),
   role: Joi.string()
     .valid(ROLES.MANAGER, ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD)
     .required(),
@@ -68,7 +68,7 @@ const createInternalBody = Joi.object({
 
 const updateInternalBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100),
-  phone: phoneVn().allow('', null),
+  phone: phoneVn(),
   role: Joi.string().valid(ROLES.MANAGER, ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD),
   roleTitle: Joi.string().valid(...values(ROLE_TITLES), null),
   boardTitle: Joi.string().valid(...values(BOARD_TITLES), null),
@@ -160,7 +160,7 @@ router.patch('/me/password', authenticate, validate({ body: changePasswordBody }
   ok(res, result, 'Đổi mật khẩu thành công');
 });
 
-// ===== Quản lý tài khoản nội bộ (UC-A04, ADMIN) =====
+// ===== Quản lý tài khoản nội bộ (UC-A04, Trưởng BQL) =====
 
 /**
  * @openapi
@@ -172,7 +172,7 @@ router.patch('/me/password', authenticate, validate({ body: changePasswordBody }
  *       200:
  *         description: Danh sách tài khoản phân trang
  */
-router.get('/internal', authenticate, authorize('ADMIN'), validate({ query: listInternalQuery }), async (req, res) => {
+router.get('/internal', authenticate, authorize('MANAGER'), validate({ query: listInternalQuery }), async (req, res) => {
   const { items, pagination } = await usersService.listInternal(req.validated.query);
   paginated(res, items, pagination);
 });
@@ -189,7 +189,7 @@ router.get('/internal', authenticate, authorize('ADMIN'), validate({ query: list
  *         application/json:
  *           schema:
  *             type: object
- *             required: [fullName, email, role]
+ *             required: [fullName, email, phone, role]
  *             properties:
  *               fullName: { type: string }
  *               email: { type: string }
@@ -201,7 +201,7 @@ router.get('/internal', authenticate, authorize('ADMIN'), validate({ query: list
  *       201:
  *         description: Tài khoản đã được tạo
  */
-router.post('/internal', authenticate, authorize('ADMIN'), validate({ body: createInternalBody }), async (req, res) => {
+router.post('/internal', authenticate, authorize('MANAGER'), validate({ body: createInternalBody }), async (req, res) => {
   const result = await usersService.createInternal(req.user, req.validated.body, { ip: req.ip });
   created(res, result, 'Tạo tài khoản nội bộ thành công');
 });
@@ -221,7 +221,7 @@ router.post('/internal', authenticate, authorize('ADMIN'), validate({ body: crea
  *       200:
  *         description: Thông tin tài khoản đã được cập nhật
  */
-router.patch('/internal/:id', authenticate, authorize('ADMIN'), validate({ params: idParams, body: updateInternalBody }), async (req, res) => {
+router.patch('/internal/:id', authenticate, authorize('MANAGER'), validate({ params: idParams, body: updateInternalBody }), async (req, res) => {
   const user = await usersService.updateInternal(req.user, req.validated.params.id, req.validated.body, { ip: req.ip });
   ok(res, user, 'Cập nhật tài khoản thành công');
 });
@@ -250,7 +250,7 @@ router.patch('/internal/:id', authenticate, authorize('ADMIN'), validate({ param
  *       200:
  *         description: Trạng thái tài khoản đã được cập nhật
  */
-router.patch('/:id/status', authenticate, authorize('ADMIN'), validate({ params: idParams, body: setStatusBody }), async (req, res) => {
+router.patch('/:id/status', authenticate, authorize('MANAGER'), validate({ params: idParams, body: setStatusBody }), async (req, res) => {
   const user = await usersService.setStatus(req.user, req.validated.params.id, req.validated.body, { ip: req.ip });
   ok(res, user, user.isActive ? 'Mở khóa tài khoản thành công' : 'Đã khóa tài khoản');
 });

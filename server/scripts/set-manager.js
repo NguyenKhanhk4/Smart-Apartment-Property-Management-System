@@ -1,0 +1,119 @@
+// Tạo hoặc thay Trưởng BQL khi cài đặt (BR-S01). UC03 không cho tạo role này trên giao diện.
+// Tài khoản Trưởng BQL cũ bị khóa, không bị xóa (BR-S12).
+//
+//   MANAGER_PASSWORD='MatKhau123' npm run db:set-manager -- --phone 0901234567 --email a@b.vn --name "Nguyễn Văn A"
+//
+// Mật khẩu lấy từ biến môi trường để không lưu trong lịch sử lệnh; bắt buộc khi tạo tài khoản mới.
+// Sau khi có kích hoạt tài khoản (UC11), tài khoản mới sẽ tự đặt mật khẩu và không cần biến này nữa.
+import { pathToFileURL } from 'node:url';
+import { parseArgs } from 'node:util';
+import bcrypt from 'bcryptjs';
+import Joi from 'joi';
+import { connectDB, disconnectDB } from '../src/config/db.js';
+import { AUDIT_ACTIONS, ROLES } from '../src/constants/enums.js';
+import { User } from '../src/models/index.js';
+import { logAudit } from '../src/services/auditLog.service.js';
+import { withTransaction } from '../src/utils/transaction.js';
+import { normalizePhone, phoneVn } from '../src/utils/validators.js';
+
+const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{8,100}$/;
+// Cùng quy tắc với API tạo tài khoản nội bộ (users.routes.js)
+const inputRules = {
+  phone: [phoneVn(), 'Số điện thoại không hợp lệ'],
+  email: [Joi.string().trim().email(), 'Email không hợp lệ'],
+  fullName: [Joi.string().trim().min(2).max(100), 'Họ tên phải có 2–100 ký tự'],
+};
+
+/** Tìm theo SĐT. Trả về { user, lockedCount } với lockedCount là số tài khoản quản trị cũ vừa bị khóa */
+export async function setManager({ phone, email, fullName, password }) {
+  if (!phone) throw new Error('Thiếu --phone');
+  for (const [field, value] of Object.entries({ phone, email, fullName })) {
+    const [rule, message] = inputRules[field];
+    if (value !== undefined && rule.validate(value).error) throw new Error(message);
+  }
+  if (password && !PASSWORD_RULE.test(password)) {
+    throw new Error('Mật khẩu tối thiểu 8 ký tự, có cả chữ và số');
+  }
+  const normalizedEmail = email?.trim().toLowerCase();
+  const passwordHash = password ? await bcrypt.hash(password, 10) : null;
+
+  return withTransaction(async (session) => {
+    let user = await User.findOne({ phone: normalizePhone(phone) })
+      .select('+passwordHash +tokenVersion')
+      .session(session);
+    if (user?.role === ROLES.RESIDENT) throw new Error('Không dùng tài khoản cư dân làm Trưởng BQL');
+    // Email vẫn cần cho tài khoản mới vì đăng nhập dùng email cho đến UC01
+    if (!user && (!fullName || !normalizedEmail || !passwordHash)) {
+      throw new Error('Tạo tài khoản mới cần --name, --email và biến môi trường MANAGER_PASSWORD');
+    }
+    // Tính cả tài khoản đã khóa: đăng nhập tìm theo email nên 1 email chỉ được thuộc 1 tài khoản
+    if (normalizedEmail) {
+      const taken = await User.exists({ email: normalizedEmail, ...(user && { _id: { $ne: user._id } }) }).session(session);
+      if (taken) throw new Error('Email đã thuộc tài khoản khác');
+    }
+
+    // Khóa trước khi gán để không vi phạm index "chỉ 1 Trưởng BQL đang hoạt động" (BR-R1)
+    const oldHolders = { isActive: true, role: ROLES.MANAGER };
+    if (user) oldHolders._id = { $ne: user._id };
+    const { modifiedCount: lockedCount } = await User.updateMany(
+      oldHolders,
+      { $set: { isActive: false }, $inc: { tokenVersion: 1 } },
+      { session },
+    );
+
+    if (user) {
+      user.set({ role: ROLES.MANAGER, roleTitle: null, boardTitle: null, isActive: true });
+      if (fullName) user.fullName = fullName.trim();
+      if (normalizedEmail) user.email = normalizedEmail;
+      if (passwordHash) user.passwordHash = passwordHash;
+      if (user.passwordHash && !user.activatedAt) user.activatedAt = new Date();
+      user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+      await user.save({ session });
+    } else {
+      [user] = await User.create(
+        [
+          {
+            email: normalizedEmail,
+            fullName: fullName.trim(),
+            phone,
+            passwordHash,
+            activatedAt: new Date(),
+            role: ROLES.MANAGER,
+            isActive: true,
+          },
+        ],
+        { session },
+      );
+    }
+
+    await logAudit(
+      {
+        action: AUDIT_ACTIONS.ROLE_ASSIGNED,
+        user: null,
+        targetType: 'users',
+        targetId: user._id,
+        metadata: { role: ROLES.MANAGER, source: 'set-manager', lockedCount },
+      },
+      { session },
+    );
+    return { user, lockedCount };
+  });
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const { values } = parseArgs({
+    options: { email: { type: 'string' }, name: { type: 'string' }, phone: { type: 'string' } },
+  });
+  await connectDB();
+  try {
+    const { user, lockedCount } = await setManager({
+      phone: values.phone,
+      email: values.email,
+      fullName: values.name,
+      password: process.env.MANAGER_PASSWORD,
+    });
+    console.log(`Trưởng BQL: ${user.email}. Đã khóa ${lockedCount} tài khoản quản trị cũ.`);
+  } finally {
+    await disconnectDB();
+  }
+}

@@ -7,7 +7,6 @@ export const ROLES = {
   ACCOUNTANT: { label: 'Kế toán', color: 'green' },
   MANAGER: { label: 'Trưởng BQL', color: 'gold' },
   BOARD: { label: 'Ban quản trị', color: 'purple' },
-  ADMIN: { label: 'Quản trị viên', color: 'red' },
 };
 
 export const ROLE_TITLES = {
@@ -273,6 +272,12 @@ export const AGE_GROUPS = {
   CHILD_FREE: { label: 'Trẻ nhỏ (miễn phí)', color: 'green' },
   CHILD: { label: 'Trẻ em', color: 'cyan' },
   ADULT: { label: 'Người lớn', color: 'default' },
+};
+
+export const CONSENT_ACTIONS = {
+  ACCEPTED: { label: 'Đã đồng ý', color: 'success' },
+  DECLINED: { label: 'Từ chối', color: 'default' },
+  WITHDRAWN: { label: 'Đã rút đồng ý', color: 'warning' },
 };
 
 export const RELATION_TYPES = {

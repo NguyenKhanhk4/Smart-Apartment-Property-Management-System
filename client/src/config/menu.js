@@ -35,7 +35,7 @@ import {
 //     label: 'Tòa nhà',                 // chữ trên menu
 //     icon: BankOutlined,               // component icon của @ant-design/icons
 //     path: 'buildings',                // tương đối: /app/buildings hoặc /r/buildings
-//     roles: ['ADMIN', 'MANAGER'],      // spec như authorize() backend; bỏ trống = ai đăng nhập cũng xem được
+//     roles: ['MANAGER', 'ACCOUNTANT'],      // spec như authorize() backend; bỏ trống = ai đăng nhập cũng xem được
 //     component: lazy(() => import('../features/buildings/BuildingListPage')),
 //     hideInMenu: true,                 // (tuỳ chọn) có route nhưng không hiện trên menu, vd trang chi tiết
 //     group: 'Tài chính',               // (tuỳ chọn, chỉ /app) nhóm hiển thị trên sidebar — dùng 1 trong MENU_GROUPS
@@ -64,7 +64,7 @@ const ApartmentDetailPage = lazy(() => import('../features/apartments/ApartmentD
 const MyApartmentPage = lazy(() => import('../features/residents/MyApartmentPage'));
 const VehicleRequestsPage = lazy(() => import('../features/vehicles/VehicleRequestsPage'));
 const MyVehiclesPage = lazy(() => import('../features/vehicles/MyVehiclesPage'));
-const SystemDashboardPage = lazy(() => import('../features/adminDashboard/SystemDashboardPage'));
+const SystemDashboardPage = lazy(() => import('../features/systemDashboard/SystemDashboardPage'));
 
 // ===== Module B =====
 const FeeTypesPage = lazy(() => import('../features/feeTypes/FeeTypesPage'));
@@ -80,10 +80,12 @@ const PaymentResultPage = lazy(() => import('../features/payments/PaymentResultP
 const DebtLedgerPage = lazy(() => import('../features/debts/DebtLedgerPage'));
 const DebtApartmentPage = lazy(() => import('../features/debts/DebtApartmentPage'));
 
-// ===== Module D (Thanh Bình) =====
+// ===== Người 1 — Vũ Việt (Mô đun 10: Thiết bị & bảo trì) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
 const AssetDetailPage = lazy(() => import('../features/assets/AssetDetailPage'));
 const WorkOrdersPage = lazy(() => import('../features/workOrders/WorkOrdersPage'));
+
+// ===== Module D (Thanh Bình) =====
 const AmenitiesPage = lazy(() => import('../features/amenities/AmenitiesPage'));
 const MyCodePage = lazy(() => import('../features/memberCodes/MyCodePage'));
 const FamilyPage = lazy(() => import('../features/memberCodes/FamilyPage'));
@@ -410,7 +412,7 @@ export const adminMenu = [
     label: 'Tòa nhà & Căn hộ',
     icon: BankOutlined,
     path: 'buildings',
-    roles: ['ADMIN', 'MANAGER', 'STAFF:RECEPTIONIST'],
+    roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
     component: BuildingsPage,
   },
   {
@@ -419,7 +421,7 @@ export const adminMenu = [
     label: 'Tài khoản nội bộ',
     icon: TeamOutlined,
     path: 'internal-accounts',
-    roles: ['ADMIN'],
+    roles: ['MANAGER'],
     component: InternalAccountsPage,
   },
   {
@@ -445,7 +447,7 @@ export const adminMenu = [
     label: 'Dashboard hệ thống',
     icon: DashboardOutlined,
     path: 'system-dashboard',
-    roles: ['ADMIN'],
+    roles: ['MANAGER'],
     component: SystemDashboardPage,
   },
   // ===== Gate Pass & Kiểm soát xe (Người 2) =====

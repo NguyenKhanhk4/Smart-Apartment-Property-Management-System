@@ -28,9 +28,11 @@ export { FundProposal } from './FundProposal.js';
 export { OperatingExpense } from './OperatingExpense.js';
 export { AuditLog } from './AuditLog.js';
 
-// Module D — Tài sản, bảo trì, tiện ích
+// Người 1 — Thiết bị, bảo trì (Mô đun 10)
 export { Asset } from './Asset.js';
 export { WorkOrder } from './WorkOrder.js';
+
+// Module D — Tiện ích
 export { Amenity } from './Amenity.js';
 export { Booking } from './Booking.js';
 export { MemberCode } from './MemberCode.js';

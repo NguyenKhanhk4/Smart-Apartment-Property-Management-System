@@ -5,7 +5,7 @@ import { CONFIG_KEYS } from '../constants/enums.js';
 import { ApiError } from '../utils/ApiError.js';
 import { getConfig } from './systemConfig.service.js';
 
-// NFR-10: chỉ jpg/png; dung lượng tối đa theo tham số UPLOAD_MAX_SIZE_MB (Admin sửa, mặc định 5MB).
+// NFR-10: chỉ jpg/png; dung lượng tối đa theo tham số UPLOAD_MAX_SIZE_MB (Trưởng BQL sửa, mặc định 5MB).
 // Multer chặn cứng ở HARD_MAX_MB để không đọc file quá lớn vào RAM; giới hạn theo cấu hình kiểm tra ngay sau đó.
 const MB = 1024 * 1024;
 const HARD_MAX_MB = 20;

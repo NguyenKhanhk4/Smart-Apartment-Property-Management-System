@@ -59,9 +59,9 @@ export async function getApartmentById(id) {
 }
 
 /**
- * Tạo căn hộ mới (Admin) — BR-A4
+ * Tạo căn hộ mới (Trưởng BQL) — BR-A4
  */
-export async function createApartment({ buildingId, code, floor, area }, adminUser, ip) {
+export async function createApartment({ buildingId, code, floor, area }, managerUser, ip) {
   const building = await Building.findById(buildingId);
   if (!building) {
     throw ApiError.notFound('Tòa nhà không tồn tại');
@@ -98,7 +98,7 @@ export async function createApartment({ buildingId, code, floor, area }, adminUs
 
   await logAudit({
     action: AUDIT_ACTIONS.APARTMENT_CHANGED,
-    user: adminUser,
+    user: managerUser,
     targetType: AUDIT_TARGETS.APARTMENT,
     targetId: apartment._id,
     metadata: {
@@ -115,9 +115,9 @@ export async function createApartment({ buildingId, code, floor, area }, adminUs
 }
 
 /**
- * Cập nhật căn hộ (Admin) — BR-A4
+ * Cập nhật căn hộ (Trưởng BQL) — BR-A4
  */
-export async function updateApartment(id, data, adminUser, ip) {
+export async function updateApartment(id, data, managerUser, ip) {
   // BR-A4: Không cho sửa status trực tiếp
   if (data.status !== undefined) {
     throw ApiError.badRequest('Trạng thái căn hộ chỉ do hợp đồng quyết định, không thể sửa trực tiếp');
@@ -170,7 +170,7 @@ export async function updateApartment(id, data, adminUser, ip) {
   if (Object.keys(changes).length > 0) {
     await logAudit({
       action: AUDIT_ACTIONS.APARTMENT_CHANGED,
-      user: adminUser,
+      user: managerUser,
       targetType: AUDIT_TARGETS.APARTMENT,
       targetId: apartment._id,
       metadata: { action: 'UPDATE', changes },
@@ -182,9 +182,9 @@ export async function updateApartment(id, data, adminUser, ip) {
 }
 
 /**
- * Xóa căn hộ (Admin) — BR-A4
+ * Xóa căn hộ (Trưởng BQL) — BR-A4
  */
-export async function deleteApartment(id, adminUser, ip) {
+export async function deleteApartment(id, managerUser, ip) {
   const apartment = await Apartment.findById(id);
   if (!apartment) {
     throw ApiError.notFound('Căn hộ không tồn tại');
@@ -205,7 +205,7 @@ export async function deleteApartment(id, adminUser, ip) {
 
   await logAudit({
     action: AUDIT_ACTIONS.APARTMENT_CHANGED,
-    user: adminUser,
+    user: managerUser,
     targetType: AUDIT_TARGETS.APARTMENT,
     targetId: apartment._id,
     metadata: {

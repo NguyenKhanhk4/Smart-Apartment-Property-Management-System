@@ -10,7 +10,13 @@ export const ROLES = Object.freeze({
   ACCOUNTANT: 'ACCOUNTANT',
   MANAGER: 'MANAGER',
   BOARD: 'BOARD',
-  ADMIN: 'ADMIN',
+});
+
+// Hành động trên điều khoản dữ liệu cá nhân (BR-X7)
+export const CONSENT_ACTIONS = Object.freeze({
+  ACCEPTED: 'ACCEPTED',
+  DECLINED: 'DECLINED',
+  WITHDRAWN: 'WITHDRAWN',
 });
 
 // Chức danh của STAFF
@@ -214,7 +220,7 @@ export const EXPENSE_CATEGORIES = Object.freeze({
   OTHER: 'OTHER',
 });
 
-// ===== Tài sản, bảo trì, tiện ích (Module D) =====
+// ===== Thiết bị, bảo trì (Người 1, Mô đun 10) =====
 export const ASSET_CATEGORIES = Object.freeze({
   ELEVATOR: 'ELEVATOR',
   PUMP: 'PUMP',
@@ -236,6 +242,7 @@ export const WORK_ORDER_STATUS = Object.freeze({
 // Work order chưa hoàn thành (BR-O6: 1 tài sản chỉ 1 work order SCHEDULED đang mở)
 export const WORK_ORDER_OPEN_STATUSES = Object.freeze([WORK_ORDER_STATUS.PENDING, WORK_ORDER_STATUS.IN_PROGRESS]);
 
+// ===== Tiện ích (Module D) =====
 // BR-O12: booking tự xác nhận APPROVED khi đặt → CHECKED_IN (lễ tân) → COMPLETED (hết giờ, tính phí BR-O5);
 // hoặc CANCELLED / NO_SHOW (không tính phí).
 // PENDING, REJECTED: luồng duyệt cũ, Module D KHÔNG còn tạo mới — giữ để dữ liệu & báo cáo UC-E14 cũ không lỗi.
@@ -595,7 +602,7 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.TICKET_ACK_MINUTES, value: 30, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn kỹ thuật viên nhận sự cố kể từ lúc gửi (phút)' },
   { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
   { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 0, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán (phút); 0 = tắt, phí gộp vào hóa đơn tháng' },
-  // TECHNICAL — Admin sửa
+  // TECHNICAL — tham số kỹ thuật, Trưởng BQL sửa
   { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 5, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10' },
 ]);
 

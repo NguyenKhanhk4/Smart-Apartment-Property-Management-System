@@ -13,6 +13,7 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { withTransaction } from '../../utils/transaction.js';
+import { normalizePhone } from '../../utils/validators.js';
 import { getHousehold } from '../household/household.service.js';
 import { ensureCodes, parseDateOfBirth } from '../memberCodes/memberCodes.service.js';
 import {
@@ -22,6 +23,7 @@ import {
 } from './idCrypto.js';
 import { findOrCreateResidentUser, linkResident, welcomeNewResident } from './residentAccounts.js';
 import { toPublicUser } from '../auth/auth.service.js';
+import { findUserByPhone } from '../users/userLookup.js';
 
 /**
  * Danh sách thành viên đang hoạt động trong căn hộ (UC-A07, BR-A8)
@@ -85,6 +87,36 @@ export async function listApartmentResidents(apartmentId, viewer) {
   return results;
 }
 
+const maskEmail = (email) => {
+  if (!email) return null;
+  const [name, domain] = email.split('@');
+  return `${name[0]}***@${domain}`;
+};
+
+/**
+ * Tra tài khoản theo SĐT để lễ tân đối chiếu trước khi gắn vào căn hộ (BR-X5).
+ * Chỉ trả thông tin đã che; tài khoản nội bộ không trả danh tính.
+ */
+export async function lookupAccountByPhone(phone) {
+  const user = await findUserByPhone(phone).select('fullName email phone role').lean();
+  if (!user) return { phone: normalizePhone(phone), exists: false };
+  if (user.role !== ROLES.RESIDENT) return { phone: user.phone, exists: true, isResident: false };
+
+  const resident = await Resident.findOne({ userId: user._id, idNumberEnc: { $nin: [null, ''] } })
+    .sort({ createdAt: -1 })
+    .select('idNumberEnc')
+    .lean();
+  return {
+    phone: user.phone,
+    exists: true,
+    isResident: true,
+    userId: user._id,
+    fullName: user.fullName,
+    email: maskEmail(user.email),
+    idNumber: maskIdNumber(decryptIdNumber(resident?.idNumberEnc)),
+  };
+}
+
 /**
  * Thêm thành viên hộ gia đình (Lễ tân) — UC-A07
  * - Luôn là FAMILY_MEMBER (OWNER/TENANT do Hợp đồng tạo). Căn hộ phải OWNED hoặc RENTED.
@@ -120,7 +152,7 @@ export async function addMember(receptionistUser, data, ip) {
       );
     }
 
-    account = await findOrCreateResidentUser(data, session, { updateDateOfBirth: true });
+    account = await findOrCreateResidentUser(data, session);
     const alreadyActive = await Resident.exists({ apartmentId, userId: account.user._id, isActive: true }).session(session);
     if (alreadyActive) throw new ApiError('STATUS_CONFLICT', 'Cư dân đã là thành viên đang ở của căn hộ này');
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { Button, Card, Descriptions, Flex, Skeleton, Table, Tag, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { assetApi } from '../../api/moduleD.api';
+import { assetApi } from '../../api/equipment.api';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';

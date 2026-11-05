@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { Alert, Button, Form, Input } from 'antd';
+import { PHONE_RULES } from '../../utils/phone';
 import { ArrowRightOutlined, LockOutlined, MailOutlined, PhoneOutlined, UserOutlined } from '@ant-design/icons';
 import { authApi } from '../../api/auth.api';
 
@@ -100,12 +101,7 @@ export default function RegisterPage() {
         <Form.Item
           name="phone"
           label="Số điện thoại"
-          rules={[
-            {
-              pattern: /^(0|\+84)\d{9,10}$/,
-              message: 'Số điện thoại không hợp lệ (10-11 số, bắt đầu bằng 0 hoặc +84)',
-            },
-          ]}
+          rules={PHONE_RULES}
         >
           <Input
             size="large"

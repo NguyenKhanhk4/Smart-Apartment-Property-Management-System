@@ -111,6 +111,8 @@ export const ERROR_CODES = Object.freeze({
   INVOICE_NOT_DRAFT: { status: 409, message: 'Thông báo phí không còn ở trạng thái Nháp, không sửa được' },
   // Module A (Vũ Việt): trạng thái nghiệp vụ xung đột (hợp đồng, xe...)
   EMAIL_EXISTS: { status: 409, message: 'Email đã được sử dụng bởi tài khoản khác' },
+  PHONE_EXISTS: { status: 409, message: 'Số điện thoại đã được sử dụng bởi tài khoản khác' },
+  ACCOUNT_CONFIRM_REQUIRED: { status: 409, message: 'Số điện thoại này đã có tài khoản, vui lòng kiểm tra và xác nhận đúng người' },
   CONTRACT_ACTIVE_EXISTS: { status: 409, message: 'Căn hộ đã có hợp đồng cùng loại đang hiệu lực' },
   STATUS_CONFLICT: {
     status: 409,

@@ -1,5 +1,5 @@
 import { Form, Input, Modal, Select, Typography } from 'antd';
-import { workOrderApi } from '../../api/moduleD.api';
+import { workOrderApi } from '../../api/equipment.api';
 import { useAction, useApi } from '../../hooks/useApi';
 
 // UC-D03 — Phân công / giao lại kỹ thuật viên. Dùng chung cho trang Work order và chi tiết tài sản.

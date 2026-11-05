@@ -1,4 +1,4 @@
-// API Module A (Vũ Việt): Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện, Dashboard Admin.
+// API Module A (Vũ Việt): Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện, Dashboard hệ thống.
 // Trả về nguyên envelope { success, data, pagination? } theo quy ước axiosClient.js.
 import { apiClient, http } from './axiosClient';
 
@@ -47,6 +47,7 @@ export const contractsApi = {
 // ===== UC-A07 & UC-A08: Cư dân & Căn hộ của tôi =====
 export const residentsApi = {
   listByApartment: (apartmentId) => http.get(`/apartments/${apartmentId}/residents`),
+  lookupPhone: (phone) => http.get('/residents/lookup', { params: { phone } }),
   addMember: (body) => http.post('/residents', body),
   updateMember: (id, body) => http.patch(`/residents/${id}`, body),
   removeMember: (id) => http.patch(`/residents/${id}/remove`),
@@ -88,7 +89,7 @@ export const parkingCardsApi = {
   lost: (id, body) => http.patch(`/parking-cards/${id}/lost`, body),
   updateStatus: (id, body) => http.patch(`/parking-cards/${id}/status`, body),
 };
-// ===== UC-A11: Dashboard thống kê hệ thống dành cho Admin =====
-export const adminApi = {
-  getDashboard: () => http.get('/admin/dashboard'),
+// ===== UC-A11: Dashboard thống kê hệ thống dành cho Trưởng BQL =====
+export const systemDashboardApi = {
+  getDashboard: () => http.get('/system-dashboard'),
 };

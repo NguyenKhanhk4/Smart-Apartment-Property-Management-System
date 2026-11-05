@@ -13,7 +13,7 @@ import { objectId } from '../../utils/validators.js';
 
 // Danh sách rút gọn cho ô chọn (Select) ở frontend — chỉ đọc, không thay thế API CRUD của Module A/D.
 const router = Router();
-const INTERNAL = ['STAFF', 'ACCOUNTANT', 'MANAGER', 'BOARD', 'ADMIN'];
+const INTERNAL = ['STAFF', 'ACCOUNTANT', 'MANAGER', 'BOARD'];
 
 /**
  * @openapi

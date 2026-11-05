@@ -147,8 +147,8 @@ export async function createContract(receptionistUser, data, file, ip) {
           'Căn hộ vẫn còn thành viên thuộc hợp đồng mua bán, vui lòng gỡ trước khi tạo hợp đồng thuê',
         );
       }
-      if (!tenant?.userId && !tenant?.email) {
-        throw ApiError.badRequest('Thông tin người thuê là bắt buộc đối với hợp đồng cho thuê');
+      if (!tenant?.userId && !tenant?.phone) {
+        throw ApiError.badRequest('Số điện thoại người thuê là bắt buộc đối với hợp đồng cho thuê');
       }
       account = await findOrCreateResidentUser(tenant, session);
       // BR-A5: Người thuê ≠ chủ sở hữu
