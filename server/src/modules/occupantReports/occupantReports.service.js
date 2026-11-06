@@ -59,8 +59,8 @@ export async function listResidentChanges({ from, to }) {
       events.push({
         _id: `${r._id}_IN`,
         residentId: r._id,
-        fullName: u.fullName || '—',
-        dateOfBirth: u.dateOfBirth || null,
+        fullName: u.fullName || r.fullName || '—',
+        dateOfBirth: u.dateOfBirth || r.dateOfBirth || null,
         idNumber: maskedId,
         apartmentCode: apt.code || '—',
         buildingName: apt.buildingId?.name || '',
@@ -76,8 +76,8 @@ export async function listResidentChanges({ from, to }) {
       events.push({
         _id: `${r._id}_OUT`,
         residentId: r._id,
-        fullName: u.fullName || '—',
-        dateOfBirth: u.dateOfBirth || null,
+        fullName: u.fullName || r.fullName || '—',
+        dateOfBirth: u.dateOfBirth || r.dateOfBirth || null,
         idNumber: maskedId,
         apartmentCode: apt.code || '—',
         buildingName: apt.buildingId?.name || '',

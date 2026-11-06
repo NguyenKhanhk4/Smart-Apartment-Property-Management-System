@@ -27,7 +27,9 @@ export function ticketActions(ticket, user, hasRole) {
     canAssign: dispatcher && isIncident && !isFinal && ticket.status !== 'WAITING_CONFIRM',
     canReject: dispatcher && ['NEW', 'ASSIGNED'].includes(ticket.status),
     canProgress: mine && progressOptions(ticket).length > 0,
+    canRespondComplaint: hasRole('MANAGER') && !isIncident && ['NEW', 'IN_PROGRESS'].includes(ticket.status),
     canDecideQuote: resident && ticket.status === 'WAITING_QUOTE_APPROVAL',
-    canConfirm: resident && ticket.status === 'WAITING_CONFIRM',
+    canConfirm: resident && (ticket.status === 'WAITING_CONFIRM' ||
+      (!isIncident && ticket.status === 'CLOSED' && ticket.rating == null)),
   };
 }

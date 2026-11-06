@@ -16,7 +16,7 @@ import { paginate } from '../../utils/pagination.js';
 import { DAY_MS, endOfVnDay, startOfVnDay } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { ensureCodes } from '../memberCodes/memberCodes.service.js';
-import { disableActiveCardsByApartment } from '../parkingCards/parkingCards.service.js';
+import { revokeDepartedResidentServices } from '../residents/residentExit.service.js';
 import { findOrCreateResidentUser, linkResident, welcomeNewResident } from '../residents/residentAccounts.js';
 
 /**
@@ -313,9 +313,11 @@ export async function terminateContract(id, receptionistUser, ip) {
       contract.terminatedAt = now;
       await contract.save({ session });
 
+      const departing = await Resident.find({ apartmentId: contract.apartmentId, contractId: contract._id, isActive: true })
+        .select('userId').session(session).lean();
       // 2. Gỡ residents có contractId là hợp đồng này
       await Resident.updateMany(
-        { contractId: contract._id, isActive: true },
+        { apartmentId: contract.apartmentId, contractId: contract._id, isActive: true },
         { isActive: false, moveOutDate: now },
         { session },
       );
@@ -328,7 +330,8 @@ export async function terminateContract(id, receptionistUser, ip) {
       );
 
       // 4. Chuyển thẻ gửi xe ACTIVE sang DISABLED_TO_COLLECT (UC66)
-      await disableActiveCardsByApartment(contract.apartmentId, null, session, receptionistUser);
+      await revokeDepartedResidentServices({ apartmentId: contract.apartmentId,
+        userIds: [...departing.map((r) => r.userId), contract.tenantId], endedAt: now, session, actor: receptionistUser, ip });
 
       await logAudit(
         {
@@ -361,6 +364,8 @@ export async function terminateContract(id, receptionistUser, ip) {
       contract.terminatedAt = now;
       await contract.save({ session });
 
+      const departing = await Resident.find({ apartmentId: contract.apartmentId, isActive: true })
+        .select('userId').session(session).lean();
       // Gỡ mọi residents đang hoạt động của căn hộ
       await Resident.updateMany(
         { apartmentId: contract.apartmentId, isActive: true },
@@ -376,7 +381,8 @@ export async function terminateContract(id, receptionistUser, ip) {
       );
 
       // Chuyển thẻ gửi xe ACTIVE sang DISABLED_TO_COLLECT (UC66)
-      await disableActiveCardsByApartment(contract.apartmentId, null, session, receptionistUser);
+      await revokeDepartedResidentServices({ apartmentId: contract.apartmentId,
+        userIds: [...departing.map((r) => r.userId), contract.ownerId], endedAt: now, session, actor: receptionistUser, ip });
 
       await logAudit(
         {

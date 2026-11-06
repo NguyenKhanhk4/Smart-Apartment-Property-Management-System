@@ -16,6 +16,7 @@ import {
   Col,
   Statistic,
   Tooltip,
+  Checkbox,
 } from 'antd';
 import PhoneAccountNotice from '../../components/PhoneAccountNotice';
 import { usePhoneAccount } from '../../hooks/usePhoneAccount';
@@ -102,11 +103,17 @@ export default function ApartmentDetailPage() {
   // Modal Thêm thành viên
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addForm] = Form.useForm();
-  const check = usePhoneAccount(Form.useWatch('phone', addForm));
+  const hasAccount = Form.useWatch('hasAccount', addForm) !== false;
+  const memberPhone = Form.useWatch('phone', addForm);
+  const check = usePhoneAccount(hasAccount ? memberPhone : null);
 
   const [addMemberAction, addingMember] = useAction(
     async (values) => {
-      const payload = {
+      const payload = values.hasAccount === false ? {
+        apartmentId: id, hasAccount: false, fullName: values.fullName,
+        dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format('YYYY-MM-DD') : null,
+        idNumber: values.idNumber || null,
+      } : {
         apartmentId: id,
         phone: values.phone,
         idNumber: values.idNumber || null,
@@ -567,19 +574,23 @@ export default function ApartmentDetailPage() {
         open={addModalOpen}
         onCancel={() => setAddModalOpen(false)}
         onOk={() => addForm.submit()}
-        okButtonProps={{ disabled: Boolean(check.blockReason) }}
+        okButtonProps={{ disabled: hasAccount && Boolean(check.blockReason) }}
         confirmLoading={addingMember}
         destroyOnClose
       >
         <Form
           form={addForm}
           layout="vertical"
-          onFinish={(v) => !check.blockReason && addMemberAction(v).catch(() => check.reload())}
+          initialValues={{ hasAccount: true }}
+          onFinish={(v) => (!hasAccount || !check.blockReason) && addMemberAction(v).catch(() => hasAccount && check.reload())}
           className="mt-4"
         >
+          <Form.Item name="hasAccount" valuePropName="checked">
+            <Checkbox>Có số điện thoại và tài khoản đăng nhập</Checkbox>
+          </Form.Item>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
+              <Form.Item name="phone" label="Số điện thoại" rules={hasAccount ? PHONE_RULES : []} hidden={!hasAccount}>
                 <Input placeholder="0912345678" />
               </Form.Item>
             </Col>
@@ -590,21 +601,23 @@ export default function ApartmentDetailPage() {
             </Col>
           </Row>
 
-          <PhoneAccountNotice check={check} />
+          {hasAccount && <PhoneAccountNotice check={check} />}
 
           {/* Tài khoản có sẵn không nhận họ tên, email, ngày sinh mới (BR-X5) */}
-          {!check.isExisting && (
+          {(!hasAccount || !check.isExisting) && (
             <>
-              <Form.Item
-                name="email"
-                label="Email tài khoản"
-                rules={[
-                  { required: true, message: 'Vui lòng nhập email' },
-                  { type: 'email', message: 'Email không đúng định dạng' },
-                ]}
-              >
-                <Input placeholder="Vd: member@gmail.com" />
-              </Form.Item>
+              {hasAccount && (
+                <Form.Item
+                  name="email"
+                  label="Email tài khoản"
+                  rules={[
+                    { required: true, message: 'Vui lòng nhập email' },
+                    { type: 'email', message: 'Email không đúng định dạng' },
+                  ]}
+                >
+                  <Input placeholder="Vd: member@gmail.com" />
+                </Form.Item>
+              )}
 
               <Form.Item
                 name="fullName"

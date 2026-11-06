@@ -13,10 +13,14 @@ const router = Router();
 
 const addMemberBody = Joi.object({
   apartmentId: objectId().required(),
-  userId: objectId(), // Tài khoản có sẵn lễ tân đã xác nhận
-  email: Joi.string().trim().lowercase().email().when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
+  hasAccount: Joi.boolean().default(true),
+  userId: objectId().when('hasAccount', { is: false, then: Joi.forbidden() }),
+  email: Joi.string().trim().lowercase().email().when('hasAccount', {
+    is: false, then: Joi.forbidden(),
+    otherwise: Joi.when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
+  }),
   fullName: Joi.string().trim().min(2).max(100).when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
-  phone: phoneVn().required(),
+  phone: phoneVn().when('hasAccount', { is: false, then: Joi.forbidden(), otherwise: Joi.required() }),
   idNumber: Joi.string().trim().allow('', null),
   dateOfBirth: ymd().allow('', null),
 });

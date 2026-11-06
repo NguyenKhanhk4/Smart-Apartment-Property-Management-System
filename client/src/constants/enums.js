@@ -287,6 +287,7 @@ export const GATE_PASS_STATUS = {
   USED: { label: 'Đã qua cổng', color: 'cyan' },
   REJECTED: { label: 'Từ chối', color: 'error' },
   EXPIRED: { label: 'Hết hạn', color: 'default' },
+  CANCELLED: { label: 'Đã hủy', color: 'default' },
 };
 
 export const PLATE_LOOKUP_RESULTS = {

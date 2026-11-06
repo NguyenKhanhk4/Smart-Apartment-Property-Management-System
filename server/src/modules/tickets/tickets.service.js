@@ -27,7 +27,7 @@ import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { HOUR_MS, fmtDateTimeVn } from '../../utils/time.js';
 import { getPayer } from '../contracts/contracts.queries.js';
 import { getOnDuty, isUserOnDuty } from '../dutyShifts/dutyShifts.service.js';
-import { BOARD_STATUSES, computeDeadlines, groupBoard, progressError } from './ticket.rules.js';
+import { BOARD_STATUSES, complaintResponseError, computeDeadlines, groupBoard, progressError } from './ticket.rules.js';
 
 const { NEW, ASSIGNED, WAITING_QUOTE_APPROVAL, IN_PROGRESS, WAITING_PARTS, WAITING_CONFIRM, CLOSED, REJECTED } =
   TICKET_STATUS;
@@ -405,6 +405,38 @@ export async function rejectTicket(user, id, { reason }) {
   return ticket;
 }
 
+/** UC42: Trưởng BQL phản hồi hoặc nhập kết quả và đóng phản ánh. */
+export async function respondComplaint(user, id, { status, note }, files = []) {
+  if (!isRole(user, 'MANAGER')) throw ApiError.forbidden('Chỉ Trưởng Ban quản lý được xử lý phản ánh');
+  const ticket = await findTicketOr404(id);
+  const transitionError = complaintResponseError(ticket, status);
+  if (transitionError) throw ApiError.field('status', transitionError);
+  const response = typeof note === 'string' ? note.trim() : '';
+  if (response.length < 5 || response.length > 2000) {
+    throw ApiError.field('note', 'Nhập nội dung phản hồi hoặc kết quả xử lý từ 5 đến 2000 ký tự');
+  }
+  const imageUrls = files.length ? await uploadToCloudinary(files, 'ticket-results') : undefined;
+  const now = new Date();
+  const fromStatus = ticket.status;
+  ticket.status = status;
+  ticket.respondedAt ??= now;
+  if (status === CLOSED) {
+    ticket.resolvedAt = now;
+    ticket.closedAt = now;
+  }
+  ticket.history.push({ at: now, by: user.id, action: status === CLOSED ? ACT.RESOLVED : ACT.PROGRESS,
+    fromStatus, toStatus: status, note: response, imageUrls });
+  await ticket.save();
+  await logAudit({ action: AUDIT_ACTIONS.TICKET_COMPLAINT_RESPONDED, user,
+    targetType: AUDIT_TARGETS.TICKET, targetId: ticket._id, metadata: { fromStatus, status } });
+  await notifyApartment(ticket.apartmentId, {
+    type: NOTIFICATION_TYPES.TICKET,
+    title: `Phản ánh ${ticket.code} ${status === CLOSED ? 'đã được xử lý' : 'có phản hồi'}`,
+    content: response, refId: ticket._id, link: ticketLink(ticket, true),
+  });
+  return ticket;
+}
+
 // ===== UC-E04: Kỹ thuật viên cập nhật tiến độ (quy tắc chuyển trạng thái ở ticket.rules) =====
 const PROGRESS_ACTION = {
   [WAITING_QUOTE_APPROVAL]: ACT.QUOTE_REQUESTED,
@@ -471,6 +503,22 @@ export async function confirmTicket(user, id, { accepted, rating, comment, reaso
   const myApartments = await getActiveApartmentIds(user.id);
   if (!myApartments.includes(String(ticket.apartmentId))) {
     throw ApiError.forbidden('Phản ánh không thuộc căn hộ của bạn');
+  }
+  // Phản ánh đã được BQL đóng: đánh giá sau xử lý không mở lại hoặc thay đổi ngày đóng.
+  if (ticket.type === COMPLAINT && ticket.status === CLOSED) {
+    if (ticket.rating != null) throw ApiError.badRequest('Phản ánh đã được đánh giá');
+    if (!accepted || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+      throw ApiError.badRequest('Phản ánh đã xử lý chỉ nhận đánh giá từ 1 đến 5 sao');
+    }
+    ticket.rating = rating;
+    ticket.ratingComment = comment;
+    ticket.history.push({ by: user.id, action: ACT.CONFIRMED, fromStatus: CLOSED, toStatus: CLOSED,
+      note: `Đánh giá ${rating}★${comment ? ` — ${comment}` : ''}` });
+    await ticket.save();
+    await notifyRoles(['MANAGER'], { type: NOTIFICATION_TYPES.TICKET,
+      title: `Phản ánh ${ticket.code} được đánh giá ${rating}★`, content: comment || 'Cư dân đã đánh giá kết quả xử lý.',
+      refId: ticket._id, link: ticketLink(ticket, false) });
+    return ticket;
   }
   assertNotFinal(ticket);
   if (ticket.status !== WAITING_CONFIRM) {
