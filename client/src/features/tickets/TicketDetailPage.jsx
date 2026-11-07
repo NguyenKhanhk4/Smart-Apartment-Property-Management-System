@@ -149,7 +149,11 @@ export default function TicketDetailPage() {
                 {t.respondedAt ? `Đã phản hồi ${formatDateTime(t.respondedAt)}` : formatDateTime(t.responseDueAt)}
               </Descriptions.Item>
             )}
-            <Descriptions.Item label="Hạn xử lý">{formatDateTime(t.dueDate)}</Descriptions.Item>
+            <Descriptions.Item label="Hạn xử lý">
+              {formatDateTime(t.dueDate)}
+              {/* M5-2: hạn được lùi thêm phần thời gian chờ khi phiếu chạy tiếp */}
+              {t.slaPausedAt && ` (SLA tạm dừng từ ${formatDateTime(t.slaPausedAt)})`}
+            </Descriptions.Item>
             {!isComplaint && (
               <Descriptions.Item label="Kỹ thuật viên">{t.assignedTo?.fullName ?? 'Chưa có người nhận'}</Descriptions.Item>
             )}

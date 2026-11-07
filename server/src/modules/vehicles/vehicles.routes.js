@@ -9,6 +9,7 @@ import {
 } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
+import { requireConsent } from '../../middlewares/requireConsent.js';
 import { validate } from '../../middlewares/validate.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
@@ -119,6 +120,7 @@ router.post(
   '/',
   authenticate,
   authorize(ROLES.RESIDENT),
+  requireConsent, // BR-X7
   validate({ body: registerVehicleBody }),
   async (req, res) => {
     const data = await service.register(req.validated.body, req.user);

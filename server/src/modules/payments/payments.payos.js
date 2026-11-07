@@ -5,7 +5,11 @@
 //      Dev chạy localhost không nhận được webhook: trang kết quả gọi tra cứu → server hỏi thẳng payOS rồi gạch nợ.
 //   3. Cron đối soát: hỏi payOS các giao dịch còn chờ; quá 15 phút chưa rõ → đánh dấu Cần đối soát.
 // Thông báo đã được trả bằng cách khác trong lúc chờ → tiền vào Số dư trả trước, không báo lỗi (M4-3).
+// Booking tiện ích có phí (Mô đun 6) cũng trả qua đây: link hết hạn đúng lúc hết giữ chỗ; tiền về muộn mà hết chỗ
+// thì vào Số dư trả trước (M6-1).
 import {
+  BOOKING_STATUS,
+  NOTIFICATION_TYPES,
   AUDIT_ACTIONS,
   AUDIT_TARGETS,
   INVOICE_OUTSTANDING_STATUSES,
@@ -13,10 +17,14 @@ import {
   PAYMENT_STATUS,
   ROLES,
 } from '../../constants/enums.js';
-import { Invoice, Payment } from '../../models/index.js';
+import { Booking, Invoice, Payment } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
+import { notify } from '../../services/notification.service.js';
+import { confirmGatewayPayment } from '../bookings/bookings.service.js';
+import { formatVnd } from '../amenities/pricing.js';
+import { getMyHouseholds } from '../household/household.service.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { MINUTE_MS } from '../../utils/time.js';
+import { MINUTE_MS, fmtDateVn } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { isDuplicateOn } from '../invoices/invoices.service.js';
 import { applyPayment, sendReceipt } from './payments.service.js';
@@ -128,6 +136,71 @@ export async function createPayosPayment(user, { invoiceIds }, { now = new Date(
   }
 }
 
+/**
+ * Link payOS trả phí booking đang giữ chỗ (PENDING_PAYMENT). Người trong căn của booking mới tạo được; link hết hạn
+ * cùng lúc hết giữ chỗ. Đã có link còn hạn thì dùng lại.
+ */
+export async function createBookingPayosPayment(user, bookingId, { now = new Date() } = {}) {
+  if (!payos.isPayosEnabled()) throw new ApiError('PAYOS_DISABLED');
+  const booking = await Booking.findById(bookingId)
+    .populate({ path: 'apartmentId', select: 'code', populate: { path: 'buildingId', select: 'code' } })
+    .lean();
+  const mine = booking ? await getMyHouseholds(user.id) : [];
+  if (!booking || !mine.some((h) => sameId(h.apartment._id, booking.apartmentId?._id))) throw ApiError.notFound('Không tìm thấy booking');
+  if (booking.status !== BOOKING_STATUS.PENDING_PAYMENT) throw new ApiError('BOOKING_INVALID_STATUS');
+  // payOS cần thời hạn trong tương lai; còn dưới 1 phút thì coi như hết giữ chỗ
+  if (!(booking.holdExpiresAt > new Date(now.getTime() + MINUTE_MS))) throw new ApiError('BOOKING_HOLD_EXPIRED');
+
+  const reusable = await Payment.findOne({
+    bookingId: booking._id,
+    method: PAYMENT_METHODS.PAYOS,
+    status: PENDING,
+    checkoutUrl: { $ne: null },
+    expiredAt: { $gt: new Date(now.getTime() + MINUTE_MS) },
+  }).lean();
+  if (reusable) return linkView(reusable);
+
+  const apartment = booking.apartmentId;
+  const apt = `${apartment.buildingId?.code ?? ''}${apartment.code}`.replace(/[^A-Za-z0-9]/g, '');
+  const day = fmtDateVn(booking.date).slice(0, 5).replace('/', '');
+  for (let attempt = 1; ; attempt += 1) {
+    let payment;
+    try {
+      payment = await Payment.create({
+        apartmentId: apartment._id,
+        payerId: booking.chargedTo ?? user.id,
+        bookingId: booking._id,
+        method: PAYMENT_METHODS.PAYOS,
+        amount: booking.fee,
+        status: PENDING,
+        orderCode: newOrderCode(),
+        expiredAt: booking.holdExpiresAt,
+      });
+    } catch (err) {
+      if (isDuplicateOn(err, 'orderCode') && attempt < MAX_ATTEMPTS) continue;
+      throw err;
+    }
+    try {
+      const link = await payos.createPaymentLink({
+        orderCode: payment.orderCode,
+        amount: booking.fee,
+        description: `${apt} TIEN ICH ${day}`.slice(0, 25),
+        expiredAt: booking.holdExpiresAt,
+        items: [{ name: `Dat ${booking.slotStart}-${booking.slotEnd}`, quantity: 1, price: booking.fee }],
+      });
+      const saved = await Payment.findByIdAndUpdate(
+        payment._id,
+        { $set: { paymentLinkId: link.paymentLinkId, checkoutUrl: link.checkoutUrl, qrCode: link.qrCode } },
+        { new: true },
+      ).lean();
+      return linkView(saved);
+    } catch (err) {
+      await Payment.updateOne({ _id: payment._id, status: PENDING }, { $set: { status: FAILED, note: 'Không tạo được link payOS' } });
+      throw err;
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Gạch nợ (webhook + tra cứu + cron dùng chung)
 // ---------------------------------------------------------------------------
@@ -142,7 +215,75 @@ function parsePayosTime(text, fallback) {
  * Ghi nhận tiền payOS đã về cho giao dịch `payment` (PENDING, hoặc FAILED nhưng thực tế đã trả).
  * Claim có điều kiện status nên webhook + tra cứu + cron chạy song song cũng chỉ gạch nợ 1 lần. Trả về payment đã xử lý hoặc null.
  */
-async function completePayos(payment, { amount, reference, paidAt }) {
+async function completePayos(payment, received) {
+  return payment.bookingId ? completeBookingPayos(payment, received) : completeInvoicePayos(payment, received);
+}
+
+/**
+ * Tiền payOS về cho booking: xác nhận booking. Không xác nhận được (hết chỗ / booking đã hủy) hoặc trả thiếu
+ * → toàn bộ tiền vào Số dư trả trước của người trả; số tiền lệch thì đánh dấu Cần đối soát.
+ */
+async function completeBookingPayos(payment, { amount, reference, paidAt }) {
+  const claimed = await Payment.findOneAndUpdate(
+    { _id: payment._id, status: { $in: [PENDING, FAILED] } },
+    { $set: { status: SUCCESS, paidAt, reference: reference ?? null, amount } },
+    { new: true },
+  ).lean();
+  if (!claimed) return null;
+
+  try {
+    const mismatch = amount !== payment.amount;
+    const result =
+      amount >= payment.amount
+        ? await confirmGatewayPayment(payment.bookingId, { paymentRef: String(payment.orderCode), paidAt })
+        : { confirmed: false, reason: 'UNDERPAID' };
+
+    let credit = 0;
+    let balanceAfter = null;
+    if (!result.confirmed) {
+      const applied = await withTransaction((session) =>
+        applyPayment({ paymentId: payment._id, apartmentId: payment.apartmentId, payerId: payment.payerId, amount, paidAt, invoiceIds: [] }, session),
+      );
+      credit = applied.credit;
+      balanceAfter = applied.balanceAfter;
+    }
+    const note = !result.confirmed
+      ? `Không xác nhận được booking (${result.reason}), tiền vào Số dư trả trước`
+      : mismatch
+        ? `payOS báo nhận ${amount} khác phí booking ${payment.amount}`
+        : undefined;
+    const saved = await Payment.findByIdAndUpdate(
+      payment._id,
+      { $set: { creditAmount: credit, needsReconcile: mismatch, ...(note && { note }) } },
+      { new: true },
+    ).lean();
+    await logAudit({
+      action: AUDIT_ACTIONS.PAYMENT_CONFIRMED,
+      user: null,
+      targetType: AUDIT_TARGETS.PAYMENT,
+      targetId: payment._id,
+      metadata: { method: PAYMENT_METHODS.PAYOS, orderCode: payment.orderCode, reference, amount, bookingId: payment.bookingId, credit },
+    });
+    if (credit > 0) {
+      await notify(payment.payerId, {
+        type: NOTIFICATION_TYPES.PAYMENT_RECEIPT,
+        title: 'Không giữ được chỗ tiện ích',
+        content:
+          `Đã nhận ${formatVnd(amount)} nhưng khung giờ đã hết chỗ hoặc booking đã hủy. Số tiền đã vào Số dư trả trước ` +
+          `(số dư hiện tại ${formatVnd(balanceAfter)}), được trừ vào thông báo phí kỳ sau.`,
+        refId: payment._id,
+        email: true,
+      });
+    }
+    return saved;
+  } catch (err) {
+    // MongoDB standalone không rollback: trả giao dịch về trạng thái cũ để lần sau xử lý lại
+    await Payment.updateOne({ _id: payment._id, status: SUCCESS, creditAmount: 0 }, { $set: { status: payment.status } });
+    throw err;
+  }
+}
+
+async function completeInvoicePayos(payment, { amount, reference, paidAt }) {
   const plannedIds = payment.allocations.map((a) => a.invoiceId);
   const mismatch = amount !== payment.amount;
 
@@ -254,13 +395,17 @@ export async function getPayosStatus(user, orderCode, { now = new Date() } = {})
     }
     payment = await Payment.findById(payment._id).lean();
   }
-  const invoices = await Invoice.find({ _id: { $in: payment.allocations.map((a) => a.invoiceId) } })
-    .select('code period status totalAmount paidAmount')
-    .lean();
+  const [invoices, booking] = await Promise.all([
+    Invoice.find({ _id: { $in: payment.allocations.map((a) => a.invoiceId) } })
+      .select('code period status totalAmount paidAmount')
+      .lean(),
+    payment.bookingId ? Booking.findById(payment.bookingId).select('status date slotStart slotEnd fee').populate('amenityId', 'name').lean() : null,
+  ]);
   return {
     ...linkView(payment),
     paidAt: payment.paidAt,
     creditAmount: payment.creditAmount,
+    booking: booking && { ...booking, amenity: booking.amenityId ?? null, amenityId: booking.amenityId?._id ?? null },
     allocations: payment.allocations.map((a) => ({ ...a, invoice: invoices.find((i) => sameId(i._id, a.invoiceId)) ?? null })),
   };
 }

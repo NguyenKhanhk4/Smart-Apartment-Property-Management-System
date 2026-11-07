@@ -54,10 +54,12 @@ export const MENU_GROUPS = [
 
 const HomePage = lazy(() => import('../features/home/HomePage'));
 const ResidentHomePage = lazy(() => import('../features/home/ResidentHomePage'));
+const SelectApartmentPage = lazy(() => import('../features/auth/SelectApartmentPage'));
 
 // ===== Module A (Vũ Việt) =====
 const ProfilePage = lazy(() => import('../features/profile/ProfilePage'));
 const InternalAccountsPage = lazy(() => import('../features/users/InternalAccountsPage'));
+const IssueActivationCodePage = lazy(() => import('../features/users/IssueActivationCodePage'));
 const BuildingsPage = lazy(() => import('../features/buildings/BuildingsPage'));
 const ContractsPage = lazy(() => import('../features/contracts/ContractsPage'));
 const ApartmentDetailPage = lazy(() => import('../features/apartments/ApartmentDetailPage'));
@@ -118,6 +120,9 @@ const SupervisionPage = lazy(() => import('../features/reports/SupervisionPage')
 // ===== Sự cố & Tiện ích (Người 4) =====
 const DutyShiftsPage = lazy(() => import('../features/dutyShifts/DutyShiftsPage'));
 const TicketBoardPage = lazy(() => import('../features/tickets/TicketBoardPage'));
+
+// ===== Module C — audit (TM) =====
+const AuditLogsPage = lazy(() => import('../features/auditLogs/AuditLogsPage'));
 
 // ===== Gate Pass & Kiểm soát xe (Người 2) =====
 const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
@@ -338,6 +343,12 @@ export const adminMenu = [
     component: AmenityUsagePage,
   },
 
+  // ===== Module C — audit chỉ đọc =====
+  {
+    key: 'audit-logs', group: 'Cấu hình', label: 'Nhật ký hoạt động', icon: FileTextOutlined,
+    path: 'audit-logs', roles: ['MANAGER', 'BOARD'], component: AuditLogsPage,
+  },
+
   // ===== Module B — Phí & hóa đơn (UC-B01, UC-B02) =====
   {
     key: 'fee-types',
@@ -455,6 +466,15 @@ export const adminMenu = [
     component: BuildingsPage,
   },
   {
+    key: 'activation-codes',
+    group: 'Cấu hình',
+    label: 'Cấp mã kích hoạt',
+    icon: IdcardOutlined,
+    path: 'activation-codes',
+    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
+    component: IssueActivationCodePage,
+  },
+  {
     key: 'internal-accounts',
     group: 'Cấu hình',
     label: 'Tài khoản nội bộ',
@@ -545,7 +565,7 @@ export const receptionNav = [
       { key: 'contracts' },
     ],
   },
-  { group: 'Cư dân và dịch vụ', items: [{ key: 'amenity-passes' }, { key: 'announcements' }] },
+  { group: 'Cư dân và dịch vụ', items: [{ key: 'amenity-passes' }, { key: 'announcements' }, { key: 'activation-codes' }] },
   { group: 'Cấu hình', items: [{ key: 'buildings' }] },
 ];
 
@@ -553,6 +573,7 @@ export const receptionNav = [
 // (theo `key`), không còn do hideInMenu. Thông báo vào qua chuông trên header.
 export const residentMenu = [
   { key: 'home', label: 'Trang chủ', icon: HomeOutlined, path: 'home', component: ResidentHomePage },
+  { key: 'select-apartment', label: 'Chọn căn hộ', path: 'select-apartment', component: SelectApartmentPage, hideInMenu: true },
   { key: 'tickets', label: 'Phản ánh', icon: ToolOutlined, path: 'tickets', component: ResidentTicketsPage },
   {
     key: 'ticket-detail',

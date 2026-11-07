@@ -27,11 +27,11 @@ test('createInternal: đã có Trưởng BQT hoạt động → 409 CHAIRMAN_ALR
   );
 });
 
-test('createInternal: email trùng → 409 EMAIL_EXISTS; email không gửi được thì trả mật khẩu tạm', async () => {
+test('createInternal: email trùng → 409 EMAIL_EXISTS; không tạo và không trả mật khẩu (BR-S02)', async () => {
   const a = await manager();
   const res = await users.createInternal(a, { fullName: 'KTV', email: 'ktv@test.local', phone: '0912000001', role: 'STAFF', roleTitle: 'TECHNICIAN' });
-  assert.equal(res.emailSent, false);
-  assert.ok(res.temporaryPassword);
+  assert.equal(res.inviteSent, false);
+  assert.equal('temporaryPassword' in res, false);
   await assert.rejects(
     users.createInternal(a, { fullName: 'KTV 2', email: 'KTV@test.local', phone: '0912000002', role: 'STAFF', roleTitle: 'TECHNICIAN' }),
     { errorCode: 'EMAIL_EXISTS', status: 409 },

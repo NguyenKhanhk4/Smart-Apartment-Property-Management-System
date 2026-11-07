@@ -6,6 +6,7 @@ import { validate } from '../../middlewares/validate.js';
 import { MAX_LIMIT, paginationQuery } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { hhmm, idParams, objectId, ymd } from '../../utils/validators.js';
+import { createBookingPayosPayment } from '../payments/payments.payos.js';
 import * as service from './bookings.service.js';
 
 // Module D — Thanh Bình. UC-D06: đặt tiện ích (chỉ accessMode = BOOKING, tự xác nhận), xem lịch sử, hủy.
@@ -187,10 +188,22 @@ router.patch(
 
 /**
  * @openapi
+ * /bookings/{id}/payos:
+ *   post:
+ *     tags: [Tiện ích & đặt chỗ]
+ *     summary: Cư dân tạo link payOS trả phí booking đang giữ chỗ (link hết hạn cùng lúc hết giữ chỗ)
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.post('/:id/payos', authenticate, authorize('RESIDENT'), validate({ params: idParams }), async (req, res) =>
+  created(res, await createBookingPayosPayment(req.user, req.params.id), 'Đã tạo link thanh toán'),
+);
+
+/**
+ * @openapi
  * /bookings/{id}/reschedule:
  *   patch:
  *     tags: [Tiện ích & đặt chỗ]
- *     summary: Cư dân đổi booking sang khung giờ khác của cùng tiện ích trước giờ bắt đầu (kiểm tra như đặt mới, booking cũ hủy)
+ *     summary: Cư dân đổi booking đã xác nhận sang khung giờ khác của cùng tiện ích (có phí - 1 lần, trước changeDeadlineHours giờ)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
 router.patch(

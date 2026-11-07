@@ -45,6 +45,7 @@ const fields = {
   slotDurationMinutes: Joi.number().integer().min(15).max(720),
   capacityPerSlot: Joi.number().integer().min(1).max(1000),
   feePerBooking: money(),
+  changeDeadlineHours: Joi.number().integer().min(0).max(720),
   perVisitFeeAdult: money(),
   perVisitFeeChild: money(),
   maxConcurrent: Joi.number().integer().min(1).max(10000).allow('', null),

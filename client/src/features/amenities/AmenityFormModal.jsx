@@ -16,7 +16,7 @@ const blank = (v) => v === undefined || v === null || v === '';
 const MODE_BODY = {
   FREE: [],
   WALK_IN: ['perVisitFeeAdult', 'perVisitFeeChild', 'maxConcurrent', 'monthlyPassFeeAdult', 'monthlyPassFeeChild'],
-  BOOKING: ['slotDurationMinutes', 'capacityPerSlot', 'feePerBooking', 'monthlyPassFeeAdult', 'monthlyPassFeeChild'],
+  BOOKING: ['slotDurationMinutes', 'capacityPerSlot', 'feePerBooking', 'changeDeadlineHours', 'monthlyPassFeeAdult', 'monthlyPassFeeChild'],
 };
 
 function MoneyInput(props) {
@@ -164,6 +164,7 @@ export default function AmenityFormModal({ amenity, buildings, reception, ages, 
         slotDurationMinutes: 60,
         capacityPerSlot: 1,
         feePerBooking: 0,
+        changeDeadlineHours: 24,
       };
 
   return (
@@ -285,6 +286,14 @@ export default function AmenityFormModal({ amenity, buildings, reception, ages, 
               <InputNumber min={1} max={1000} precision={0} style={{ width: '100%' }} />
             </Form.Item>
             {money('feePerBooking', 'Phí / lượt đặt (đ)', <FeeHint form={form} />, [{ required: true, message: 'Nhập phí (0 = miễn phí)' }])}
+            <Form.Item
+              name="changeDeadlineHours"
+              label="Hạn đổi lịch (giờ trước giờ sử dụng)"
+              style={{ flex: 1, minWidth: 160 }}
+              extra="Tiện ích có phí: cư dân được đổi giờ 1 lần trước mốc này, hủy không hoàn tiền"
+            >
+              <InputNumber min={0} max={720} precision={0} style={{ width: '100%' }} />
+            </Form.Item>
           </Flex>
         )}
 

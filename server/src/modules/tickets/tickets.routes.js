@@ -132,7 +132,7 @@ router.get('/queue', authenticate, authorize('STAFF:TECHNICIAN'), async (req, re
  * /tickets/board:
  *   get:
  *     tags: [Ticket]
- *     summary: Kanban điều phối sự cố của Trưởng BQL — { columns: [{ status, items }] }
+ *     summary: 'Kanban điều phối sự cố của Trưởng BQL — trả về columns[] gồm status, items'
  *     parameters: [{ in: query, name: buildingId, schema: { type: string } }]
  */
 router.get(

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router';
 import { Alert, Button, Form, Input } from 'antd';
-import { ArrowRightOutlined, LockOutlined, ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
+import { ArrowRightOutlined, LockOutlined, PhoneOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { PHONE_RULES } from '../../utils/phone';
 import { authApi } from '../../api/auth.api';
+import { SESSION_EXPIRED_FLAG } from '../../utils/authStorage';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi } from '../../hooks/useApi';
 import { roleLabelOf } from '../../constants/enums';
@@ -15,25 +17,40 @@ export default function LoginPage() {
   const location = useLocation();
   const { startSession } = useAuth();
   const [error, setError] = useState(null);
+  const [pendingPhone, setPendingPhone] = useState(null); // tài khoản chưa kích hoạt (UC01 Step 2c)
   const [loading, setLoading] = useState(false);
 
-  const registeredSuccess = location.state?.registered;
+  const activated = location.state?.activated;
+  const passwordReset = location.state?.passwordReset;
+  const [sessionExpired] = useState(() => {
+    try {
+      const expired = window.sessionStorage.getItem(SESSION_EXPIRED_FLAG) === '1';
+      window.sessionStorage.removeItem(SESSION_EXPIRED_FLAG);
+      return expired;
+    } catch {
+      return false;
+    }
+  });
 
   const enter = (session) => {
     startSession(session);
-    navigate(roleHome(session.user), { replace: true, viewTransition: true });
+    // UC01 bước 5: cư dân có từ 2 căn thì chọn căn làm việc trước
+    const target = session.apartments?.length > 1 ? '/r/select-apartment' : roleHome(session.user);
+    navigate(target, { replace: true, viewTransition: true });
   };
 
   const submit = async (values) => {
     setError(null);
+    setPendingPhone(null);
     setLoading(true);
     try {
       const { data } = await authApi.login({
-        email: values.email?.trim(),
+        phone: values.phone?.trim(),
         password: values.password,
       });
       enter(data);
     } catch (e) {
+      if (e.errorCode === 'ACCOUNT_NOT_ACTIVATED') setPendingPhone(values.phone?.trim());
       setError(e.message || 'Đăng nhập không thành công');
     } finally {
       setLoading(false);
@@ -46,28 +63,41 @@ export default function LoginPage() {
       <div className="w-8 h-0.5 bg-gold mt-2 mb-2" />
       <p className="m-0 mb-6 text-[13px] text-ink-2">Nhập thông tin tài khoản để truy cập hệ thống.</p>
 
-      {registeredSuccess && (
+      {sessionExpired && (
+        <Alert type="warning" showIcon title="Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." className="mb-4" closable />
+      )}
+
+      {(activated || passwordReset) && (
         <Alert
           type="success"
           showIcon
-          message="Đăng ký tài khoản thành công! Vui lòng đăng nhập."
+          title={passwordReset ? 'Mật khẩu đã được đặt lại. Vui lòng đăng nhập.' : 'Tài khoản đã được kích hoạt. Vui lòng đăng nhập.'}
           className="mb-4"
           closable
         />
       )}
 
-      {error && <Alert type="error" showIcon message={error} className="mb-4" closable onClose={() => setError(null)} />}
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          title={error}
+          className="mb-4"
+          closable
+          onClose={() => setError(null)}
+          action={
+            pendingPhone && (
+              <Button size="small" type="primary" onClick={() => navigate('/activate', { state: { phone: pendingPhone } })}>
+                Kích hoạt
+              </Button>
+            )
+          }
+        />
+      )}
 
       <Form layout="vertical" requiredMark={false} onFinish={submit} disabled={loading}>
-        <Form.Item
-          name="email"
-          label="Email"
-          rules={[
-            { required: true, message: 'Vui lòng nhập email' },
-            { type: 'email', message: 'Email không đúng định dạng' },
-          ]}
-        >
-          <Input size="large" prefix={<UserOutlined className="text-ink-3" />} placeholder="vd: cudan1@sapms.vn" autoComplete="username" />
+        <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
+          <Input size="large" prefix={<PhoneOutlined className="text-ink-3" />} placeholder="0912345678" autoComplete="username" />
         </Form.Item>
         <Form.Item
           name="password"
@@ -82,9 +112,13 @@ export default function LoginPage() {
       </Form>
 
       <div className="mt-4 text-center text-[13px] text-ink-2">
-        Chưa có tài khoản?{' '}
-        <Link to="/register" className="font-semibold text-navy hover:text-gold transition-colors">
-          Đăng ký
+        <Link to="/forgot-password" className="font-semibold text-navy hover:text-gold transition-colors">
+          Quên mật khẩu?
+        </Link>
+        {' · '}
+        Lần đầu sử dụng?{' '}
+        <Link to="/activate" className="font-semibold text-navy hover:text-gold transition-colors">
+          Kích hoạt tài khoản
         </Link>
       </div>
 
