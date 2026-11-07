@@ -36,8 +36,8 @@ import {
 import dayjs from 'dayjs';
 import PageHeader from '../../components/PageHeader';
 import EnumTag from '../../components/EnumTag';
+import ApartmentOccupancyTag from '../buildings/ApartmentOccupancyTag';
 import {
-  APARTMENT_STATUS,
   CONTRACT_TYPES,
   CONTRACT_STATUS,
   RELATION_TYPES,
@@ -76,6 +76,13 @@ export default function ApartmentDetailPage() {
     loading: loadingApt,
     reload: reloadApt,
   } = useApi(() => apartmentsApi.getById(id), [id]);
+
+  const [confirmMoveIn, confirmingMoveIn] = useAction(() => apartmentsApi.confirmMoveIn(id), {
+    success: 'Đã xác nhận cư dân vào ở',
+    onDone: reloadApt,
+  });
+  const canConfirmMoveIn = isReceptionist && apartment?.handoverDate &&
+    apartment.activeContracts?.some((contract) => contract.type === 'SALE');
 
   // Load residents list
   const {
@@ -416,9 +423,20 @@ export default function ApartmentDetailPage() {
         </Button>
         <PageHeader
           title={`Chi tiết căn hộ ${apartment?.code || ''}`}
-          subtitle={`${apartment?.building?.name || ''} • Tầng ${apartment?.floor || ''} • ${apartment?.area || 0} m²`}
+          subtitle={`${apartment?.building?.name || ''} • Tầng ${apartment?.floor || ''}`}
           extra={
-            <Space>
+            <Space wrap>
+              {canConfirmMoveIn && (
+                <Popconfirm
+                  title="Xác nhận cư dân đã vào ở?"
+                  description="Đối chiếu hồ sơ và xác nhận cư dân đã vào ở. Hệ thống dùng hợp đồng đang có hiệu lực để xác định chủ nhà hoặc khách thuê."
+                  okText="Xác nhận"
+                  cancelText="Hủy"
+                  onConfirm={() => confirmMoveIn().catch(() => {})}
+                >
+                  <Button type="primary" loading={confirmingMoveIn}>Xác nhận vào ở</Button>
+                </Popconfirm>
+              )}
               <Button
                 icon={<ReloadOutlined />}
                 onClick={() => {
@@ -443,7 +461,7 @@ export default function ApartmentDetailPage() {
               title="Trạng thái căn"
               valueRender={() => (
                 <div className="mt-1">
-                  <EnumTag map={APARTMENT_STATUS} value={apartment?.status} />
+                  <ApartmentOccupancyTag status={apartment?.occupancyStatus} />
                 </div>
               )}
             />
@@ -474,9 +492,9 @@ export default function ApartmentDetailPage() {
           </Col>
           <Col xs={12} sm={6} md={4}>
             <Statistic
-              title="Diện tích"
-              value={apartment?.area || 0}
-              suffix="m²"
+              title="Diện tích tính phí quản lý"
+              value={apartment?.netArea ?? '—'}
+              suffix={apartment?.netArea != null ? 'm²' : undefined}
             />
           </Col>
         </Row>

@@ -2,6 +2,7 @@
 // Phí vệ sinh, gửi xe tính cho chính kỳ P (thu trước); phí tiện ích phát sinh trong kỳ P−1 (thu sau).
 import {
   AMENITY_PASS_STATUS,
+  APARTMENT_OCCUPANCY,
   BOOKING_BILLABLE_STATUSES,
   FEE_CALC_METHODS,
   FEE_CATEGORIES,
@@ -11,7 +12,7 @@ import { AmenityPass, AmenityVisit, Booking } from '../../models/index.js';
 import { getPayer } from '../contracts/contracts.queries.js';
 import { getBillableVehicles } from '../vehicles/vehicles.queries.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { fmtDateVn, periodEnd, periodLabel, periodStart, shiftPeriod } from '../../utils/time.js';
+import { DAY_MS, fmtDateVn, periodEnd, periodLabel, periodStart, shiftPeriod, startOfVnDay } from '../../utils/time.js';
 
 
 // feeCode cho dòng tiện ích — phân biệt nguồn khi truy vết refId
@@ -42,10 +43,22 @@ const item = (feeCategory, feeCode, description, quantity, unitPrice, refId = nu
 });
 
 /** Dòng phí theo căn: mọi mức giá không phải gửi xe (PER_M2 theo diện tích, PER_APARTMENT cố định) — BR-F4 */
-function apartmentItems(apartment, prices) {
+function apartmentItems(apartment, prices, daysInPeriod, billableDays) {
   const items = [];
   for (const fee of prices.values()) {
-    if (fee.calcMethod === FEE_CALC_METHODS.PER_M2) {
+    if (fee.feeCategory === FEE_CATEGORIES.MANAGEMENT) {
+      if (!apartment.handoverDate || fee.code !== `MANAGEMENT_${apartment.type}`) continue;
+      if (!(apartment.netArea > 0)) {
+        throw ApiError.field('netArea', 'Cần diện tích thông thủy để tính phí quản lý');
+      }
+      items.push(item(
+        fee.feeCategory,
+        fee.code,
+        `${fee.name} (${apartment.netArea} m² × ${billableDays}/${daysInPeriod} ngày)`,
+        apartment.netArea * billableDays / daysInPeriod,
+        fee.unitPrice,
+      ));
+    } else if (fee.calcMethod === FEE_CALC_METHODS.PER_M2) {
       items.push(item(fee.feeCategory, fee.code, `${fee.name} ${apartment.area}m²`, apartment.area, fee.unitPrice));
     } else if (fee.calcMethod === FEE_CALC_METHODS.PER_APARTMENT) {
       items.push(item(fee.feeCategory, fee.code, fee.name, 1, fee.unitPrice));
@@ -139,7 +152,7 @@ export async function collectAmenityCharges(apartmentId, prev, { invoiceId = nul
 
 /**
  * Bản nháp hóa đơn kỳ `period` cho 1 căn (apartment cần có buildingId đã populate `code`).
- * Căn chưa có hợp đồng mua bán hiệu lực → payer null, không có dòng phí (bỏ qua khi sinh).
+ * Bỏ qua căn chưa bàn giao trong kỳ hoặc chưa xác định được người nộp phí.
  * @param {Map<string, object>} prices bảng giá kỳ `period` (getPriceTable)
  * @param {{ invoiceId?: import('mongoose').Types.ObjectId }} [opts] tính lại thông báo Nháp đã có
  */
@@ -154,12 +167,21 @@ export async function buildInvoiceDraft(apartment, period, prices, { invoiceId =
     code: baseInvoiceCode(period, building.code, apartment.code),
   };
 
-  // BR-F7: người trả tại đầu kỳ
-  const payer = await getPayer(apartment._id, periodStart(period));
+  const start = periodStart(period);
+  const end = periodEnd(period);
+  const handover = apartment.handoverDate ? startOfVnDay(new Date(apartment.handoverDate)) : null;
+  if (apartment.occupancyStatus === APARTMENT_OCCUPANCY.NOT_HANDED_OVER || (handover && handover >= end)) {
+    return { ...base, excludedByHandover: true, payer: null, items: [], totalAmount: 0, charges: null };
+  }
+
+  // Kỳ đầu có bàn giao giữa tháng dùng người nộp phí tại ngày bắt đầu tính.
+  const billFrom = handover && handover > start ? handover : start;
+  const payer = await getPayer(apartment._id, billFrom);
   if (!payer) return { ...base, payer: null, items: [], totalAmount: 0, charges: null };
 
   const charges = await collectAmenityCharges(apartment._id, shiftPeriod(period, -1), { invoiceId });
-  const items = [...apartmentItems(apartment, prices), ...(await parkingItems(apartment, period, prices)), ...charges.items];
+  const fixedItems = apartmentItems(apartment, prices, (end - start) / DAY_MS, (end - billFrom) / DAY_MS);
+  const items = [...fixedItems, ...(await parkingItems(apartment, period, prices)), ...charges.items];
   return {
     ...base,
     payer,

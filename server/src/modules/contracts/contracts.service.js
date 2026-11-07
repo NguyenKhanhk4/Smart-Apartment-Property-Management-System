@@ -1,4 +1,5 @@
 import {
+  APARTMENT_OCCUPANCY,
   APARTMENT_STATUS,
   AUDIT_ACTIONS,
   AUDIT_TARGETS,
@@ -15,6 +16,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { paginate } from '../../utils/pagination.js';
 import { DAY_MS, endOfVnDay, startOfVnDay } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
+import { recordOccupancy } from '../apartments/apartmentOccupancy.js';
 import { ensureCodes } from '../memberCodes/memberCodes.service.js';
 import { revokeDepartedResidentServices } from '../residents/residentExit.service.js';
 import { findOrCreateResidentUser, linkResident, welcomeNewResident } from '../residents/residentAccounts.js';
@@ -164,6 +166,9 @@ export async function createContract(receptionistUser, data, file, ip) {
         tenantPaysFees: Boolean(tenantPaysFees),
       };
       apartment.status = APARTMENT_STATUS.RENTED;
+      if (apartment.handoverDate && startDate <= new Date() && endDate >= startOfVnDay()) {
+        apartment.occupancyStatus = APARTMENT_OCCUPANCY.RENTED;
+      }
     } else {
       throw ApiError.badRequest('Loại hợp đồng không hợp lệ');
     }
@@ -328,6 +333,9 @@ export async function terminateContract(id, receptionistUser, ip) {
         { status: APARTMENT_STATUS.OWNED },
         { session },
       );
+      if (contract.startDate <= now) {
+        await recordOccupancy(contract.apartmentId, APARTMENT_OCCUPANCY.VACANT, session);
+      }
 
       // 4. Chuyển thẻ gửi xe ACTIVE sang DISABLED_TO_COLLECT (UC66)
       await revokeDepartedResidentServices({ apartmentId: contract.apartmentId,
@@ -379,6 +387,7 @@ export async function terminateContract(id, receptionistUser, ip) {
         { status: APARTMENT_STATUS.VACANT },
         { session },
       );
+      await recordOccupancy(contract.apartmentId, APARTMENT_OCCUPANCY.VACANT, session);
 
       // Chuyển thẻ gửi xe ACTIVE sang DISABLED_TO_COLLECT (UC66)
       await revokeDepartedResidentServices({ apartmentId: contract.apartmentId,

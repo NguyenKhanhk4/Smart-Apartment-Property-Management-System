@@ -33,6 +33,19 @@ export const BOARD_TITLES = Object.freeze({
 });
 
 // ===== Tòa nhà, căn hộ, hợp đồng, cư dân, xe (Module A) =====
+export const APARTMENT_OCCUPANCY = Object.freeze({
+  NOT_HANDED_OVER: 'NOT_HANDED_OVER',
+  VACANT: 'VACANT',
+  OWNER_OCCUPIED: 'OWNER_OCCUPIED',
+  RENTED: 'RENTED',
+  UNDER_REPAIR: 'UNDER_REPAIR',
+});
+
+export const APARTMENT_TYPES = Object.freeze({
+  RESIDENTIAL: 'RESIDENTIAL',
+  COMMERCIAL: 'COMMERCIAL',
+});
+
 export const APARTMENT_STATUS = Object.freeze({
   VACANT: 'VACANT',
   OWNED: 'OWNED',
@@ -102,6 +115,7 @@ export const PARKING_CARD_STATUS = Object.freeze({
 // ===== Phí, hóa đơn, thanh toán, công nợ (Module B) =====
 // Nhóm phí trên hóa đơn (BR-F1)
 export const FEE_CATEGORIES = Object.freeze({
+  MANAGEMENT: 'MANAGEMENT',
   CLEANING: 'CLEANING',
   PARKING: 'PARKING',
   AMENITY: 'AMENITY',
@@ -117,6 +131,7 @@ export const FEE_TYPE_STATES = Object.freeze({ ACTIVE: 'ACTIVE', UPCOMING: 'UPCO
 export const INVOICE_PREVIEW_STATUS = Object.freeze({
   NEW: 'NEW', // sẽ được lập
   EXISTS: 'EXISTS', // đã có hóa đơn chưa hủy (BR-F2)
+  NOT_HANDED_OVER: 'NOT_HANDED_OVER',
   NO_PAYER: 'NO_PAYER', // chưa có hợp đồng hiệu lực → bỏ qua
   ERROR: 'ERROR', // thiếu đơn giá...
 });

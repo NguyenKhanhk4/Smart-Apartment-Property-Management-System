@@ -1,4 +1,5 @@
 import {
+  APARTMENT_OCCUPANCY,
   APARTMENT_STATUS,
   AUDIT_ACTIONS,
   AUDIT_TARGETS,
@@ -11,6 +12,7 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { DAY_MS, endOfVnDay, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
+import { recordOccupancy } from '../apartments/apartmentOccupancy.js';
 import { ensureCodes } from '../memberCodes/memberCodes.service.js';
 import { revokeDepartedResidentServices } from '../residents/residentExit.service.js';
 
@@ -84,6 +86,8 @@ export async function expireLeases() {
           { status: hasActiveSale ? APARTMENT_STATUS.OWNED : APARTMENT_STATUS.VACANT },
           { session },
         );
+
+        await recordOccupancy(current.apartmentId, APARTMENT_OCCUPANCY.VACANT, session);
 
         // Chuyển thẻ gửi xe ACTIVE sang DISABLED_TO_COLLECT (UC66)
         await revokeDepartedResidentServices({ apartmentId: current.apartmentId,

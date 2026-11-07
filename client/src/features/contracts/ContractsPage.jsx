@@ -405,8 +405,8 @@ export default function ContractsPage() {
               title="Chấm dứt hợp đồng"
               description={
                 record.type === 'SALE'
-                  ? 'Chấm dứt hợp đồng mua bán sẽ gỡ toàn bộ cư dân và đưa căn hộ về trạng thái Trống. Tiếp tục?'
-                  : 'Chấm dứt hợp đồng thuê sẽ gỡ người thuê và đưa căn hộ về trạng thái Đã sở hữu. Tiếp tục?'
+                  ? 'Chấm dứt hợp đồng mua bán sẽ kết thúc cư trú của các thành viên. Căn đã bàn giao chuyển sang Đang trống trên sơ đồ. Tiếp tục?'
+                  : 'Chấm dứt hợp đồng thuê sẽ kết thúc cư trú của khách thuê. Nếu hợp đồng đã bắt đầu và căn đã bàn giao, sơ đồ chuyển sang Đang trống. Tiếp tục?'
               }
               okText="Chấm dứt"
               cancelText="Hủy"
