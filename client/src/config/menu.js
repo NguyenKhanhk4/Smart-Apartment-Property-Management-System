@@ -79,6 +79,8 @@ const MyReceiptPage = lazy(() => import('../features/payments/MyReceiptPage'));
 const PaymentResultPage = lazy(() => import('../features/payments/PaymentResultPage'));
 const DebtLedgerPage = lazy(() => import('../features/debts/DebtLedgerPage'));
 const DebtApartmentPage = lazy(() => import('../features/debts/DebtApartmentPage'));
+const FundPage = lazy(() => import('../features/fund/FundPage'));
+const FundProposalPage = lazy(() => import('../features/fund/FundProposalPage'));
 
 // ===== Người 1 — Vũ Việt (Mô đun 10: Thiết bị & bảo trì) =====
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
@@ -377,6 +379,23 @@ export const adminMenu = [
     path: 'debts',
     roles: ['ACCOUNTANT', 'MANAGER'],
     component: DebtLedgerPage,
+  },
+  {
+    key: 'fund',
+    group: 'Tài chính',
+    label: 'Quỹ bảo trì',
+    icon: BankOutlined,
+    path: 'fund',
+    roles: ['ACCOUNTANT', 'MANAGER', 'BOARD'],
+    component: FundPage,
+  },
+  {
+    key: 'fund-proposal',
+    label: 'Đề xuất chi quỹ',
+    path: 'fund/proposals/:id',
+    roles: ['ACCOUNTANT', 'MANAGER', 'BOARD'],
+    component: FundProposalPage,
+    hideInMenu: true,
   },
   {
     key: 'debt-apartment',

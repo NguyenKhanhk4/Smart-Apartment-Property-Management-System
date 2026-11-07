@@ -27,13 +27,16 @@ import { getConfig, getConfigs } from '../../services/systemConfig.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { nextMonthlyCode, retryOnDuplicate } from '../../utils/codeGenerator.js';
 import { paginate } from '../../utils/pagination.js';
-import { DAY_MS } from '../../utils/time.js';
+import { DAY_MS, HOUR_MS } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { formatVnd } from '../amenities/pricing.js';
 import { getPayer } from '../contracts/contracts.queries.js';
+import { applySlaTransition, quoteResumeStatus } from '../tickets/ticket.rules.js';
 
 const { ASSIGNED, WAITING_QUOTE_APPROVAL, IN_PROGRESS, WAITING_PARTS, REJECTED } = TICKET_STATUS;
 const { PENDING, ACCEPTED, DECLINED, EXPIRED, SUPERSEDED } = QUOTE_STATUS;
+
+const partsPauseMs = async () => Number(await getConfig(CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS)) * HOUR_MS;
 
 const residentLink = (ticket) => `/r/tickets/${ticket._id}`;
 const staffLink = (ticket) => `/app/tickets/${ticket._id}`;
@@ -77,11 +80,12 @@ export async function submitQuote(user, { ticketId, items, note = null }, { now 
   const totalAmount = lines.reduce((s, i) => s + i.amount, 0);
   if (totalAmount <= 0) throw ApiError.badRequest('Tổng chi phí báo giá phải lớn hơn 0');
 
-  const [accepted, last, payer, percent] = await Promise.all([
+  const [accepted, last, payer, percent, partsMs] = await Promise.all([
     RepairQuote.findOne({ ticketId, status: ACCEPTED }).sort({ version: -1 }).lean(),
     RepairQuote.findOne({ ticketId }).sort({ version: -1 }).select('version').lean(),
     getPayer(ticket.apartmentId, now),
     getConfig(CONFIG_KEYS.QUOTE_REAPPROVAL_PERCENT),
+    partsPauseMs(),
   ]);
 
   // Đang làm mà chưa có báo giá đã đồng ý nào (dữ liệu cũ) → coi như báo giá mới, cần đồng ý
@@ -122,7 +126,10 @@ export async function submitQuote(user, { ticketId, items, note = null }, { now 
         { session },
       );
 
-      if (needsApproval && ticket.status !== WAITING_QUOTE_APPROVAL) ticket.status = WAITING_QUOTE_APPROVAL;
+      if (needsApproval && ticket.status !== WAITING_QUOTE_APPROVAL) {
+        applySlaTransition(ticket, WAITING_QUOTE_APPROVAL, now, partsMs); // M5-2: SLA dừng khi chờ cư dân đồng ý phí
+        ticket.status = WAITING_QUOTE_APPROVAL;
+      }
       ticket.history.push({
         at: now,
         by: user.id,
@@ -244,8 +251,24 @@ async function expireQuote(quote, now, days) {
   if (!res.modifiedCount) return 0;
 
   const ticket = await Ticket.findById(quote.ticketId);
-  if (ticket && ticket.status === WAITING_QUOTE_APPROVAL) {
+  // Bản báo giá lại (đã đồng ý bản trước, M5-3) quá hạn → coi như không đồng ý phần phát sinh, KTV làm tiếp theo báo giá cũ
+  if (ticket && ticket.status === WAITING_QUOTE_APPROVAL && ticket.quoteDecision?.accepted === true) {
+    const reason = `Quá ${days} ngày Người nộp phí không phản hồi báo giá lại ${quote.code} — tiếp tục theo báo giá đã đồng ý`;
+    const to = quoteResumeStatus(ticket);
+    applySlaTransition(ticket, to, now, await partsPauseMs());
+    ticket.status = to;
+    ticket.history.push({ at: now, by: null, action: ACT.QUOTE_EXPIRED, fromStatus: WAITING_QUOTE_APPROVAL, toStatus: to, note: reason });
+    await ticket.save();
+    await notify(ticket.assignedTo, {
+      type: NOTIFICATION_TYPES.TICKET,
+      title: `Báo giá lại ${quote.code} hết hạn`,
+      content: reason,
+      refId: ticket._id,
+      link: staffLink(ticket),
+    });
+  } else if (ticket && ticket.status === WAITING_QUOTE_APPROVAL) {
     const reason = `Quá ${days} ngày Người nộp phí không phản hồi báo giá ${quote.code}`;
+    applySlaTransition(ticket, REJECTED, now, 0);
     ticket.status = REJECTED;
     ticket.rejectReason = reason;
     ticket.closedAt = now;

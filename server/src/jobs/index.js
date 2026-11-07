@@ -12,6 +12,7 @@ import { remindExpiringLeases } from '../modules/contracts/contracts.jobs.js';
 import { reconcilePayosPayments } from '../modules/payments/payments.payos.js';
 import { remindDebts } from '../modules/debts/debts.jobs.js';
 import { remindQuotes } from '../modules/repairQuotes/repairQuotes.service.js';
+import { remindProposals } from '../modules/fund/fund.service.js';
 
 /**
  * Đăng ký mọi cron job (node-cron, múi giờ Asia/Ho_Chi_Minh — srs_final.md §2.4).
@@ -37,6 +38,8 @@ export const JOBS = [
   { name: CRON_JOBS.DEBT_REMIND, schedule: '30 8 * * *', handler: remindDebts },
   // UC48 — mỗi giờ (phút 20): báo giá sửa chữa chờ quá N ngày → nhắc Người nộp phí; quá M ngày → tự đóng phiếu (X8)
   { name: CRON_JOBS.QUOTE_REMIND, schedule: '20 * * * *', handler: remindQuotes },
+  // UC34 — 09:00 hằng ngày: đề xuất chi quỹ chờ quá N ngày → nhắc Ban quản trị chưa bỏ phiếu + báo Trưởng BQL (không tự duyệt)
+  { name: CRON_JOBS.FUND_PROPOSAL_REMIND, schedule: '0 9 * * *', handler: remindProposals },
   // UC29 — mỗi 5 phút hỏi payOS các giao dịch còn chờ (phòng webhook không về); quá 15 phút chưa rõ → Cần đối soát
   { name: CRON_JOBS.PAYMENT_RECONCILE, schedule: '*/5 * * * *', handler: reconcilePayosPayments },
   // BR-O5 / BR-O14 — mỗi 5 phút: booking quá giờ check-in → NO_SHOW, đã dùng xong → COMPLETED

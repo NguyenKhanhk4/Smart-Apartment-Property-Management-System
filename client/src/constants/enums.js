@@ -193,6 +193,36 @@ export const INVOICE_STATUS = {
   CANCELLED: { label: 'Đã hủy', color: 'default' },
 };
 
+// ===== Quỹ bảo trì 2% (UC33, UC34) =====
+export const FUND_TX_TYPES = {
+  INCOME: { label: 'Thu', color: 'green' },
+  EXPENSE: { label: 'Chi', color: 'red' },
+};
+
+export const VOTE_DECISIONS = {
+  AGREE: { label: 'Đồng ý', color: 'green' },
+  DISAGREE: { label: 'Không đồng ý', color: 'red' },
+};
+
+export const FUND_INCOME_SOURCES = {
+  INITIAL_HANDOVER: { label: 'Số dư ban đầu CĐT bàn giao', color: 'blue' },
+  INTEREST: { label: 'Lãi tiền gửi', color: 'cyan' },
+  OTHER: { label: 'Khác', color: 'default' },
+};
+
+export const FUND_PLAN_TYPES = {
+  ANNUAL_PLAN: { label: 'Kế hoạch bảo trì năm', color: 'blue' },
+  UNSCHEDULED: { label: 'Bảo trì đột xuất', color: 'orange' },
+};
+
+export const FUND_PROPOSAL_STATUS = {
+  PENDING: { label: 'Chờ Ban quản trị duyệt', color: 'gold' },
+  APPROVED: { label: 'Đã duyệt, chờ chi', color: 'blue' },
+  REJECTED: { label: 'Bị từ chối', color: 'red' },
+  PAID: { label: 'Đã chi', color: 'green' },
+  CANCELLED: { label: 'Đã rút', color: 'default' },
+};
+
 // Báo giá sửa chữa trong căn hộ (UC48, UC40)
 export const QUOTE_STATUS = {
   PENDING: { label: 'Chờ đồng ý', color: 'gold' },
@@ -351,6 +381,7 @@ export const CRON_JOBS = {
   PAYMENT_RECONCILE: { label: 'Đối soát giao dịch payOS', color: 'blue' },
   DEBT_REMIND: { label: 'Nhắc nợ quá hạn', color: 'red' },
   QUOTE_REMIND: { label: 'Nhắc / tự đóng báo giá sửa chữa', color: 'purple' },
+  FUND_PROPOSAL_REMIND: { label: 'Nhắc Ban quản trị duyệt chi quỹ', color: 'purple' },
   BOOKING_COMPLETE: { label: 'Hoàn tất / không đến booking tiện ích', color: 'cyan' },
   WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
   TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },

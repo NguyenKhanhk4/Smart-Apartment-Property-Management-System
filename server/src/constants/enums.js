@@ -223,6 +223,29 @@ export const FUND_TX_TYPES = Object.freeze({ INCOME: 'INCOME', EXPENSE: 'EXPENSE
 
 export const VOTE_DECISIONS = Object.freeze({ AGREE: 'AGREE', DISAGREE: 'DISAGREE' });
 
+// Quỹ bảo trì 2% (UC33, UC34) — nguồn thu quỹ có chứng từ (M4-7)
+export const FUND_INCOME_SOURCES = Object.freeze({
+  INITIAL_HANDOVER: 'INITIAL_HANDOVER', // số dư ban đầu Chủ đầu tư bàn giao
+  INTEREST: 'INTEREST', // lãi tiền gửi
+  OTHER: 'OTHER',
+});
+
+// Loại kế hoạch của đề xuất chi quỹ
+export const FUND_PLAN_TYPES = Object.freeze({
+  ANNUAL_PLAN: 'ANNUAL_PLAN', // thuộc Kế hoạch bảo trì năm đã được Hội nghị nhà chung cư thông qua
+  UNSCHEDULED: 'UNSCHEDULED', // bảo trì đột xuất, bắt buộc ghi lý do
+});
+
+// Vòng đời đề xuất chi quỹ: Chờ Ban quản trị biểu quyết → Đã duyệt → Đã chi (Kế toán lập phiếu chi);
+// hoặc Từ chối / Kế toán rút lại. Đủ tỷ lệ đồng ý > FUND_APPROVAL_RATIO số thành viên thì tự duyệt.
+export const FUND_PROPOSAL_STATUS = Object.freeze({
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  PAID: 'PAID',
+  CANCELLED: 'CANCELLED',
+});
+
 export const EXPENSE_CATEGORIES = Object.freeze({
   SALARY: 'SALARY',
   COMMON_UTILITY: 'COMMON_UTILITY',
@@ -356,7 +379,8 @@ export const TICKET_OPEN_STATUSES = Object.freeze([
   TICKET_STATUS.IN_PROGRESS,
   TICKET_STATUS.WAITING_PARTS,
 ]);
-// Tính SLA hoàn thành / leo thang: tạm dừng khi đang chờ cư dân đồng ý phí (lỗi không thuộc Ban quản lý)
+// Tính SLA hoàn thành / leo thang: tạm dừng khi đang chờ cư dân đồng ý phí (lỗi không thuộc Ban quản lý).
+// Chờ linh kiện vẫn nằm trong nhóm này nhưng được cộng tối đa TICKET_PARTS_PAUSE_HOURS (M5-2, xem ticket.rules)
 export const TICKET_SLA_STATUSES = Object.freeze(
   TICKET_OPEN_STATUSES.filter((s) => s !== TICKET_STATUS.WAITING_QUOTE_APPROVAL),
 );
@@ -441,7 +465,8 @@ export const CRON_JOBS = Object.freeze({
   INVOICE_OVERDUE: 'INVOICE_OVERDUE',
   BILLING_REMIND: 'BILLING_REMIND', // nhắc Kế toán đến kỳ tính phí + nhắc Trưởng BQL duyệt quá hạn (X8)
   PAYMENT_RECONCILE: 'PAYMENT_RECONCILE',
-  QUOTE_REMIND: 'QUOTE_REMIND', // báo giá sửa chữa chờ đồng ý: nhắc sau N ngày, tự đóng sau M ngày
+  QUOTE_REMIND: 'QUOTE_REMIND',
+  FUND_PROPOSAL_REMIND: 'FUND_PROPOSAL_REMIND', // đề xuất chi quỹ chờ biểu quyết quá N ngày → nhắc Ban quản trị + báo Trưởng BQL // báo giá sửa chữa chờ đồng ý: nhắc sau N ngày, tự đóng sau M ngày
   DEBT_REMIND: 'DEBT_REMIND', // nhắc nợ quá hạn N ngày/lần, tối đa M lần → Nợ quá hạn dài; quá ngày hẹn trả → báo Trưởng BQL // payOS: tra cứu giao dịch chờ kết quả, quá 15 phút → Cần đối soát
   BOOKING_COMPLETE: 'BOOKING_COMPLETE',
   WORK_ORDER_GENERATE: 'WORK_ORDER_GENERATE',
@@ -478,6 +503,10 @@ export const AUDIT_ACTIONS = Object.freeze({
   FUND_VOTED: 'FUND_VOTED',
   FUND_PROPOSAL_APPROVED: 'FUND_PROPOSAL_APPROVED',
   FUND_PROPOSAL_REJECTED: 'FUND_PROPOSAL_REJECTED',
+  FUND_PROPOSAL_CREATED: 'FUND_PROPOSAL_CREATED',
+  FUND_PROPOSAL_CANCELLED: 'FUND_PROPOSAL_CANCELLED',
+  FUND_WORK_ACCEPTED: 'FUND_WORK_ACCEPTED',
+  FUND_EXPENSE_RECORDED: 'FUND_EXPENSE_RECORDED',
   CONFIG_CHANGED: 'CONFIG_CHANGED',
   COMPLAINT_CATEGORY_CHANGED: 'COMPLAINT_CATEGORY_CHANGED',
   TICKET_ASSIGNED: 'TICKET_ASSIGNED',
@@ -543,6 +572,8 @@ export const AUDIT_TARGETS = Object.freeze({
   PAYMENT: 'payments',
   DEBT_FOLLOWUP: 'debt_followups',
   REPAIR_QUOTE: 'repair_quotes',
+  FUND_PROPOSAL: 'fund_proposals',
+  FUND_TRANSACTION: 'fund_transactions',
   AMENITY: 'amenities',
   AMENITY_PASS: 'amenity_passes',
   AMENITY_VISIT: 'amenity_visits',
@@ -572,6 +603,7 @@ export const CONFIG_KEYS = Object.freeze({
   INVOICE_APPROVAL_REMIND_DAYS: 'INVOICE_APPROVAL_REMIND_DAYS',
   FUND_LOW_BALANCE_THRESHOLD: 'FUND_LOW_BALANCE_THRESHOLD',
   FUND_APPROVAL_RATIO: 'FUND_APPROVAL_RATIO',
+  FUND_APPROVAL_REMIND_DAYS: 'FUND_APPROVAL_REMIND_DAYS',
   BOOKING_MAX_ACTIVE_PER_APARTMENT: 'BOOKING_MAX_ACTIVE_PER_APARTMENT',
   BOOKING_ADVANCE_DAYS: 'BOOKING_ADVANCE_DAYS',
   CHECKIN_EARLY_MINUTES: 'CHECKIN_EARLY_MINUTES',
@@ -587,6 +619,7 @@ export const CONFIG_KEYS = Object.freeze({
   UPLOAD_MAX_SIZE_MB: 'UPLOAD_MAX_SIZE_MB',
   // Sự cố & tiện ích (Người 4)
   TICKET_ACK_MINUTES: 'TICKET_ACK_MINUTES',
+  TICKET_PARTS_PAUSE_HOURS: 'TICKET_PARTS_PAUSE_HOURS',
   COMPLAINT_RESPONSE_HOURS: 'COMPLAINT_RESPONSE_HOURS',
   BOOKING_PAYMENT_HOLD_MINUTES: 'BOOKING_PAYMENT_HOLD_MINUTES',
 });
@@ -607,7 +640,8 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.BILLING_REMIND_DAY, value: 1, scope: CONFIG_SCOPES.BUSINESS, description: 'Ngày trong tháng nhắc Kế toán tính phí (1–28) — Mô đun 4' },
   { key: CONFIG_KEYS.INVOICE_APPROVAL_REMIND_DAYS, value: 2, scope: CONFIG_SCOPES.BUSINESS, description: 'Thông báo phí chờ duyệt quá N ngày thì nhắc Trưởng BQL mỗi ngày — X8' },
   { key: CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, value: 50000000, scope: CONFIG_SCOPES.BUSINESS, description: 'Ngưỡng cảnh báo số dư quỹ (VNĐ) — UC-C06' },
-  { key: CONFIG_KEYS.FUND_APPROVAL_RATIO, value: 0.5, scope: CONFIG_SCOPES.BUSINESS, description: 'Tỷ lệ đồng ý tối thiểu (> giá trị) — BR-M2' },
+  { key: CONFIG_KEYS.FUND_APPROVAL_RATIO, value: 0.5, scope: CONFIG_SCOPES.BUSINESS, description: 'Đề xuất chi quỹ được duyệt khi số phiếu đồng ý > tỷ lệ này × số thành viên Ban quản trị — UC34' },
+  { key: CONFIG_KEYS.FUND_APPROVAL_REMIND_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Đề xuất chi quỹ chờ quá N ngày → nhắc Ban quản trị và báo Trưởng BQL (N ngày/lần, không tự duyệt) — X8' },
   { key: CONFIG_KEYS.BOOKING_MAX_ACTIVE_PER_APARTMENT, value: 2, scope: CONFIG_SCOPES.BUSINESS, description: 'Số booking chưa dùng tối đa/căn — BR-O3' },
   { key: CONFIG_KEYS.BOOKING_ADVANCE_DAYS, value: 14, scope: CONFIG_SCOPES.BUSINESS, description: 'Đặt tiện ích trước tối đa N ngày — BR-O3' },
   { key: CONFIG_KEYS.CHECKIN_EARLY_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Check-in sớm nhất trước giờ bắt đầu (phút) — BR-O14' },
@@ -621,8 +655,9 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, value: 500, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi xe máy' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_CAR, value: 100, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi ô tô' },
   { key: CONFIG_KEYS.TICKET_ACK_MINUTES, value: 30, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn kỹ thuật viên nhận sự cố kể từ lúc gửi (phút)' },
+  { key: CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA dừng tối đa N giờ khi chờ linh kiện, quá thì cảnh báo Trưởng BQL — M5-2' },
   { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
-  { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 0, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán (phút); 0 = tắt, phí gộp vào hóa đơn tháng' },
+  { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán qua payOS (phút); 0 hoặc chưa cấu hình payOS = phí gộp vào thông báo phí tháng' },
   // TECHNICAL — tham số kỹ thuật, Trưởng BQL sửa
   { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 5, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10' },
 ]);

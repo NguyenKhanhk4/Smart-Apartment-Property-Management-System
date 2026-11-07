@@ -197,7 +197,13 @@ export function QuoteDecisionModal({ ticket, quote: pending, open, onClose, onDo
       onClose={onClose}
       onDone={onDone}
       okText="Gửi quyết định"
-      success={(res) => (res.data.status === TS.IN_PROGRESS ? 'Đã đồng ý, kỹ thuật viên sẽ tiến hành' : 'Đã từ chối báo giá')}
+      success={(res) =>
+        res.data.history?.at(-1)?.action === 'QUOTE_ACCEPTED'
+          ? 'Đã đồng ý, kỹ thuật viên sẽ tiến hành'
+          : res.data.status === TS.REJECTED
+            ? 'Đã từ chối báo giá'
+            : 'Đã từ chối chi phí phát sinh, kỹ thuật viên làm tiếp theo báo giá đã đồng ý'
+      }
       initialValues={{ accepted: true }}
       action={({ accepted, note }) => ticketApi.decideQuote(ticket._id, { accepted, note })}
     >
