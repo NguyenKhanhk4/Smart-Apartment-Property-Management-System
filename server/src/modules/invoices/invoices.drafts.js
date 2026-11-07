@@ -87,8 +87,9 @@ export async function recalculateDraft(user, invoiceId) {
 
   const prices = await getPriceTable(invoice.period);
   const draft = await buildInvoiceDraft(apartment, invoice.period, prices, { invoiceId: invoice._id });
+  if (draft.excludedByHandover) throw ApiError.badRequest('Căn hộ chưa bàn giao trong kỳ, không tính lại được');
   if (!draft.payer) {
-    throw ApiError.badRequest('Căn hộ không còn hợp đồng mua bán hiệu lực đầu kỳ, không tính lại được');
+    throw ApiError.badRequest('Căn hộ không có hợp đồng mua bán hiệu lực tại ngày bắt đầu tính phí');
   }
   const items = [...draft.items, ...invoice.items.filter((i) => i.feeCategory === OTHER)];
 

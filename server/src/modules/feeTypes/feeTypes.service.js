@@ -1,6 +1,6 @@
 // UC-B01 — Danh mục phí & đơn giá theo thời gian (BR-F4, BR-F12).
 // Đổi giá = tạo mức giá mới từ một kỳ, mức đang mở tự đóng lại; không sửa đè giá đã dùng lập hóa đơn (BR-F3).
-import { AUDIT_ACTIONS, FEE_CALC_METHODS, FEE_CATEGORIES, FEE_TYPE_STATES } from '../../constants/enums.js';
+import { APARTMENT_TYPES, AUDIT_ACTIONS, FEE_CALC_METHODS, FEE_CATEGORIES, FEE_TYPE_STATES } from '../../constants/enums.js';
 import { FeeType } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -28,7 +28,15 @@ function present(fee, currentPeriod, billedPeriods = []) {
 }
 
 /** BR-F4: PARKING tính theo xe (bắt buộc loại xe); CLEANING tính theo m² hoặc theo căn */
-function assertValidShape({ feeCategory, calcMethod, vehicleType }) {
+function assertValidShape({ code, feeCategory, calcMethod, vehicleType }) {
+  const reserved = Object.values(APARTMENT_TYPES).some((type) => code === `MANAGEMENT_${type}`);
+  if (feeCategory === FEE_CATEGORIES.MANAGEMENT) {
+    if (!reserved || calcMethod !== FEE_CALC_METHODS.PER_M2) {
+      throw ApiError.badRequest('Phí quản lý phải tính theo m² và chọn mã phí tương ứng với loại căn hộ');
+    }
+  } else if (reserved) {
+    throw ApiError.badRequest('Mã này dành riêng cho phí quản lý theo loại căn hộ');
+  }
   if (feeCategory === FEE_CATEGORIES.PARKING) {
     if (calcMethod !== FEE_CALC_METHODS.PER_VEHICLE) throw ApiError.badRequest('Phí gửi xe phải tính theo xe (PER_VEHICLE)');
     if (!vehicleType) throw ApiError.badRequest('Phí gửi xe cần chọn loại xe');
@@ -100,7 +108,7 @@ export async function createFeeType(user, body, { now = new Date() } = {}) {
       throw ApiError.badRequest('Loại phí mới cần có tên, nhóm phí và cách tính');
     }
     shape = Object.fromEntries(SHAPE_FIELDS.map((k) => [k, body[k] ?? null]));
-    assertValidShape(shape);
+    assertValidShape({ code, ...shape });
     // Mỗi loại xe chỉ 1 mã phí gửi xe, để lúc sinh hóa đơn không phải đoán dùng giá nào
     if (shape.vehicleType && (await FeeType.exists({ vehicleType: shape.vehicleType }))) {
       throw ApiError.badRequest('Loại xe này đã có mã phí gửi xe, hãy đổi giá trên mã đó');

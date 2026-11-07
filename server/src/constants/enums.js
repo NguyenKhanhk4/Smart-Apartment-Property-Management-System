@@ -1,4 +1,4 @@
-// Enum dùng chung toàn hệ thống — khớp srs_final.md §III.2.2 (Table Descriptions).
+// Enum dùng chung toàn hệ thống; bổ sung cron an ninh và thời hạn lưu khách Module 7, giữ quy ước các module hiện có.
 // Client có bản nhãn tiếng Việt tương ứng ở client/src/constants/enums.js.
 
 export const values = (enumObj) => Object.values(enumObj);
@@ -46,6 +46,19 @@ export const BOARD_TITLES = Object.freeze({
 });
 
 // ===== Tòa nhà, căn hộ, hợp đồng, cư dân, xe (Module A) =====
+export const APARTMENT_OCCUPANCY = Object.freeze({
+  NOT_HANDED_OVER: 'NOT_HANDED_OVER',
+  VACANT: 'VACANT',
+  OWNER_OCCUPIED: 'OWNER_OCCUPIED',
+  RENTED: 'RENTED',
+  UNDER_REPAIR: 'UNDER_REPAIR',
+});
+
+export const APARTMENT_TYPES = Object.freeze({
+  RESIDENTIAL: 'RESIDENTIAL',
+  COMMERCIAL: 'COMMERCIAL',
+});
+
 export const APARTMENT_STATUS = Object.freeze({
   VACANT: 'VACANT',
   OWNED: 'OWNED',
@@ -92,6 +105,7 @@ export const GATE_PASS_STATUS = Object.freeze({
   USED: 'USED',
   REJECTED: 'REJECTED',
   EXPIRED: 'EXPIRED',
+  CANCELLED: 'CANCELLED',
 });
 
 export const PLATE_LOOKUP_RESULTS = Object.freeze({
@@ -114,6 +128,7 @@ export const PARKING_CARD_STATUS = Object.freeze({
 // ===== Phí, hóa đơn, thanh toán, công nợ (Module B) =====
 // Nhóm phí trên hóa đơn (BR-F1)
 export const FEE_CATEGORIES = Object.freeze({
+  MANAGEMENT: 'MANAGEMENT',
   CLEANING: 'CLEANING',
   PARKING: 'PARKING',
   AMENITY: 'AMENITY',
@@ -139,6 +154,7 @@ export const FEE_TYPE_STATES = Object.freeze({ ACTIVE: 'ACTIVE', UPCOMING: 'UPCO
 export const INVOICE_PREVIEW_STATUS = Object.freeze({
   NEW: 'NEW', // sẽ được lập
   EXISTS: 'EXISTS', // đã có hóa đơn chưa hủy (BR-F2)
+  NOT_HANDED_OVER: 'NOT_HANDED_OVER',
   NO_PAYER: 'NO_PAYER', // chưa có hợp đồng hiệu lực → bỏ qua
   ERROR: 'ERROR', // thiếu đơn giá...
 });
@@ -474,6 +490,7 @@ export const CRON_STATUS = Object.freeze({ SUCCESS: 'SUCCESS', FAILED: 'FAILED' 
 export const CRON_TRIGGERS = Object.freeze({ SCHEDULE: 'SCHEDULE', MANUAL: 'MANUAL' });
 
 export const CRON_JOBS = Object.freeze({
+  OPERATIONS_SECURITY: 'OPERATIONS_SECURITY',
   INVOICE_GENERATE: 'INVOICE_GENERATE',
   INVOICE_OVERDUE: 'INVOICE_OVERDUE',
   BILLING_REMIND: 'BILLING_REMIND', // nhắc Kế toán đến kỳ tính phí + nhắc Trưởng BQL duyệt quá hạn (X8)
@@ -560,6 +577,8 @@ export const AUDIT_ACTIONS = Object.freeze({
   GATEPASS_REJECTED: 'GATEPASS_REJECTED',
   GATEPASS_USED: 'GATEPASS_USED',
   GATEPASS_EXPIRED: 'GATEPASS_EXPIRED',
+  GATEPASS_CANCELLED: 'GATEPASS_CANCELLED',
+  TICKET_COMPLAINT_RESPONDED: 'TICKET_COMPLAINT_RESPONDED',
   // Thẻ gửi xe (Người 2 — UC66)
   PARKING_CARD_ISSUED: 'PARKING_CARD_ISSUED',
   PARKING_CARD_DISABLED: 'PARKING_CARD_DISABLED',
@@ -611,6 +630,7 @@ export const AUDIT_TARGETS = Object.freeze({
 
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
 export const CONFIG_KEYS = Object.freeze({
+  GUEST_RETENTION_MONTHS: 'GUEST_RETENTION_MONTHS',
   SLA_HOURS_URGENT: 'SLA_HOURS_URGENT',
   SLA_HOURS_HIGH: 'SLA_HOURS_HIGH',
   SLA_HOURS_MEDIUM: 'SLA_HOURS_MEDIUM',
@@ -646,6 +666,7 @@ export const CONFIG_KEYS = Object.freeze({
 });
 
 export const DEFAULT_CONFIGS = Object.freeze([
+  { key: CONFIG_KEYS.GUEST_RETENTION_MONTHS, value: 12, scope: CONFIG_SCOPES.BUSINESS, description: 'Thời hạn lưu dữ liệu khách vãng lai (tháng) — Module 7' },
   // BUSINESS — Manager sửa (UC-E01)
   { key: CONFIG_KEYS.SLA_HOURS_URGENT, value: 24, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Khẩn cấp (giờ) — BR-O7' },
   { key: CONFIG_KEYS.SLA_HOURS_HIGH, value: 72, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Cao (giờ) — BR-O7' },

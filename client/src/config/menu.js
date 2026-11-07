@@ -1,3 +1,4 @@
+// Khai báo menu theo quyền hiện có; Module 7 dùng chung màn khách/vận hành, giữ các route của thành viên khác.
 import { lazy } from 'react';
 import {
   AppstoreOutlined,
@@ -240,7 +241,7 @@ export const adminMenu = [
   {
     key: 'guests',
     group: 'Tiện ích & khách',
-    label: 'Sổ khách',
+    label: 'Khách & vận hành an ninh',
     icon: UsergroupAddOutlined,
     path: 'guests',
     roles: ['STAFF:SECURITY', 'STAFF:RECEPTIONIST', 'MANAGER'],
@@ -498,7 +499,7 @@ export const adminMenu = [
   {
     key: 'security-gate',
     group: 'Tiện ích & khách',
-    label: 'Gate Pass & Tra biển số',
+    label: 'Quản lí bãi xe',
     icon: ScanOutlined,
     path: 'security-gate',
     roles: ['STAFF:SECURITY', 'MANAGER'],

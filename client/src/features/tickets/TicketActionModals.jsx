@@ -141,11 +141,33 @@ export function ProgressModal({ ticket, open, onClose, onDone }) {
   );
 }
 
+export function ComplaintResponseModal({ ticket, open, onClose, onDone }) {
+  return (
+    <ActionModal title={`Xử lý phản ánh ${ticket.code}`} open={open} onClose={onClose} onDone={onDone}
+      okText="Lưu phản hồi" success="Đã lưu kết quả xử lý phản ánh"
+      initialValues={{ status: TS.IN_PROGRESS }}
+      action={({ images, ...body }) => ticketApi.respondComplaint(ticket._id, body, toFiles(images))}>
+      <Form.Item name="status" label="Tiến độ" rules={[{ required: true }]}>
+        <Radio.Group options={[
+          { value: TS.IN_PROGRESS, label: 'Đang xử lý — gửi phản hồi' },
+          { value: TS.CLOSED, label: 'Đã xử lý — đóng phiếu' },
+        ]} />
+      </Form.Item>
+      <Form.Item name="note" label="Nội dung phản hồi / Kết quả xử lý"
+        rules={[{ required: true, whitespace: true, min: 5, message: 'Nhập ít nhất 5 ký tự' }]}>
+        <Input.TextArea rows={4} maxLength={2000} showCount />
+      </Form.Item>
+      <EvidencePhotosField name="images" label="Ảnh minh chứng (nếu có)" required={false} />
+    </ActionModal>
+  );
+}
+
 // UC-E05 — Cư dân xác nhận + đánh giá sao, hoặc báo chưa đạt
 export function ConfirmModal({ ticket, open, onClose, onDone }) {
+  const ratingOnly = ticket.type === 'COMPLAINT' && ticket.status === TS.CLOSED;
   return (
     <ActionModal
-      title={`Xác nhận kết quả ${ticket.code}`}
+      title={`${ratingOnly ? 'Đánh giá phản ánh' : 'Xác nhận kết quả'} ${ticket.code}`}
       open={open}
       onClose={onClose}
       onDone={onDone}
@@ -156,7 +178,7 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
         ticketApi.confirm(ticket._id, accepted ? { accepted, rating, comment } : { accepted, reason })
       }
     >
-      <Form.Item name="accepted" label="Kết quả xử lý">
+      <Form.Item name="accepted" label="Kết quả xử lý" hidden={ratingOnly}>
         <Radio.Group
           options={[
             { value: true, label: 'Đã giải quyết' },
@@ -168,7 +190,7 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
         {({ getFieldValue }) =>
           getFieldValue('accepted') !== false ? (
             <>
-              <Form.Item name="rating" label="Đánh giá kỹ thuật viên" rules={[{ required: true, message: 'Chọn số sao' }]}>
+              <Form.Item name="rating" label={ticket.type === 'COMPLAINT' ? 'Đánh giá kết quả xử lý' : 'Đánh giá kỹ thuật viên'} rules={[{ required: true, message: 'Chọn số sao' }]}>
                 <Rate />
               </Form.Item>
               <Form.Item name="comment" label="Nhận xét">

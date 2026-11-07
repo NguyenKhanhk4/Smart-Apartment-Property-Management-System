@@ -26,6 +26,7 @@ export const buildingsApi = {
   create: (body) => http.post('/buildings', body),
   update: (id, body) => http.put(`/buildings/${id}`, body),
   delete: (id) => http.delete(`/buildings/${id}`),
+  floorPlan: (id, params) => http.get(`/buildings/${id}/floor-plan`, { params }),
 };
 
 export const apartmentsApi = {
@@ -34,6 +35,8 @@ export const apartmentsApi = {
   create: (body) => http.post('/apartments', body),
   update: (id, body) => http.put(`/apartments/${id}`, body),
   delete: (id) => http.delete(`/apartments/${id}`),
+  setOccupancy: (id, body) => http.patch(`/apartments/${id}/occupancy-status`, body),
+  confirmMoveIn: (id) => http.patch(`/apartments/${id}/confirm-move-in`),
 };
 
 // ===== UC-A06: Hợp đồng =====

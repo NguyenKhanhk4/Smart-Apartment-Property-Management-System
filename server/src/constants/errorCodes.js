@@ -47,6 +47,8 @@ export const ERROR_CODES = Object.freeze({
     message: 'Bạn chưa được chủ hộ cho phép phát sinh phí tiện ích. Hãy nhờ chủ hộ bật quyền hoặc chọn khung giờ miễn phí',
   },
   VEHICLE_SLOT_FULL: { status: 409, message: 'Bãi xe đã hết chỗ' },
+  PARKING_TARIFF_UNDEFINED: { status: 422, message: 'Chưa có quy tắc tính phí cho lượt gửi này. Lượt gửi vẫn đang mở.' },
+  PARKING_FEE_CHANGED: { status: 409, message: 'Phí đã thay đổi theo giờ ra. Hãy tính lại trước khi xác nhận thu tiền.' },
   RESIDENCY_DATE_OVERLAP: { status: 409, message: 'Khai báo bị trùng thời gian với khai báo khác' },
   TICKET_ALREADY_CLOSED: { status: 409, message: 'Phản ánh đã đóng, không thể cập nhật' },
   // Sự cố & tiện ích (Người 4)

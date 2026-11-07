@@ -12,6 +12,7 @@ export { Resident } from './Resident.js';
 export { Vehicle } from './Vehicle.js';
 export { GatePass } from './GatePass.js';
 export { ParkingCard } from './ParkingCard.js';
+export { ParkingSession } from './ParkingSession.js';
 
 // Module B — Phí, hóa đơn, thanh toán, công nợ
 export { FeeType } from './FeeType.js';

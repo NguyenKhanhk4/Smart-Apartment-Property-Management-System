@@ -1,4 +1,5 @@
 import {
+  APARTMENT_OCCUPANCY,
   APARTMENT_STATUS,
   AUDIT_ACTIONS,
   AUDIT_TARGETS,
@@ -11,8 +12,9 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { DAY_MS, endOfVnDay, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
+import { recordOccupancy } from '../apartments/apartmentOccupancy.js';
 import { ensureCodes } from '../memberCodes/memberCodes.service.js';
-import { disableActiveCardsByApartment } from '../parkingCards/parkingCards.service.js';
+import { revokeDepartedResidentServices } from '../residents/residentExit.service.js';
 
 /**
  * BR-O2 & UC-A06.4: Cron job kiểm tra và xử lý hợp đồng cho thuê hết hạn
@@ -39,7 +41,6 @@ export async function expireLeases() {
     return 0;
   }
 
-  const now = new Date();
   const processedApartmentIds = new Set();
   let processedCount = 0;
 
@@ -51,6 +52,7 @@ export async function expireLeases() {
         const current = await Contract.findOne({
           _id: contract._id,
           status: CONTRACT_STATUS.ACTIVE,
+          endDate: { $lt: cutoff },
         }).session(session);
 
         if (!current) {
@@ -61,10 +63,14 @@ export async function expireLeases() {
         current.status = CONTRACT_STATUS.EXPIRED;
         await current.save({ session });
 
+        // Lưu đúng ngày hợp đồng kết thúc, không dùng thời điểm cron chạy bù.
+        const endedAt = endOfVnDay(current.endDate);
+        const departing = await Resident.find({ apartmentId: current.apartmentId, contractId: current._id, isActive: true })
+          .select('userId').session(session).lean();
         // 2. Gỡ các cư dân thuộc hợp đồng thuê này
         await Resident.updateMany(
-          { contractId: current._id, isActive: true },
-          { isActive: false, moveOutDate: now },
+          { apartmentId: current.apartmentId, contractId: current._id, isActive: true },
+          { isActive: false, moveOutDate: endedAt },
           { session },
         );
 
@@ -81,8 +87,11 @@ export async function expireLeases() {
           { session },
         );
 
+        await recordOccupancy(current.apartmentId, APARTMENT_OCCUPANCY.VACANT, session);
+
         // Chuyển thẻ gửi xe ACTIVE sang DISABLED_TO_COLLECT (UC66)
-        await disableActiveCardsByApartment(current.apartmentId, null, session, null);
+        await revokeDepartedResidentServices({ apartmentId: current.apartmentId,
+          userIds: [...departing.map((r) => r.userId), current.tenantId], endedAt, session });
 
         // 4. Ghi audit log CONTRACT_EXPIRED
         await logAudit(

@@ -1,4 +1,4 @@
-// Nhãn tiếng Việt + màu antd Tag cho enum. Key phải khớp server/src/constants/enums.js.
+// Nhãn enum frontend khớp server, gồm cron vận hành/an ninh Module 7.
 // Module nào thêm enum nghiệp vụ thì thêm vào đây theo cùng dạng { VALUE: { label, color } }.
 
 export const ROLES = {
@@ -21,6 +21,19 @@ export const BOARD_TITLES = {
 };
 
 // ===== Module A =====
+export const APARTMENT_OCCUPANCY = {
+  NOT_HANDED_OVER: { label: 'Chưa bàn giao', color: '#e2e8f0' },
+  VACANT: { label: 'Đang trống', color: '#ffffff' },
+  OWNER_OCCUPIED: { label: 'Chủ nhà đang ở', color: '#bbf7d0' },
+  RENTED: { label: 'Đang cho thuê', color: '#bfdbfe' },
+  UNDER_REPAIR: { label: 'Đang sửa chữa', color: '#fef08a' },
+};
+
+export const APARTMENT_TYPES = {
+  RESIDENTIAL: { label: 'Căn để ở' },
+  COMMERCIAL: { label: 'Căn kinh doanh' },
+};
+
 export const APARTMENT_STATUS = {
   VACANT: { label: 'Trống', color: 'default' },
   OWNED: { label: 'Đã sở hữu', color: 'blue' },
@@ -145,6 +158,7 @@ export const NOTIFICATION_TYPES = {
 
 // ===== Dùng chung cho báo cáo =====
 export const FEE_CATEGORIES = {
+  MANAGEMENT: { label: 'Phí quản lý', color: 'blue' },
   CLEANING: { label: 'Phí vệ sinh', color: 'green' },
   PARKING: { label: 'Phí gửi xe', color: 'blue' },
   AMENITY: { label: 'Phí tiện ích', color: 'purple' },
@@ -170,6 +184,7 @@ export const FEE_TYPE_STATES = {
 export const INVOICE_PREVIEW_STATUS = {
   NEW: { label: 'Sẽ lập', color: 'blue' },
   EXISTS: { label: 'Đã có hóa đơn', color: 'green' },
+  NOT_HANDED_OVER: { label: 'Chưa bàn giao trong kỳ', color: 'default' },
   NO_PAYER: { label: 'Chưa có HĐ mua bán', color: 'default' },
   ERROR: { label: 'Lỗi', color: 'red' },
 };
@@ -339,6 +354,7 @@ export const GATE_PASS_STATUS = {
   USED: { label: 'Đã qua cổng', color: 'cyan' },
   REJECTED: { label: 'Từ chối', color: 'error' },
   EXPIRED: { label: 'Hết hạn', color: 'default' },
+  CANCELLED: { label: 'Đã hủy', color: 'default' },
 };
 
 export const PLATE_LOOKUP_RESULTS = {
@@ -361,6 +377,7 @@ export const OCCUPANT_CHANGE_TYPES = {
 
 // ===== Hệ thống =====
 export const CRON_JOBS = {
+  OPERATIONS_SECURITY: { label: 'Vận hành & an ninh (Module 7)' },
   INVOICE_GENERATE: { label: 'Tạo hóa đơn định kỳ', color: 'green' },
   INVOICE_OVERDUE: { label: 'Quét hóa đơn quá hạn', color: 'red' },
   BILLING_REMIND: { label: 'Nhắc tính phí / duyệt thông báo phí', color: 'gold' },

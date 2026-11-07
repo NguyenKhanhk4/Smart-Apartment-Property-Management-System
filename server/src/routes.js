@@ -34,6 +34,7 @@ import repairQuoteRoutes from './modules/repairQuotes/repairQuotes.routes.js';
 import fundRoutes from './modules/fund/fund.routes.js';
 import gatePassRoutes, { platesRouter } from './modules/gatePasses/gatePasses.routes.js';
 import parkingCardRoutes from './modules/parkingCards/parkingCards.routes.js';
+import parkingGateRoutes from './modules/parkingGate/parkingGate.routes.js';
 import dutyShiftRoutes from './modules/dutyShifts/dutyShifts.routes.js';
 
 import auditLogRoutes from './modules/auditLogs/auditLogs.routes.js';
@@ -94,6 +95,7 @@ router.use('/system-dashboard', systemDashboardRoutes);
 router.use('/gate-passes', gatePassRoutes);
 router.use('/plates', platesRouter);
 router.use('/parking-cards', parkingCardRoutes);
+router.use('/parking-gate', parkingGateRoutes);
 
 // Module B — Phí, Hóa đơn, Thanh toán, Công nợ
 router.use('/fee-types', feeTypeRoutes);
