@@ -6,8 +6,8 @@ import { amenityApi } from '../../api/moduleD.api';
 import { AMENITY_ACCESS_MODES, enumOptions } from '../../constants/enums';
 import { useAction } from '../../hooks/useApi';
 import { formatMoney, moneyInputProps } from '../../utils/format';
+import { IMAGE_ACCEPT, IMAGE_HINT, checkImageFile } from '../../utils/imageUpload';
 
-const MAX_SIZE = 5 * 1024 * 1024;
 const toDayjs = (hhmm) => (hhmm ? dayjs().hour(Number(hhmm.slice(0, 2))).minute(Number(hhmm.slice(3))).second(0) : null);
 const toMinutes = (d) => d.hour() * 60 + d.minute();
 
@@ -76,8 +76,9 @@ export default function AmenityFormModal({ amenity, buildings, reception, open, 
     });
 
   const beforeUpload = (file) => {
-    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > MAX_SIZE) {
-      message.error('Chỉ nhận ảnh jpg/png tối đa 5MB.');
+    const error = checkImageFile(file); // UC63: mọi định dạng ảnh, tự chuyển JPEG và thu nhỏ khi gửi
+    if (error) {
+      message.error(error);
       return Upload.LIST_IGNORE;
     }
     setImage({ file, preview: URL.createObjectURL(file) });
@@ -259,7 +260,7 @@ export default function AmenityFormModal({ amenity, buildings, reception, open, 
         <Form.Item name="description" label="Mô tả">
           <Input.TextArea rows={2} maxLength={1000} showCount />
         </Form.Item>
-        <Form.Item label="Ảnh" extra="jpg/png, tối đa 5MB">
+        <Form.Item label="Ảnh" extra={IMAGE_HINT}>
           <Flex gap={12} align="center">
             {(image || amenity?.imageUrl) && (
               <Image
@@ -269,7 +270,7 @@ export default function AmenityFormModal({ amenity, buildings, reception, open, 
                 style={{ objectFit: 'cover', borderRadius: 8 }}
               />
             )}
-            <Upload accept="image/jpeg,image/png" maxCount={1} showUploadList={false} beforeUpload={beforeUpload}>
+            <Upload accept={IMAGE_ACCEPT} maxCount={1} showUploadList={false} beforeUpload={beforeUpload}>
               <Button icon={<UploadOutlined />}>{image || amenity?.imageUrl ? 'Đổi ảnh' : 'Chọn ảnh'}</Button>
             </Upload>
           </Flex>

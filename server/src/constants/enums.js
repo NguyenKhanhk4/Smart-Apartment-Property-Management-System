@@ -701,7 +701,7 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
   { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán qua payOS (phút); 0 hoặc chưa cấu hình payOS = phí gộp vào thông báo phí tháng' },
   // TECHNICAL — tham số kỹ thuật, Trưởng BQL sửa
-  { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 5, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10' },
+  { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 10, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10. Client tự thu nhỏ ảnh trước khi gửi; mức này là lưới an toàn (Cloudinary miễn phí giới hạn ~10MB/ảnh)' },
 ]);
 
 // key → giá trị mặc định (module thuần như pricing / slot.utils đọc từ đây, không tự dựng lại map)
