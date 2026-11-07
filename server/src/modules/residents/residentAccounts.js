@@ -14,7 +14,8 @@ import { buildIdNumberFields } from './idCrypto.js';
  * Lấy tài khoản cư dân đã được lễ tân xác nhận (userId), hoặc tạo mới ở trạng thái chờ kích hoạt khi SĐT chưa có tài khoản.
  * Hệ thống không tạo và không gửi mật khẩu; cư dân tự đặt khi kích hoạt (BR-S02, UC11).
  * SĐT đã có tài khoản mà chưa xác nhận → 409 ACCOUNT_CONFIRM_REQUIRED, tránh gõ nhầm số gắn nhầm người.
- * Không ghi đè thông tin của tài khoản có sẵn (BR-X5). Tạo mới cần họ tên và email vì đăng nhập còn dùng email đến UC01.
+ * Không ghi đè thông tin của tài khoản có sẵn (BR-X5). Tạo mới cần họ tên; email không bắt buộc (BR-X4),
+ * không có email thì Lễ tân cấp mã kích hoạt tại quầy (UC02).
  * SĐT thuộc tài khoản nội bộ → 409 PHONE_EXISTS.
  * @returns {{ user, created: boolean }}
  */
@@ -40,8 +41,8 @@ export async function findOrCreateResidentUser({ userId, email, fullName, phone,
     });
   }
 
-  if (!email || !fullName) throw ApiError.badRequest('Tạo tài khoản mới cần họ tên và email');
-  const normEmail = email.trim().toLowerCase();
+  if (!fullName) throw ApiError.field('fullName', 'Tạo tài khoản mới cần họ tên');
+  const normEmail = email?.trim().toLowerCase() || null;
   await assertPhoneAndEmailFree({ phone, email: normEmail }, session);
 
   const [user] = await User.create(
@@ -98,14 +99,15 @@ export async function linkResident({ userId, apartmentId, relationType, contract
 
 /**
  * Mời cư dân vừa tạo tài khoản đi kích hoạt (gọi SAU khi transaction commit); email không chứa mật khẩu.
- * @returns {boolean|null} đã gửi được email hay chưa; null nếu không tạo tài khoản mới
+ * @returns {boolean|null} đã gửi được email hay chưa (không có email thì false); null nếu không tạo tài khoản mới
  */
 export async function inviteNewResident({ user, created }) {
   if (!created) return null;
+  if (!user.email) return false;
   const link = `${env.clientUrls[0]}/activate`;
   return sendMail({
     to: user.email,
     subject: '[SAPMS] Kích hoạt tài khoản cư dân',
-    text: `Tài khoản SAPMS của bạn đã được tạo. Vui lòng kích hoạt và tự đặt mật khẩu tại: ${link}\nKhi kích hoạt, bạn cần số điện thoại, mã căn hộ và email này.`,
+    text: `Tài khoản SAPMS của bạn đã được tạo. Vui lòng kích hoạt và tự đặt mật khẩu tại: ${link}\nKhi kích hoạt, bạn cần số điện thoại, mã căn hộ và email này. Đăng nhập bằng số điện thoại.`,
   });
 }

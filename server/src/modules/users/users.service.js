@@ -281,6 +281,8 @@ export async function setStatus(managerUser, targetId, { isActive }, { ip } = {}
   }
   // Khóa: tăng tokenVersion để vô hiệu hóa refresh token cũ
   if (!isActive) target.tokenVersion = (target.tokenVersion ?? 0) + 1;
+  // Mở khóa thủ công cũng gỡ khóa tạm do nhập sai mật khẩu (BR-S03); audit ghi ở dưới
+  if (isActive) target.set({ failedLoginCount: 0, lockedUntil: null });
   target.isActive = isActive;
 
   await saveUnique(() => target.save());

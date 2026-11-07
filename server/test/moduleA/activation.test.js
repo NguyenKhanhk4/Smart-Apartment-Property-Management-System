@@ -150,7 +150,7 @@ test('start: gửi email thất bại → báo ra quầy, mã vừa tạo không
 
 test('confirm: kích hoạt, tự đặt mật khẩu, ghi đồng ý và audit; đăng nhập được; mã không dùng lại được', async () => {
   const { user, request } = await readyToConfirm();
-  await assert.rejects(login({ email: user.email, password: PASSWORD }), { errorCode: 'AUTH_INVALID_CREDENTIALS' });
+  await assert.rejects(login({ phone: user.phone, password: PASSWORD }), { errorCode: 'ACCOUNT_NOT_ACTIVATED' });
 
   await confirmActivation(request, { ip: '1.2.3.4' });
 
@@ -166,7 +166,7 @@ test('confirm: kích hoạt, tự đặt mật khẩu, ghi đồng ý và audit;
   assert.equal(audit.metadata.consent, 'ACCEPTED');
   assert.equal(JSON.stringify(audit).includes(PASSWORD), false);
 
-  const { user: logged, accessToken } = await login({ email: user.email, password: PASSWORD });
+  const { user: logged, accessToken } = await login({ phone: user.phone, password: PASSWORD });
   assert.ok(accessToken);
   assert.equal(logged.consentStatus, 'ACCEPTED');
 
@@ -285,7 +285,7 @@ test('hợp đồng tạo cư dân mới: chờ kích hoạt, không có mật k
 
   await startActivation({ phone: '0912000090', apartmentCode: 'C-5', email: 'chumoi@example.com' });
   await confirmActivation({ phone: '0912000090', code: lastOtp(), password: PASSWORD, consent: 'ACCEPTED' });
-  assert.ok((await login({ email: 'chumoi@example.com', password: PASSWORD })).accessToken);
+  assert.ok((await login({ phone: '0912000090', password: PASSWORD })).accessToken);
 });
 
 test('start: mỗi tài khoản tối đa OTP_DAILY_LIMIT mã trong 24 giờ; mã cũ hơn 24 giờ không tính', async () => {

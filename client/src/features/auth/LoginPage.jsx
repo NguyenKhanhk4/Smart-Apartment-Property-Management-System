@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router';
 import { Alert, Button, Form, Input } from 'antd';
-import { ArrowRightOutlined, LockOutlined, ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
+import { ArrowRightOutlined, LockOutlined, PhoneOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { PHONE_RULES } from '../../utils/phone';
 import { authApi } from '../../api/auth.api';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi } from '../../hooks/useApi';
@@ -15,6 +16,7 @@ export default function LoginPage() {
   const location = useLocation();
   const { startSession } = useAuth();
   const [error, setError] = useState(null);
+  const [pendingPhone, setPendingPhone] = useState(null); // tài khoản chưa kích hoạt (UC01 Step 2c)
   const [loading, setLoading] = useState(false);
 
   const activated = location.state?.activated;
@@ -22,19 +24,23 @@ export default function LoginPage() {
 
   const enter = (session) => {
     startSession(session);
-    navigate(roleHome(session.user), { replace: true, viewTransition: true });
+    // UC01 bước 5: cư dân có từ 2 căn thì chọn căn làm việc trước
+    const target = session.apartments?.length > 1 ? '/r/select-apartment' : roleHome(session.user);
+    navigate(target, { replace: true, viewTransition: true });
   };
 
   const submit = async (values) => {
     setError(null);
+    setPendingPhone(null);
     setLoading(true);
     try {
       const { data } = await authApi.login({
-        email: values.email?.trim(),
+        phone: values.phone?.trim(),
         password: values.password,
       });
       enter(data);
     } catch (e) {
+      if (e.errorCode === 'ACCOUNT_NOT_ACTIVATED') setPendingPhone(values.phone?.trim());
       setError(e.message || 'Đăng nhập không thành công');
     } finally {
       setLoading(false);
@@ -57,18 +63,27 @@ export default function LoginPage() {
         />
       )}
 
-      {error && <Alert type="error" showIcon message={error} className="mb-4" closable onClose={() => setError(null)} />}
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          title={error}
+          className="mb-4"
+          closable
+          onClose={() => setError(null)}
+          action={
+            pendingPhone && (
+              <Button size="small" type="primary" onClick={() => navigate('/activate', { state: { phone: pendingPhone } })}>
+                Kích hoạt
+              </Button>
+            )
+          }
+        />
+      )}
 
       <Form layout="vertical" requiredMark={false} onFinish={submit} disabled={loading}>
-        <Form.Item
-          name="email"
-          label="Email"
-          rules={[
-            { required: true, message: 'Vui lòng nhập email' },
-            { type: 'email', message: 'Email không đúng định dạng' },
-          ]}
-        >
-          <Input size="large" prefix={<UserOutlined className="text-ink-3" />} placeholder="vd: cudan1@sapms.vn" autoComplete="username" />
+        <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
+          <Input size="large" prefix={<PhoneOutlined className="text-ink-3" />} placeholder="0912345678" autoComplete="username" />
         </Form.Item>
         <Form.Item
           name="password"

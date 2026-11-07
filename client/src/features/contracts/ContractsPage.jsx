@@ -75,11 +75,8 @@ function PartyFields({ prefix, title, check, namePlaceholder, emailPlaceholder, 
           <Col span={8}>
             <Form.Item
               name={`${prefix}Email`}
-              label="Email"
-              rules={[
-                { required: true, message: 'Vui lòng nhập email' },
-                { type: 'email', message: 'Email không hợp lệ' },
-              ]}
+              label="Email (không bắt buộc)"
+              rules={[{ type: 'email', message: 'Email không hợp lệ' }]}
             >
               <Input placeholder={emailPlaceholder} />
             </Form.Item>
@@ -162,7 +159,7 @@ export default function ContractsPage() {
     {
       success: (res) => {
         return res?.data?.activationInviteSent === false
-          ? 'Đã tạo hợp đồng. Chưa gửi được email mời, hãy hướng dẫn cư dân vào trang Kích hoạt tài khoản.'
+          ? 'Đã tạo hợp đồng. Chưa gửi được email mời (hoặc cư dân không có email): cấp mã tại menu Cấp mã kích hoạt để cư dân kích hoạt.'
           : 'Tạo hợp đồng thành công';
       },
       onDone: () => {

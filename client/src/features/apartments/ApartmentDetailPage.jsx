@@ -123,7 +123,7 @@ export default function ApartmentDetailPage() {
     {
       success: (res) => {
         return res?.data?.activationInviteSent === false
-          ? 'Đã thêm thành viên. Chưa gửi được email mời, hãy hướng dẫn cư dân vào trang Kích hoạt tài khoản.'
+          ? 'Đã thêm thành viên. Chưa gửi được email mời (hoặc cư dân không có email): cấp mã tại menu Cấp mã kích hoạt để cư dân kích hoạt.'
           : 'Thêm thành viên vào căn hộ thành công';
       },
       onDone: () => {
@@ -596,11 +596,9 @@ export default function ApartmentDetailPage() {
             <>
               <Form.Item
                 name="email"
-                label="Email tài khoản"
-                rules={[
-                  { required: true, message: 'Vui lòng nhập email' },
-                  { type: 'email', message: 'Email không đúng định dạng' },
-                ]}
+                label="Email (không bắt buộc)"
+                extra="Không có email thì cấp mã kích hoạt tại quầy sau khi thêm."
+                rules={[{ type: 'email', message: 'Email không đúng định dạng' }]}
               >
                 <Input placeholder="Vd: member@gmail.com" />
               </Form.Item>

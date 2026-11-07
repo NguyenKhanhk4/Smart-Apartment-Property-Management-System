@@ -10,7 +10,7 @@ export const authApi = {
   forgotPassword: (phone) => http.post('/auth/password/forgot', { phone }),
   /** UC02. body { phone, code, password, confirmPassword } */
   resetPassword: (body) => http.post('/auth/password/reset', body),
-  /** body { email, password } → { user, accessToken, refreshToken } (hợp đồng với Module A) */
+  /** UC01. body { phone, password } → { user, accessToken, refreshToken } (hợp đồng với Module A) */
   login: (body) => http.post('/auth/login', body),
   /** body { refreshToken } → { accessToken, refreshToken } */
   refresh: (refreshToken) => http.post('/auth/refresh', { refreshToken }),

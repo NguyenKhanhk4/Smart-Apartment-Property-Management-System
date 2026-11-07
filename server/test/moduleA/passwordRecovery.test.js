@@ -46,8 +46,8 @@ test('quên mật khẩu: gửi OTP; đặt lại thì đăng nhập bằng mậ
   assert.equal(mails.length, 1);
   await reset(user, lastOtp());
 
-  await assert.rejects(login({ email: user.email, password: OLD }), { errorCode: 'AUTH_INVALID_CREDENTIALS' });
-  assert.ok((await login({ email: user.email, password: NEW })).accessToken);
+  await assert.rejects(login({ phone: user.phone, password: OLD }), { errorCode: 'AUTH_INVALID_CREDENTIALS' });
+  assert.ok((await login({ phone: user.phone, password: NEW })).accessToken);
   await assert.rejects(refresh({ refreshToken: oldSession }), { errorCode: 'UNAUTHORIZED' });
   const audit = await AuditLog.findOne({ action: 'PASSWORD_RESET', targetId: user._id }).lean();
   assert.equal(audit.metadata.channel, 'EMAIL_OTP');
@@ -136,11 +136,11 @@ test('mã tại quầy cho tài khoản đã kích hoạt: đặt lại mật kh
   const saved = await User.findById(user._id).lean();
   assert.equal(saved.activatedAt.getTime(), activatedAt.getTime());
   assert.equal(saved.consents.length, 1); // chọn lại giống cũ thì không ghi thêm
-  assert.ok((await login({ email: user.email, password: NEW })).accessToken);
+  assert.ok((await login({ phone: user.phone, password: NEW })).accessToken);
 
   const again = await issueDeskCode(receptionist, user._id);
   await resetPassword({ phone: user.phone, code: again.code, password: 'MatKhauBa3' });
-  assert.ok((await login({ email: user.email, password: 'MatKhauBa3' })).accessToken);
+  assert.ok((await login({ phone: user.phone, password: 'MatKhauBa3' })).accessToken);
 
   // OTP email không dùng được ở trang kích hoạt cho tài khoản đã kích hoạt
   await forgotPassword({ phone: user.phone });

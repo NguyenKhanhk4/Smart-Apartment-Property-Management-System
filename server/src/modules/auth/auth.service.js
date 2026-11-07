@@ -194,34 +194,71 @@ export async function resetPassword({ phone, code, password }, { ip } = {}) {
 /**
  * UC-A02 — Đăng nhập hệ thống (Public)
  */
-export async function login({ email, password }) {
-  const normalizedEmail = email.trim().toLowerCase();
-  const user = await User.findOne({ email: normalizedEmail }).select('+passwordHash +tokenVersion');
+export const MAX_FAILED_LOGINS = 5; // BR-S03
+export const LOGIN_LOCK_MINUTES = 15;
+// So mật khẩu với một hash giả khi không có tài khoản, để thời gian phản hồi không lộ SĐT nào tồn tại
+const DUMMY_HASH = bcrypt.hashSync('khong-phai-mat-khau', 10);
 
-  // Chưa kích hoạt thì chưa có mật khẩu (UC01 sẽ chuyển sang trang kích hoạt)
-  if (!user?.passwordHash) {
+/** Ghi 1 lần sai trong 1 lệnh cập nhật: đủ MAX_FAILED_LOGINS thì khóa tạm và đếm lại từ 0 */
+async function recordFailedLogin(userId, now) {
+  const next = { $add: [{ $ifNull: ['$failedLoginCount', 0] }, 1] };
+  const reached = { $gte: [next, MAX_FAILED_LOGINS] };
+  const updated = await User.findOneAndUpdate(
+    { _id: userId },
+    [
+      {
+        $set: {
+          failedLoginCount: { $cond: [reached, 0, next] },
+          lockedUntil: { $cond: [reached, new Date(now.getTime() + LOGIN_LOCK_MINUTES * 60 * 1000), '$lockedUntil'] },
+        },
+      },
+    ],
+    { new: true, updatePipeline: true },
+  ).select('+lockedUntil');
+  return updated?.lockedUntil > now;
+}
+
+/** Căn hộ đang ở của cư dân, để client biết có cần màn hình Chọn căn hộ không (UC01 bước 5) */
+async function apartmentsOf(user) {
+  if (user.role !== ROLES.RESIDENT) return [];
+  const residents = await Resident.find({ userId: user._id, isActive: true })
+    .select('apartmentId relationType')
+    .populate({ path: 'apartmentId', select: 'code buildingId', populate: { path: 'buildingId', select: 'name' } })
+    .lean();
+  return residents
+    .filter((r) => r.apartmentId)
+    .map((r) => ({
+      apartmentId: r.apartmentId._id,
+      code: r.apartmentId.code,
+      building: r.apartmentId.buildingId?.name ?? null,
+      relationType: r.relationType,
+    }));
+}
+
+/**
+ * UC01: đăng nhập bằng SĐT + mật khẩu (BR-S01). Thứ tự kiểm tra:
+ * tạm khóa → chưa kích hoạt (Step 2c) → mật khẩu (sai thì đếm, đủ 5 lần khóa 15 phút, BR-S03) → bị Trưởng BQL khóa (Step 3a).
+ */
+export async function login({ phone, password }, { now = new Date() } = {}) {
+  const user = await findUserByPhone(phone).select('+passwordHash +tokenVersion +lockedUntil +failedLoginCount');
+  if (!user) {
+    await bcrypt.compare(password, DUMMY_HASH);
     throw new ApiError('AUTH_INVALID_CREDENTIALS');
   }
+  if (user.lockedUntil > now) throw new ApiError('ACCOUNT_LOCKED_TEMP');
+  if (!user.activatedAt || !user.passwordHash) throw new ApiError('ACCOUNT_NOT_ACTIVATED');
 
-  const isMatch = await bcrypt.compare(password, user.passwordHash);
-  if (!isMatch) {
-    throw new ApiError('AUTH_INVALID_CREDENTIALS');
+  if (!(await bcrypt.compare(password, user.passwordHash))) {
+    throw new ApiError((await recordFailedLogin(user._id, now)) ? 'ACCOUNT_LOCKED_TEMP' : 'AUTH_INVALID_CREDENTIALS');
   }
+  if (!user.isActive) throw new ApiError('FORBIDDEN_ROLE', 'Tài khoản đã bị khóa');
 
-  if (!user.isActive) {
-    throw new ApiError('FORBIDDEN_ROLE', 'Tài khoản đã bị khóa');
-  }
-
-  user.lastLoginAt = new Date();
-  await user.save();
-
-  const accessToken = signAccessToken(user);
-  const refreshToken = signRefreshToken(user);
-
+  await User.updateOne({ _id: user._id }, { $set: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: now } });
   return {
     user: toPublicUser(user),
-    accessToken,
-    refreshToken,
+    apartments: await apartmentsOf(user),
+    accessToken: signAccessToken(user),
+    refreshToken: signRefreshToken(user),
   };
 }
 

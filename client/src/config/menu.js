@@ -54,6 +54,7 @@ export const MENU_GROUPS = [
 
 const HomePage = lazy(() => import('../features/home/HomePage'));
 const ResidentHomePage = lazy(() => import('../features/home/ResidentHomePage'));
+const SelectApartmentPage = lazy(() => import('../features/auth/SelectApartmentPage'));
 
 // ===== Module A (Vũ Việt) =====
 const ProfilePage = lazy(() => import('../features/profile/ProfilePage'));
@@ -543,6 +544,7 @@ export const receptionNav = [
 // (theo `key`), không còn do hideInMenu. Thông báo vào qua chuông trên header.
 export const residentMenu = [
   { key: 'home', label: 'Trang chủ', icon: HomeOutlined, path: 'home', component: ResidentHomePage },
+  { key: 'select-apartment', label: 'Chọn căn hộ', path: 'select-apartment', component: SelectApartmentPage, hideInMenu: true },
   { key: 'tickets', label: 'Phản ánh', icon: ToolOutlined, path: 'tickets', component: ResidentTicketsPage },
   {
     key: 'ticket-detail',

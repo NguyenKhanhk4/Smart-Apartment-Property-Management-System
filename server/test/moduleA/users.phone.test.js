@@ -71,13 +71,13 @@ test('User: consents chỉ nhận hành động hợp lệ', async () => {
   await assert.rejects(User.create({ ...base, phone: '0912345678', consents: [invalid] }));
 });
 
-test('đăng nhập: tài khoản chưa có mật khẩu trả 401, không lỗi 500', async () => {
+test('đăng nhập: tài khoản chưa kích hoạt trả 403 ACCOUNT_NOT_ACTIVATED, không lỗi 500', async () => {
   await User.create({ fullName: 'Chờ', role: 'RESIDENT', phone: '0912345678', email: 'cho@example.com' });
 
-  const res = await app.request('POST', '/auth/login', { body: { email: 'cho@example.com', password: PASSWORD } });
+  const res = await app.request('POST', '/auth/login', { body: { phone: '0912345678', password: PASSWORD } });
 
-  assert.equal(res.status, 401);
-  assert.equal(res.body.errorCode, 'AUTH_INVALID_CREDENTIALS');
+  assert.equal(res.status, 403);
+  assert.equal(res.body.errorCode, 'ACCOUNT_NOT_ACTIVATED');
 });
 
 test('User: email là duy nhất; nhiều tài khoản có email null vẫn được', async () => {

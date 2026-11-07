@@ -47,8 +47,8 @@ const resetBody = Joi.object({
 });
 
 const loginBody = Joi.object({
-  email: Joi.string().trim().lowercase().email().required(),
-  password: Joi.string().required(),
+  phone: phoneVn().required(),
+  password: Joi.string().max(100).required(),
 });
 
 const refreshBody = Joi.object({

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { Alert, Button, Form, Input, Steps } from 'antd';
 import { ArrowRightOutlined, HomeOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons';
 import { authApi } from '../../api/auth.api';
@@ -20,6 +20,7 @@ const PASSWORD_RULES = [
 // UC11: nhập thông tin → nhập mã và đặt mật khẩu → đồng ý hoặc từ chối điều khoản. Mã in tại quầy vào thẳng bước 2.
 export default function ActivationPage() {
   const navigate = useNavigate();
+  const prefillPhone = useLocation().state?.phone; // từ trang đăng nhập khi tài khoản chưa kích hoạt
   const [step, setStep] = useState(0);
   const [identity, setIdentity] = useState(null); // Thông tin bước 1; null = dùng mã in tại quầy
   const [credentials, setCredentials] = useState(null);
@@ -90,7 +91,7 @@ export default function ActivationPage() {
       {error && <Alert type="error" showIcon title={error} className="mb-4" closable onClose={() => setError(null)} />}
 
       {step === 0 && (
-        <Form layout="vertical" requiredMark={false} onFinish={sendOtp} disabled={loading} initialValues={identity ?? undefined}>
+        <Form layout="vertical" requiredMark={false} onFinish={sendOtp} disabled={loading} initialValues={identity ?? (prefillPhone ? { phone: prefillPhone } : undefined)}>
           <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
             <Input size="large" prefix={icon(PhoneOutlined)} placeholder="0912345678" autoComplete="tel" />
           </Form.Item>
