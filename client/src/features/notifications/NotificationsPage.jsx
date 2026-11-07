@@ -1,3 +1,4 @@
+// Module 8: thông báo cá nhân và nút xin quyền thông báo trình duyệt do người dùng chủ động bật.
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Badge, Button, Card, Empty, Flex, Pagination, Segmented, Spin, Typography } from 'antd';
@@ -14,6 +15,7 @@ export default function NotificationsPage() {
   const area = useLocation().pathname.startsWith('/r') ? 'r' : 'app';
   const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(1);
+  const [permission, setPermission] = useState(() => typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
   const { data = [], raw, pagination, loading, reload } = useApi(
     () => notificationApi.list({ page, limit: 15, isRead: filter === 'unread' ? false : undefined }),
     [page, filter],
@@ -40,6 +42,9 @@ export default function NotificationsPage() {
           Thông báo {raw?.unreadCount > 0 && <Badge count={raw.unreadCount} />}
         </Typography.Title>
         <Flex gap={8}>
+          {permission !== 'unsupported' && <Button disabled={permission !== 'default'} onClick={async () => setPermission(await Notification.requestPermission())}>
+            {permission === 'granted' ? 'Đã bật thông báo trình duyệt' : permission === 'denied' ? 'Thông báo bị chặn trong trình duyệt' : 'Bật thông báo trình duyệt'}
+          </Button>}
           <Segmented
             value={filter}
             onChange={(v) => (setFilter(v), setPage(1))}

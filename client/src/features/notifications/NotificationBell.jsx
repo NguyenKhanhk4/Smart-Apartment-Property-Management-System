@@ -1,5 +1,5 @@
-// Chuông dùng chung kèm banner khẩn Module 7 trên mọi màn hình; polling và quyền tiếp nhận do backend kiểm soát.
-import { useCallback, useEffect, useState } from 'react';
+// Module 8: chuông và thông báo trình duyệt khi được cấp quyền, giữ banner khẩn Module 7 theo quyền backend.
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import { Alert, App, Badge, Button } from 'antd';
@@ -17,6 +17,7 @@ const POLL_MS = 60_000;
 export default function NotificationBell({ area, variant }) {
   const navigate = useNavigate();
   const [count, setCount] = useState(0);
+  const latestRef = useRef(undefined);
   const [alerts, setAlerts] = useState([]);
   const [receiving, setReceiving] = useState(null);
   const { hasRole } = useAuth();
@@ -30,6 +31,15 @@ export default function NotificationBell({ area, variant }) {
   };
 
   const refresh = useCallback(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      notificationApi.list({ page: 1, limit: 1 }).then((res) => {
+        const latest = res.data?.[0];
+        if (latest && latestRef.current !== undefined && latestRef.current !== latest._id && !latest.isRead) {
+          new Notification(latest.title, { body: latest.content, tag: latest._id });
+        }
+        latestRef.current = latest?._id ?? null;
+      }).catch(() => {});
+    }
     notificationApi
       .unreadCount()
       .then((res) => setCount(res.data.count))

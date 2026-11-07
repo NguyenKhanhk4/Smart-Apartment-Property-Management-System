@@ -1,4 +1,4 @@
-// API dùng chung: giữ endpoint cũ, thêm nghiệp vụ Module 7 (TM): khách, bưu kiện, tuần tra và báo khẩn.
+// API dùng chung Module 7/8: vận hành an ninh, bảng tin, bình luận và khảo sát theo căn hộ.
 // Theo quy ước axiosClient.js: trả nguyên envelope { success, data, pagination? }.
 import { apiClient, http } from './axiosClient';
 
@@ -86,6 +86,12 @@ export const guestApi = {
 
 // ===== UC-E09: Bảng tin & thông báo =====
 export const announcementApi = {
+  comments: (id, params) => http.get(`/announcements/${id}/comments`, { params }),
+  comment: (id, content) => http.post(`/announcements/${id}/comments`, { content }),
+  hideComment: (id, commentId) => http.patch(`/announcements/${id}/comments/${commentId}/hide`),
+  poll: (id, apartmentId) => http.get(`/announcements/${id}/poll`, { params: { apartmentId } }),
+  vote: (id, body) => http.put(`/announcements/${id}/poll/vote`, body),
+  closePoll: (id) => http.patch(`/announcements/${id}/poll/close`),
   list: (params) => http.get('/announcements', { params }),
   get: (id) => http.get(`/announcements/${id}`),
   create: (body) => http.post('/announcements', body),
