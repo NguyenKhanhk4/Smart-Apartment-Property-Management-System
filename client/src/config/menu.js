@@ -21,6 +21,7 @@ import {
   NotificationOutlined,
   IdcardOutlined,
   PieChartOutlined,
+  SafetyCertificateOutlined,
   ScheduleOutlined,
   SettingOutlined,
   TeamOutlined,
@@ -120,6 +121,7 @@ const TicketBoardPage = lazy(() => import('../features/tickets/TicketBoardPage')
 
 // ===== Module C — audit (TM) =====
 const AuditLogsPage = lazy(() => import('../features/auditLogs/AuditLogsPage'));
+const PermissionMatrixPage = lazy(() => import('../features/permissions/PermissionMatrixPage'));
 
 // ===== Gate Pass & Kiểm soát xe (Người 2) =====
 const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
@@ -459,6 +461,16 @@ export const adminMenu = [
     path: 'internal-accounts',
     roles: ['MANAGER'],
     component: InternalAccountsPage,
+  },
+  // UC04: ma trận phân quyền theo vai trò
+  {
+    key: 'permissions',
+    group: 'Cấu hình',
+    label: 'Phân quyền',
+    icon: SafetyCertificateOutlined,
+    path: 'permissions',
+    roles: ['MANAGER'],
+    component: PermissionMatrixPage,
   },
   {
     key: 'apartment-detail',

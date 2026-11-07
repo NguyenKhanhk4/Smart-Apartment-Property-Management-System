@@ -93,13 +93,15 @@ export function parseEnv(source) {
       apiSecret: value.CLOUDINARY_API_SECRET,
       enabled: Boolean(value.CLOUDINARY_CLOUD_NAME && value.CLOUDINARY_API_KEY && value.CLOUDINARY_API_SECRET),
     },
+    // Chạy test không bao giờ dùng tài khoản SMTP thật trong .env (không gửi mail thật tới địa chỉ giả của test).
+    // Test cần mail tự bật env.smtp.enabled và giả lập nodemailer.
     smtp: {
       host: value.SMTP_HOST,
       port: value.SMTP_PORT,
-      user: value.SMTP_USER,
-      pass: value.SMTP_PASS,
-      from: value.MAIL_FROM || value.SMTP_USER,
-      enabled: Boolean(value.SMTP_USER && value.SMTP_PASS),
+      user: isTest ? '' : value.SMTP_USER,
+      pass: isTest ? '' : value.SMTP_PASS,
+      from: (isTest ? '' : value.MAIL_FROM) || (isTest ? 'test@sapms.local' : value.SMTP_USER),
+      enabled: !isTest && Boolean(value.SMTP_USER && value.SMTP_PASS),
     },
     payos: (() => {
       const resultUrl = `${value.CLIENT_URL.split(',')[0].trim()}/r/payments/result`;

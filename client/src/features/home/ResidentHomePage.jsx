@@ -86,14 +86,15 @@ function NewsRow({ item, last, wide }) {
 // Lối tắt chức năng đã bỏ vì trùng với thanh điều hướng, menu avatar và chuông.
 export default function ResidentHomePage() {
   const wide = useMediaQuery('(min-width: 768px)');
-  const { user } = useAuth();
+  const { user, canSee } = useAuth();
+  const showNews = canSee({ key: 'announcements' }); // UC04: bị tắt quyền Xem Bảng tin thì ẩn khung
   const { apartment, apartmentId } = useResident();
   const enabled = Boolean(apartmentId);
 
   const booking = useApi(() => bookingApi.mine({ scope: 'upcoming', limit: 1, apartmentId }), [apartmentId], { enabled });
   const tickets = useApi(() => ticketApi.list({ status: OPEN_TICKET_STATUS, limit: 1, sort: '-createdAt' }), []);
   const guests = useApi(() => guestApi.list({ date: new Date().toISOString(), status: 'EXPECTED,CHECKED_IN', limit: 5, sort: 'expectedTime' }), []);
-  const news = useApi(() => announcementApi.list({ limit: 3 }), []);
+  const news = useApi(() => announcementApi.list({ limit: 3 }), [], { enabled: showNews });
 
   const nextBooking = booking.data?.[0];
   const ticket = tickets.data?.[0];
@@ -162,7 +163,7 @@ export default function ResidentHomePage() {
     </section>
   ) : null;
 
-  const newsCard = (
+  const newsCard = showNews && (
     <SurfaceCard as="section" className="overflow-hidden">
       <div className={`flex items-center justify-between border-b border-r-divider ${wide ? 'px-6 py-[18px]' : 'px-4 py-3.5'}`}>
         <h2 className="m-0 text-[15px] md:text-[17px] font-semibold">Bảng tin mới</h2>

@@ -81,7 +81,8 @@ router.get('/', authorize('ACCOUNTANT', 'MANAGER'), validate({ query: listQuery 
  *     parameters:
  *       - { in: path, name: ticketId, required: true, schema: { type: string } }
  */
-router.get('/ticket/:ticketId', validate({ params: Joi.object({ ticketId: objectId().required() }) }), async (req, res) =>
+// UC04 (08/11/2026): authorize() khớp đúng vai trò service listTicketQuotes đang cho xem, để ma trận phân quyền đọc đúng
+router.get('/ticket/:ticketId', authorize('MANAGER', 'STAFF:RECEPTIONIST', 'ACCOUNTANT', 'STAFF:TECHNICIAN', 'RESIDENT'), validate({ params: Joi.object({ ticketId: objectId().required() }) }), async (req, res) =>
   ok(res, await service.listTicketQuotes(req.user, req.params.ticketId)),
 );
 

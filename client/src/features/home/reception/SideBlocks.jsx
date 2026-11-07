@@ -4,6 +4,7 @@ import { PushpinOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { announcementApi } from '../../../api/moduleE.api';
 import { useApi } from '../../../hooks/useApi';
+import { useAuth } from '../../../hooks/useAuth';
 import { Block } from './Block';
 import { refreshReceptionDashboard, useReceptionDashboard } from './receptionDashboard';
 import { DIVIDER, LINK, MUTED, TEXT } from './styles';
@@ -57,7 +58,11 @@ export function UpcomingGuests() {
 // 2–3 tin mới nhất; tin ghim nằm trên cùng
 export function LatestNews() {
   const navigate = useNavigate();
-  const { data = [], loading, error, reload } = useApi(() => announcementApi.list({ limit: 10 }), []);
+  // UC04: bị tắt quyền Xem Bảng tin thì ẩn hẳn khung, không gọi API
+  const { canSee } = useAuth();
+  const visible = canSee({ key: 'announcements' });
+  const { data = [], loading, error, reload } = useApi(() => announcementApi.list({ limit: 10 }), [], { enabled: visible });
+  if (!visible) return null;
   const items = [...data].sort((a, b) => Number(Boolean(b.isPinned)) - Number(Boolean(a.isPinned))).slice(0, NEWS_ROWS);
   return (
     <Block

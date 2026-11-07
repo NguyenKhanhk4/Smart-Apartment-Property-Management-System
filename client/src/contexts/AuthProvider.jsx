@@ -4,6 +4,10 @@ import { authApi } from '../api/auth.api';
 import { SESSION_EXPIRED_EVENT } from '../api/axiosClient';
 import { SESSION_EXPIRED_FLAG, authStorage } from '../utils/authStorage';
 import { hasRole as matchRoles } from '../utils/permission';
+import { permissionApi } from '../api/moduleA.api';
+import { PERMISSIONS_CHANGED_EVENT } from '../utils/permissionEvents';
+
+const EMPTY = new Set();
 
 /**
  * Giữ phiên đăng nhập phía client. Module Auth (Module A — Vũ Việt):
@@ -49,9 +53,37 @@ export function AuthProvider({ children }) {
 
   const hasRole = useCallback((...specs) => matchRoles(user, specs), [user]);
 
+  // UC04 bước 6: menu bị Trưởng BQL tắt quyền Xem. Nạp lại khi đổi người dùng, khi quay lại tab và khi có sự kiện
+  // PERMISSIONS_CHANGED_EVENT (vd vừa gặp lỗi PERMISSION_REVOKED). Lưu kèm userId để không dùng nhầm của người trước.
+  const userId = user?.id ?? user?._id ?? null;
+  const [hidden, setHidden] = useState({ userId: null, keys: new Set() });
+  const reloadPermissions = useCallback(() => {
+    if (!userId) return;
+    permissionApi
+      .me()
+      .then((res) => setHidden({ userId, keys: new Set(res.data?.hiddenMenuKeys ?? []) }))
+      .catch(() => {}); // lỗi mạng: giữ nguyên menu, server vẫn chặn API
+  }, [userId]);
+  useEffect(() => {
+    reloadPermissions();
+    window.addEventListener('focus', reloadPermissions);
+    window.addEventListener(PERMISSIONS_CHANGED_EVENT, reloadPermissions);
+    return () => {
+      window.removeEventListener('focus', reloadPermissions);
+      window.removeEventListener(PERMISSIONS_CHANGED_EVENT, reloadPermissions);
+    };
+  }, [reloadPermissions]);
+  const hiddenMenuKeys = hidden.userId === userId ? hidden.keys : EMPTY;
+
+  /** Mục menu hiện được không: đúng vai trò và chưa bị tắt quyền Xem */
+  const canSee = useCallback(
+    (item) => Boolean(item) && matchRoles(user, item.roles ?? []) && !hiddenMenuKeys.has(item.key),
+    [user, hiddenMenuKeys],
+  );
+
   const value = useMemo(
-    () => ({ user, isAuthenticated: Boolean(user), startSession, updateUser, logout, hasRole }),
-    [user, startSession, updateUser, logout, hasRole],
+    () => ({ user, isAuthenticated: Boolean(user), startSession, updateUser, logout, hasRole, canSee }),
+    [user, startSession, updateUser, logout, hasRole, canSee],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

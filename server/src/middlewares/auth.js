@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { ROLES } from '../constants/enums.js';
 import { ApiError } from '../utils/ApiError.js';
+import { enforcePermissions } from '../modules/permissions/permissions.service.js';
 
 const VALID_ROLES = Object.values(ROLES);
 
@@ -38,5 +39,6 @@ export function authenticate(req, _res, next) {
     roleTitle: payload.roleTitle ?? null,
     boardTitle: payload.boardTitle ?? null,
   };
-  return next();
+  // UC04: chặn theo ma trận phân quyền (Trưởng BQL tắt quyền nào thì chặn từ request kế tiếp)
+  return enforcePermissions(req).then(() => next(), next);
 }

@@ -563,6 +563,8 @@ export const AUDIT_ACTIONS = Object.freeze({
   PHONE_CHANGED: 'PHONE_CHANGED',
   EMAIL_CHANGED: 'EMAIL_CHANGED',
   CONSENT_CHANGED: 'CONSENT_CHANGED',
+  AUDIT_LOG_EXPORTED: 'AUDIT_LOG_EXPORTED', // UC06 bước 5 / UC65: xuất nhật ký cũng được ghi lại
+  ROLE_PERMISSIONS_CHANGED: 'ROLE_PERMISSIONS_CHANGED', // UC04: lưu ma trận phân quyền
   VEHICLE_APPROVED: 'VEHICLE_APPROVED',
   VEHICLE_REJECTED: 'VEHICLE_REJECTED',
   VEHICLE_CANCELLED: 'VEHICLE_CANCELLED',
@@ -600,6 +602,8 @@ export const AUDIT_ACTIONS = Object.freeze({
 export const AUDIT_TARGETS = Object.freeze({
   MAINTENANCE_FUND: 'maintenance_fund',
   OPERATING_EXPENSE: 'operating_expenses',
+  AUDIT_LOG: 'audit_logs',
+  ROLE_PERMISSION: 'role_permissions',
   USER: 'users',
   BUILDING: 'buildings',
   APARTMENT: 'apartments',

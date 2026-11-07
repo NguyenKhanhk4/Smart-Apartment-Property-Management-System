@@ -57,6 +57,14 @@ export const activationCodeApi = {
   changePhone: (userId, phone) => http.post('/activation-codes/change-phone', { userId, phone }),
 };
 
+// UC04: ma trận phân quyền (Trưởng BQL) và quyền đang bị tắt của người đăng nhập
+export const permissionApi = {
+  me: () => http.get('/permissions/me'),
+  roles: () => http.get('/permissions/roles'),
+  matrix: (roleKey) => http.get(`/permissions/roles/${roleKey}`),
+  save: (roleKey, granted) => http.put(`/permissions/roles/${roleKey}`, { granted }),
+};
+
 export const residentsApi = {
   listByApartment: (apartmentId) => http.get(`/apartments/${apartmentId}/residents`),
   lookupPhone: (phone) => http.get('/residents/lookup', { params: { phone } }),

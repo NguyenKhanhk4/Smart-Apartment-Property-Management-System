@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { Alert, Button, Form, Input } from 'antd';
 import { ArrowRightOutlined, LockOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons';
 import { authApi } from '../../api/auth.api';
+import { ALERT_GAP } from './authStyles';
 import { PHONE_RULES } from '../../utils/phone';
 
 const RESEND_SECONDS = 60;
@@ -44,7 +45,7 @@ export default function ForgotPasswordPage() {
 
   const reset = async (values) => {
     if (await run(() => authApi.resetPassword({ ...values, phone }))) {
-      navigate('/login', { replace: true, state: { passwordReset: true } });
+      navigate('/login', { replace: true, state: { passwordReset: true, phone } });
     }
   };
 
@@ -56,7 +57,7 @@ export default function ForgotPasswordPage() {
         {phone ? 'Nhập mã đã gửi tới email và đặt mật khẩu mới.' : 'Nhập số điện thoại đăng nhập, mã đặt lại mật khẩu sẽ gửi tới email của tài khoản.'}
       </p>
 
-      {error && <Alert type="error" showIcon title={error} className="mb-4" closable onClose={() => setError(null)} />}
+      {error && <Alert type="error" showIcon title={error} style={ALERT_GAP} closable={{ onClose: () => setError(null) }} />}
 
       {!phone ? (
         <Form layout="vertical" requiredMark={false} disabled={loading} onFinish={({ phone: value }) => sendCode(value)}>
@@ -72,7 +73,7 @@ export default function ForgotPasswordPage() {
           <Alert
             type="info"
             showIcon
-            className="mb-4"
+            style={ALERT_GAP}
             title={`Nếu số ${phone} có tài khoản và email, mã đã được gửi tới email, có hiệu lực 10 phút.`}
             description="Không nhận được email hoặc tài khoản không có email: mang CCCD đến quầy lễ tân để lấy mã in."
           />
