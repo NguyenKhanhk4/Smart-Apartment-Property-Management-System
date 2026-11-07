@@ -112,7 +112,7 @@ test('trả danh sách căn đang ở: cư dân 2 căn có đủ mã căn, tòa,
   assert.deepEqual((await login({ phone: staff.phone, password: PASSWORD })).apartments, []);
 });
 
-test('API: đăng nhập bằng email không còn nhận; giới hạn request theo từng SĐT, SĐT khác vẫn đăng nhập được', async () => {
+test('API: đăng nhập bằng email không còn nhận; giới hạn theo SĐT chỉ đếm lần thất bại, SĐT khác vẫn đăng nhập được', async () => {
   const user = await activeUser();
   const other = await activeUser();
   const post = (body) => app.request('POST', '/auth/login', { body });
@@ -122,9 +122,18 @@ test('API: đăng nhập bằng email không còn nhận; giới hạn request t
   assert.equal(ok.status, 200);
   assert.ok(Array.isArray(ok.body.data.apartments));
 
-  // Lượt thứ 1 là request email ở trên (không có SĐT nên tính riêng), từ đây dùng hết lượt của SĐT này
-  let last;
-  for (let i = 0; i < 10; i += 1) last = await post({ phone: user.phone, password: 'SaiMatKhau9' });
-  assert.equal(last.status, 429);
+  // Đăng nhập thành công liên tục không bị tính vào giới hạn
+  for (let i = 0; i < 12; i += 1) assert.equal((await post({ phone: user.phone, password: PASSWORD })).status, 200);
+
+  // Tài khoản có thật: lần sai thứ 5 bị khóa tạm (423); lúc đang khóa không tính vào giới hạn nên không ra 429
+  const statuses = [];
+  for (let i = 0; i < 12; i += 1) statuses.push((await post({ phone: user.phone, password: 'SaiMatKhau9' })).status);
+  assert.equal(statuses[4], 423);
+  assert.equal(statuses.includes(429), false);
+
+  // Dò SĐT không có tài khoản: quá 10 lần thất bại thì 429
+  let probe;
+  for (let i = 0; i < 11; i += 1) probe = await post({ phone: '0999999991', password: 'SaiMatKhau9' });
+  assert.equal(probe.status, 429);
   assert.equal((await post({ phone: other.phone, password: PASSWORD })).status, 200);
 });
