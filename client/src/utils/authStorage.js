@@ -5,6 +5,8 @@
 const ACCESS_KEY = 'sapms_access_token';
 const REFRESH_KEY = 'sapms_refresh_token';
 const USER_KEY = 'sapms_user';
+// sessionStorage: phiên vừa hết hạn, trang đăng nhập hiện MSG-S03 rồi xóa
+export const SESSION_EXPIRED_FLAG = 'sapms_session_expired';
 
 function read(key) {
   try {

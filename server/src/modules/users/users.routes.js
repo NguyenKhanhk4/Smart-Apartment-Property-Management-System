@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { BOARD_TITLES, ROLES, ROLE_TITLES, values } from '../../constants/enums.js';
+import { BOARD_TITLES, CONSENT_ACTIONS, ROLES, ROLE_TITLES, values } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
+import { requireConsent } from '../../middlewares/requireConsent.js';
 import { validate } from '../../middlewares/validate.js';
 import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery } from '../../utils/pagination.js';
@@ -13,11 +14,17 @@ import * as usersService from './users.service.js';
 // Module A — Vũ Việt. UC-A03 (Hồ sơ cá nhân), UC-A04 (Quản lý tài khoản nội bộ)
 const router = Router();
 
+// SĐT là tên đăng nhập nên không tự đổi được (SRS màn hình 5); nhờ Lễ tân / Trưởng BQL
 const updateMeBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100),
-  phone: phoneVn(),
+  email: Joi.string().trim().lowercase().email().allow('', null), // nhận OTP kích hoạt, quên mật khẩu
+  currentPassword: Joi.string().max(100), // bắt buộc khi đổi email (kiểm tra ở service)
   dateOfBirth: ymd().allow('', null),
 }).min(1);
+
+const updateConsentBody = Joi.object({
+  action: Joi.string().valid(CONSENT_ACTIONS.ACCEPTED, CONSENT_ACTIONS.WITHDRAWN).required(),
+});
 
 const changePasswordBody = Joi.object({
   currentPassword: Joi.string().required(),
@@ -44,16 +51,16 @@ const listInternalQuery = Joi.object({
   roleTitle: Joi.string().valid(...values(ROLE_TITLES)),
   boardTitle: Joi.string().valid(...values(BOARD_TITLES)),
   isActive: Joi.boolean(),
+  status: Joi.string().valid('PENDING', 'ACTIVE', 'LOCKED'),
   q: Joi.string().trim().max(100),
 });
 
 const createInternalBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100).required(),
-  email: Joi.string().trim().lowercase().email().required(),
+  email: Joi.string().trim().lowercase().email().allow('', null), // Không bắt buộc: không có thì cấp mã tại quầy (UC02)
   phone: phoneVn().required(),
-  role: Joi.string()
-    .valid(ROLES.MANAGER, ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD)
-    .required(),
+  // UC03 bước 2: không tạo Trưởng BQL trên giao diện (dùng npm run db:set-manager)
+  role: Joi.string().valid(ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD).required(),
   roleTitle: Joi.when('role', {
     is: ROLES.STAFF,
     then: Joi.string().valid(...values(ROLE_TITLES)).required().messages({ 'any.required': 'Chức danh là bắt buộc với nhân viên' }),
@@ -68,6 +75,7 @@ const createInternalBody = Joi.object({
 
 const updateInternalBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100),
+  email: Joi.string().trim().lowercase().email().allow('', null),
   phone: phoneVn(),
   role: Joi.string().valid(ROLES.MANAGER, ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD),
   roleTitle: Joi.string().valid(...values(ROLE_TITLES), null),
@@ -115,8 +123,19 @@ router.get('/me', authenticate, async (req, res) => {
  *         description: Hồ sơ đã được cập nhật
  */
 router.patch('/me', authenticate, validate({ body: updateMeBody }), async (req, res) => {
-  const user = await usersService.updateMe(req.user.id, req.validated.body);
+  const user = await usersService.updateMe(req.user.id, req.validated.body, { ip: req.ip });
   ok(res, user, 'Cập nhật thông tin thành công');
+});
+
+/**
+ * @openapi
+ * /users/me/consent:
+ *   patch:
+ *     tags: [Tài khoản nội bộ]
+ *     summary: Đồng ý hoặc rút lại đồng ý về dữ liệu cá nhân — BR-X7
+ */
+router.patch('/me/consent', authenticate, validate({ body: updateConsentBody }), async (req, res) => {
+  ok(res, await usersService.updateConsent(req.user.id, req.validated.body, { ip: req.ip }));
 });
 
 /**
@@ -129,7 +148,7 @@ router.patch('/me', authenticate, validate({ body: updateMeBody }), async (req, 
  *       200:
  *         description: Ảnh đại diện đã được cập nhật
  */
-router.patch('/me/avatar', authenticate, uploadImages('avatar', 1), async (req, res) => {
+router.patch('/me/avatar', authenticate, requireConsent, uploadImages('avatar', 1), async (req, res) => {
   const user = await usersService.updateAvatar(req.user.id, req.files);
   ok(res, user, 'Cập nhật ảnh đại diện thành công');
 });

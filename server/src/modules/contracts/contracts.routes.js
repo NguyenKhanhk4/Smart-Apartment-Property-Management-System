@@ -32,7 +32,7 @@ const listQuery = Joi.object({
 const personSchema = Joi.object({
   userId: objectId(),
   fullName: Joi.string().trim().min(2).max(100),
-  email: Joi.string().trim().email(),
+  email: Joi.string().trim().email().allow('', null), // Không bắt buộc (BR-X4)
   phone: phoneVn(),
   idNumber: Joi.string().trim().allow('', null),
   dateOfBirth: ymd().allow('', null),

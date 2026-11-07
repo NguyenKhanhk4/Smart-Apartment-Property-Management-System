@@ -27,7 +27,7 @@ router.post(
   validate({ body: Joi.object({ email: Joi.string().trim().lowercase().email().required() }) }),
   async (req, res) => {
     const user = await User.findOne({ email: req.body.email, isActive: true })
-      .select('email fullName role roleTitle boardTitle phone')
+      .select('email fullName role roleTitle boardTitle phone consents')
       .lean();
     if (!user) throw ApiError.notFound('Không có tài khoản đang hoạt động với email này');
     // Cùng payload/secret/thuật toán mà middleware authenticate đọc
@@ -36,7 +36,9 @@ router.post(
       env.jwt.accessSecret,
       { expiresIn: '12h' },
     );
-    ok(res, { user: { ...user, id: String(user._id) }, accessToken, refreshToken: null }, 'Đăng nhập dev thành công');
+    const { consents, ...profile } = user;
+    const publicUser = { ...profile, id: String(user._id), consentStatus: consents?.at(-1)?.action ?? null };
+    ok(res, { user: publicUser, accessToken, refreshToken: null }, 'Đăng nhập dev thành công');
   },
 );
 
