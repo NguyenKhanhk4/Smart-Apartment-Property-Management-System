@@ -15,7 +15,6 @@ export const systemConfigApi = {
   update: (key, value) => http.patch(`/system-configs/${key}`, { value }),
 };
 
-<<<<<<< HEAD
 // multipart: field rỗng bỏ qua, ảnh gửi ở field `images`
 function toForm(body, files) {
   const form = new FormData();
@@ -24,13 +23,10 @@ function toForm(body, files) {
   return form;
 }
 
-=======
->>>>>>> origin/minh
 // ===== UC-E02..E06: Ticket =====
 export const ticketApi = {
   list: (params) => http.get('/tickets', { params }),
   get: (id) => http.get(`/tickets/${id}`),
-<<<<<<< HEAD
   /** body: { categoryId, title, description, type, scope, apartmentId? }, files: File[] */
   create: (body, files = []) => http.post('/tickets', toForm(body, files)),
   /** Lễ tân tạo hộ cư dân — body như create, apartmentId bắt buộc */
@@ -42,29 +38,13 @@ export const ticketApi = {
   claim: (id) => http.patch(`/tickets/${id}/claim`),
   /** Người nộp phí đồng ý / từ chối báo giá sự cố trong căn hộ */
   decideQuote: (id, body) => http.patch(`/tickets/${id}/quote-decision`, body),
-=======
-  /** body: { categoryId, title, description, apartmentId? }, files: File[] */
-  create: (body, files = []) => {
-    const form = new FormData();
-    Object.entries(body).forEach(([k, v]) => v != null && v !== '' && form.append(k, v));
-    files.forEach((f) => form.append('images', f));
-    return http.post('/tickets', form);
-  },
->>>>>>> origin/minh
   assignees: () => http.get('/tickets/assignees'),
   assign: (id, body) => http.patch(`/tickets/${id}/assign`, body),
   reject: (id, reason) => http.patch(`/tickets/${id}/reject`, { reason }),
   /** files: ảnh kết quả, bắt buộc khi status = WAITING_CONFIRM (gửi multipart) */
   progress: (id, body, files = []) => {
     if (!files.length) return http.patch(`/tickets/${id}/progress`, body);
-<<<<<<< HEAD
     return http.patch(`/tickets/${id}/progress`, toForm(body, files));
-=======
-    const form = new FormData();
-    Object.entries(body).forEach(([k, v]) => v != null && v !== '' && form.append(k, v));
-    files.forEach((f) => form.append('images', f));
-    return http.patch(`/tickets/${id}/progress`, form);
->>>>>>> origin/minh
   },
   confirm: (id, body) => http.patch(`/tickets/${id}/confirm`, body),
   runJob: (job) => http.post(`/tickets/jobs/${job}/run`),
@@ -127,7 +107,6 @@ export const lookupApi = {
   apartments: (params) => http.get('/lookups/apartments', { params }),
   amenities: () => http.get('/lookups/amenities'),
 };
-<<<<<<< HEAD
 
 // ===== Người 4: Lịch ca trực Kỹ thuật / Bảo vệ =====
 export const dutyShiftApi = {
@@ -139,5 +118,3 @@ export const dutyShiftApi = {
   create: (body) => http.post('/duty-shifts', body),
   remove: (id) => http.delete(`/duty-shifts/${id}`),
 };
-=======
->>>>>>> origin/minh

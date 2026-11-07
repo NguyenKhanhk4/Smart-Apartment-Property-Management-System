@@ -3,14 +3,11 @@ import dayjs from 'dayjs';
 import { vehicleApi } from '../../../api/moduleA.api';
 import { bookingApi } from '../../../api/moduleD.api';
 import { guestApi, ticketApi } from '../../../api/moduleE.api';
-<<<<<<< HEAD
 import { BOOKING_STATUS, VEHICLE_STATUS } from '../../../constants/enums';
 import { keysOf } from '../../../utils/status';
 
 const BOOKING = keysOf(BOOKING_STATUS);
 const VEHICLE = keysOf(VEHICLE_STATUS);
-=======
->>>>>>> origin/minh
 
 // Dữ liệu trang chủ Lễ tân + badge ở sidebar dùng CHUNG một kho: layout tải và làm mới mỗi phút,
 // trang chủ chỉ đọc; thao tác Duyệt / Check-in... gọi refreshReceptionDashboard() để mọi số đếm cập nhật cùng lúc.
@@ -22,11 +19,7 @@ const PARTS = {
   guestsAll: (today) => guestApi.list({ date: today, limit: 1 }),
   guestsExpected: (today) => guestApi.list({ date: today, status: 'EXPECTED', limit: LIST_LIMIT, sort: 'expectedTime' }),
   tickets: () => ticketApi.list({ status: 'NEW', limit: LIST_LIMIT, sort: 'createdAt' }),
-<<<<<<< HEAD
   vehicles: () => vehicleApi.list({ status: VEHICLE.PENDING, limit: LIST_LIMIT, sort: 'createdAt' }),
-=======
-  vehicles: () => vehicleApi.list({ status: 'PENDING', limit: LIST_LIMIT, sort: 'createdAt' }),
->>>>>>> origin/minh
   bookings: (today) => bookingApi.schedule({ date: today }),
 };
 
@@ -98,11 +91,7 @@ export function selectCounts(s) {
     guestsToday: okPart(guestsAll)?.pagination?.total ?? null,
     guestsPending: okPart(guestsExpected)?.pagination?.total ?? null,
     bookingsTotal: bookingList ? bookingList.filter((b) => b.status !== 'CANCELLED').length : null,
-<<<<<<< HEAD
     bookingsWaiting: bookingList ? bookingList.filter((b) => b.status === BOOKING.APPROVED).length : null,
-=======
-    bookingsWaiting: bookingList ? bookingList.filter((b) => b.status === 'APPROVED').length : null,
->>>>>>> origin/minh
     ticketsNew: okPart(tickets)?.pagination?.total ?? null,
     ticketsOver24: ticketList ? ticketList.filter((t) => s.fetchedAt - Date.parse(t.createdAt) > DAY_MS).length : null,
     vehiclesPending: okPart(vehicles)?.pagination?.total ?? null,

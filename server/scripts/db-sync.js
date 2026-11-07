@@ -3,17 +3,13 @@
 import mongoose from 'mongoose';
 import { connectDB, disconnectDB } from '../src/config/db.js';
 import * as models from '../src/models/index.js';
-<<<<<<< HEAD
 import { normalizePhone } from '../src/utils/validators.js';
-=======
->>>>>>> origin/minh
 import { ensureDefaultConfigs } from '../src/services/systemConfig.service.js';
 
 await connectDB();
 const db = mongoose.connection.db;
 const existing = new Set((await db.listCollections().toArray()).map((c) => c.name));
 
-<<<<<<< HEAD
 // Tài khoản cũ: SĐT phải đủ và không trùng thì mới tạo được index unique. Thiếu hoặc trùng thì dừng để sửa tay.
 if (existing.has('users')) {
   const users = db.collection('users');
@@ -52,8 +48,6 @@ if (existing.has('users')) {
   console.log(`users: đánh dấu đã kích hoạt ${activated.modifiedCount} tài khoản cũ\n`);
 }
 
-=======
->>>>>>> origin/minh
 for (const Model of Object.values(models)) {
   const name = Model.collection.collectionName;
   if (!existing.has(name)) await Model.createCollection();

@@ -3,7 +3,6 @@ import { env } from '../config/env.js';
 import { CRON_JOBS } from '../constants/enums.js';
 import { runTrackedJob } from './cronRunner.js';
 import { generateMaintenanceWorkOrders } from '../modules/workOrders/workOrders.jobs.js';
-<<<<<<< HEAD
 import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from '../modules/tickets/tickets.jobs.js';
 import { expireLeases } from '../modules/contracts/contracts.jobs.js';
 import { billingReminders, markOverdueInvoices } from '../modules/invoices/invoices.jobs.js';
@@ -17,27 +16,19 @@ import { remindQuotes } from '../modules/repairQuotes/repairQuotes.service.js';
 /**
  * Đăng ký mọi cron job (node-cron, múi giờ Asia/Ho_Chi_Minh — srs_final.md §2.4).
  * Module khác thêm job của mình vào mảng này:
-<<<<<<< HEAD
  *   { name: CRON_JOBS.BILLING_REMIND, schedule: '0 8 * * *', handler: billingReminders }
-=======
- *   { name: CRON_JOBS.INVOICE_GENERATE, schedule: '30 0 1 * *', handler: generateMonthlyInvoices }
->>>>>>> origin/minh
  */
 export const JOBS = [
   // UC-E06 / BR-O8 — 09:00 hằng ngày
   { name: CRON_JOBS.TICKET_ESCALATE, schedule: '0 9 * * *', handler: escalateOverdueTickets },
-<<<<<<< HEAD
   // Người 4 — mỗi 5 phút cảnh báo sự cố quá hạn nhận / phản ánh quá hạn phản hồi
   { name: CRON_JOBS.TICKET_SLA_ALERT, schedule: '*/5 * * * *', handler: alertSlaBreaches },
-=======
->>>>>>> origin/minh
   // BR-O9 — 01:00 hằng ngày tự đóng ticket chờ xác nhận quá hạn
   { name: CRON_JOBS.TICKET_AUTO_CLOSE, schedule: '0 1 * * *', handler: autoCloseTickets },
   // UC-D02 / BR-O6 — 02:00 hằng ngày tạo work order bảo trì định kỳ cho tài sản đến hạn
   { name: CRON_JOBS.WORK_ORDER_GENERATE, schedule: '0 2 * * *', handler: generateMaintenanceWorkOrders },
   // UC-A06 / BR-O2 — 00:00 hằng ngày kiểm tra và chuyển hợp đồng thuê hết hạn
   { name: CRON_JOBS.CONTRACT_EXPIRE, schedule: '0 0 * * *', handler: expireLeases },
-<<<<<<< HEAD
   // Mô đun 4 — 08:00 hằng ngày: đến ngày cấu hình thì nhắc Kế toán tính phí; nhắc Trưởng BQL thông báo chờ duyệt quá N ngày (không tự duyệt)
   { name: CRON_JOBS.BILLING_REMIND, schedule: '0 8 * * *', handler: billingReminders },
   // BR-F8 — 00:15 hằng ngày chuyển hóa đơn quá hạn thanh toán sang OVERDUE
@@ -56,8 +47,6 @@ export const JOBS = [
   { name: CRON_JOBS.GATE_PASS_EXPIRE, schedule: '*/15 * * * *', handler: expireGatePasses },
   // UC19 — 00:30 hằng ngày nhắc trước 15 ngày hợp đồng thuê sắp hết hạn
   { name: CRON_JOBS.CONTRACT_EXPIRY_REMIND, schedule: '30 0 * * *', handler: remindExpiringLeases },
-=======
->>>>>>> origin/minh
 ];
 
 export function startJobs() {
@@ -66,10 +55,7 @@ export function startJobs() {
     cron.schedule(job.schedule, () => runTrackedJob(job.name, job.handler), {
       timezone: env.timezone,
       name: job.name,
-<<<<<<< HEAD
       noOverlap: true, // lần chạy trước chưa xong thì bỏ lượt này (job */5, */15)
-=======
->>>>>>> origin/minh
     });
   }
   console.log(`⏰ Cron: đã đăng ký ${JOBS.length} job (${env.timezone})`);

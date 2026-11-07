@@ -1,10 +1,6 @@
 import { Router } from 'express';
 import Joi from 'joi';
-<<<<<<< HEAD
 import { CRON_JOBS, CRON_TRIGGERS, PRIORITIES, TICKET_SCOPES, TICKET_STATUS, TICKET_TYPES, values } from '../../constants/enums.js';
-=======
-import { CRON_JOBS, PRIORITIES, TICKET_STATUS, values } from '../../constants/enums.js';
->>>>>>> origin/minh
 import { runTrackedJob } from '../../jobs/cronRunner.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
@@ -13,11 +9,7 @@ import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId } from '../../utils/validators.js';
-<<<<<<< HEAD
 import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from './tickets.jobs.js';
-=======
-import { autoCloseTickets, escalateOverdueTickets } from './tickets.jobs.js';
->>>>>>> origin/minh
 import * as service from './tickets.service.js';
 
 const router = Router();
@@ -32,16 +24,12 @@ const listQuery = Joi.object({
   buildingId: objectId(),
   apartmentId: objectId(),
   assignedTo: objectId(),
-<<<<<<< HEAD
   type: Joi.string().valid(...values(TICKET_TYPES)),
   scope: Joi.string().valid(...values(TICKET_SCOPES)),
-=======
->>>>>>> origin/minh
   overdue: Joi.boolean(),
   q: Joi.string().trim().max(100),
 });
 
-<<<<<<< HEAD
 const ticketFields = {
   categoryId: objectId().required(),
   title: Joi.string().trim().min(5).max(150).required(),
@@ -58,14 +46,6 @@ const MANUAL_JOBS = {
   'auto-close': [CRON_JOBS.TICKET_AUTO_CLOSE, autoCloseTickets],
   'sla-alert': [CRON_JOBS.TICKET_SLA_ALERT, alertSlaBreaches],
 };
-=======
-const createBody = Joi.object({
-  categoryId: objectId().required(),
-  title: Joi.string().trim().min(5).max(150).required(),
-  description: Joi.string().trim().min(10).max(2000).required(),
-  apartmentId: objectId(),
-});
->>>>>>> origin/minh
 
 /**
  * @openapi
@@ -82,11 +62,7 @@ const createBody = Joi.object({
  *       - { in: query, name: q, schema: { type: string }, description: 'Tìm theo mã/tiêu đề' }
  *   post:
  *     tags: [Ticket]
-<<<<<<< HEAD
  *     summary: Cư dân gửi sự cố (INCIDENT → hàng chờ Kỹ thuật) hoặc phản ánh (COMPLAINT → Trưởng BQL), tối đa 5 ảnh (UC-E02)
-=======
- *     summary: Cư dân tạo phản ánh kèm tối đa 5 ảnh jpg/png ≤5MB (UC-E02)
->>>>>>> origin/minh
  *     requestBody:
  *       content:
  *         multipart/form-data:
@@ -98,11 +74,8 @@ const createBody = Joi.object({
  *               title: { type: string }
  *               description: { type: string }
  *               apartmentId: { type: string, description: 'Bắt buộc nếu cư dân ở nhiều căn' }
-<<<<<<< HEAD
  *               type: { type: string, enum: [INCIDENT, COMPLAINT] }
  *               scope: { type: string, enum: [COMMON_AREA, IN_APARTMENT], description: 'Chỉ áp dụng cho sự cố' }
-=======
->>>>>>> origin/minh
  *               images: { type: array, items: { type: string, format: binary } }
  */
 router.get(
@@ -128,7 +101,6 @@ router.post(
 
 /**
  * @openapi
-<<<<<<< HEAD
  * /tickets/staff:
  *   post:
  *     tags: [Ticket]
@@ -173,8 +145,6 @@ router.get(
 
 /**
  * @openapi
-=======
->>>>>>> origin/minh
  * /tickets/assignees:
  *   get:
  *     tags: [Ticket]
@@ -189,33 +159,17 @@ router.get('/assignees', authenticate, authorize(...DISPATCHERS), async (_req, r
  * /tickets/jobs/{job}/run:
  *   post:
  *     tags: [Ticket]
-<<<<<<< HEAD
  *     summary: Chạy lại thủ công cron leo thang (escalate), tự đóng (auto-close) hoặc cảnh báo SLA (sla-alert), ghi cron_runs
  *     parameters: [{ in: path, name: job, required: true, schema: { type: string, enum: [escalate, auto-close, sla-alert] } }]
-=======
- *     summary: Chạy lại thủ công cron leo thang (escalate) hoặc tự đóng (auto-close), ghi cron_runs
- *     parameters: [{ in: path, name: job, required: true, schema: { type: string, enum: [escalate, auto-close] } }]
->>>>>>> origin/minh
  */
 router.post(
   '/jobs/:job/run',
   authenticate,
-<<<<<<< HEAD
   authorize('MANAGER'),
   validate({ params: Joi.object({ job: Joi.string().valid(...Object.keys(MANUAL_JOBS)).required() }) }),
   async (req, res) => {
     const [name, handler] = MANUAL_JOBS[req.params.job];
     ok(res, await runTrackedJob(name, () => handler(), { trigger: CRON_TRIGGERS.MANUAL }));
-=======
-  authorize('MANAGER', 'ADMIN'),
-  validate({ params: Joi.object({ job: Joi.string().valid('escalate', 'auto-close').required() }) }),
-  async (req, res) => {
-    const [name, handler] =
-      req.params.job === 'escalate'
-        ? [CRON_JOBS.TICKET_ESCALATE, escalateOverdueTickets]
-        : [CRON_JOBS.TICKET_AUTO_CLOSE, autoCloseTickets];
-    ok(res, await runTrackedJob(name, () => handler(), { trigger: 'MANUAL' }));
->>>>>>> origin/minh
   },
 );
 
@@ -305,7 +259,6 @@ router.patch(
   validate({
     params: idParams,
     body: Joi.object({
-<<<<<<< HEAD
       status: Joi.string()
         .valid(
           TICKET_STATUS.WAITING_QUOTE_APPROVAL,
@@ -314,9 +267,6 @@ router.patch(
           TICKET_STATUS.WAITING_CONFIRM,
         )
         .required(),
-=======
-      status: Joi.string().valid(TICKET_STATUS.IN_PROGRESS, TICKET_STATUS.WAITING_CONFIRM).required(),
->>>>>>> origin/minh
       note: Joi.string().trim().max(1000).allow(''),
     }),
   }),
@@ -367,7 +317,6 @@ router.patch(
     ok(res, await service.confirmTicket(req.user, req.params.id, req.body), 'Đã ghi nhận'),
 );
 
-<<<<<<< HEAD
 /**
  * @openapi
  * /tickets/{id}/claim:
@@ -408,6 +357,4 @@ router.patch(
   async (req, res) => ok(res, await service.decideQuote(req.user, req.params.id, req.body), 'Đã ghi nhận quyết định'),
 );
 
-=======
->>>>>>> origin/minh
 export default router;

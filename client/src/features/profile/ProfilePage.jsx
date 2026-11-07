@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
 import { App, Avatar, Button, Card, DatePicker, Form, Input, Tabs, Upload, Tag } from 'antd';
-<<<<<<< HEAD
 import { PHONE_RULES } from '../../utils/phone';
-=======
->>>>>>> origin/minh
 import {
   CameraOutlined,
   KeyOutlined,
@@ -18,10 +15,7 @@ import { usersApi } from '../../api/moduleA.api';
 import { useAuth } from '../../hooks/useAuth';
 import { roleLabelOf } from '../../constants/enums';
 import PageHeader from '../../components/PageHeader';
-<<<<<<< HEAD
 import { roleHome } from '../../routes/roleHome';
-=======
->>>>>>> origin/minh
 
 // UC-A03: Trang hồ sơ cá nhân và đổi mật khẩu (/app/profile và /r/profile)
 export default function ProfilePage() {
@@ -176,16 +170,7 @@ export default function ProfilePage() {
               <Form.Item
                 name="phone"
                 label="Số điện thoại"
-<<<<<<< HEAD
                 rules={PHONE_RULES}
-=======
-                rules={[
-                  {
-                    pattern: /^(0|\+84)\d{9,10}$/,
-                    message: 'Số điện thoại không hợp lệ',
-                  },
-                ]}
->>>>>>> origin/minh
               >
                 <Input size="large" prefix={<PhoneOutlined className="text-ink-3" />} placeholder="Chưa cập nhật" />
               </Form.Item>
@@ -315,11 +300,7 @@ export default function ProfilePage() {
         title="Hồ sơ cá nhân"
         subtitle="Quản lý thông tin tài khoản và bảo mật mật khẩu của bạn"
         breadcrumb={[
-<<<<<<< HEAD
           { label: 'Trang chủ', path: roleHome(user) },
-=======
-          { label: 'Trang chủ', path: user?.role === 'RESIDENT' ? '/r/home' : '/app/home' },
->>>>>>> origin/minh
           { label: 'Hồ sơ cá nhân' },
         ]}
       />

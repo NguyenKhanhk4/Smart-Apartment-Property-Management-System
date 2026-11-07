@@ -1,9 +1,5 @@
 import { CONTRACT_STATUS, CONTRACT_TYPES } from '../../constants/enums.js';
-<<<<<<< HEAD
 import { Contract } from '../../models/index.js';
-=======
-import { Contract } from '../../models/Contract.js';
->>>>>>> origin/minh
 
 /**
  * BR-F7: Xác định người chịu trách nhiệm thanh toán của căn hộ tại thời điểm `at`.

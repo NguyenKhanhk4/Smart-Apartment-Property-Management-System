@@ -1,22 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button, Card, Flex, Input, Popconfirm, Select, Switch, Table, Tabs, Tag, Typography } from 'antd';
-<<<<<<< HEAD
 import { workOrderApi } from '../../api/equipment.api';
-=======
-import { workOrderApi } from '../../api/moduleD.api';
->>>>>>> origin/minh
 import { lookupApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
-<<<<<<< HEAD
 import { WORK_ORDER_OPEN_STATUSES, WORK_ORDER_STATUS, WORK_ORDER_TYPES, enumOptions } from '../../constants/enums';
 import { keysOf } from '../../utils/status';
-=======
-import { WORK_ORDER_STATUS, WORK_ORDER_TYPES, enumOptions } from '../../constants/enums';
->>>>>>> origin/minh
 import { formatDate, formatDateTime } from '../../utils/format';
 import { vtName } from '../../motion/viewTransition';
 import AssignWorkOrderModal from './AssignWorkOrderModal';
@@ -24,18 +16,11 @@ import CompleteWorkOrderModal from './CompleteWorkOrderModal';
 import WorkOrderReportModal from './WorkOrderReportModal';
 
 const UNASSIGNED = 'UNASSIGNED';
-<<<<<<< HEAD
 const WO = keysOf(WORK_ORDER_STATUS);
 
 // Việc đang mở: gần hạn nhất lên trước; việc đã xong: mới hoàn thành lên trước
 const TABS = {
   open: { status: WORK_ORDER_OPEN_STATUSES.join(','), sort: 'scheduledDate' },
-=======
-
-// Việc đang mở: gần hạn nhất lên trước; việc đã xong: mới hoàn thành lên trước
-const TABS = {
-  open: { status: 'PENDING,IN_PROGRESS', sort: 'scheduledDate' },
->>>>>>> origin/minh
   done: { status: 'DONE', sort: '-completedAt' },
 };
 
@@ -54,11 +39,7 @@ export default function WorkOrdersPage() {
   const { data = [], pagination, loading, reload } = useApi(() => workOrderApi.list(filters), [filters]);
   const { data: buildings = [] } = useApi(() => lookupApi.buildings(), [], { enabled: !isTech });
   const { data: techs = [] } = useApi(() => workOrderApi.assignees(), [], { enabled: !isTech });
-<<<<<<< HEAD
   const [start] = useAction((id) => workOrderApi.updateStatus(id, { status: WO.IN_PROGRESS }), { onDone: reload });
-=======
-  const [start] = useAction((id) => workOrderApi.updateStatus(id, { status: 'IN_PROGRESS' }), { onDone: reload });
->>>>>>> origin/minh
 
   const changeTab = (key) => {
     setTab(key);
@@ -146,11 +127,7 @@ export default function WorkOrdersPage() {
             width: 130,
             fixed: 'right',
             render: (_, r) =>
-<<<<<<< HEAD
               r.status === WO.PENDING ? (
-=======
-              r.status === 'PENDING' ? (
->>>>>>> origin/minh
                 <Popconfirm
                   title="Bắt đầu xử lý work order này?"
                   onConfirm={() => start(r._id).catch(() => {})}

@@ -36,28 +36,17 @@ const now = new Date();
 const daysAgo = (n, hour = 9) => new Date(startOfVnDay(new Date(now.getTime() - n * DAY_MS)).getTime() + hour * HOUR_MS);
 
 // ===== Tài khoản =====
-<<<<<<< HEAD
 let phoneSeq = 10000000; // SĐT là duy nhất (BR-S01)
-=======
->>>>>>> origin/minh
 const mkUser = (email, fullName, role, extra = {}) => ({
   email,
   fullName,
   role,
   passwordHash,
-<<<<<<< HEAD
   activatedAt: now,
   phone: `09${(phoneSeq += 1)}`,
   ...extra,
 });
 const users = await M.User.insertMany([
-=======
-  phone: `09${between(10000000, 99999999)}`,
-  ...extra,
-});
-const users = await M.User.insertMany([
-  mkUser('admin@sapms.vn', 'Quản trị hệ thống', 'ADMIN'),
->>>>>>> origin/minh
   mkUser('manager@sapms.vn', 'Nguyễn Văn Quản', 'MANAGER'),
   mkUser('accountant@sapms.vn', 'Trần Thị Kế Toán', 'ACCOUNTANT'),
   mkUser('letan@sapms.vn', 'Lê Thị Lễ Tân', 'STAFF', { roleTitle: 'RECEPTIONIST' }),
@@ -126,11 +115,7 @@ await M.Resident.insertMany(
 // cudan1 (căn đầu) là chủ hộ có vợ và con nhỏ (chưa có ngày sinh: chủ hộ tự nhập ở mục Gia đình).
 // Căn thứ 7 đang cho thuê: chủ sở hữu "không ở" (cusohuu7) không có quyền tiện ích, người thuê (nguoithue7) là chủ hộ.
 // Tạo trực tiếp (không qua mkUser) để không tiêu thụ bộ sinh số ngẫu nhiên → dữ liệu demo phía sau giữ nguyên
-<<<<<<< HEAD
 const demoUser = (email, fullName, phone) => ({ email, fullName, role: 'RESIDENT', passwordHash, activatedAt: now, phone });
-=======
-const demoUser = (email, fullName, phone) => ({ email, fullName, role: 'RESIDENT', passwordHash, phone });
->>>>>>> origin/minh
 const householdUsers = await M.User.insertMany([
   demoUser('vo.cudan1@sapms.vn', 'Vợ cư dân An', '0900000001'),
   demoUser('con.cudan1@sapms.vn', 'Bé An', '0900000002'),
@@ -219,37 +204,25 @@ for (const period of periods) {
     }
     const totalAmount = items.reduce((s, i) => s + i.amount, 0);
 
-<<<<<<< HEAD
     // Kỳ hiện tại: đa số chưa trả, vài căn trả một phần; kỳ trước: 1 phần quá hạn; các kỳ cũ: gần như đã trả hết
     const r = rand();
     let status = 'PAID';
     if (isCurrent) status = r < 0.3 ? 'PAID' : r < 0.4 ? 'PARTIALLY_PAID' : 'UNPAID';
-=======
-    // Kỳ hiện tại: đa số chưa trả; kỳ trước: 1 phần quá hạn; các kỳ cũ: gần như đã trả hết
-    const r = rand();
-    let status = 'PAID';
-    if (isCurrent) status = r < 0.3 ? 'PAID' : 'UNPAID';
->>>>>>> origin/minh
     else if (isPrev) status = r < 0.7 ? 'PAID' : 'OVERDUE';
     else if (r < 0.03) status = 'OVERDUE';
     else if (r < 0.05) status = 'CANCELLED';
 
-<<<<<<< HEAD
     // Đã trả một phần: làm tròn nghìn đồng
     let paidAmount = 0;
     if (status === 'PAID') paidAmount = totalAmount;
     else if (status === 'PARTIALLY_PAID') paidAmount = Math.round((totalAmount * 0.4) / 1000) * 1000;
     const paidAt = paidAmount > 0 ? new Date(issuedAt.getTime() + between(1, 14) * DAY_MS) : null;
-=======
-    const paidAt = status === 'PAID' ? new Date(issuedAt.getTime() + between(1, 14) * DAY_MS) : null;
->>>>>>> origin/minh
     const invoice = {
       _id: new M.Invoice()._id,
       code: `HD-${period.replace('-', '')}-${buildings.find((b) => String(b._id) === String(a.buildingId)).code}-${a.code}`,
       apartmentId: a._id,
       buildingId: a.buildingId,
       payerId: residentUsers[apartments.indexOf(a)]?._id,
-<<<<<<< HEAD
       payerSource: 'OWNER',
       period,
       items,
@@ -279,28 +252,6 @@ for (const period of periods) {
         paidAt,
         ...(method === 'PAYOS'
           ? { orderCode: (payments.length + 1) * 1000 + between(100, 999), reference: `FT${between(10000000, 99999999)}` }
-=======
-      period,
-      items,
-      totalAmount,
-      status,
-      issuedAt,
-      dueDate,
-      paidAt,
-      generatedBy: 'CRON',
-    };
-    invoices.push(invoice);
-    if (status === 'PAID') {
-      const method = pick(['VNPAY', 'VNPAY', 'CASH', 'BANK_TRANSFER']);
-      payments.push({
-        invoiceId: invoice._id,
-        method,
-        amount: totalAmount,
-        status: 'SUCCESS',
-        paidAt,
-        ...(method === 'VNPAY'
-          ? { vnpTxnRef: `${invoice.code}-${between(1000, 9999)}`, vnpResponseCode: '00' }
->>>>>>> origin/minh
           : {
               receiptNo: `PT-${period.replace('-', '')}-${String((receiptSeq += 1)).padStart(5, '0')}`,
               confirmedBy: U.accountant._id,

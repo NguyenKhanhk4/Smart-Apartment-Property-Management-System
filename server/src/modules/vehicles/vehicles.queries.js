@@ -1,11 +1,6 @@
 import { VEHICLE_STATUS } from '../../constants/enums.js';
-<<<<<<< HEAD
 import { periodStart } from '../../utils/time.js';
 import { Vehicle } from '../../models/index.js';
-=======
-import { Vehicle } from '../../models/index.js';
-import { periodStart } from '../../utils/time.js';
->>>>>>> origin/minh
 
 /**
  * BR-F5: Xe tính vé tháng cho kỳ `period` ('YYYY-MM', giờ VN):

@@ -9,12 +9,8 @@ const feeTypeSchema = new Schema(
     name: { type: String, required: true },
     feeCategory: {
       type: String,
-<<<<<<< HEAD
       // ADJUSTMENT / OTHER chỉ có trên dòng thông báo phí, không phải phí cố định hằng tháng
       enum: values(FEE_CATEGORIES).filter((c) => c !== FEE_CATEGORIES.ADJUSTMENT && c !== FEE_CATEGORIES.OTHER),
-=======
-      enum: values(FEE_CATEGORIES).filter((c) => c !== FEE_CATEGORIES.ADJUSTMENT),
->>>>>>> origin/minh
       required: true,
     },
     calcMethod: { type: String, enum: values(FEE_CALC_METHODS), required: true },

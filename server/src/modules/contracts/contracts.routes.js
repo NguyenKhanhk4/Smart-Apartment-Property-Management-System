@@ -12,11 +12,7 @@ import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { ApiError } from '../../utils/ApiError.js';
-<<<<<<< HEAD
 import { idParams, objectId, phoneVn, ymd } from '../../utils/validators.js';
-=======
-import { idParams, objectId } from '../../utils/validators.js';
->>>>>>> origin/minh
 import * as service from './contracts.service.js';
 
 // Module A — Vũ Việt. UC-A06: Quản lý hợp đồng (Contracts)
@@ -37,15 +33,9 @@ const personSchema = Joi.object({
   userId: objectId(),
   fullName: Joi.string().trim().min(2).max(100),
   email: Joi.string().trim().email(),
-<<<<<<< HEAD
   phone: phoneVn(),
   idNumber: Joi.string().trim().allow('', null),
   dateOfBirth: ymd().allow('', null),
-=======
-  phone: Joi.string().trim().allow('', null),
-  idNumber: Joi.string().trim().allow('', null),
-  dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
->>>>>>> origin/minh
 });
 
 const createContractBody = Joi.object({
@@ -182,22 +172,14 @@ router.patch(
  * /contracts/{id}/terminate:
  *   patch:
  *     tags: [Hợp đồng]
-<<<<<<< HEAD
  *     summary: Chấm dứt sớm hợp đồng (Trưởng BQL) — UC-A06
-=======
- *     summary: Chấm dứt sớm hợp đồng (Lễ tân) — UC-A06
->>>>>>> origin/minh
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
 router.patch(
   '/:id/terminate',
   authenticate,
-<<<<<<< HEAD
   authorize('MANAGER'),
-=======
-  authorize('STAFF:RECEPTIONIST'),
->>>>>>> origin/minh
   validate({ params: idParams }),
   async (req, res) => {
     const result = await service.terminateContract(req.validated.params.id, req.user, req.ip);

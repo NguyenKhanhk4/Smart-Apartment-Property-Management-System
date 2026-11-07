@@ -15,10 +15,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
-<<<<<<< HEAD
 import { PHONE_RULES } from '../../utils/phone';
-=======
->>>>>>> origin/minh
 import {
   CheckCircleOutlined,
   CopyOutlined,
@@ -50,11 +47,7 @@ const INTERNAL_ROLES = {
   BOARD: ROLES.BOARD,
 };
 
-<<<<<<< HEAD
 // Modal tạo mới tài khoản nội bộ (Trưởng BQL)
-=======
-// Modal tạo mới tài khoản nội bộ (Admin)
->>>>>>> origin/minh
 function CreateAccountModal({ open, onClose, onDone }) {
   const [form] = Form.useForm();
   const selectedRole = Form.useWatch('role', form);
@@ -122,11 +115,7 @@ function CreateAccountModal({ open, onClose, onDone }) {
           <Form.Item
             name="phone"
             label="Số điện thoại"
-<<<<<<< HEAD
             rules={PHONE_RULES}
-=======
-            rules={[{ pattern: /^(0|\+84)\d{9,10}$/, message: 'Số điện thoại không hợp lệ' }]}
->>>>>>> origin/minh
           >
             <Input placeholder="vd: 0901234567" />
           </Form.Item>
@@ -199,11 +188,7 @@ function CreateAccountModal({ open, onClose, onDone }) {
   );
 }
 
-<<<<<<< HEAD
 // Modal sửa tài khoản nội bộ (Trưởng BQL)
-=======
-// Modal sửa tài khoản nội bộ (Admin)
->>>>>>> origin/minh
 function EditAccountModal({ user, open, onClose, onDone }) {
   const [form] = Form.useForm();
   const selectedRole = Form.useWatch('role', form);
@@ -240,12 +225,8 @@ function EditAccountModal({ user, open, onClose, onDone }) {
           roleTitle: user?.roleTitle,
           boardTitle: user?.boardTitle,
         }}
-<<<<<<< HEAD
         // Email chỉ hiển thị, không đổi được → không gửi lên server
         onFinish={({ email: _email, ...v }) => updateAccount(v).catch(() => {})}
-=======
-        onFinish={(v) => updateAccount(v).catch(() => {})}
->>>>>>> origin/minh
       >
         <Form.Item name="email" label="Email (Không thể thay đổi)">
           <Input disabled />
@@ -262,11 +243,7 @@ function EditAccountModal({ user, open, onClose, onDone }) {
         <Form.Item
           name="phone"
           label="Số điện thoại"
-<<<<<<< HEAD
           rules={PHONE_RULES}
-=======
-          rules={[{ pattern: /^(0|\+84)\d{9,10}$/, message: 'Số điện thoại không hợp lệ' }]}
->>>>>>> origin/minh
         >
           <Input />
         </Form.Item>
@@ -303,15 +280,9 @@ function EditAccountModal({ user, open, onClose, onDone }) {
   );
 }
 
-<<<<<<< HEAD
 // UC-A04: Quản lý danh sách tài khoản nội bộ (/app/internal-accounts, Trưởng BQL)
 export default function InternalAccountsPage() {
   const { user: currentUser } = useAuth();
-=======
-// UC-A04: Quản lý danh sách tài khoản nội bộ (/app/internal-accounts, ADMIN)
-export default function InternalAccountsPage() {
-  const { user: currentAdmin } = useAuth();
->>>>>>> origin/minh
   const { message } = App.useApp();
 
   const [filters, setFilters] = useState({ page: 1, limit: 15 });
@@ -349,11 +320,7 @@ export default function InternalAccountsPage() {
       render: (text, record) => (
         <div>
           <span className="font-semibold text-ink dark:text-[#EEF1F6]">{text}</span>
-<<<<<<< HEAD
           {record._id === currentUser?.id && (
-=======
-          {record._id === currentAdmin?.id && (
->>>>>>> origin/minh
             <Tag color="cyan" className="ml-2 text-[10px]">
               Tài khoản của bạn
             </Tag>
@@ -396,11 +363,7 @@ export default function InternalAccountsPage() {
       key: 'action',
       width: 140,
       render: (_, record) => {
-<<<<<<< HEAD
         const isSelf = record._id === currentUser?.id;
-=======
-        const isSelf = record._id === currentAdmin?.id;
->>>>>>> origin/minh
 
         return (
           <Space orientation="horizontal" size="small">

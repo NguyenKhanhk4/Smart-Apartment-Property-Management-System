@@ -10,16 +10,10 @@ import SurfaceCard from '../../components/resident/SurfaceCard';
 import { AMENITY_ACCESS_MODES } from '../../constants/enums';
 import { useApi } from '../../hooks/useApi';
 import { useResident } from '../../hooks/useResident';
-<<<<<<< HEAD
 import { formatDate, formatMoney } from '../../utils/format';
 import { usePurchasePass } from '../amenityPasses/usePurchasePass';
 import { passSpan } from './passUtils';
 import { holdLabel } from './bookingHelpers';
-=======
-import { formatMoney } from '../../utils/format';
-import { usePurchasePass } from '../amenityPasses/usePurchasePass';
-import { passSpan } from './passUtils';
->>>>>>> origin/minh
 
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const DEFAULT_ADVANCE_DAYS = 14;
@@ -117,15 +111,10 @@ function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) 
   const submit = async () => {
     setBooking(true);
     try {
-<<<<<<< HEAD
       const { data: booking } = await bookingApi.create({ apartmentId, amenityId: amenity._id, date, slotStart: picked });
       // Giữ chỗ chờ thanh toán (khi Ban quản lý bật): nhắc thanh toán trước giờ hết hạn
       if (booking?.status === 'PENDING_PAYMENT') message.warning(`${holdLabel(booking.holdExpiresAt)}. Vui lòng thanh toán tại quầy lễ tân.`, 6);
       else message.success('Đặt chỗ thành công');
-=======
-      await bookingApi.create({ apartmentId, amenityId: amenity._id, date, slotStart: picked });
-      message.success('Đặt chỗ thành công');
->>>>>>> origin/minh
       navigate(`/r/amenities?tab=history&apartmentId=${apartmentId}`, { viewTransition: true });
     } catch (e) {
       message.error(e.message);
@@ -206,11 +195,7 @@ function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) 
       {slot ? (
         <div className="flex flex-col gap-3 border-t border-r-divider pt-4">
           <div className="text-sm">
-<<<<<<< HEAD
             <b>{amenity.name}</b> · {formatDate(date)} · {slot.slotStart}–{slot.slotEnd}
-=======
-            <b>{amenity.name}</b> · {dayjs(date).format('DD/MM/YYYY')} · {slot.slotStart}–{slot.slotEnd}
->>>>>>> origin/minh
           </div>
 
           {slot.usesPass && <div className="px-3.5 py-3 rounded-xl bg-r-ok-bg text-r-ok-fg text-sm">Miễn phí theo gói tháng của bạn.</div>}

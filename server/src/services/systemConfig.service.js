@@ -1,15 +1,8 @@
-<<<<<<< HEAD
 import { CONFIG_DEFAULTS, DEFAULT_CONFIGS } from '../constants/enums.js';
 import { SystemConfig } from '../models/index.js';
 
 export { CONFIG_DEFAULTS };
 const DEFAULTS = CONFIG_DEFAULTS;
-=======
-import { DEFAULT_CONFIGS } from '../constants/enums.js';
-import { SystemConfig } from '../models/index.js';
-
-const DEFAULTS = Object.fromEntries(DEFAULT_CONFIGS.map((c) => [c.key, c.value]));
->>>>>>> origin/minh
 
 /**
  * Đọc tham số hệ thống (system_configs). Chưa có trong DB thì dùng giá trị mặc định ở

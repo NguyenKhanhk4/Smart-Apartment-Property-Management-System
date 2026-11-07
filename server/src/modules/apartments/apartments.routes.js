@@ -12,11 +12,7 @@ import { listApartmentResidents } from '../residents/residents.service.js';
 
 // Module A — Vũ Việt. UC-A05, UC-A07: Quản lý căn hộ & Cư dân
 const router = Router();
-<<<<<<< HEAD
 const VIEWERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
-=======
-const VIEWERS = ['ADMIN', 'MANAGER', 'STAFF:RECEPTIONIST'];
->>>>>>> origin/minh
 
 const listQuery = Joi.object({
   ...paginationQuery,
@@ -107,20 +103,12 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
  * /apartments:
  *   post:
  *     tags: [Tòa nhà & Căn hộ]
-<<<<<<< HEAD
  *     summary: Tạo mới căn hộ với trạng thái VACANT (Trưởng BQL) — UC-A05
-=======
- *     summary: Tạo mới căn hộ với trạng thái VACANT (Admin) — UC-A05
->>>>>>> origin/minh
  */
 router.post(
   '/',
   authenticate,
-<<<<<<< HEAD
   authorize('MANAGER'),
-=======
-  authorize('ADMIN'),
->>>>>>> origin/minh
   validate({ body: createApartmentBody }),
   async (req, res) => {
     const apartment = await service.createApartment(req.validated.body, req.user, req.ip);
@@ -133,22 +121,14 @@ router.post(
  * /apartments/{id}:
  *   put:
  *     tags: [Tòa nhà & Căn hộ]
-<<<<<<< HEAD
  *     summary: Cập nhật thông tin căn hộ (Trưởng BQL, không cho sửa status) — UC-A05
-=======
- *     summary: Cập nhật thông tin căn hộ (Admin, không cho sửa status) — UC-A05
->>>>>>> origin/minh
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
 router.put(
   '/:id',
   authenticate,
-<<<<<<< HEAD
   authorize('MANAGER'),
-=======
-  authorize('ADMIN'),
->>>>>>> origin/minh
   validate({ params: idParams, body: updateApartmentBody }),
   async (req, res) => {
     const apartment = await service.updateApartment(
@@ -166,22 +146,14 @@ router.put(
  * /apartments/{id}:
  *   delete:
  *     tags: [Tòa nhà & Căn hộ]
-<<<<<<< HEAD
  *     summary: Xóa căn hộ chưa có hợp đồng/cư dân/xe (Trưởng BQL) — UC-A05
-=======
- *     summary: Xóa căn hộ chưa có hợp đồng/cư dân/xe (Admin) — UC-A05
->>>>>>> origin/minh
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
 router.delete(
   '/:id',
   authenticate,
-<<<<<<< HEAD
   authorize('MANAGER'),
-=======
-  authorize('ADMIN'),
->>>>>>> origin/minh
   validate({ params: idParams }),
   async (req, res) => {
     const result = await service.deleteApartment(req.validated.params.id, req.user, req.ip);

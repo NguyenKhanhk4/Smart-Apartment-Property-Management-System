@@ -43,17 +43,11 @@ import { buildingsApi, apartmentsApi } from '../../api/moduleA.api';
 
 export default function BuildingsPage() {
   const navigate = useNavigate();
-<<<<<<< HEAD
   const { hasRole } = useAuth();
   const { message } = App.useApp();
   const isManager = hasRole('MANAGER');
   // Trang chi tiết căn hộ (route apartment-detail) chỉ dành cho Trưởng BQL / Lễ tân
   const canOpenApartment = hasRole('MANAGER', 'STAFF:RECEPTIONIST');
-=======
-  const { user } = useAuth();
-  const { message } = App.useApp();
-  const isAdmin = user?.role === 'ADMIN';
->>>>>>> origin/minh
 
   // Active tab: 'buildings' | 'apartments'
   const [activeTab, setActiveTab] = useState('buildings');
@@ -229,11 +223,7 @@ export default function BuildingsPage() {
       const res = await apartmentsApi.getById(id);
       setSelectedApartment(res.data);
     } catch (err) {
-<<<<<<< HEAD
       message.error(err?.message || 'Không thể tải chi tiết căn hộ');
-=======
-      message.error(err?.response?.data?.message || 'Không thể tải chi tiết căn hộ');
->>>>>>> origin/minh
       setDetailModalOpen(false);
     } finally {
       setLoadingDetail(false);
@@ -275,11 +265,7 @@ export default function BuildingsPage() {
       width: 130,
       render: (count) => <Badge count={count ?? 0} showZero overflowCount={999} style={{ backgroundColor: '#108ee9' }} />,
     },
-<<<<<<< HEAD
     ...(isManager
-=======
-    ...(isAdmin
->>>>>>> origin/minh
       ? [
           {
             title: 'Thao tác',
@@ -305,11 +291,7 @@ export default function BuildingsPage() {
                   okText="Xóa"
                   cancelText="Hủy"
                   okButtonProps={{ danger: true, disabled: record.apartmentCount > 0 }}
-<<<<<<< HEAD
                   onConfirm={() => deleteBuilding(record._id).catch(() => {})}
-=======
-                  onConfirm={() => deleteBuilding(record._id)}
->>>>>>> origin/minh
                 >
                   <Button size="small" type="text" danger icon={<DeleteOutlined />}>
                     Xóa
@@ -329,7 +311,6 @@ export default function BuildingsPage() {
       dataIndex: 'code',
       key: 'code',
       width: 120,
-<<<<<<< HEAD
       render: (code, record) =>
         canOpenApartment ? (
           <button
@@ -342,17 +323,6 @@ export default function BuildingsPage() {
         ) : (
           <span className="font-semibold">{code}</span>
         ),
-=======
-      render: (code, record) => (
-        <button
-          type="button"
-          onClick={() => navigate(`/app/apartments/${record._id}`)}
-          className="font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer bg-transparent border-0 p-0 text-left"
-        >
-          {code}
-        </button>
-      ),
->>>>>>> origin/minh
     },
     {
       title: 'Tòa nhà',
@@ -396,11 +366,7 @@ export default function BuildingsPage() {
           >
             Chi tiết
           </Button>
-<<<<<<< HEAD
           {isManager && (
-=======
-          {isAdmin && (
->>>>>>> origin/minh
             <>
               <Button
                 size="small"
@@ -416,11 +382,7 @@ export default function BuildingsPage() {
                 okText="Xóa"
                 cancelText="Hủy"
                 okButtonProps={{ danger: true }}
-<<<<<<< HEAD
                 onConfirm={() => deleteApartment(record._id).catch(() => {})}
-=======
-                onConfirm={() => deleteApartment(record._id)}
->>>>>>> origin/minh
               >
                 <Button size="small" type="text" danger icon={<DeleteOutlined />}>
                   Xóa
@@ -450,11 +412,7 @@ export default function BuildingsPage() {
             >
               Làm mới
             </Button>
-<<<<<<< HEAD
             {isManager && activeTab === 'buildings' && (
-=======
-            {isAdmin && activeTab === 'buildings' && (
->>>>>>> origin/minh
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -463,11 +421,7 @@ export default function BuildingsPage() {
                 Thêm tòa nhà
               </Button>
             )}
-<<<<<<< HEAD
             {isManager && activeTab === 'apartments' && (
-=======
-            {isAdmin && activeTab === 'apartments' && (
->>>>>>> origin/minh
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -764,7 +718,6 @@ export default function BuildingsPage() {
         open={detailModalOpen}
         onCancel={() => setDetailModalOpen(false)}
         footer={[
-<<<<<<< HEAD
           canOpenApartment && (
             <Button
               key="manage"
@@ -778,19 +731,6 @@ export default function BuildingsPage() {
               Quản lý nhân khẩu & Hợp đồng
             </Button>
           ),
-=======
-          <Button
-            key="manage"
-            type="primary"
-            icon={<TeamOutlined />}
-            onClick={() => {
-              setDetailModalOpen(false);
-              navigate(`/app/apartments/${selectedApartment?._id}`);
-            }}
-          >
-            Quản lý nhân khẩu & Hợp đồng
-          </Button>,
->>>>>>> origin/minh
           <Button key="close" onClick={() => setDetailModalOpen(false)}>
             Đóng
           </Button>,

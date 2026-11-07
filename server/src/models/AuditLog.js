@@ -1,21 +1,12 @@
-<<<<<<< HEAD
 import { AUDIT_ACTIONS, values } from '../constants/enums.js';
-=======
->>>>>>> origin/minh
 import { ObjectId, Schema, model, schemaOptions } from './_shared.js';
 
 // audit_logs — nhật ký hành động (NFR-05, BR-O11). Chỉ ghi thêm, không sửa/xóa.
 const auditLogSchema = new Schema(
   {
-<<<<<<< HEAD
     action: { type: String, enum: values(AUDIT_ACTIONS), required: true },
     performedBy: { type: ObjectId, ref: 'User', default: null }, // null = hệ thống
     targetType: String, // tên collection — dùng AUDIT_TARGETS (dữ liệu cũ có thể còn tên model, vd 'Contract')
-=======
-    action: { type: String, required: true },
-    performedBy: { type: ObjectId, ref: 'User', default: null }, // null = hệ thống
-    targetType: String, // tên collection, vd 'tickets'
->>>>>>> origin/minh
     targetId: { type: ObjectId, default: null },
     metadata: Schema.Types.Mixed,
     ip: String,

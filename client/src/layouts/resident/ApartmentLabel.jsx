@@ -30,7 +30,4 @@ export default function ApartmentLabel({ className = 'text-[13px] text-r-muted' 
     </Dropdown>
   );
 }
-<<<<<<< HEAD
 
-=======
->>>>>>> origin/minh

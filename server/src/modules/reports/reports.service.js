@@ -1,7 +1,6 @@
 import mongoose from 'mongoose';
 import {
   APARTMENT_STATUS,
-<<<<<<< HEAD
   BOOKING_BILLABLE_STATUSES,
   BOOKING_LEGACY_STATUSES,
   BOOKING_STATUS,
@@ -15,13 +14,6 @@ import {
   REVIEW_STATUS,
   TICKET_OPEN_STATUSES,
   TICKET_SLA_STATUSES,
-=======
-  BOOKING_STATUS,
-  FUND_TX_TYPES,
-  INVOICE_STATUS,
-  PAYMENT_STATUS,
-  REVIEW_STATUS,
->>>>>>> origin/minh
   TICKET_STATUS,
   WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
@@ -71,12 +63,8 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
     throw ApiError.badRequest(`Khoảng thời gian tối đa ${MAX_RANGE_MONTHS} tháng, hãy thu hẹp lại`);
   }
 
-<<<<<<< HEAD
   // Nháp / Chờ duyệt chưa gửi cư dân → không tính là đã phát hành
   const match = { period: { $gte: from, $lte: to }, status: { $nin: [...INVOICE_UNPUBLISHED_STATUSES] } };
-=======
-  const match = { period: { $gte: from, $lte: to } };
->>>>>>> origin/minh
   if (buildingId) match.buildingId = oid(buildingId);
   if (feeCategory) match['items.feeCategory'] = feeCategory;
 
@@ -92,7 +80,6 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
       }
     : '$totalAmount';
   const notCancelled = { $ne: ['$status', INVOICE_STATUS.CANCELLED] };
-<<<<<<< HEAD
   const isOutstanding = { $in: ['$status', [...INVOICE_OUTSTANDING_STATUSES]] };
   const sumIf = (cond, value = '$amount') => ({ $sum: { $cond: [cond, value, 0] } });
   // Trả một phần: tiền đã thu chia theo tỉ lệ cho từng nhóm phí (đã thu / tổng của thông báo)
@@ -103,27 +90,13 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
     collected: sumIf(notCancelled, '$paid'),
     outstanding: sumIf(isOutstanding, unpaidOf),
     overdueAmount: sumIf({ $eq: ['$status', INVOICE_STATUS.OVERDUE] }, unpaidOf),
-=======
-  const isPaid = { $eq: ['$status', INVOICE_STATUS.PAID] };
-  const isOutstanding = { $in: ['$status', [INVOICE_STATUS.UNPAID, INVOICE_STATUS.OVERDUE]] };
-  const sumIf = (cond, value = '$amount') => ({ $sum: { $cond: [cond, value, 0] } });
-  const moneyGroup = {
-    billed: sumIf(notCancelled),
-    collected: sumIf(isPaid),
-    outstanding: sumIf(isOutstanding),
-    overdueAmount: sumIf({ $eq: ['$status', INVOICE_STATUS.OVERDUE] }),
->>>>>>> origin/minh
     invoiceCount: sumIf(notCancelled, 1),
   };
 
   const [facets] = await Invoice.aggregate([
     { $match: match },
-<<<<<<< HEAD
     { $addFields: { amount: amountExpr, paidRatio } },
     { $addFields: { paid: { $round: [{ $multiply: ['$amount', '$paidRatio'] }, 0] } } },
-=======
-    { $addFields: { amount: amountExpr } },
->>>>>>> origin/minh
     {
       $facet: {
         byStatus: [{ $group: { _id: '$status', count: { $sum: 1 }, amount: { $sum: '$amount' } } }],
@@ -144,17 +117,12 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
             $group: {
               _id: '$items.feeCategory',
               billed: { $sum: '$items.amount' },
-<<<<<<< HEAD
               collected: { $sum: { $round: [{ $multiply: ['$items.amount', '$paidRatio'] }, 0] } },
               outstanding: {
                 $sum: {
                   $cond: [isOutstanding, { $round: [{ $multiply: ['$items.amount', { $subtract: [1, '$paidRatio'] }] }, 0] }, 0],
                 },
               },
-=======
-              collected: { $sum: { $cond: [isPaid, '$items.amount', 0] } },
-              outstanding: { $sum: { $cond: [isOutstanding, '$items.amount', 0] } },
->>>>>>> origin/minh
             },
           },
           { $sort: { _id: 1 } },
@@ -163,7 +131,6 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
     },
   ]);
 
-<<<<<<< HEAD
   // Theo phương thức thanh toán — phần tiền giao dịch SUCCESS đã phân bổ vào thông báo phí trong kỳ
   // (một lần thu có thể trả nhiều kỳ; tiền thừa vào Số dư trả trước không tính ở đây)
   const byMethod = await Payment.aggregate([
@@ -174,15 +141,6 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
     { $match: Object.fromEntries(Object.entries(match).map(([k, v]) => [`inv.${k}`, v])) },
     { $group: { _id: '$method', payments: { $addToSet: '$_id' }, amount: { $sum: '$allocations.amount' } } },
     { $project: { count: { $size: '$payments' }, amount: 1 } },
-=======
-  // Theo phương thức thanh toán — chỉ giao dịch SUCCESS của hóa đơn trong kỳ
-  const byMethod = await Payment.aggregate([
-    { $match: { status: PAYMENT_STATUS.SUCCESS } },
-    { $lookup: { from: 'invoices', localField: 'invoiceId', foreignField: '_id', as: 'inv' } },
-    { $unwind: '$inv' },
-    { $match: Object.fromEntries(Object.entries(match).map(([k, v]) => [`inv.${k}`, v])) },
-    { $group: { _id: '$method', count: { $sum: 1 }, amount: { $sum: '$amount' } } },
->>>>>>> origin/minh
     { $sort: { amount: -1 } },
   ]);
 
@@ -200,10 +158,7 @@ export async function billingSummary({ from, to, buildingId, feeCategory }) {
       issued: Object.values(statusCount).reduce((a, b) => a + b, 0),
       paid: statusCount.PAID,
       unpaid: statusCount.UNPAID,
-<<<<<<< HEAD
       partiallyPaid: statusCount.PARTIALLY_PAID,
-=======
->>>>>>> origin/minh
       overdue: statusCount.OVERDUE,
       cancelled: statusCount.CANCELLED,
       billed: totals.billed,
@@ -243,11 +198,7 @@ export async function debtReport({ buildingId }) {
         _id: '$apartmentId',
         buildingId: { $first: '$buildingId' },
         invoiceCount: { $sum: 1 },
-<<<<<<< HEAD
         outstanding: { $sum: { $subtract: ['$totalAmount', '$paidAmount'] } },
-=======
-        outstanding: { $sum: '$totalAmount' },
->>>>>>> origin/minh
         oldestDueDate: { $min: '$dueDate' },
         periods: { $push: '$period' },
       },
@@ -404,10 +355,6 @@ export async function ticketReport({ from, to, buildingId }) {
   const match = { createdAt: { $gte: start, $lte: end } };
   if (buildingId) match.buildingId = oid(buildingId);
   const now = new Date();
-<<<<<<< HEAD
-=======
-  const openStatuses = [TICKET_STATUS.NEW, TICKET_STATUS.ASSIGNED, TICKET_STATUS.IN_PROGRESS];
->>>>>>> origin/minh
 
   const [facets] = await Ticket.aggregate([
     { $match: match },
@@ -423,11 +370,7 @@ export async function ticketReport({ from, to, buildingId }) {
           { $sort: { count: -1 } },
         ],
         overdue: [
-<<<<<<< HEAD
           { $match: { status: { $in: TICKET_SLA_STATUSES }, dueDate: { $lt: now } } },
-=======
-          { $match: { status: { $in: openStatuses }, dueDate: { $lt: now } } },
->>>>>>> origin/minh
           { $count: 'count' },
         ],
         resolution: [
@@ -477,11 +420,7 @@ export async function ticketReport({ from, to, buildingId }) {
   const res = facets.resolution[0];
   return {
     total,
-<<<<<<< HEAD
     open: TICKET_OPEN_STATUSES.reduce((s, k) => s + (byStatus[k] ?? 0), 0),
-=======
-    open: openStatuses.reduce((s, k) => s + (byStatus[k] ?? 0), 0),
->>>>>>> origin/minh
     waitingConfirm: byStatus.WAITING_CONFIRM ?? 0,
     closed: byStatus.CLOSED ?? 0,
     rejected: byStatus.REJECTED ?? 0,
@@ -569,7 +508,6 @@ export async function amenityUsage({ from, to, amenityId }) {
   }
   const match = { date: { $gte: start, $lte: end } };
   if (amenityId) match.amenityId = oid(amenityId);
-<<<<<<< HEAD
   // Lượt giữ slot thật (tính phí, BR-O5/O16): đã xác nhận, đang dùng, đã dùng, không đến
   const USED = BOOKING_BILLABLE_STATUSES;
   // Cột theo trạng thái — bỏ trạng thái luồng duyệt cũ (PENDING) ; REJECTED giữ riêng cho rejectRate của dữ liệu cũ
@@ -577,9 +515,6 @@ export async function amenityUsage({ from, to, amenityId }) {
     ...Object.values(BOOKING_STATUS).filter((s) => !BOOKING_LEGACY_STATUSES.includes(s)),
     BOOKING_STATUS.REJECTED,
   ];
-=======
-  const USED = [BOOKING_STATUS.APPROVED, BOOKING_STATUS.COMPLETED];
->>>>>>> origin/minh
 
   const [facets] = await Booking.aggregate([
     { $match: match },
@@ -591,24 +526,14 @@ export async function amenityUsage({ from, to, amenityId }) {
               _id: '$amenityId',
               total: { $sum: 1 },
               ...Object.fromEntries(
-<<<<<<< HEAD
                 STATUS_COLUMNS.map((s) => [
-=======
-                Object.values(BOOKING_STATUS).map((s) => [
->>>>>>> origin/minh
                   s.toLowerCase(),
                   { $sum: { $cond: [{ $eq: ['$status', s] }, 1, 0] } },
                 ]),
               ),
-<<<<<<< HEAD
               // Doanh thu = phí của booking đã giữ slot (cùng nhóm với phí gộp hóa đơn — BOOKING_BILLABLE_STATUSES)
               revenue: {
                 $sum: { $cond: [{ $in: ['$status', USED] }, '$fee', 0] },
-=======
-              // BR-O5: chỉ COMPLETED mới tính là đã sử dụng/được tính phí
-              revenue: {
-                $sum: { $cond: [{ $eq: ['$status', BOOKING_STATUS.COMPLETED] }, '$fee', 0] },
->>>>>>> origin/minh
               },
             },
           },
@@ -661,10 +586,7 @@ export async function amenityUsage({ from, to, amenityId }) {
     ...r,
     cancelRate: rate(r.cancelled, r.total),
     rejectRate: rate(r.rejected, r.total),
-<<<<<<< HEAD
     noShowRate: rate(r.no_show, r.total),
-=======
->>>>>>> origin/minh
   }));
   const sum = (k) => byAmenity.reduce((s, a) => s + a[k], 0);
   const bySlot = facets.bySlot.map(({ _id, ...r }) => ({
@@ -681,13 +603,9 @@ export async function amenityUsage({ from, to, amenityId }) {
     rejected: sum('rejected'),
     revenue: sum('revenue'),
     cancelRate: rate(sum('cancelled'), sum('total')),
-<<<<<<< HEAD
     rejectRate: rate(sum('rejected'), sum('total')), // chỉ còn ý nghĩa với dữ liệu luồng duyệt cũ
     noShow: sum('no_show'),
     noShowRate: rate(sum('no_show'), sum('total')),
-=======
-    rejectRate: rate(sum('rejected'), sum('total')),
->>>>>>> origin/minh
     mostUsed: byAmenity[0] ? { amenityId: byAmenity[0].amenityId, name: byAmenity[0].name } : null,
     peakSlot: peak?.slotStart ?? null,
     byAmenity,

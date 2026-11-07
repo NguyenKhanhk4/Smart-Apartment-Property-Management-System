@@ -4,12 +4,8 @@ import { notifyApartment } from '../../services/notification.service.js';
 import { getActiveApartmentIds, resolveResidentApartment } from '../../services/residency.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
-<<<<<<< HEAD
 import { HOUR_MS, endOfVnDay, fmtTimeVn, startOfVnDay } from '../../utils/time.js';
 import { buildIdNumberFields, decryptIdNumber, maskIdNumber } from '../residents/idCrypto.js';
-=======
-import { HOUR_MS, endOfVnDay, startOfVnDay } from '../../utils/time.js';
->>>>>>> origin/minh
 
 const POPULATE = [
   { path: 'apartmentId', select: 'code buildingId', populate: { path: 'buildingId', select: 'name' } },
@@ -17,7 +13,6 @@ const POPULATE = [
   { path: 'recordedBy', select: 'fullName' },
 ];
 
-<<<<<<< HEAD
 /**
  * CCCD khách lưu mã hóa (idNumberEnc + idNumberHash, không select mặc định) như CCCD cư dân.
  * API chỉ trả số đã che; bản ghi cũ còn idNumber dạng rõ cũng được che khi trả về.
@@ -34,10 +29,6 @@ export function presentGuest(log) {
 
 async function findOr404(id) {
   const log = await GuestLog.findById(id).select('+idNumberEnc');
-=======
-async function findOr404(id) {
-  const log = await GuestLog.findById(id);
->>>>>>> origin/minh
   if (!log) throw ApiError.notFound('Không tìm thấy bản ghi khách');
   return log;
 }
@@ -48,22 +39,14 @@ export async function registerGuest(user, data) {
   if (data.expectedTime.getTime() < Date.now() - HOUR_MS) {
     throw ApiError.badRequest('Thời gian dự kiến không được ở quá khứ');
   }
-<<<<<<< HEAD
   const log = await GuestLog.create({
     ...withIdFields(data),
-=======
-  return GuestLog.create({
-    ...data,
->>>>>>> origin/minh
     apartmentId: apartment._id,
     buildingId: apartment.buildingId,
     status: GUEST_STATUS.EXPECTED,
     registeredBy: user.id,
   });
-<<<<<<< HEAD
   return presentGuest(log);
-=======
->>>>>>> origin/minh
 }
 
 export async function cancelRegistration(user, id) {
@@ -100,15 +83,11 @@ export async function listGuests(user, query) {
     filter.$and = [...(filter.$or ? [{ $or: filter.$or }] : []), { $or: or }];
     delete filter.$or;
   }
-<<<<<<< HEAD
   const { items, pagination } = await paginate(GuestLog, filter, { ...query, sort: query.sort ?? '-createdAt' }, {
     populate: POPULATE,
     select: '+idNumberEnc',
   });
   return { items: items.map(presentGuest), pagination };
-=======
-  return paginate(GuestLog, filter, { ...query, sort: query.sort ?? '-createdAt' }, { populate: POPULATE });
->>>>>>> origin/minh
 }
 
 // ===== UC-E08: Bảo vệ ghi nhận khách đến/rời =====
@@ -124,19 +103,11 @@ export async function checkIn(user, id, { note }) {
   await notifyApartment(log.apartmentId, {
     type: NOTIFICATION_TYPES.GUEST,
     title: 'Khách của bạn đã đến',
-<<<<<<< HEAD
     content: `${log.guestName} đã vào tòa nhà lúc ${fmtTimeVn(log.checkInTime)}.`,
     refId: log._id,
     link: '/r/guests',
   });
   return presentGuest(log);
-=======
-    content: `${log.guestName} đã vào tòa nhà lúc ${log.checkInTime.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}.`,
-    refId: log._id,
-    link: '/r/guests',
-  });
-  return log;
->>>>>>> origin/minh
 }
 
 /** BR-O10: khách vãng lai — bắt buộc tên khách + căn hộ đến thăm */
@@ -145,11 +116,7 @@ export async function walkIn(user, data) {
   if (!apartment) throw ApiError.badRequest('Căn hộ đến thăm không tồn tại');
   const now = new Date();
   const log = await GuestLog.create({
-<<<<<<< HEAD
     ...withIdFields(data),
-=======
-    ...data,
->>>>>>> origin/minh
     buildingId: apartment.buildingId,
     status: GUEST_STATUS.CHECKED_IN,
     isWalkIn: true,
@@ -164,11 +131,7 @@ export async function walkIn(user, data) {
     refId: log._id,
     link: '/r/guests',
   });
-<<<<<<< HEAD
   return presentGuest(log);
-=======
-  return log;
->>>>>>> origin/minh
 }
 
 export async function checkOut(user, id) {
@@ -178,9 +141,5 @@ export async function checkOut(user, id) {
   log.checkOutTime = new Date();
   log.recordedBy ??= user.id;
   await log.save();
-<<<<<<< HEAD
   return presentGuest(log);
-=======
-  return log;
->>>>>>> origin/minh
 }

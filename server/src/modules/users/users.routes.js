@@ -7,11 +7,7 @@ import { validate } from '../../middlewares/validate.js';
 import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
-<<<<<<< HEAD
 import { idParams, phoneVn, ymd } from '../../utils/validators.js';
-=======
-import { idParams } from '../../utils/validators.js';
->>>>>>> origin/minh
 import * as usersService from './users.service.js';
 
 // Module A — Vũ Việt. UC-A03 (Hồ sơ cá nhân), UC-A04 (Quản lý tài khoản nội bộ)
@@ -19,13 +15,8 @@ const router = Router();
 
 const updateMeBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100),
-<<<<<<< HEAD
   phone: phoneVn(),
   dateOfBirth: ymd().allow('', null),
-=======
-  phone: Joi.string().trim().pattern(/^(0|\+84)\d{9,10}$/).allow('', null),
-  dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
->>>>>>> origin/minh
 }).min(1);
 
 const changePasswordBody = Joi.object({
@@ -59,11 +50,7 @@ const listInternalQuery = Joi.object({
 const createInternalBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100).required(),
   email: Joi.string().trim().lowercase().email().required(),
-<<<<<<< HEAD
   phone: phoneVn().required(),
-=======
-  phone: Joi.string().trim().pattern(/^(0|\+84)\d{9,10}$/).allow('', null),
->>>>>>> origin/minh
   role: Joi.string()
     .valid(ROLES.MANAGER, ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD)
     .required(),
@@ -81,11 +68,7 @@ const createInternalBody = Joi.object({
 
 const updateInternalBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100),
-<<<<<<< HEAD
   phone: phoneVn(),
-=======
-  phone: Joi.string().trim().pattern(/^(0|\+84)\d{9,10}$/).allow('', null),
->>>>>>> origin/minh
   role: Joi.string().valid(ROLES.MANAGER, ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD),
   roleTitle: Joi.string().valid(...values(ROLE_TITLES), null),
   boardTitle: Joi.string().valid(...values(BOARD_TITLES), null),
@@ -177,11 +160,7 @@ router.patch('/me/password', authenticate, validate({ body: changePasswordBody }
   ok(res, result, 'Đổi mật khẩu thành công');
 });
 
-<<<<<<< HEAD
 // ===== Quản lý tài khoản nội bộ (UC-A04, Trưởng BQL) =====
-=======
-// ===== Quản lý tài khoản nội bộ (UC-A04, ADMIN) =====
->>>>>>> origin/minh
 
 /**
  * @openapi
@@ -193,11 +172,7 @@ router.patch('/me/password', authenticate, validate({ body: changePasswordBody }
  *       200:
  *         description: Danh sách tài khoản phân trang
  */
-<<<<<<< HEAD
 router.get('/internal', authenticate, authorize('MANAGER'), validate({ query: listInternalQuery }), async (req, res) => {
-=======
-router.get('/internal', authenticate, authorize('ADMIN'), validate({ query: listInternalQuery }), async (req, res) => {
->>>>>>> origin/minh
   const { items, pagination } = await usersService.listInternal(req.validated.query);
   paginated(res, items, pagination);
 });
@@ -214,11 +189,7 @@ router.get('/internal', authenticate, authorize('ADMIN'), validate({ query: list
  *         application/json:
  *           schema:
  *             type: object
-<<<<<<< HEAD
  *             required: [fullName, email, phone, role]
-=======
- *             required: [fullName, email, role]
->>>>>>> origin/minh
  *             properties:
  *               fullName: { type: string }
  *               email: { type: string }
@@ -230,11 +201,7 @@ router.get('/internal', authenticate, authorize('ADMIN'), validate({ query: list
  *       201:
  *         description: Tài khoản đã được tạo
  */
-<<<<<<< HEAD
 router.post('/internal', authenticate, authorize('MANAGER'), validate({ body: createInternalBody }), async (req, res) => {
-=======
-router.post('/internal', authenticate, authorize('ADMIN'), validate({ body: createInternalBody }), async (req, res) => {
->>>>>>> origin/minh
   const result = await usersService.createInternal(req.user, req.validated.body, { ip: req.ip });
   created(res, result, 'Tạo tài khoản nội bộ thành công');
 });
@@ -254,11 +221,7 @@ router.post('/internal', authenticate, authorize('ADMIN'), validate({ body: crea
  *       200:
  *         description: Thông tin tài khoản đã được cập nhật
  */
-<<<<<<< HEAD
 router.patch('/internal/:id', authenticate, authorize('MANAGER'), validate({ params: idParams, body: updateInternalBody }), async (req, res) => {
-=======
-router.patch('/internal/:id', authenticate, authorize('ADMIN'), validate({ params: idParams, body: updateInternalBody }), async (req, res) => {
->>>>>>> origin/minh
   const user = await usersService.updateInternal(req.user, req.validated.params.id, req.validated.body, { ip: req.ip });
   ok(res, user, 'Cập nhật tài khoản thành công');
 });
@@ -287,11 +250,7 @@ router.patch('/internal/:id', authenticate, authorize('ADMIN'), validate({ param
  *       200:
  *         description: Trạng thái tài khoản đã được cập nhật
  */
-<<<<<<< HEAD
 router.patch('/:id/status', authenticate, authorize('MANAGER'), validate({ params: idParams, body: setStatusBody }), async (req, res) => {
-=======
-router.patch('/:id/status', authenticate, authorize('ADMIN'), validate({ params: idParams, body: setStatusBody }), async (req, res) => {
->>>>>>> origin/minh
   const user = await usersService.setStatus(req.user, req.validated.params.id, req.validated.body, { ip: req.ip });
   ok(res, user, user.isActive ? 'Mở khóa tài khoản thành công' : 'Đã khóa tài khoản');
 });

@@ -1,14 +1,8 @@
 import { Router } from 'express';
 import Joi from 'joi';
-<<<<<<< HEAD
 import { validate } from '../../middlewares/validate.js';
 import { created, ok } from '../../utils/response.js';
 import { phoneVn } from '../../utils/validators.js';
-=======
-import { authenticate } from '../../middlewares/auth.js';
-import { validate } from '../../middlewares/validate.js';
-import { created, ok } from '../../utils/response.js';
->>>>>>> origin/minh
 import * as authService from './auth.service.js';
 
 // Module A — Vũ Việt. UC-A01 (Đăng ký), UC-A02 (Đăng nhập, làm mới token, đăng xuất)
@@ -17,11 +11,7 @@ const router = Router();
 const registerBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100).required(),
   email: Joi.string().trim().lowercase().email().required(),
-<<<<<<< HEAD
   phone: phoneVn().required(),
-=======
-  phone: Joi.string().trim().pattern(/^(0|\+84)\d{9,10}$/).allow('', null),
->>>>>>> origin/minh
   password: Joi.string()
     .min(8)
     .max(100)
@@ -61,11 +51,7 @@ const refreshBody = Joi.object({
  *         application/json:
  *           schema:
  *             type: object
-<<<<<<< HEAD
  *             required: [fullName, email, phone, password, confirmPassword]
-=======
- *             required: [fullName, email, password, confirmPassword]
->>>>>>> origin/minh
  *             properties:
  *               fullName: { type: string, example: "Nguyễn Văn A" }
  *               email: { type: string, format: email, example: "cudan@sapms.vn" }
@@ -137,7 +123,6 @@ router.post('/refresh', validate({ body: refreshBody }), async (req, res) => {
  * /auth/logout:
  *   post:
  *     tags: [Xác thực & Tài khoản]
-<<<<<<< HEAD
  *     summary: Đăng xuất, thu hồi refresh token trên mọi thiết bị — UC-A02
  *     security: []
  *     requestBody:
@@ -155,14 +140,6 @@ router.post('/refresh', validate({ body: refreshBody }), async (req, res) => {
  */
 router.post('/logout', validate({ body: refreshBody }), async (req, res) => {
   await authService.logout(req.validated.body);
-=======
- *     summary: Đăng xuất hệ thống — UC-A02
- *     responses:
- *       200:
- *         description: Đăng xuất thành công
- */
-router.post('/logout', authenticate, (_req, res) => {
->>>>>>> origin/minh
   ok(res, null, 'Đăng xuất thành công');
 });
 

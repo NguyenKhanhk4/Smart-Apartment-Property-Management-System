@@ -6,21 +6,14 @@ import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { Amenity, Apartment, Building } from '../../models/index.js';
 import { getActiveApartmentIds } from '../../services/residency.service.js';
-<<<<<<< HEAD
 import { visibilityFilter } from '../amenities/amenities.service.js';
-=======
->>>>>>> origin/minh
 import { escapeRegex } from '../../utils/pagination.js';
 import { ok } from '../../utils/response.js';
 import { objectId } from '../../utils/validators.js';
 
 // Danh sách rút gọn cho ô chọn (Select) ở frontend — chỉ đọc, không thay thế API CRUD của Module A/D.
 const router = Router();
-<<<<<<< HEAD
 const INTERNAL = ['STAFF', 'ACCOUNTANT', 'MANAGER', 'BOARD'];
-=======
-const INTERNAL = ['STAFF', 'ACCOUNTANT', 'MANAGER', 'BOARD', 'ADMIN'];
->>>>>>> origin/minh
 
 /**
  * @openapi
@@ -72,18 +65,11 @@ router.get(
  * /lookups/amenities:
  *   get:
  *     tags: [Lookup]
-<<<<<<< HEAD
  *     summary: Danh sách tiện ích (id, tên) cho ô chọn — cư dân chỉ thấy tiện ích đang mở, dùng chung hoặc thuộc tòa mình
  */
 router.get('/amenities', authenticate, async (req, res) => {
   const filter = await visibilityFilter(req.user);
   ok(res, await Amenity.find(filter).select('name capacityPerSlot isActive').sort({ name: 1 }).lean());
-=======
- *     summary: Danh sách tiện ích (id, tên) cho bộ lọc thống kê
- */
-router.get('/amenities', authenticate, async (_req, res) => {
-  ok(res, await Amenity.find().select('name capacityPerSlot isActive').sort({ name: 1 }).lean());
->>>>>>> origin/minh
 });
 
 export default router;

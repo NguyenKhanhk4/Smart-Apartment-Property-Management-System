@@ -12,11 +12,7 @@ import { csvEnum, idParams, objectId } from '../../utils/validators.js';
 import { generateMaintenanceWorkOrders } from './workOrders.jobs.js';
 import * as service from './workOrders.service.js';
 
-<<<<<<< HEAD
 // Người 1 — Vũ Việt (Mô đun 10). UC-D02: tự động tạo work order; UC-D03: danh sách, phân công / giao lại.
-=======
-// Module D — Thanh Bình. UC-D02: tự động tạo work order; UC-D03: danh sách, phân công / giao lại.
->>>>>>> origin/minh
 // Thứ tự khai báo: đường dẫn cố định (/assignees, /jobs/...) phải đứng TRƯỚC /:id.
 const router = Router();
 const VIEWERS = ['MANAGER', 'STAFF:TECHNICIAN'];
@@ -95,11 +91,7 @@ router.get('/assignees', authenticate, authorize('MANAGER'), async (_req, res) =
  *     summary: Chạy thủ công cron quét tài sản đến hạn và tạo work order bảo trì định kỳ (UC-D02), ghi cron_runs
  *     description: Trả về bản ghi cron_runs; affectedCount = số work order mới tạo.
  */
-<<<<<<< HEAD
 router.post('/jobs/generate/run', authenticate, authorize('MANAGER'), async (_req, res) =>
-=======
-router.post('/jobs/generate/run', authenticate, authorize('MANAGER', 'ADMIN'), async (_req, res) =>
->>>>>>> origin/minh
   ok(
     res,
     await runTrackedJob(CRON_JOBS.WORK_ORDER_GENERATE, () => generateMaintenanceWorkOrders(), {

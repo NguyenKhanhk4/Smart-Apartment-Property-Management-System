@@ -32,13 +32,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
-<<<<<<< HEAD
     // Lấy token trước khi xóa phiên. Tài khoản đăng nhập dev không có refresh token thì không cần gọi.
     const refreshToken = authStorage.getRefreshToken();
     if (refreshToken) authApi.logout(refreshToken).catch(() => {});
-=======
-    authApi.logout().catch(() => {});
->>>>>>> origin/minh
     authStorage.clear();
     setUser(null);
   }, []);

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { CRON_STATUS, CRON_TRIGGERS } from '../constants/enums.js';
 import { CronRun } from '../models/index.js';
 
@@ -18,18 +17,10 @@ function describeFailures(failed) {
  * Chạy 1 job và ghi `cron_runs` (Cron Run Tracker — phục vụ UC-A11).
  * `handler` trả về số bản ghi đã xử lý (affectedCount), hoặc `{ affectedCount, failed: [{ message }] }`
  * khi một số bản ghi lỗi nhưng các bản ghi khác vẫn xử lý xong → FAILED nhưng giữ affectedCount.
-=======
-import { CronRun } from '../models/index.js';
-
-/**
- * Chạy 1 job và ghi `cron_runs` (Cron Run Tracker — phục vụ UC-A11).
- * `handler` trả về số bản ghi đã xử lý (affectedCount).
->>>>>>> origin/minh
  * Dùng chung cho cả lịch tự động lẫn nút "chạy lại thủ công".
  *
  * @example await runTrackedJob('TICKET_ESCALATE', escalateOverdueTickets)
  */
-<<<<<<< HEAD
 export async function runTrackedJob(jobName, handler, { trigger = CRON_TRIGGERS.SCHEDULE } = {}) {
   const startedAt = new Date();
   const record = (fields) => CronRun.create({ jobName, trigger, startedAt, finishedAt: new Date(), ...fields }).then((r) => r.toJSON());
@@ -45,31 +36,5 @@ export async function runTrackedJob(jobName, handler, { trigger = CRON_TRIGGERS.
   } catch (err) {
     console.error(`[cron] ${jobName} lỗi:`, err);
     return record({ status: CRON_STATUS.FAILED, errorMessage: err.message });
-=======
-export async function runTrackedJob(jobName, handler, { trigger = 'SCHEDULE' } = {}) {
-  const startedAt = new Date();
-  try {
-    const affectedCount = Number(await handler()) || 0;
-    const run = await CronRun.create({
-      jobName,
-      trigger,
-      startedAt,
-      finishedAt: new Date(),
-      status: 'SUCCESS',
-      affectedCount,
-    });
-    return run.toJSON();
-  } catch (err) {
-    console.error(`[cron] ${jobName} lỗi:`, err);
-    const run = await CronRun.create({
-      jobName,
-      trigger,
-      startedAt,
-      finishedAt: new Date(),
-      status: 'FAILED',
-      errorMessage: err.message,
-    });
-    return run.toJSON();
->>>>>>> origin/minh
   }
 }

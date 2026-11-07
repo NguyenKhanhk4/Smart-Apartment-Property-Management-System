@@ -22,10 +22,7 @@ import {
   ToolOutlined,
   CoffeeOutlined,
   IdcardOutlined,
-<<<<<<< HEAD
   FileTextOutlined,
-=======
->>>>>>> origin/minh
   UsergroupAddOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -35,10 +32,7 @@ import { APARTMENT_STATUS, RELATION_TYPES } from '../../constants/enums';
 import { formatDate } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi } from '../../hooks/useApi';
-<<<<<<< HEAD
 import { useResident } from '../../hooks/useResident';
-=======
->>>>>>> origin/minh
 import { residentsApi } from '../../api/moduleA.api';
 
 export default function MyApartmentPage() {
@@ -53,7 +47,6 @@ export default function MyApartmentPage() {
   } = useApi(residentsApi.myApartments, []);
 
   const [selectedAptId, setSelectedAptId] = useState(null);
-<<<<<<< HEAD
   // Căn đang chọn đồng bộ với ô chọn căn trên header (useResident): mặc định theo header, đổi ở đây thì header đổi theo
   const { apartmentId: headerAptId, setApartmentId: setHeaderAptId } = useResident();
   const pickApartment = (id) => {
@@ -66,14 +59,6 @@ export default function MyApartmentPage() {
     [selectedAptId, headerAptId].find((id) => id && apartments.some((a) => a.apartmentId === id)) ??
     apartments[0]?.apartmentId ??
     null;
-=======
-
-  // Lấy căn hộ đang chọn hoặc mặc định căn đầu tiên
-  const activeAptId =
-    selectedAptId && apartments.some((a) => a.apartmentId === selectedAptId)
-      ? selectedAptId
-      : apartments[0]?.apartmentId ?? null;
->>>>>>> origin/minh
 
   // Căn hộ hiện tại đang chọn
   const currentApartment = apartments.find((a) => a.apartmentId === activeAptId);
@@ -134,11 +119,7 @@ export default function MyApartmentPage() {
         <div className="overflow-x-auto pb-1">
           <Segmented
             value={activeAptId}
-<<<<<<< HEAD
             onChange={pickApartment}
-=======
-            onChange={setSelectedAptId}
->>>>>>> origin/minh
             options={apartments.map((a) => ({
               label: (
                 <span className="px-2 py-1 flex items-center gap-1.5">
@@ -270,10 +251,7 @@ export default function MyApartmentPage() {
                 description={
                   <div className="text-xs text-gray-400 space-x-3 mt-0.5">
                     {m.phone && <span>SĐT: {m.phone}</span>}
-<<<<<<< HEAD
                     {m.idNumber && <span>CCCD: {m.idNumber}</span>}
-=======
->>>>>>> origin/minh
                     {m.dateOfBirth && <span>Ngày sinh: {formatDate(m.dateOfBirth)}</span>}
                     <span>Ngày dọn vào: {formatDate(m.moveInDate)}</span>
                   </div>
@@ -341,7 +319,6 @@ export default function MyApartmentPage() {
               Sổ khách
             </Button>
           </Col>
-<<<<<<< HEAD
           <Col xs={12} sm={6}>
             <Button
               block
@@ -351,8 +328,6 @@ export default function MyApartmentPage() {
               Đơn chuyển đồ
             </Button>
           </Col>
-=======
->>>>>>> origin/minh
         </Row>
       </Card>
     </div>

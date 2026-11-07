@@ -1,19 +1,11 @@
-<<<<<<< HEAD
 import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { App, Avatar, Button, Card, DatePicker, Flex, Form, Input, Modal, Popconfirm, Select, Table, Tag, Tooltip, Typography } from 'antd';
 import { DollarOutlined, LoginOutlined, PlusOutlined, ReloadOutlined, ScanOutlined, UserOutlined } from '@ant-design/icons';
-=======
-import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router';
-import { Avatar, Button, Card, DatePicker, Flex, Form, Input, Modal, Select, Table, Tag, Tooltip, Typography } from 'antd';
-import { LoginOutlined, PlusOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons';
->>>>>>> origin/minh
 import dayjs from 'dayjs';
 import { bookingApi } from '../../api/moduleD.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
-<<<<<<< HEAD
 import QrScanModal from '../../components/QrScanModal';
 import ReasonModal from '../../components/ReasonModal';
 import { BOOKING_STATUS } from '../../constants/enums';
@@ -26,13 +18,6 @@ import CounterBookingModal from './CounterBookingModal';
 import { holdLabel } from './bookingHelpers';
 
 const BS = keysOf(BOOKING_STATUS);
-=======
-import { BOOKING_STATUS } from '../../constants/enums';
-import { useAction, useApi } from '../../hooks/useApi';
-import { useAuth } from '../../hooks/useAuth';
-import { formatMoney } from '../../utils/format';
-import CounterBookingModal from './CounterBookingModal';
->>>>>>> origin/minh
 
 const AUTO_REFRESH_MS = 60 * 1000;
 const CLOCK_TICK_MS = 15 * 1000;
@@ -40,13 +25,8 @@ const hhmm = (d) => (d ? dayjs(d).format('HH:mm') : '');
 
 /** Nhãn thời gian check-in, tính theo giờ máy chủ (nowMs) chứ không theo đồng hồ máy người dùng */
 function checkInTag(b, nowMs) {
-<<<<<<< HEAD
   if (b.status === BS.CHECKED_IN) return <Tag color="processing">Check-in lúc {hhmm(b.checkedInAt)}</Tag>;
   if (b.status !== BS.APPROVED) return null;
-=======
-  if (b.status === 'CHECKED_IN') return <Tag color="processing">Check-in lúc {hhmm(b.checkedInAt)}</Tag>;
-  if (b.status !== 'APPROVED') return null;
->>>>>>> origin/minh
   const opens = Date.parse(b.checkIn.opensAt);
   const closes = Date.parse(b.checkIn.closesAt);
   if (nowMs < opens) return <Tag>Mở check-in lúc {hhmm(opens)}</Tag>;
@@ -54,18 +34,11 @@ function checkInTag(b, nowMs) {
   return <Tag color="red">Quá hạn check-in</Tag>;
 }
 
-<<<<<<< HEAD
 const inWindow = (b, nowMs) => b.status === BS.APPROVED && nowMs >= Date.parse(b.checkIn.opensAt) && nowMs <= Date.parse(b.checkIn.closesAt);
 
 // UC-D07 — Lịch đặt tiện ích trong ngày. Lễ tân: check-in, hủy kèm lý do, đặt hộ; Bảo vệ: chỉ check-in; Trưởng BQL: chỉ xem.
 export default function BookingSchedulePage() {
   const { message } = App.useApp();
-=======
-const inWindow = (b, nowMs) => b.status === 'APPROVED' && nowMs >= Date.parse(b.checkIn.opensAt) && nowMs <= Date.parse(b.checkIn.closesAt);
-
-// UC-D07 — Lịch đặt tiện ích trong ngày. Lễ tân: check-in, hủy kèm lý do, đặt hộ; Bảo vệ: chỉ check-in; Trưởng BQL: chỉ xem.
-export default function BookingSchedulePage() {
->>>>>>> origin/minh
   const { hasRole } = useAuth();
   const isReception = hasRole('STAFF:RECEPTIONIST');
   const canCheckIn = hasRole('STAFF:RECEPTIONIST', 'STAFF:SECURITY');
@@ -78,11 +51,7 @@ export default function BookingSchedulePage() {
   const [checkingIn, setCheckingIn] = useState(null);
   const [cancelling, setCancelling] = useState(null);
   const [counterOpen, setCounterOpen] = useState(false);
-<<<<<<< HEAD
   const [scanning, setScanning] = useState(false);
-=======
-  const [cancelForm] = Form.useForm();
->>>>>>> origin/minh
   const [checkInForm] = Form.useForm();
 
   const dateText = date.format('YYYY-MM-DD');
@@ -100,7 +69,6 @@ export default function BookingSchedulePage() {
     reload().finally(() => setSilent(false));
   }, [reload]);
 
-<<<<<<< HEAD
   usePolling(() => setClock(Date.now()), CLOCK_TICK_MS);
   usePolling(refreshSilently, AUTO_REFRESH_MS);
 
@@ -116,18 +84,6 @@ export default function BookingSchedulePage() {
     }
   };
   const [markPaid] = useAction((b) => bookingApi.markPaid(b._id), { success: 'Đã xác nhận thu tiền', onDone: () => refreshSilently() });
-=======
-  useEffect(() => {
-    const tick = setInterval(() => setClock(Date.now()), CLOCK_TICK_MS);
-    const refresh = setInterval(() => {
-      if (!document.hidden) refreshSilently();
-    }, AUTO_REFRESH_MS);
-    return () => {
-      clearInterval(tick);
-      clearInterval(refresh);
-    };
-  }, [refreshSilently]);
->>>>>>> origin/minh
 
   const [checkIn, checkingIn$] = useAction((v) => bookingApi.checkIn(checkingIn._id, v.code?.trim()), {
     success: 'Đã check-in',
@@ -137,17 +93,6 @@ export default function BookingSchedulePage() {
       refreshSilently();
     },
   });
-<<<<<<< HEAD
-=======
-  const [cancel, cancelling$] = useAction((v) => bookingApi.cancel(cancelling._id, v.reason), {
-    success: 'Đã hủy booking, cư dân được thông báo không bị tính phí',
-    onDone: () => {
-      setCancelling(null);
-      cancelForm.resetFields();
-      refreshSilently();
-    },
-  });
->>>>>>> origin/minh
 
   const columns = [
     {
@@ -219,7 +164,6 @@ export default function BookingSchedulePage() {
       ? [
           {
             title: '',
-<<<<<<< HEAD
             width: isReception ? 220 : 110,
             fixed: 'right',
             render: (_, b) =>
@@ -248,12 +192,6 @@ export default function BookingSchedulePage() {
                 </Flex>
               ) : (
                 b.status === BS.APPROVED && (
-=======
-            width: isReception ? 170 : 110,
-            fixed: 'right',
-            render: (_, b) =>
-              b.status === 'APPROVED' && (
->>>>>>> origin/minh
                 <Flex gap={6}>
                   <Tooltip title={inWindow(b, nowMs) ? null : 'Ngoài khung check-in'}>
                     <Button size="small" type="primary" icon={<LoginOutlined />} disabled={!inWindow(b, nowMs)} onClick={() => setCheckingIn(b)}>
@@ -266,10 +204,7 @@ export default function BookingSchedulePage() {
                     </Button>
                   )}
                 </Flex>
-<<<<<<< HEAD
                 )
-=======
->>>>>>> origin/minh
               ),
           },
         ]
@@ -294,14 +229,11 @@ export default function BookingSchedulePage() {
             <Button icon={<ReloadOutlined />} onClick={() => reload()}>
               Làm mới
             </Button>
-<<<<<<< HEAD
             {canCheckIn && (
               <Button icon={<ScanOutlined />} onClick={() => setScanning(true)}>
                 Quét vé QR
               </Button>
             )}
-=======
->>>>>>> origin/minh
             {isReception && (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setCounterOpen(true)}>
                 Đặt hộ
@@ -354,7 +286,6 @@ export default function BookingSchedulePage() {
         </Form>
       </Modal>
 
-<<<<<<< HEAD
       <QrScanModal open={scanning} title="Quét vé đặt tiện ích" onClose={() => setScanning(false)} onResult={scanTicket} />
       <ReasonModal
         open={Boolean(cancelling)}
@@ -371,28 +302,6 @@ export default function BookingSchedulePage() {
           refreshSilently();
         }}
       />
-=======
-      <Modal
-        title="Hủy booking"
-        open={Boolean(cancelling)}
-        onCancel={() => setCancelling(null)}
-        onOk={() => cancelForm.submit()}
-        okText="Hủy booking"
-        okButtonProps={{ danger: true }}
-        cancelText="Đóng"
-        confirmLoading={cancelling$}
-        destroyOnHidden
-      >
-        <Typography.Paragraph type="secondary">
-          {describe(cancelling)}. Người đặt sẽ được thông báo và không bị tính phí; thao tác được ghi nhật ký.
-        </Typography.Paragraph>
-        <Form form={cancelForm} layout="vertical" preserve={false} onFinish={(v) => cancel(v).catch(() => {})}>
-          <Form.Item name="reason" label="Lý do hủy" rules={[{ required: true, whitespace: true, min: 5, max: 500, message: 'Nhập lý do 5–500 ký tự' }]}>
-            <Input.TextArea rows={3} maxLength={500} showCount />
-          </Form.Item>
-        </Form>
-      </Modal>
->>>>>>> origin/minh
 
       {counterOpen && <CounterBookingModal initialDate={date.isBefore(dayjs(), 'day') ? dayjs() : date} onClose={() => setCounterOpen(false)} onDone={refreshSilently} />}
     </>

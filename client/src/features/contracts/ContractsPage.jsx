@@ -15,24 +15,15 @@ import {
   Row,
   Col,
   Descriptions,
-<<<<<<< HEAD
-=======
-  Alert,
->>>>>>> origin/minh
   Upload,
   Radio,
   App,
   Tooltip,
 } from 'antd';
-<<<<<<< HEAD
 import PhoneAccountNotice from '../../components/PhoneAccountNotice';
 import { usePhoneAccount } from '../../hooks/usePhoneAccount';
 import { PHONE_RULES } from '../../utils/phone';
 import {
-=======
-import {
-  FileTextOutlined,
->>>>>>> origin/minh
   PlusOutlined,
   ReloadOutlined,
   EyeOutlined,
@@ -48,7 +39,6 @@ import { CONTRACT_TYPES, CONTRACT_STATUS } from '../../constants/enums';
 import { formatDate } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi, useAction } from '../../hooks/useApi';
-<<<<<<< HEAD
 import { contractsApi, buildingsApi } from '../../api/moduleA.api';
 import ApartmentSelect from '../../components/ApartmentSelect';
 
@@ -110,14 +100,6 @@ export default function ContractsPage() {
   const { message } = App.useApp();
   const isReceptionist = hasRole('STAFF:RECEPTIONIST');
   const isManager = hasRole('MANAGER');
-=======
-import { contractsApi, buildingsApi, apartmentsApi } from '../../api/moduleA.api';
-
-export default function ContractsPage() {
-  const { user } = useAuth();
-  const { message } = App.useApp();
-  const isReceptionist = user?.role === 'STAFF' && user?.roleTitle === 'RECEPTIONIST';
->>>>>>> origin/minh
 
   // Filters state
   const [filters, setFilters] = useState({
@@ -133,15 +115,6 @@ export default function ContractsPage() {
   // Load buildings for filter & form
   const { data: buildings = [] } = useApi(buildingsApi.list, []);
 
-<<<<<<< HEAD
-=======
-  // Load apartments for apartment selection dropdown
-  const { data: allApartments = [] } = useApi(
-    () => apartmentsApi.list({ limit: 100 }),
-    [],
-  );
-
->>>>>>> origin/minh
   // Load contracts list
   const {
     data: contracts = [],
@@ -168,11 +141,8 @@ export default function ContractsPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createForm] = Form.useForm();
   const selectedType = Form.useWatch('type', createForm);
-<<<<<<< HEAD
   const partyPrefix = selectedType === CONTRACT_TYPES.LEASE ? 'tenant' : 'owner';
   const check = usePhoneAccount(Form.useWatch(`${partyPrefix}Phone`, createForm));
-=======
->>>>>>> origin/minh
   const [contractFileList, setContractFileList] = useState([]);
 
   // Modal Extend/Update state
@@ -199,10 +169,7 @@ export default function ContractsPage() {
       onDone: () => {
         setCreateModalOpen(false);
         createForm.resetFields();
-<<<<<<< HEAD
         check.reset();
-=======
->>>>>>> origin/minh
         setContractFileList([]);
         reloadContracts();
       },
@@ -233,10 +200,7 @@ export default function ContractsPage() {
   // Handlers
   const handleOpenCreateModal = () => {
     createForm.resetFields();
-<<<<<<< HEAD
     check.reset();
-=======
->>>>>>> origin/minh
     createForm.setFieldsValue({
       type: CONTRACT_TYPES.SALE,
       startDate: dayjs(),
@@ -258,7 +222,6 @@ export default function ContractsPage() {
       }
       formData.append('tenantPaysFees', String(Boolean(values.tenantPaysFees)));
 
-<<<<<<< HEAD
       if (check.blockReason) return;
       const dob = values[`${partyPrefix}Dob`];
       const partyData = {
@@ -273,38 +236,13 @@ export default function ContractsPage() {
             }),
       };
       formData.append(partyPrefix, JSON.stringify(partyData));
-=======
-      if (values.type === CONTRACT_TYPES.SALE) {
-        const ownerData = {
-          fullName: values.ownerFullName,
-          email: values.ownerEmail,
-          phone: values.ownerPhone || '',
-          idNumber: values.ownerIdNumber || '',
-          dateOfBirth: values.ownerDob ? values.ownerDob.format('YYYY-MM-DD') : null,
-        };
-        formData.append('owner', JSON.stringify(ownerData));
-      } else {
-        const tenantData = {
-          fullName: values.tenantFullName,
-          email: values.tenantEmail,
-          phone: values.tenantPhone || '',
-          idNumber: values.tenantIdNumber || '',
-          dateOfBirth: values.tenantDob ? values.tenantDob.format('YYYY-MM-DD') : null,
-        };
-        formData.append('tenant', JSON.stringify(tenantData));
-      }
->>>>>>> origin/minh
 
       if (contractFileList[0]?.originFileObj) {
         formData.append('file', contractFileList[0].originFileObj);
       }
 
-<<<<<<< HEAD
       // Lỗi đã được báo; kiểm tra lại vì SĐT có thể vừa có tài khoản
       await createContract(formData).catch(() => check.reload());
-=======
-      await createContract(formData);
->>>>>>> origin/minh
     } catch {
       // Form validation error
     }
@@ -347,11 +285,7 @@ export default function ContractsPage() {
       const res = await contractsApi.getById(id);
       setSelectedContract(res.data);
     } catch (err) {
-<<<<<<< HEAD
       message.error(err?.message || 'Không thể tải chi tiết hợp đồng');
-=======
-      message.error(err?.response?.data?.message || 'Không thể tải chi tiết hợp đồng');
->>>>>>> origin/minh
       setDetailModalOpen(false);
     } finally {
       setLoadingDetail(false);
@@ -454,7 +388,6 @@ export default function ContractsPage() {
           >
             Xem
           </Button>
-<<<<<<< HEAD
           {isReceptionist && record.status === 'ACTIVE' && record.type === 'LEASE' && (
             <Tooltip title="Gia hạn thời hạn hợp đồng">
               <Button
@@ -484,39 +417,6 @@ export default function ContractsPage() {
                 Chấm dứt
               </Button>
             </Popconfirm>
-=======
-          {isReceptionist && record.status === 'ACTIVE' && (
-            <>
-              {record.type === 'LEASE' && (
-                <Tooltip title="Gia hạn thời hạn hợp đồng">
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<CalendarOutlined />}
-                    onClick={() => handleOpenExtendModal(record)}
-                  >
-                    Gia hạn
-                  </Button>
-                </Tooltip>
-              )}
-              <Popconfirm
-                title="Chấm dứt hợp đồng"
-                description={
-                  record.type === 'SALE'
-                    ? 'Chấm dứt hợp đồng mua bán sẽ gỡ toàn bộ cư dân và đưa căn hộ về trạng thái Trống. Tiếp tục?'
-                    : 'Chấm dứt hợp đồng thuê sẽ gỡ người thuê và đưa căn hộ về trạng thái Đã sở hữu. Tiếp tục?'
-                }
-                okText="Chấm dứt"
-                cancelText="Hủy"
-                okButtonProps={{ danger: true }}
-                onConfirm={() => terminateContract(record._id)}
-              >
-                <Button size="small" type="text" danger icon={<StopOutlined />}>
-                  Chấm dứt
-                </Button>
-              </Popconfirm>
-            </>
->>>>>>> origin/minh
           )}
         </Space>
       ),
@@ -562,7 +462,6 @@ export default function ContractsPage() {
             ))}
           </Select>
 
-<<<<<<< HEAD
           <ApartmentSelect
             placeholder="Căn hộ"
             allowClear
@@ -570,25 +469,6 @@ export default function ContractsPage() {
             value={filters.apartmentId}
             onChange={(val) => setFilters((prev) => ({ ...prev, page: 1, apartmentId: val }))}
           />
-=======
-          <Select
-            placeholder="Căn hộ"
-            allowClear
-            showSearch
-            filterOption={(input, option) =>
-              (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-            }
-            style={{ width: 140 }}
-            value={filters.apartmentId}
-            onChange={(val) => setFilters((prev) => ({ ...prev, page: 1, apartmentId: val }))}
-          >
-            {allApartments.map((a) => (
-              <Select.Option key={a._id} value={a._id}>
-                {a.code}
-              </Select.Option>
-            ))}
-          </Select>
->>>>>>> origin/minh
 
           <Select
             placeholder="Loại hợp đồng"
@@ -665,10 +545,7 @@ export default function ContractsPage() {
         open={createModalOpen}
         onCancel={() => setCreateModalOpen(false)}
         onOk={handleSaveCreate}
-<<<<<<< HEAD
         okButtonProps={{ disabled: Boolean(check.blockReason) }}
-=======
->>>>>>> origin/minh
         confirmLoading={creating}
         width={680}
         destroyOnClose
@@ -681,26 +558,10 @@ export default function ContractsPage() {
                 label="Căn hộ"
                 rules={[{ required: true, message: 'Vui lòng chọn căn hộ' }]}
               >
-<<<<<<< HEAD
                 <ApartmentSelect
                   placeholder="Gõ mã căn để tìm"
                   renderLabel={(a) => `${a.code} (${a.buildingId?.name || ''}) — ${a.status}`}
                 />
-=======
-                <Select
-                  placeholder="Chọn căn hộ"
-                  showSearch
-                  filterOption={(input, option) =>
-                    (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
-                >
-                  {allApartments.map((a) => (
-                    <Select.Option key={a._id} value={a._id}>
-                      {a.code} ({a.buildingId?.name || ''}) — {a.status}
-                    </Select.Option>
-                  ))}
-                </Select>
->>>>>>> origin/minh
               </Form.Item>
             </Col>
 
@@ -755,7 +616,6 @@ export default function ContractsPage() {
             </Form.Item>
           )}
 
-<<<<<<< HEAD
           {selectedType === CONTRACT_TYPES.SALE && (
             <PartyFields
               prefix="owner"
@@ -778,100 +638,6 @@ export default function ContractsPage() {
               phonePlaceholder="0987654321"
               idPlaceholder="001200000002"
             />
-=======
-          {/* Thông tin Chủ sở hữu khi SALE */}
-          {selectedType === CONTRACT_TYPES.SALE && (
-            <Card size="small" title="Thông tin Chủ sở hữu" className="mb-4 bg-gray-50/50 dark:bg-gray-800">
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item
-                    name="ownerFullName"
-                    label="Họ và tên"
-                    rules={[{ required: true, message: 'Vui lòng nhập họ tên chủ sở hữu' }]}
-                  >
-                    <Input placeholder="Vd: Nguyễn Văn A" />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item
-                    name="ownerEmail"
-                    label="Email"
-                    rules={[
-                      { required: true, message: 'Vui lòng nhập email' },
-                      { type: 'email', message: 'Email không hợp lệ' },
-                    ]}
-                  >
-                    <Input placeholder="Vd: nva@gmail.com" />
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Form.Item name="ownerPhone" label="Số điện thoại">
-                    <Input placeholder="0912345678" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="ownerIdNumber" label="Số CCCD">
-                    <Input placeholder="001200000001" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="ownerDob" label="Ngày sinh">
-                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </Card>
-          )}
-
-          {/* Thông tin Người thuê khi LEASE */}
-          {selectedType === CONTRACT_TYPES.LEASE && (
-            <Card size="small" title="Thông tin Người thuê" className="mb-4 bg-gray-50/50 dark:bg-gray-800">
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item
-                    name="tenantFullName"
-                    label="Họ và tên"
-                    rules={[{ required: true, message: 'Vui lòng nhập họ tên người thuê' }]}
-                  >
-                    <Input placeholder="Vd: Trần Thị B" />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item
-                    name="tenantEmail"
-                    label="Email"
-                    rules={[
-                      { required: true, message: 'Vui lòng nhập email' },
-                      { type: 'email', message: 'Email không hợp lệ' },
-                    ]}
-                  >
-                    <Input placeholder="Vd: ttb@gmail.com" />
-                  </Form.Item>
-                </Col>
-              </Row>
-
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Form.Item name="tenantPhone" label="Số điện thoại">
-                    <Input placeholder="0987654321" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="tenantIdNumber" label="Số CCCD">
-                    <Input placeholder="001200000002" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="tenantDob" label="Ngày sinh">
-                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </Card>
->>>>>>> origin/minh
           )}
 
           <Form.Item label="File đính kèm (hợp đồng có chữ ký / công chứng, jpg/png ≤ 5MB)">

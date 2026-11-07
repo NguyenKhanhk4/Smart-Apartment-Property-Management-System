@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { BOARD_TITLES, CONSENT_ACTIONS, ROLES, ROLE_TITLES, values } from '../constants/enums.js';
 import { normalizePhone } from '../utils/validators.js';
 import { Schema, model, schemaOptions } from './_shared.js';
@@ -24,18 +23,6 @@ const userSchema = new Schema(
       ],
       default: [],
     }, // BR-X7: lịch sử đồng ý điều khoản
-=======
-import { BOARD_TITLES, ROLES, ROLE_TITLES, values } from '../constants/enums.js';
-import { Schema, model, schemaOptions } from './_shared.js';
-
-// users — tài khoản cho cả 6 role (Module A)
-const userSchema = new Schema(
-  {
-    fullName: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    passwordHash: { type: String, required: true, select: false },
-    phone: { type: String, trim: true },
->>>>>>> origin/minh
     avatarUrl: String,
     role: { type: String, enum: values(ROLES), required: true, default: ROLES.RESIDENT },
     roleTitle: { type: String, enum: [...values(ROLE_TITLES), null], default: null },
@@ -48,14 +35,11 @@ const userSchema = new Schema(
   schemaOptions('users'),
 );
 
-<<<<<<< HEAD
 // Đăng nhập còn tìm theo email đến UC01 nên email phải duy nhất; tài khoản không có email thì không bị tính
 userSchema.index(
   { email: 1 },
   { name: 'uniq_email', unique: true, partialFilterExpression: { email: { $type: 'string' } } },
 );
-=======
->>>>>>> origin/minh
 userSchema.index({ role: 1, isActive: 1 });
 userSchema.index({ role: 1, roleTitle: 1 });
 
