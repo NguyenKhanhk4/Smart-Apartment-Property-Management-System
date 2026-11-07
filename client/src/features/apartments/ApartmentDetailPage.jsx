@@ -136,10 +136,9 @@ export default function ApartmentDetailPage() {
     },
     {
       success: (res) => {
-        if (res?.data?.temporaryPassword) {
-          return `Thêm thành viên thành công! Mật khẩu tạm của cư dân: ${res.data.temporaryPassword}`;
-        }
-        return 'Thêm thành viên vào căn hộ thành công';
+        return res?.data?.activationInviteSent === false
+          ? 'Đã thêm thành viên. Chưa gửi được email mời (hoặc cư dân không có email): cấp mã tại menu Cấp mã kích hoạt để cư dân kích hoạt.'
+          : 'Thêm thành viên vào căn hộ thành công';
       },
       onDone: () => {
         setAddModalOpen(false);
@@ -627,11 +626,9 @@ export default function ApartmentDetailPage() {
               {hasAccount && (
                 <Form.Item
                   name="email"
-                  label="Email tài khoản"
-                  rules={[
-                    { required: true, message: 'Vui lòng nhập email' },
-                    { type: 'email', message: 'Email không đúng định dạng' },
-                  ]}
+                  label="Email (không bắt buộc)"
+                  extra="Không có email thì cấp mã kích hoạt tại quầy sau khi thêm."
+                  rules={[{ type: 'email', message: 'Email không đúng định dạng' }]}
                 >
                   <Input placeholder="Vd: member@gmail.com" />
                 </Form.Item>

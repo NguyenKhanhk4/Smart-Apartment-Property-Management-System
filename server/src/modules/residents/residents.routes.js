@@ -16,8 +16,7 @@ const addMemberBody = Joi.object({
   hasAccount: Joi.boolean().default(true),
   userId: objectId().when('hasAccount', { is: false, then: Joi.forbidden() }),
   email: Joi.string().trim().lowercase().email().when('hasAccount', {
-    is: false, then: Joi.forbidden(),
-    otherwise: Joi.when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
+    is: false, then: Joi.forbidden(), otherwise: Joi.allow('', null),
   }),
   fullName: Joi.string().trim().min(2).max(100).when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
   phone: phoneVn().when('hasAccount', { is: false, then: Joi.forbidden(), otherwise: Joi.required() }),

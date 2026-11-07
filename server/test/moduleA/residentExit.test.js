@@ -98,6 +98,7 @@ test('nhân khẩu không tài khoản: API thêm nhiều người cùng căn, s
       body: { apartmentId: apartment.id, hasAccount: false, fullName, dateOfBirth: '2020-02-03' } });
     assert.equal(res.status, 201, JSON.stringify(res.body));
     assert.equal(res.body.data.user, null);
+    assert.equal(res.body.data.activationInviteSent, null);
     assert.equal(res.body.data.resident.userId, null);
   }
   assert.equal(await User.countDocuments(), userCount);
@@ -143,4 +144,22 @@ test('nhân khẩu không tài khoản: không được lách để gắn tài k
     assert.equal((await app.request('POST', '/residents', { user: actor, body: { apartmentId: apartment.id, ...body } })).status, 400);
   }
   assert.equal(await Resident.countDocuments({ userId: null }), 0);
+});
+
+test('thêm tài khoản không email: chờ kích hoạt tại quầy và chỉ trả CCCD đã che', async () => {
+  const { user: owner, apartment } = await createHousehold();
+  await createContract({ apartment, owner });
+  const actor = asUser(await createReceptionist());
+  const res = await app.request('POST', '/residents', {
+    user: actor,
+    body: { apartmentId: apartment.id, phone: '0912000003', fullName: 'Thành Viên', idNumber: '012345678901' },
+  });
+
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  const { user, resident, activationInviteSent } = res.body.data;
+  assert.equal(user.email, null);
+  assert.equal(activationInviteSent, false);
+  assert.equal(resident.idNumber, '********8901');
+  assert.equal(resident.idNumberEnc, undefined);
+  assert.equal(resident.idNumberHash, undefined);
 });

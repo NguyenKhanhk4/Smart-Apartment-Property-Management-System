@@ -10,8 +10,10 @@ import { ERROR_MESSAGES } from '../../../client/src/constants/errorMessages.js';
 // Enum server không cần nhãn ở client (nội bộ server, hoặc Module B/C chưa có giao diện)
 const SERVER_ONLY = new Set([
   'CONFIG_KEYS', 'CONFIG_SCOPES', 'CRON_STATUS', 'CRON_TRIGGERS', 'AUDIT_ACTIONS', 'AUDIT_TARGETS',
-  'PRIORITY_ORDER', 'DEFAULT_CONFIGS', 'GENERATED_BY', 'PAYMENT_STATUS', 'ADJUSTMENT_TYPES', 'REVIEW_STATUS',
-  'DEBT_STATUS', 'CONTACT_METHODS', 'FUND_TX_TYPES', 'VOTE_DECISIONS', 'EXPENSE_CATEGORIES',
+  'VERIFICATION_PURPOSES', 'VERIFICATION_CHANNELS', 'PRIORITY_ORDER', 'DEFAULT_CONFIGS', 'GENERATED_BY', 'PAYMENT_STATUS', 'ADJUSTMENT_TYPES', 'REVIEW_STATUS',
+  'EXPENSE_CATEGORIES',
+  // Dữ liệu cũ gói tháng / lượt vào cửa: không còn giao diện, chỉ phần tính phí đọc
+  'AMENITY_PASS_STATUS', 'VISIT_CHARGE_TYPES', 'VISIT_STATUS',
 ]);
 
 const isEnumObject = (v) => v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).every((x) => typeof x === 'string');

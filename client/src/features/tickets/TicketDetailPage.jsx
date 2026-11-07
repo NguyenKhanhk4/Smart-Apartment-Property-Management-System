@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -15,6 +15,9 @@ import {
 } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { ticketApi } from '../../api/moduleE.api';
+import { repairQuoteApi } from '../../api/moduleB.api';
+import QuoteFormModal from '../repairQuotes/QuoteFormModal';
+import QuotePanel from '../repairQuotes/QuotePanel';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
@@ -27,7 +30,10 @@ import {
   TICKET_TYPES,
 } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
-import { AssignModal, ComplaintResponseModal, ConfirmModal, ProgressModal, QuoteDecisionModal, RejectModal } from './TicketActionModals';
+import {
+  AssignModal, ComplaintResponseModal, ConfirmModal, MergeModal, ProgressModal,
+  QuoteDecisionModal, ReclassifyModal, RejectModal,
+} from './TicketActionModals';
 import { ticketActions } from './ticketActions';
 
 // Chi tiết phản ánh dùng chung cho cư dân (/r) và nội bộ (/app); nút thao tác hiện theo quyền
@@ -37,6 +43,9 @@ export default function TicketDetailPage() {
   const { user, hasRole } = useAuth();
   const [modal, setModal] = useState(null);
   const { data: t, loading, error, reload } = useApi(() => ticketApi.get(id), [id]);
+  // Báo giá sửa chữa (sự cố trong căn hộ) — tải lại cùng phiếu
+  const hasQuotes = t?.type === 'INCIDENT' && t?.scope === 'IN_APARTMENT';
+  const quotes = useApi(() => repairQuoteApi.byTicket(id), [id, t?.status, t?.history?.length], { enabled: Boolean(hasQuotes) });
   const [claim, claiming] = useAction(() => ticketApi.claim(id), { success: 'Đã nhận sự cố', onDone: reload });
 
   if (error && !t) {
@@ -44,7 +53,13 @@ export default function TicketDetailPage() {
   }
   if (!t) return <Spin style={{ display: 'block', margin: 48 }} />;
 
-  const { canClaim, canAssign, canReject, canProgress, canRespondComplaint, canDecideQuote, canConfirm } = ticketActions(t, user, hasRole);
+  const {
+    canClaim, canAssign, canReject, canProgress, canRespondComplaint, canQuote,
+    canDecideQuote, canConfirm, canReclassify, canMerge,
+  } = ticketActions(t, user, hasRole);
+  const quoteList = quotes.data?.items ?? [];
+  const pendingQuote = quoteList.find((q) => q.status === 'PENDING');
+  const acceptedQuote = quoteList.find((q) => q.status === 'ACCEPTED');
   const isComplaint = t.type === 'COMPLAINT';
   const modalProps = (key) => ({ ticket: t, open: modal === key, onClose: () => setModal(null), onDone: reload });
 
@@ -66,6 +81,8 @@ export default function TicketDetailPage() {
               {t.assignedTo ? 'Phân công lại' : 'Phân công'}
             </Button>
           )}
+          {canReclassify && <Button onClick={() => setModal('classify')}>Đổi phân loại</Button>}
+          {canMerge && <Button onClick={() => setModal('merge')}>Gộp vào phiếu khác</Button>}
           {canReject && (
             <Button danger onClick={() => setModal('reject')}>
               Từ chối
@@ -74,6 +91,11 @@ export default function TicketDetailPage() {
           {canDecideQuote && (
             <Button type="primary" onClick={() => setModal('quote')}>
               Xem & quyết định báo giá
+            </Button>
+          )}
+          {canQuote && (
+            <Button type={canProgress ? 'default' : 'primary'} onClick={() => setModal('quote-form')}>
+              {acceptedQuote && t.status !== 'WAITING_QUOTE_APPROVAL' ? 'Báo giá lại' : pendingQuote ? 'Sửa báo giá' : 'Gửi báo giá'}
             </Button>
           )}
           {canProgress && (
@@ -91,6 +113,28 @@ export default function TicketDetailPage() {
           )}
         </Flex>
 
+        {t.mergedParent && (
+          <Alert
+            type="info"
+            showIcon
+            title={
+              hasRole('RESIDENT') ? (
+                `Sự cố này trùng với phiếu ${t.mergedParent.code} đang được xử lý (${TICKET_STATUS[t.mergedParent.status]?.label}). Bạn sẽ được báo khi xử lý xong.`
+              ) : (
+                <>
+                  Đã gộp vào phiếu <Link to={`/app/tickets/${t.mergedParent._id}`}>{t.mergedParent.code}</Link> — {t.mergedParent.title}
+                </>
+              )
+            }
+          />
+        )}
+        {t.mergedChildren?.length > 0 && !hasRole('RESIDENT') && (
+          <Alert
+            type="info"
+            showIcon
+            title={`Phiếu trùng đã gộp vào đây: ${t.mergedChildren.map((c) => `${c.code} (căn ${c.apartmentCode ?? '?'})`).join(', ')}`}
+          />
+        )}
         {t.isOverdue && (
           <Alert type="error" showIcon title={`Phản ánh đã quá hạn xử lý (hạn ${formatDateTime(t.dueDate)})`} />
         )}
@@ -140,7 +184,11 @@ export default function TicketDetailPage() {
                 {t.respondedAt ? `Đã phản hồi ${formatDateTime(t.respondedAt)}` : formatDateTime(t.responseDueAt)}
               </Descriptions.Item>
             )}
-            <Descriptions.Item label="Hạn xử lý">{formatDateTime(t.dueDate)}</Descriptions.Item>
+            <Descriptions.Item label="Hạn xử lý">
+              {formatDateTime(t.dueDate)}
+              {/* M5-2: hạn được lùi thêm phần thời gian chờ khi phiếu chạy tiếp */}
+              {t.slaPausedAt && ` (SLA tạm dừng từ ${formatDateTime(t.slaPausedAt)})`}
+            </Descriptions.Item>
             {!isComplaint && (
               <Descriptions.Item label="Kỹ thuật viên">{t.assignedTo?.fullName ?? 'Chưa có người nhận'}</Descriptions.Item>
             )}
@@ -168,6 +216,14 @@ export default function TicketDetailPage() {
             </Image.PreviewGroup>
           )}
         </Card>
+
+        {hasQuotes && (
+          <QuotePanel
+            quotes={quoteList}
+            loading={quotes.loading}
+            invoiceBase={hasRole('RESIDENT') ? '/r/invoices' : '/app/invoices'}
+          />
+        )}
 
         <Card size="small" title="Lịch sử xử lý">
           <Timeline
@@ -197,10 +253,21 @@ export default function TicketDetailPage() {
 
       <AssignModal {...modalProps('assign')} />
       <RejectModal {...modalProps('reject')} />
+      <ReclassifyModal {...modalProps('classify')} />
+      <MergeModal {...modalProps('merge')} />
       <ProgressModal {...modalProps('progress')} />
       <ComplaintResponseModal {...modalProps('complaint')} />
       <ConfirmModal {...modalProps('confirm')} />
-      <QuoteDecisionModal {...modalProps('quote')} />
+      <QuoteDecisionModal {...modalProps('quote')} quote={pendingQuote} />
+      <QuoteFormModal
+        ticket={t}
+        open={modal === 'quote-form'}
+        accepted={acceptedQuote}
+        pending={pendingQuote}
+        percent={quotes.data?.reapprovalPercent}
+        onClose={() => setModal(null)}
+        onDone={reload}
+      />
     </Spin>
   );
 }

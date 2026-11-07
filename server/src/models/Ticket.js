@@ -49,6 +49,9 @@ const ticketSchema = new Schema(
     responseDueAt: { type: Date, default: null },
     respondedAt: { type: Date, default: null }, // Người 2 ghi khi nhập kết quả xử lý phản ánh
     responseAlertedAt: { type: Date, default: null },
+    // M5-2: SLA tạm dừng từ lúc vào Chờ cư dân đồng ý phí / Chờ linh kiện; rời trạng thái thì dueDate được cộng bù (ticket.rules)
+    slaPausedAt: { type: Date, default: null },
+    partsAlertedAt: { type: Date, default: null }, // đã cảnh báo Trưởng BQL chờ linh kiện quá hạn dừng
     // Sự cố trong căn hộ: cư dân đồng ý / từ chối báo giá (form báo giá do Người 3 làm)
     quoteDecision: {
       accepted: { type: Boolean, default: null },
@@ -61,6 +64,8 @@ const ticketSchema = new Schema(
     resolvedAt: Date, // lúc chuyển WAITING_CONFIRM
     closedAt: Date,
     autoClosed: { type: Boolean, default: false }, // BR-O9: đóng do quá hạn không phản hồi
+    confirmRemindedAt: { type: Date, default: null }, // M5-1: đã nhắc cư dân nghiệm thu trước khi tự đóng
+    mergedInto: { type: ObjectId, ref: 'Ticket', default: null }, // M5-6: phiếu chính khi phiếu này bị gộp
     rating: { type: Number, min: 1, max: 5, default: null },
     ratingComment: String,
     rejectReason: String,
@@ -83,5 +88,6 @@ ticketSchema.index({ assignedTo: 1, status: 1 });
 ticketSchema.index({ buildingId: 1, createdAt: -1 });
 ticketSchema.index({ type: 1, status: 1, assignedTo: 1 }); // hàng chờ sự cố theo ca
 ticketSchema.index({ status: 1, ackDueAt: 1 }); // cron cảnh báo SLA nhận phiếu
+ticketSchema.index({ mergedInto: 1 }, { partialFilterExpression: { mergedInto: { $type: 'objectId' } } });
 
 export const Ticket = model('Ticket', ticketSchema);

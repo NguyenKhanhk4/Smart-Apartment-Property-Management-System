@@ -12,10 +12,11 @@ import {
   GENERATED_BY,
   INVOICE_PREVIEW_STATUS as PREVIEW_STATUS,
   INVOICE_STATUS,
+  QUOTE_STATUS,
   VISIT_STATUS,
 } from '../../constants/enums.js';
 import { runTrackedJob } from '../../jobs/cronRunner.js';
-import { AmenityPass, AmenityVisit, Apartment, Booking, Invoice, User } from '../../models/index.js';
+import { AmenityPass, AmenityVisit, Apartment, Booking, Invoice, RepairQuote, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex } from '../../utils/pagination.js';
@@ -46,12 +47,13 @@ async function nextInvoiceCode(base) {
   return `${base}-R${max + 1}`;
 }
 
-/** Bản ghi tiện ích gắn vào thông báo: [Model, ids, điều kiện status còn hiệu lực] */
+/** Bản ghi tiện ích + báo giá sửa chữa gắn vào thông báo: [Model, ids, điều kiện status còn hiệu lực] */
 export const amenityTargets = (charges) =>
   [
     [AmenityPass, charges.passIds, AMENITY_PASS_STATUS.ACTIVE],
     [AmenityVisit, charges.visitIds, VISIT_STATUS.VALID],
     [Booking, charges.bookingIds, { $in: BOOKING_BILLABLE_STATUSES }],
+    [RepairQuote, charges.repairQuoteIds ?? [], QUOTE_STATUS.ACCEPTED],
   ].filter(([, ids]) => ids.length);
 
 /**

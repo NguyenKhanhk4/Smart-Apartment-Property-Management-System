@@ -12,6 +12,7 @@ import { formatDate, formatMoney } from '../../utils/format';
 import BookingTicketModal from './BookingTicketModal';
 import RescheduleModal from './RescheduleModal';
 import { holdLabel } from './bookingHelpers';
+import { payBooking } from './payBooking';
 
 // Nhãn + tone theo BOOKING_STATUS chung (constants/enums.js)
 
@@ -19,7 +20,7 @@ const Badge = ({ status }) => (
   <StatusBadge tone={BOOKING_STATUS[status]?.tone}>{BOOKING_STATUS[status]?.label ?? status}</StatusBadge>
 );
 const timeOf = (b) => `${b.slotStart}–${b.slotEnd}`;
-const feeOf = (b) => (b.fee > 0 ? formatMoney(b.fee) : b.passId ? 'Gói tháng' : 'Miễn phí');
+const feeOf = (b) => (b.fee > 0 ? formatMoney(b.fee) : 'Miễn phí');
 const startOf = (b) => dayjs(b.startAt ?? b.date);
 
 // Tab "Lịch sử đặt": chủ hộ thấy cả hộ, thành viên thấy lượt mình đặt. Hủy được khi còn trước giờ bắt đầu.
@@ -41,7 +42,7 @@ export default function HistoryTab({ wide }) {
   const cancel = async (b) => {
     try {
       await bookingApi.cancel(b._id);
-      message.success('Đã hủy booking, không mất phí');
+      message.success(b.paidAt ? 'Đã hủy booking. Phí đã thanh toán không được hoàn lại' : 'Đã hủy booking, không mất phí');
     } catch (e) {
       message.error(e.message);
     }
@@ -67,16 +68,26 @@ export default function HistoryTab({ wide }) {
       {cancelButton(b)}
     </span>
   );
+  const pay = (b) => payBooking(b._id).catch((e) => message.error(e.message));
   const holdLine = (b) =>
     b.status === 'PENDING_PAYMENT' && (
-      <span className="block text-xs text-r-warn-fg">{holdLabel(b.holdExpiresAt)} · thanh toán tại quầy lễ tân</span>
+      <span className="block text-xs text-r-warn-fg">
+        {holdLabel(b.holdExpiresAt)} ·{' '}
+        {b.canPay ? (
+          <button type="button" className={linkBtn} onClick={() => pay(b)}>
+            Thanh toán online
+          </button>
+        ) : (
+          'thanh toán tại quầy lễ tân'
+        )}
+      </span>
     );
 
   const cancelButton = (b) =>
     b.canCancel && (
       <Popconfirm
         title="Hủy booking này?"
-        description="Hủy trước giờ bắt đầu thì không mất phí."
+        description={b.paidAt ? 'Tiện ích có phí: phí đã thanh toán không được hoàn lại.' : 'Hủy trước giờ bắt đầu thì không mất phí.'}
         okText="Hủy booking"
         cancelText="Giữ lại"
         okButtonProps={{ danger: true }}

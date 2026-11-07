@@ -1,4 +1,5 @@
 import { Flex, Table, Tag, Typography } from 'antd';
+import { Link } from 'react-router';
 import { reportApi } from '../../api/moduleE.api';
 import { useApi } from '../../hooks/useApi';
 import { formatDate, formatMoney } from '../../utils/format';
@@ -12,7 +13,7 @@ export default function DebtTable({ buildingId }) {
       <Flex justify="space-between" align="center" wrap gap={8}>
         <Typography.Text>
           <b>{data?.totalApartments ?? 0}</b> căn quá hạn · tổng nợ <b>{formatMoney(data?.totalOutstanding)}</b> ·{' '}
-          <Typography.Text type="danger">{data?.unassigned ?? 0} căn chưa giao người đòi nợ</Typography.Text>
+          <Typography.Text type="danger">{data?.longOverdue ?? 0} căn nợ quá hạn dài</Typography.Text>
         </Typography.Text>
         <ExportButton type="debts" params={{ buildingId }} />
       </Flex>
@@ -24,13 +25,28 @@ export default function DebtTable({ buildingId }) {
         scroll={{ x: 760 }}
         pagination={{ pageSize: 10 }}
         columns={[
-          { title: 'Căn hộ', dataIndex: 'apartmentCode', width: 90 },
+          {
+            title: 'Căn hộ',
+            dataIndex: 'apartmentCode',
+            width: 90,
+            render: (v, r) => <Link to={`/app/debts/apartments/${r.apartmentId}`}>{v}</Link>,
+          },
           { title: 'Tòa', dataIndex: 'buildingName', width: 90 },
           { title: 'Các kỳ nợ', dataIndex: 'periods', render: (v) => v.map((p) => <Tag key={p}>{p}</Tag>) },
           { title: 'Số tiền', dataIndex: 'outstanding', align: 'right', render: formatMoney },
           { title: 'Hạn sớm nhất', dataIndex: 'oldestDueDate', render: formatDate },
           { title: 'Quá hạn', dataIndex: 'daysOverdue', align: 'right', render: (v) => `${v} ngày` },
-          { title: 'Phụ trách', dataIndex: 'assignedTo', render: (v) => v ?? <Tag color="red">Chưa giao</Tag> },
+          {
+            title: 'Xử lý nợ',
+            render: (_, r) =>
+              r.caseStatus === 'LONG_OVERDUE' ? (
+                <Tag color="magenta">Nợ quá hạn dài</Tag>
+              ) : r.promisedDate ? (
+                <Tag color="blue">Hẹn trả {formatDate(r.promisedDate)}</Tag>
+              ) : (
+                <Tag color="orange">Đang nhắc ({r.reminderCount ?? 0} lần)</Tag>
+              ),
+          },
         ]}
       />
     </Flex>

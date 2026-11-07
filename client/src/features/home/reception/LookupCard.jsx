@@ -2,14 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Avatar, Spin } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import { memberCodeApi } from '../../../api/moduleD.api';
 import { CARD, MUTED, TEXT } from './styles';
 import { BOOKING_ACTIVE_STATUSES } from '../../../constants/enums';
-
-
-/** Số ngày còn lại của gói tháng (hết hạn cuối tháng dương lịch) */
-const daysLeftInMonth = () => dayjs().endOf('month').diff(dayjs().startOf('day'), 'day');
 
 function Result({ state, onConfirm }) {
   if (state.status === 'loading') {
@@ -32,9 +27,8 @@ function Result({ state, onConfirm }) {
   }
 
   const d = state.data;
-  const passes = (d.passes ?? []).slice(0, 2).map((p) => `Gói ${p.amenityName} còn ${daysLeftInMonth()} ngày`);
   const today = (d.bookingsToday ?? []).filter((b) => b.isMine && BOOKING_ACTIVE_STATUSES.includes(b.status));
-  const place = [`Căn ${d.apartment.code}`, d.apartment.building?.name, ...passes].filter(Boolean).join(' · ');
+  const place = [`Căn ${d.apartment.code}`, d.apartment.building?.name].filter(Boolean).join(' · ');
 
   return (
     <div className="flex items-center gap-4 flex-wrap">
@@ -65,8 +59,7 @@ function Result({ state, onConfirm }) {
   );
 }
 
-// Tra mã cư dân: luôn hiện ảnh để lễ tân đối chiếu. "Xác nhận vào" mở lịch đặt đã lọc theo mã để check-in
-// (ghi lượt vào tiện ích là UC-D10, chưa có API).
+// Tra mã cư dân: luôn hiện ảnh để lễ tân đối chiếu. "Xác nhận vào" mở lịch đặt đã lọc theo mã để check-in.
 export default function LookupCard() {
   const navigate = useNavigate();
   const [text, setText] = useState('');

@@ -8,7 +8,6 @@ const bookingSchema = new Schema(
     apartmentId: { type: ObjectId, ref: 'Apartment', required: true },
     requestedBy: { type: ObjectId, ref: 'User' }, // dữ liệu cũ (luồng duyệt / seed); booking mới dùng bookedBy
     bookedBy: { type: ObjectId, ref: 'User' }, // người đặt (UC-D06); phí > 0 chỉ khi là chủ hộ hoặc được bật canIncurCharges
-    passId: { type: ObjectId, ref: 'AmenityPass', default: null }, // gói tháng đã dùng để đặt phí 0 (UC-D09)
     createdByStaff: { type: ObjectId, ref: 'User', default: null }, // Lễ tân đặt hộ tại quầy (UC-D07)
     chargedTo: { type: ObjectId, ref: 'User', default: null }, // người chịu phí khi fee > 0: người đặt, hoặc người cùng căn có quyền phí (lễ tân đặt hộ)
     date: { type: Date, required: true }, // 00:00 ngày đặt (giờ VN)
@@ -38,6 +37,8 @@ const bookingSchema = new Schema(
     holdExpiresAt: { type: Date, default: null },
     paidAt: { type: Date, default: null },
     paymentRef: { type: String, default: null },
+    // Đổi lịch: booking mới trỏ về booking cũ. Tiện ích có phí chỉ được đổi 1 lần
+    rescheduledFrom: { type: ObjectId, ref: 'Booking', default: null },
   },
   schemaOptions('bookings'),
 );

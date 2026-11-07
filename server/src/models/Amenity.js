@@ -10,14 +10,10 @@ function notFree() {
 function isBooking() {
   return (this.accessMode ?? AMENITY_ACCESS_MODES.BOOKING) === AMENITY_ACCESS_MODES.BOOKING;
 }
-function isWalkIn() {
-  return this.accessMode === AMENITY_ACCESS_MODES.WALK_IN;
-}
 
 // amenities — tiện ích (UC-D05). Trường theo kiểu (accessMode):
 //   FREE    : chỉ hiển thị (giờ mở cửa tùy chọn), mọi trường phí/slot lưu 0/null
-//   WALK_IN : openTime/closeTime, perVisitFeeAdult/Child, [monthlyPassFee*], [maxConcurrent]
-//   BOOKING : openTime/closeTime, slotDurationMinutes, capacityPerSlot, feePerBooking, [monthlyPassFee*]
+//   BOOKING : openTime/closeTime, slotDurationMinutes, capacityPerSlot, feePerBooking, changeDeadlineHours
 // Tiền là số nguyên VND. Bản ghi cũ không có accessMode đọc ra là BOOKING (default) — Module E vẫn đọc được.
 const amenitySchema = new Schema(
   {
@@ -33,13 +29,8 @@ const amenitySchema = new Schema(
     slotDurationMinutes: { type: Number, required: isBooking, default: null, min: 15 },
     capacityPerSlot: { type: Number, required: isBooking, default: null, min: 1 },
     feePerBooking: { type: Number, required: true, default: 0, min: 0 }, // 0 = miễn phí
-    // WALK_IN: phí 1 lượt vào theo nhóm tuổi (BR-O24); số người tối đa cùng lúc (null = không giới hạn)
-    perVisitFeeAdult: { type: Number, required: isWalkIn, default: 0, min: 0 },
-    perVisitFeeChild: { type: Number, required: isWalkIn, default: 0, min: 0 },
-    maxConcurrent: { type: Number, default: null, min: 1 },
-    // Gói tháng (WALK_IN / BOOKING, BR-O22): null = không bán gói
-    monthlyPassFeeAdult: { type: Number, default: null, min: 0 },
-    monthlyPassFeeChild: { type: Number, default: null, min: 0 },
+    // Tiện ích có phí: được đổi lịch (1 lần) nếu còn ít nhất N giờ trước giờ bắt đầu
+    changeDeadlineHours: { type: Number, default: 24, min: 0 },
     isActive: { type: Boolean, default: true },
     // Tăng mỗi khi có booking mới để serialize việc giữ chỗ cùng slot (Bước 7 — UC-D06)
     lockVersion: { type: Number, default: 0 },

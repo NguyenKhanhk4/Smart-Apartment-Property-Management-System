@@ -30,6 +30,8 @@ import EnumTag from '../../components/EnumTag';
 import { VEHICLE_STATUS, VEHICLE_TYPES, enumOptions } from '../../constants/enums';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useResident } from '../../hooks/useResident';
+import { useAuth } from '../../hooks/useAuth';
+import { isConsentLocked } from '../../utils/consent';
 import { formatDate } from '../../utils/format';
 
 export default function MyVehiclesPage() {
@@ -45,6 +47,8 @@ export default function MyVehiclesPage() {
     setHeaderAptId(id);
   };
   const [registerModalOpen, setRegisterModalOpen] = useState(false);
+  const { user } = useAuth();
+  const consentLocked = isConsentLocked(user); // BR-X7
   const [selectedType, setSelectedType] = useState('MOTORBIKE');
   const [cancellingId, setCancellingId] = useState(null);
 
@@ -182,6 +186,7 @@ export default function MyVehiclesPage() {
           {!isFamilyMember && (
             <Button
               type="primary"
+              disabled={consentLocked}
               icon={<PlusOutlined />}
               onClick={() => {
                 form.resetFields();
@@ -195,6 +200,16 @@ export default function MyVehiclesPage() {
           )}
         </Space>
       </div>
+
+      {consentLocked && (
+        <Alert
+          type="warning"
+          showIcon
+          className="mb-4"
+          title="Đăng ký xe cần bạn đồng ý với điều khoản dữ liệu cá nhân"
+          description="Vào Hồ sơ cá nhân, mục Dữ liệu cá nhân để xem và đồng ý."
+        />
+      )}
 
       {/* Căn hộ đang chọn (nếu có nhiều căn) */}
       {apartments.length > 1 && (
@@ -239,6 +254,7 @@ export default function MyVehiclesPage() {
             {!isFamilyMember && (
               <Button
                 type="primary"
+                disabled={consentLocked}
                 icon={<PlusOutlined />}
                 onClick={() => {
                   form.resetFields();

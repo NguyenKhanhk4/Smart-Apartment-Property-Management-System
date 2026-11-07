@@ -4,6 +4,7 @@
 
 // Module A — Tài khoản, tòa nhà, căn hộ, cư dân, hợp đồng, xe
 export { User } from './User.js';
+export { VerificationCode } from './VerificationCode.js';
 export { Building } from './Building.js';
 export { Apartment } from './Apartment.js';
 export { Contract } from './Contract.js';
@@ -21,6 +22,7 @@ export { PrepaidBalance } from './PrepaidBalance.js';
 export { PrepaidTransaction } from './PrepaidTransaction.js';
 export { InvoiceAdjustment } from './InvoiceAdjustment.js';
 export { DebtFollowup } from './DebtFollowup.js';
+export { RepairQuote } from './RepairQuote.js'; // báo giá sửa chữa trong căn hộ (Mô đun 5, phần Người 3)
 
 // Module C — Quỹ bảo trì, chi phí vận hành, audit log
 export { MaintenanceFund } from './MaintenanceFund.js';
@@ -36,9 +38,9 @@ export { WorkOrder } from './WorkOrder.js';
 // Module D — Tiện ích
 export { Amenity } from './Amenity.js';
 export { Booking } from './Booking.js';
+export { AmenityPass } from './AmenityPass.js'; // dữ liệu cũ (gói tháng) — chỉ phần tính phí đọc, chờ Người 3 gỡ
+export { AmenityVisit } from './AmenityVisit.js'; // dữ liệu cũ (lượt vào cửa) — như trên
 export { MemberCode } from './MemberCode.js';
-export { AmenityPass } from './AmenityPass.js';
-export { AmenityVisit } from './AmenityVisit.js';
 export { DutyShift } from './DutyShift.js';
 
 // Module E — Ticket, sổ khách, bảng tin, thông báo, tham số hệ thống

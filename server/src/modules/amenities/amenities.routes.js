@@ -13,7 +13,7 @@ import * as service from './amenities.service.js';
 import { HHMM } from './slot.utils.js';
 
 const MODES = Object.values(AMENITY_ACCESS_MODES);
-const { WALK_IN, BOOKING } = AMENITY_ACCESS_MODES;
+const { BOOKING } = AMENITY_ACCESS_MODES;
 
 // Module D — Thanh Bình. UC-D05: Quản lý tiện ích theo kiểu (tự do / vào cửa / đặt chỗ): giờ mở cửa, slot, sức chứa,
 // giá theo nhóm tuổi, gói tháng, ngừng/kích hoạt.
@@ -40,16 +40,12 @@ const fields = {
   buildingId: objectId().allow('', null), // trống = dùng chung toàn khu
   location: Joi.string().trim().max(200).allow(''),
   description: Joi.string().trim().max(1000).allow(''),
-  openTime: time().allow('', null), // FREE: tùy chọn; WALK_IN/BOOKING: bắt buộc (kiểm tra ở service khi sửa)
+  openTime: time().allow('', null), // FREE: tùy chọn; BOOKING: bắt buộc (kiểm tra ở service khi sửa)
   closeTime: time().allow('', null),
   slotDurationMinutes: Joi.number().integer().min(15).max(720),
   capacityPerSlot: Joi.number().integer().min(1).max(1000),
   feePerBooking: money(),
-  perVisitFeeAdult: money(),
-  perVisitFeeChild: money(),
-  maxConcurrent: Joi.number().integer().min(1).max(10000).allow('', null),
-  monthlyPassFeeAdult: money().allow('', null),
-  monthlyPassFeeChild: money().allow('', null),
+  changeDeadlineHours: Joi.number().integer().min(0).max(720),
 };
 
 // Trường bắt buộc theo kiểu (bỏ qua nếu kiểu không dùng). accessMode mặc định BOOKING để tương thích client cũ
@@ -60,13 +56,11 @@ const createBody = Joi.object({
   ...fields,
   name: fields.name.required(),
   accessMode: fields.accessMode.default(BOOKING),
-  openTime: requiredWhen(fields.openTime, [WALK_IN, BOOKING]),
-  closeTime: requiredWhen(fields.closeTime, [WALK_IN, BOOKING]),
+  openTime: requiredWhen(fields.openTime, [BOOKING]),
+  closeTime: requiredWhen(fields.closeTime, [BOOKING]),
   slotDurationMinutes: requiredWhen(fields.slotDurationMinutes, [BOOKING]),
   capacityPerSlot: requiredWhen(fields.capacityPerSlot, [BOOKING]),
   feePerBooking: fields.feePerBooking.default(0),
-  perVisitFeeAdult: requiredWhen(fields.perVisitFeeAdult, [WALK_IN]),
-  perVisitFeeChild: requiredWhen(fields.perVisitFeeChild, [WALK_IN]),
 });
 const updateBody = Joi.object(fields);
 
@@ -81,22 +75,22 @@ const updateBody = Joi.object(fields);
  *       - { in: query, name: limit, schema: { type: integer, default: 50 } }
  *       - { in: query, name: sort, schema: { type: string, enum: [name, -name, createdAt, -createdAt, feePerBooking, -feePerBooking] } }
  *       - { in: query, name: isActive, schema: { type: boolean } }
- *       - { in: query, name: accessMode, schema: { type: string, enum: [FREE, WALK_IN, BOOKING] } }
+ *       - { in: query, name: accessMode, schema: { type: string, enum: [FREE, BOOKING] } }
  *       - { in: query, name: buildingId, schema: { type: string } }
  *       - { in: query, name: q, schema: { type: string } }
  *   post:
  *     tags: [Tiện ích & đặt chỗ]
- *     summary: Thêm tiện ích theo kiểu accessMode (FREE / WALK_IN / BOOKING; mặc định BOOKING). WALK_IN và BOOKING áp BR-O15 (giờ mở cửa trong giờ lễ tân); BOOKING vừa ≥ 1 slot
+ *     summary: Thêm tiện ích theo kiểu accessMode (FREE / BOOKING; mặc định BOOKING). BOOKING áp BR-O15 (giờ mở cửa trong giờ lễ tân); BOOKING vừa ≥ 1 slot
  *     requestBody:
  *       content:
  *         multipart/form-data:
  *           schema:
  *             type: object
  *             required: [name]
- *             description: 'FREE: giờ mở cửa tùy chọn. WALK_IN: openTime, closeTime, perVisitFeeAdult, perVisitFeeChild bắt buộc. BOOKING: openTime, closeTime, slotDurationMinutes, capacityPerSlot bắt buộc.'
+ *             description: 'FREE: giờ mở cửa tùy chọn. BOOKING: openTime, closeTime, slotDurationMinutes, capacityPerSlot bắt buộc.'
  *             properties:
  *               name: { type: string, example: 'Phòng gym' }
- *               accessMode: { type: string, enum: [FREE, WALK_IN, BOOKING], default: BOOKING }
+ *               accessMode: { type: string, enum: [FREE, BOOKING], default: BOOKING }
  *               buildingId: { type: string, description: 'Để trống = dùng chung toàn khu' }
  *               location: { type: string }
  *               description: { type: string }
@@ -105,11 +99,6 @@ const updateBody = Joi.object(fields);
  *               slotDurationMinutes: { type: integer, example: 60 }
  *               capacityPerSlot: { type: integer, example: 10 }
  *               feePerBooking: { type: integer, example: 50000, description: 'BOOKING: phí mỗi lượt đặt, 0 = miễn phí' }
- *               perVisitFeeAdult: { type: integer, example: 50000, description: 'WALK_IN: vé lẻ người lớn' }
- *               perVisitFeeChild: { type: integer, example: 30000, description: 'WALK_IN: vé lẻ trẻ em' }
- *               maxConcurrent: { type: integer, description: 'WALK_IN: số người tối đa cùng lúc, để trống = không giới hạn' }
- *               monthlyPassFeeAdult: { type: integer, example: 400000, description: 'WALK_IN/BOOKING: gói tháng người lớn; để trống cả hai giá gói = không bán gói' }
- *               monthlyPassFeeChild: { type: integer, example: 250000 }
  *               image: { type: string, format: binary, description: 'jpg/png ≤ 5MB' }
  */
 router.get('/', authenticate, authorize(...VIEWERS), validate({ query: listQuery }), async (req, res) => {

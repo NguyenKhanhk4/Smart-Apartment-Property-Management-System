@@ -1,6 +1,6 @@
 // API Module B: Phí & đơn giá, hóa đơn, thanh toán, công nợ.
 // Theo quy ước axiosClient.js: trả nguyên envelope { success, data, pagination? }.
-import { http } from './axiosClient';
+import { apiClient, http } from './axiosClient';
 
 // ===== UC-B01: Danh mục phí & đơn giá theo thời gian =====
 export const feeTypeApi = {
@@ -49,4 +49,76 @@ export const paymentApi = {
   /** body: { invoiceId | apartmentId + payerId, method: CASH | BANK_TRANSFER, amount, bankRef?, note?, paidAt? } */
   recordOffline: (body) => http.post('/payments/offline', body),
   receipt: (id) => http.get(`/payments/${id}/receipt`),
+
+  // payOS (UC29) — cư dân là Người nộp phí
+  /** body: { invoiceIds } → { paymentId, orderCode, amount, checkoutUrl, qrCode, expiredAt, status } */
+  payosCreate: (body) => http.post('/payments/payos/create', body),
+  /** Trạng thái giao dịch (còn chờ thì server hỏi thẳng payOS) */
+  payosStatus: (orderCode) => http.get(`/payments/payos/${orderCode}`),
+};
+
+// ===== Mô đun 5 (phần Người 3): Báo giá sửa chữa trong căn hộ (UC48). Quyết định: ticketApi.decideQuote =====
+export const repairQuoteApi = {
+  /** KTV — body: { ticketId, items: [{ description, quantity, unitPrice }], note? } → { quote, ticketStatus, needsApproval } */
+  submit: (body) => http.post('/repair-quotes', body),
+  /** Các phiên bản báo giá của 1 phiếu → { items, reapprovalPercent } */
+  byTicket: (ticketId) => http.get(`/repair-quotes/ticket/${ticketId}`),
+  /** Kế toán / Trưởng BQL — params: { status (CSV), billed, apartmentId, page, limit } */
+  list: (params) => http.get('/repair-quotes', { params }),
+};
+
+// ===== Mô đun 4: Công nợ (UC23 kiểm tra công nợ căn, UC31 sổ công nợ & xử lý nợ quá hạn dài) =====
+export const debtApi = {
+  /** params: { page, limit, sort, buildingId, apartmentId, payerId, q, status (CSV LEDGER_STATUS), hasBalance }. Kèm summary */
+  ledger: (params) => http.get('/debts/ledger', { params }),
+  /** Sổ công nợ 1 căn: từng Người nộp phí, hồ sơ nợ, sổ số dư, giao dịch Cần đối soát */
+  apartment: (apartmentId) => http.get(`/debts/apartments/${apartmentId}`),
+  /** UC23 — params: { at? } */
+  check: (apartmentId, params) => http.get(`/debts/apartments/${apartmentId}/check`, { params }),
+  getCase: (id) => http.get(`/debts/cases/${id}`),
+  /** Trưởng BQL — body: { method, response?, measures?, note?, promisedDate?: 'YYYY-MM-DD' } */
+  recordActivity: (id, body) => http.post(`/debts/cases/${id}/activities`, body),
+
+  /** Tải PDF Thông báo nợ quá hạn, trả về tên file */
+  async downloadNotice(id) {
+    const res = await apiClient.get(`/debts/cases/${id}/notice.pdf`, { responseType: 'blob' });
+    const match = /filename="?([^"]+)"?/.exec(res.headers['content-disposition'] ?? '');
+    const filename = match?.[1] ?? 'thong-bao-no-qua-han.pdf';
+    const url = URL.createObjectURL(res.data);
+    const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return filename;
+  },
+};
+
+// ===== Mô đun 4: Quỹ bảo trì 2% (UC33 Kế toán, UC34 Ban quản trị) =====
+// Form có ảnh (chứng từ, báo giá, hóa đơn) gửi multipart, ảnh ở field `images`
+function toMultipart(body, files = []) {
+  if (!files.length) return body;
+  const form = new FormData();
+  Object.entries(body).forEach(([k, v]) => v != null && v !== '' && form.append(k, v));
+  files.forEach((f) => form.append('images', f));
+  return form;
+}
+
+export const fundApi = {
+  overview: () => http.get('/fund'),
+  /** params: { page, limit, type, from, to } */
+  transactions: (params) => http.get('/fund/transactions', { params }),
+  /** body: { incomeSource, amount, occurredAt?, documentNo, description? } */
+  recordIncome: (body, files) => http.post('/fund/incomes', toMultipart(body, files)),
+  /** params: { page, limit, status (CSV) } */
+  proposals: (params) => http.get('/fund/proposals', { params }),
+  proposal: (id) => http.get(`/fund/proposals/${id}`),
+  /** body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair? } */
+  createProposal: (body, files) => http.post('/fund/proposals', toMultipart(body, files)),
+  /** body: { decision: AGREE | DISAGREE, comment? } */
+  vote: (id, body) => http.post(`/fund/proposals/${id}/votes`, body),
+  cancel: (id, reason) => http.post(`/fund/proposals/${id}/cancel`, { reason }),
+  acceptWork: (id) => http.post(`/fund/proposals/${id}/accept-work`),
+  /** body: { amount, occurredAt?, documentNo, description? } */
+  recordExpense: (id, body, files) => http.post(`/fund/proposals/${id}/expense`, toMultipart(body, files)),
 };

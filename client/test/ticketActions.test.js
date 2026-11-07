@@ -56,8 +56,38 @@ test('phản ánh: manager được xử lý; cư dân đánh giá sau khi BQL �
   assert.equal(ticketActions({ ...complaint, status: 'CLOSED', rating: 4 }, me, can('RESIDENT')).canConfirm, false);
 });
 
-test('progressOptions: trong căn hộ chưa đồng ý phí thì chỉ gửi báo giá', () => {
+test('progressOptions: trong căn hộ chưa đồng ý phí thì không cập nhật tiến độ, phải gửi báo giá qua form', () => {
   const inApt = { ...base, scope: 'IN_APARTMENT', status: 'ASSIGNED' };
-  assert.deepEqual(progressOptions(inApt), ['WAITING_QUOTE_APPROVAL']);
+  assert.deepEqual(progressOptions(inApt), []);
   assert.deepEqual(progressOptions({ ...inApt, quoteDecision: { accepted: true } }), ['IN_PROGRESS', 'WAITING_CONFIRM']);
+});
+
+test('KTV được giao: gửi báo giá sự cố trong căn khi Đã nhận / Chờ đồng ý / Đang xử lý / Chờ linh kiện', () => {
+  const tech = can('STAFF:TECHNICIAN');
+  const mine = { ...base, scope: 'IN_APARTMENT', assignedTo: { _id: 'u1' } };
+  for (const status of ['ASSIGNED', 'WAITING_QUOTE_APPROVAL', 'IN_PROGRESS', 'WAITING_PARTS']) {
+    assert.equal(ticketActions({ ...mine, status }, me, tech).canQuote, true, status);
+  }
+  assert.equal(ticketActions({ ...mine, status: 'WAITING_CONFIRM' }, me, tech).canQuote, false);
+  assert.equal(ticketActions({ ...mine, scope: 'COMMON_AREA', status: 'ASSIGNED' }, me, tech).canQuote, false);
+  assert.equal(ticketActions({ ...mine, status: 'ASSIGNED', assignedTo: { _id: 'other' } }, me, tech).canQuote, false);
+});
+
+test('M5-5 đổi phân loại: điều phối hoặc KTV được giao, chỉ khi Mới / Đã nhận', () => {
+  const dispatcher = can('MANAGER');
+  const tech = can('STAFF:TECHNICIAN');
+  assert.equal(ticketActions(base, me, dispatcher).canReclassify, true);
+  assert.equal(ticketActions({ ...base, status: 'IN_PROGRESS' }, me, dispatcher).canReclassify, false);
+  assert.equal(ticketActions({ ...base, status: 'ASSIGNED', assignedTo: { _id: 'u1' } }, me, tech).canReclassify, true);
+  assert.equal(ticketActions({ ...base, status: 'ASSIGNED', assignedTo: { _id: 'u2' } }, me, tech).canReclassify, false);
+  assert.equal(ticketActions(base, me, can('RESIDENT')).canReclassify, false);
+});
+
+test('M5-6 gộp phiếu: điều phối, sự cố khu vực chung chưa bắt đầu; phiếu đã gộp không phân công được', () => {
+  const dispatcher = can('STAFF:RECEPTIONIST');
+  assert.equal(ticketActions(base, me, dispatcher).canMerge, true);
+  assert.equal(ticketActions({ ...base, scope: 'IN_APARTMENT' }, me, dispatcher).canMerge, false);
+  assert.equal(ticketActions({ ...base, status: 'IN_PROGRESS' }, me, dispatcher).canMerge, false);
+  assert.equal(ticketActions(base, me, can('STAFF:TECHNICIAN')).canMerge, false);
+  assert.equal(ticketActions({ ...base, status: 'MERGED' }, me, dispatcher).canAssign, false);
 });

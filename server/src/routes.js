@@ -15,12 +15,11 @@ import assetRoutes from './modules/assets/assets.routes.js';
 import workOrderRoutes from './modules/workOrders/workOrders.routes.js';
 import amenityRoutes from './modules/amenities/amenities.routes.js';
 import memberCodeRoutes from './modules/memberCodes/memberCodes.routes.js';
-import amenityPassRoutes from './modules/amenityPasses/amenityPasses.routes.js';
 import bookingRoutes from './modules/bookings/bookings.routes.js';
-import amenityVisitRoutes from './modules/amenityVisits/amenityVisits.routes.js';
 import devAuthRoutes from './modules/devAuth/devAuth.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import userRoutes from './modules/users/users.routes.js';
+import activationCodeRoutes from './modules/auth/activationCodes.routes.js';
 import buildingRoutes from './modules/buildings/buildings.routes.js';
 import apartmentRoutes from './modules/apartments/apartments.routes.js';
 import contractRoutes from './modules/contracts/contracts.routes.js';
@@ -30,12 +29,20 @@ import systemDashboardRoutes from './modules/systemDashboard/systemDashboard.rou
 import feeTypeRoutes from './modules/feeTypes/feeTypes.routes.js';
 import invoiceRoutes from './modules/invoices/invoices.routes.js';
 import paymentRoutes from './modules/payments/payments.routes.js';
+import debtRoutes from './modules/debts/debts.routes.js';
+import repairQuoteRoutes from './modules/repairQuotes/repairQuotes.routes.js';
+import fundRoutes from './modules/fund/fund.routes.js';
 import gatePassRoutes, { platesRouter } from './modules/gatePasses/gatePasses.routes.js';
 import parkingCardRoutes from './modules/parkingCards/parkingCards.routes.js';
 import parkingGateRoutes from './modules/parkingGate/parkingGate.routes.js';
 import dutyShiftRoutes from './modules/dutyShifts/dutyShifts.routes.js';
 
+import auditLogRoutes from './modules/auditLogs/auditLogs.routes.js';
+
 const router = Router();
+
+// Module C — audit chỉ đọc (TM)
+router.use('/audit-logs', auditLogRoutes);
 
 /**
  * @openapi
@@ -73,13 +80,12 @@ router.use('/work-orders', workOrderRoutes);
 // Module D — Thanh Bình (Tiện ích & đặt chỗ)
 router.use('/amenities', amenityRoutes);
 router.use('/member-codes', memberCodeRoutes);
-router.use('/amenity-passes', amenityPassRoutes);
 router.use('/bookings', bookingRoutes);
-router.use('/amenity-visits', amenityVisitRoutes);
 
 // Module A — Vũ Việt (Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện)
 router.use('/auth', authLimiter, authRoutes);
 router.use('/users', userRoutes);
+router.use('/activation-codes', activationCodeRoutes);
 router.use('/buildings', buildingRoutes);
 router.use('/apartments', apartmentRoutes);
 router.use('/contracts', contractRoutes);
@@ -95,6 +101,9 @@ router.use('/parking-gate', parkingGateRoutes);
 router.use('/fee-types', feeTypeRoutes);
 router.use('/invoices', invoiceRoutes);
 router.use('/payments', paymentRoutes);
+router.use('/debts', debtRoutes);
+router.use('/repair-quotes', repairQuoteRoutes);
+router.use('/fund', fundRoutes);
 
 // Người 4 — Sự cố & Tiện ích (lịch ca trực)
 router.use('/duty-shifts', dutyShiftRoutes);

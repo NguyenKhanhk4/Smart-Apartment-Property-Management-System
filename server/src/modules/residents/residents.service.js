@@ -22,9 +22,9 @@ import {
   decryptIdNumber,
   maskIdNumber,
 } from './idCrypto.js';
-import { findOrCreateResidentUser, linkResident, welcomeNewResident } from './residentAccounts.js';
+import { findOrCreateResidentUser, inviteNewResident, linkResident } from './residentAccounts.js';
 import { toPublicUser } from '../auth/auth.service.js';
-import { findUserByPhone } from '../users/userLookup.js';
+import { findUserByPhone, maskEmail } from '../users/userLookup.js';
 
 /**
  * Danh sách thành viên đang hoạt động trong căn hộ (UC-A07, BR-A8)
@@ -88,12 +88,6 @@ export async function listApartmentResidents(apartmentId, viewer) {
   return results;
 }
 
-const maskEmail = (email) => {
-  if (!email) return null;
-  const [name, domain] = email.split('@');
-  return `${name[0]}***@${domain}`;
-};
-
 /**
  * Tra tài khoản theo SĐT để lễ tân đối chiếu trước khi gắn vào căn hộ (BR-X5).
  * Chỉ trả thông tin đã che; tài khoản nội bộ không trả danh tính.
@@ -121,7 +115,7 @@ export async function lookupAccountByPhone(phone) {
 /**
  * Thêm thành viên hộ gia đình (Lễ tân) — UC-A07
  * - Luôn là FAMILY_MEMBER (OWNER/TENANT do Hợp đồng tạo). Căn hộ phải OWNED hoặc RENTED.
- * - Chưa có tài khoản thì tạo mới + gửi mail mật khẩu tạm; mật khẩu chỉ trả về khi gửi mail thất bại.
+ * - Chưa có tài khoản thì tạo mới ở trạng thái chờ kích hoạt và gửi mail mời kích hoạt.
  */
 export async function addMember(receptionistUser, data, ip) {
   const { apartmentId, idNumber } = data;
@@ -195,7 +189,7 @@ export async function addMember(receptionistUser, data, ip) {
     );
   });
 
-  const temporaryPassword = account ? await welcomeNewResident(account) : null;
+  const activationInviteSent = account ? await inviteNewResident(account) : null;
   await notify(account?.user._id, {
     type: NOTIFICATION_TYPES.SYSTEM,
     title: 'Đã thêm vào căn hộ',
@@ -209,7 +203,7 @@ export async function addMember(receptionistUser, data, ip) {
   resident.idNumber = maskIdNumber(decryptIdNumber(resident.idNumberEnc));
   delete resident.idNumberEnc;
   delete resident.idNumberHash;
-  return { resident, user: account ? toPublicUser(account.user) : null, temporaryPassword };
+  return { resident, user: account ? toPublicUser(account.user) : null, activationInviteSent };
 }
 
 async function syncMemberCodes(apartmentId) {

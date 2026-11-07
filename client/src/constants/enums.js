@@ -81,6 +81,7 @@ export const TICKET_STATUS = {
   WAITING_CONFIRM: { label: 'Chờ nghiệm thu', color: 'gold' },
   CLOSED: { label: 'Đã nghiệm thu', color: 'success' },
   REJECTED: { label: 'Từ chối', color: 'default' },
+  MERGED: { label: 'Đã gộp vào phiếu khác', color: 'default' },
 };
 
 // Nhóm trạng thái — giống hệt server/src/constants/enums.js (test enumParity kiểm tra). Không tự liệt kê ở từng trang.
@@ -98,6 +99,8 @@ export const TICKET_HISTORY_ACTIONS = {
   QUOTE_REQUESTED: { label: 'Gửi báo giá', color: 'purple' },
   QUOTE_ACCEPTED: { label: 'Cư dân đồng ý phí', color: 'green' },
   QUOTE_DECLINED: { label: 'Cư dân từ chối phí', color: 'gray' },
+  QUOTE_REVISED: { label: 'Cập nhật báo giá', color: 'purple' },
+  QUOTE_EXPIRED: { label: 'Báo giá quá hạn, tự đóng', color: 'gray' },
   WAITING_PARTS: { label: 'Chờ linh kiện', color: 'orange' },
   RESOLVED: { label: 'Đã xử lý xong', color: 'blue' },
   CONFIRMED: { label: 'Cư dân nghiệm thu', color: 'green' },
@@ -106,6 +109,8 @@ export const TICKET_HISTORY_ACTIONS = {
   SLA_ALERTED: { label: 'Cảnh báo trễ hạn', color: 'red' },
   AUTO_CLOSED: { label: 'Hệ thống tự đóng', color: 'green' },
   REJECTED: { label: 'Từ chối', color: 'gray' },
+  RECLASSIFIED: { label: 'Đổi phân loại', color: 'purple' },
+  MERGED: { label: 'Gộp phiếu trùng', color: 'gray' },
 };
 
 // ===== Sự cố & tiện ích (Người 4) =====
@@ -159,6 +164,7 @@ export const FEE_CATEGORIES = {
   AMENITY: { label: 'Phí tiện ích', color: 'purple' },
   ADJUSTMENT: { label: 'Điều chỉnh', color: 'gold' },
   OTHER: { label: 'Khoản thu khác', color: 'magenta' },
+  REPAIR: { label: 'Sửa chữa trong căn', color: 'volcano' },
 };
 
 // ===== Module B — Phí & đơn giá (UC-B01) =====
@@ -205,6 +211,69 @@ export const INVOICE_STATUS = {
   CANCELLED: { label: 'Đã hủy', color: 'default' },
 };
 
+// ===== Quỹ bảo trì 2% (UC33, UC34) =====
+export const FUND_TX_TYPES = {
+  INCOME: { label: 'Thu', color: 'green' },
+  EXPENSE: { label: 'Chi', color: 'red' },
+};
+
+export const VOTE_DECISIONS = {
+  AGREE: { label: 'Đồng ý', color: 'green' },
+  DISAGREE: { label: 'Không đồng ý', color: 'red' },
+};
+
+export const FUND_INCOME_SOURCES = {
+  INITIAL_HANDOVER: { label: 'Số dư ban đầu CĐT bàn giao', color: 'blue' },
+  INTEREST: { label: 'Lãi tiền gửi', color: 'cyan' },
+  OTHER: { label: 'Khác', color: 'default' },
+};
+
+export const FUND_PLAN_TYPES = {
+  ANNUAL_PLAN: { label: 'Kế hoạch bảo trì năm', color: 'blue' },
+  UNSCHEDULED: { label: 'Bảo trì đột xuất', color: 'orange' },
+};
+
+export const FUND_PROPOSAL_STATUS = {
+  PENDING: { label: 'Chờ Ban quản trị duyệt', color: 'gold' },
+  APPROVED: { label: 'Đã duyệt, chờ chi', color: 'blue' },
+  REJECTED: { label: 'Bị từ chối', color: 'red' },
+  PAID: { label: 'Đã chi', color: 'green' },
+  CANCELLED: { label: 'Đã rút', color: 'default' },
+};
+
+// Báo giá sửa chữa trong căn hộ (UC48, UC40)
+export const QUOTE_STATUS = {
+  PENDING: { label: 'Chờ đồng ý', color: 'gold' },
+  ACCEPTED: { label: 'Đã đồng ý', color: 'green' },
+  DECLINED: { label: 'Đã từ chối', color: 'red' },
+  EXPIRED: { label: 'Quá hạn phản hồi', color: 'default' },
+  SUPERSEDED: { label: 'Đã thay bằng bản mới', color: 'default' },
+};
+
+// Công nợ (UC31): hồ sơ nợ quá hạn của 1 Người nộp phí tại 1 căn
+export const DEBT_STATUS = {
+  REMINDING: { label: 'Đang nhắc nợ', color: 'orange' },
+  LONG_OVERDUE: { label: 'Nợ quá hạn dài', color: 'magenta' },
+  RESOLVED: { label: 'Đã trả hết', color: 'green' },
+};
+
+// Tình trạng một dòng sổ công nợ (căn + Người nộp phí), lấy mức nặng nhất
+export const LEDGER_STATUS = {
+  PAID: { label: 'Đã thanh toán', color: 'green' },
+  UNPAID: { label: 'Chưa thanh toán', color: 'blue' },
+  PARTIALLY_PAID: { label: 'Thanh toán một phần', color: 'cyan' },
+  OVERDUE: { label: 'Quá hạn', color: 'red' },
+  LONG_OVERDUE: { label: 'Nợ quá hạn dài', color: 'magenta' },
+};
+
+export const CONTACT_METHODS = {
+  PHONE: { label: 'Gọi điện', color: 'blue' },
+  SMS: { label: 'Tin nhắn', color: 'cyan' },
+  EMAIL: { label: 'Email', color: 'geekblue' },
+  IN_PERSON: { label: 'Gặp trực tiếp', color: 'purple' },
+  LETTER: { label: 'Gửi văn bản', color: 'default' },
+};
+
 export const PREPAID_TX_TYPES = {
   DEPOSIT: { label: 'Tiền thừa ghi vào số dư', color: 'green' },
   APPLY: { label: 'Trừ vào thông báo phí', color: 'blue' },
@@ -240,27 +309,15 @@ export const BOOKING_STATUS = {
 export const BOOKING_ACTIVE_STATUSES = ['PENDING_PAYMENT', 'APPROVED', 'CHECKED_IN'];
 export const BOOKING_LEGACY_STATUSES = ['PENDING', 'REJECTED'];
 
-// Lượt vào tiện ích WALK_IN (UC-D10)
-export const VISIT_CHARGE_TYPES = {
-  PASS: { label: 'Gói tháng', color: 'cyan' },
-  SINGLE: { label: 'Vé lẻ', color: 'blue' },
-  FREE: { label: 'Miễn phí', color: 'green' },
-};
-export const VISIT_STATUS = {
-  VALID: { label: 'Hợp lệ', color: 'success' },
-  CANCELLED: { label: 'Đã hủy', color: 'default' },
-};
-
 // Kiểu tiện ích (accessMode). Bản ghi cũ không có accessMode coi là BOOKING
 export const AMENITY_ACCESS_MODES = {
   FREE: { label: 'Tự do', color: 'green', hint: 'Công viên, đường dạo, sân chơi ngoài trời: không đặt chỗ, không phí, chỉ hiển thị giờ và vị trí.' },
-  WALK_IN: { label: 'Vào cửa', color: 'cyan', hint: 'Gym, yoga, hồ bơi: cư dân đến thẳng, lễ tân tra mã; vào bằng gói tháng, vé lẻ hoặc miễn phí (trẻ nhỏ).' },
-  BOOKING: { label: 'Đặt chỗ', color: 'blue', hint: 'Sân tennis, cầu lông, khu BBQ: cư dân đặt slot độc quyền, lễ tân hoặc bảo vệ check-in.' },
+  BOOKING: { label: 'Đặt chỗ', color: 'blue', hint: 'Sân tennis, cầu lông, khu BBQ, gym, hồ bơi: cư dân đặt theo khung giờ (slot), lễ tân hoặc bảo vệ check-in.' },
 };
 
-// Nhóm tuổi tính giá tiện ích (BR-O24); mốc tuổi lấy từ tham số CHILD_FREE_AGE / CHILD_ADULT_AGE
+// Nhóm tuổi theo ngày sinh (hiển thị ở thẻ cư dân, gia đình, đặt hộ tại quầy); mốc tuổi lấy từ tham số CHILD_FREE_AGE / CHILD_ADULT_AGE
 export const AGE_GROUPS = {
-  CHILD_FREE: { label: 'Trẻ nhỏ (miễn phí)', color: 'green' },
+  CHILD_FREE: { label: 'Trẻ nhỏ', color: 'green' },
   CHILD: { label: 'Trẻ em', color: 'cyan' },
   ADULT: { label: 'Người lớn', color: 'default' },
 };
@@ -275,11 +332,6 @@ export const RELATION_TYPES = {
   OWNER: { label: 'Chủ sở hữu', color: 'blue' },
   TENANT: { label: 'Người thuê', color: 'geekblue' },
   FAMILY_MEMBER: { label: 'Thành viên', color: 'default' },
-};
-
-export const AMENITY_PASS_STATUS = {
-  ACTIVE: { label: 'Đang hiệu lực', color: 'green' },
-  CANCELLED: { label: 'Đã hủy', color: 'default' },
 };
 
 export const ASSET_CATEGORIES = {
@@ -328,6 +380,10 @@ export const CRON_JOBS = {
   INVOICE_GENERATE: { label: 'Tạo hóa đơn định kỳ', color: 'green' },
   INVOICE_OVERDUE: { label: 'Quét hóa đơn quá hạn', color: 'red' },
   BILLING_REMIND: { label: 'Nhắc tính phí / duyệt thông báo phí', color: 'gold' },
+  PAYMENT_RECONCILE: { label: 'Đối soát giao dịch payOS', color: 'blue' },
+  DEBT_REMIND: { label: 'Nhắc nợ quá hạn', color: 'red' },
+  QUOTE_REMIND: { label: 'Nhắc / tự đóng báo giá sửa chữa', color: 'purple' },
+  FUND_PROPOSAL_REMIND: { label: 'Nhắc Ban quản trị duyệt chi quỹ', color: 'purple' },
   BOOKING_COMPLETE: { label: 'Hoàn tất / không đến booking tiện ích', color: 'cyan' },
   WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
   TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },

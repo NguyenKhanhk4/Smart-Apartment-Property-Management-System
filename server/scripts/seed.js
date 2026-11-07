@@ -7,7 +7,7 @@ import { connectDB, disconnectDB } from '../src/config/db.js';
 import { env } from '../src/config/env.js';
 import * as M from '../src/models/index.js';
 import { ensureDefaultConfigs } from '../src/services/systemConfig.service.js';
-import { DAY_MS, HOUR_MS, periodEnd, periodRange, startOfVnDay, vnPeriod } from '../src/utils/time.js';
+import { DAY_MS, HOUR_MS, periodRange, startOfVnDay, vnPeriod } from '../src/utils/time.js';
 
 const RESET = process.argv.includes('--reset');
 const PASSWORD = 'Sapms@123';
@@ -33,6 +33,7 @@ if (RESET) {
 await ensureDefaultConfigs();
 const passwordHash = await bcrypt.hash(PASSWORD, 10);
 const now = new Date();
+const acceptedConsent = { action: 'ACCEPTED', policyVersion: '1.0', createdAt: now };
 const daysAgo = (n, hour = 9) => new Date(startOfVnDay(new Date(now.getTime() - n * DAY_MS)).getTime() + hour * HOUR_MS);
 
 // ===== Tài khoản =====
@@ -43,6 +44,7 @@ const mkUser = (email, fullName, role, extra = {}) => ({
   role,
   passwordHash,
   activatedAt: now,
+  consents: [acceptedConsent],
   phone: `09${(phoneSeq += 1)}`,
   ...extra,
 });
@@ -115,7 +117,7 @@ await M.Resident.insertMany(
 // cudan1 (căn đầu) là chủ hộ có vợ và con nhỏ (chưa có ngày sinh: chủ hộ tự nhập ở mục Gia đình).
 // Căn thứ 7 đang cho thuê: chủ sở hữu "không ở" (cusohuu7) không có quyền tiện ích, người thuê (nguoithue7) là chủ hộ.
 // Tạo trực tiếp (không qua mkUser) để không tiêu thụ bộ sinh số ngẫu nhiên → dữ liệu demo phía sau giữ nguyên
-const demoUser = (email, fullName, phone) => ({ email, fullName, role: 'RESIDENT', passwordHash, activatedAt: now, phone });
+const demoUser = (email, fullName, phone) => ({ email, fullName, role: 'RESIDENT', passwordHash, activatedAt: now, consents: [acceptedConsent], phone });
 const householdUsers = await M.User.insertMany([
   demoUser('vo.cudan1@sapms.vn', 'Vợ cư dân An', '0900000001'),
   demoUser('con.cudan1@sapms.vn', 'Bé An', '0900000002'),
@@ -157,6 +159,21 @@ await M.Resident.insertMany([
   { userId: householdUsers[3]._id, apartmentId: rentedApartment._id, relationType: 'TENANT', contractId: rentedLeaseContract._id, moveInDate: daysAgo(120) },
   { userId: householdUsers[4]._id, apartmentId: apartments[2]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[2]._id, moveInDate: daysAgo(300) },
 ]);
+// Cư dân chờ kích hoạt để thử UC11: SĐT 0900000006, email chokichhoat@sapms.vn, mã căn lấy từ căn đầu tiên
+const pendingUser = await M.User.create({
+  email: 'chokichhoat@sapms.vn',
+  fullName: 'Cư dân chờ kích hoạt',
+  role: 'RESIDENT',
+  phone: '0900000006',
+});
+await M.Resident.create({
+  userId: pendingUser._id,
+  apartmentId: apartments[0]._id,
+  relationType: 'FAMILY_MEMBER',
+  contractId: contracts[0]._id,
+  moveInDate: daysAgo(10),
+});
+
 const vehicles = await M.Vehicle.insertMany(
   occupied.slice(0, 20).map((a, i) => ({
     apartmentId: a._id,
@@ -263,15 +280,29 @@ for (const period of periods) {
 await M.Invoice.insertMany(invoices);
 await M.Payment.insertMany(payments);
 
-const overdueApartments = [...new Set(invoices.filter((i) => i.status === 'OVERDUE').map((i) => String(i.apartmentId)))];
+// Hồ sơ nợ quá hạn (UC31): 1 căn đã nhắc đủ 3 lần → Nợ quá hạn dài, có lời hẹn trả; các căn còn lại cron DEBT_REMIND tự mở khi chạy
+const overdueApartments = [...new Set(invoices.filter((i) => i.status === 'OVERDUE' && i.payerId).map((i) => String(i.apartmentId)))];
 await M.DebtFollowup.insertMany(
-  overdueApartments.slice(0, 3).map((apartmentId) => ({
-    apartmentId,
-    invoiceIds: invoices.filter((i) => String(i.apartmentId) === apartmentId && i.status === 'OVERDUE').map((i) => i._id),
-    assignedTo: U.letan._id,
-    assignedBy: U.manager._id,
-    activities: [{ at: daysAgo(2), by: U.letan._id, method: 'PHONE', note: 'Đã gọi, hẹn cuối tuần thanh toán', promisedDate: daysAgo(-3) }],
-  })),
+  overdueApartments.slice(0, 1).map((apartmentId) => {
+    const inv = invoices.filter((i) => String(i.apartmentId) === apartmentId && i.status === 'OVERDUE');
+    const amount = inv.reduce((sum, i) => sum + i.totalAmount - (i.paidAmount ?? 0), 0);
+    const reminders = [12, 9, 6].map((d) => ({ at: daysAgo(d, 8), amount, invoiceCodes: inv.map((i) => i.code) }));
+    return {
+      apartmentId,
+      buildingId: inv[0].buildingId,
+      payerId: inv[0].payerId,
+      status: 'LONG_OVERDUE',
+      openedAt: daysAgo(12, 8),
+      reminderCount: 3,
+      lastRemindedAt: reminders.at(-1).at,
+      reminders,
+      longOverdueAt: daysAgo(3, 8),
+      promisedDate: startOfVnDay(daysAgo(-5)),
+      activities: [
+        { at: daysAgo(2), by: U.manager._id, method: 'PHONE', response: 'Cư dân xin lùi vì đang đi công tác', promisedDate: startOfVnDay(daysAgo(-5)) },
+      ],
+    };
+  }),
 );
 
 // ===== Quỹ bảo trì =====
@@ -282,29 +313,43 @@ const addTx = (type, amount, occurredAt, description, extra = {}) => {
   balance += type === 'INCOME' ? amount : -amount;
   fundTx.push({ fundId: fund._id, type, amount, balanceAfter: balance, occurredAt, description, createdBy: U.accountant._id, ...extra });
 };
-addTx('INCOME', 1500000000, daysAgo(270), 'Kinh phí bảo trì 2% bàn giao', { source: 'Kinh phí 2% bàn giao' });
+const fundSeq = { PTQ: 0, PCQ: 0 };
+const fundCode = (prefix, at) => `${prefix}-${vnPeriod(at).replace('-', '')}-${String((fundSeq[prefix] += 1)).padStart(5, '0')}`;
+addTx('INCOME', 1500000000, daysAgo(270), 'Kinh phí bảo trì 2% bàn giao', {
+  source: 'Kinh phí 2% bàn giao', incomeSource: 'INITIAL_HANDOVER', documentNo: 'BB-BG-001', code: fundCode('PTQ', daysAgo(270)),
+});
 const proposals = await M.FundProposal.insertMany([
   {
-    fundId: fund._id, title: 'Thay cáp thang máy Block A', description: 'Cáp tải đã mòn theo biên bản kiểm định', amount: 180000000,
-    proposedBy: U.manager._id, status: 'APPROVED', finalizedBy: U.chairman._id, finalizedAt: daysAgo(150), finalNote: 'Đồng ý',
+    code: 'DXQ-SEED-00001', fundId: fund._id, title: 'Thay cáp thang máy Block A', description: 'Cáp tải đã mòn theo biên bản kiểm định', amount: 180000000,
+    planType: 'ANNUAL_PLAN', planRef: 'Kế hoạch bảo trì năm (Hội nghị nhà chung cư)', largeRepair: true, workAcceptedBy: U.manager._id, workAcceptedAt: daysAgo(151),
+    proposedBy: U.accountant._id, status: 'PAID', paidAt: daysAgo(150), boardSize: 3, finalizedBy: U.chairman._id, finalizedAt: daysAgo(152), finalNote: '3/3 thành viên đồng ý',
     votes: [U.chairman, U.bqt1, U.bqt2].map((u) => ({ memberId: u._id, decision: 'AGREE', votedAt: daysAgo(152) })),
   },
   {
-    fundId: fund._id, title: 'Sơn lại hành lang Block B', description: 'Tường hành lang bong tróc', amount: 95000000,
-    proposedBy: U.manager._id, status: 'APPROVED', finalizedBy: U.chairman._id, finalizedAt: daysAgo(60),
+    code: 'DXQ-SEED-00002', fundId: fund._id, title: 'Sơn lại hành lang Block B', description: 'Tường hành lang bong tróc', amount: 95000000,
+    planType: 'ANNUAL_PLAN', planRef: 'Kế hoạch bảo trì năm (Hội nghị nhà chung cư)',
+    proposedBy: U.accountant._id, status: 'PAID', paidAt: daysAgo(60), boardSize: 3, finalizedBy: U.bqt1._id, finalizedAt: daysAgo(62), finalNote: '2/3 thành viên đồng ý',
     votes: [U.chairman, U.bqt1].map((u) => ({ memberId: u._id, decision: 'AGREE', votedAt: daysAgo(62) })),
   },
   {
-    fundId: fund._id, title: 'Nâng cấp hệ thống PCCC', description: 'Thay đầu báo khói tầng 1-5', amount: 120000000,
-    proposedBy: U.manager._id, status: 'PENDING', votes: [{ memberId: U.bqt1._id, decision: 'AGREE', votedAt: daysAgo(1) }],
+    code: 'DXQ-SEED-00003', fundId: fund._id, title: 'Nâng cấp hệ thống PCCC', description: 'Thay đầu báo khói tầng 1-5', amount: 120000000,
+    planType: 'UNSCHEDULED', urgentReason: 'Đầu báo khói hỏng hàng loạt sau đợt kiểm tra PCCC',
+    proposedBy: U.accountant._id, status: 'PENDING', votes: [{ memberId: U.bqt1._id, decision: 'AGREE', votedAt: daysAgo(1) }],
   },
 ]);
-addTx('INCOME', 12500000, daysAgo(180), 'Lãi tiền gửi quý 1', { source: 'Lãi tiền gửi' });
-addTx('EXPENSE', 180000000, daysAgo(150), 'Chi thay cáp thang máy Block A', { proposalId: proposals[0]._id, createdBy: U.chairman._id });
-addTx('INCOME', 13100000, daysAgo(90), 'Lãi tiền gửi quý 2', { source: 'Lãi tiền gửi' });
-addTx('EXPENSE', 95000000, daysAgo(60), 'Chi sơn hành lang Block B', { proposalId: proposals[1]._id, createdBy: U.chairman._id });
-addTx('INCOME', 13400000, daysAgo(5), 'Lãi tiền gửi quý 3', { source: 'Lãi tiền gửi' });
-await M.FundTransaction.insertMany(fundTx);
+const interest = (amount, at, quarter) =>
+  addTx('INCOME', amount, at, `Lãi tiền gửi quý ${quarter}`, { source: 'Lãi tiền gửi', incomeSource: 'INTEREST', documentNo: `SK-LAI-Q${quarter}`, code: fundCode('PTQ', at) });
+const expense = (amount, at, description, proposal, documentNo) =>
+  addTx('EXPENSE', amount, at, description, { proposalId: proposal._id, documentNo, code: fundCode('PCQ', at) });
+interest(12500000, daysAgo(180), 1);
+expense(180000000, daysAgo(150), 'Chi thay cáp thang máy Block A', proposals[0], 'HĐ-0012345');
+interest(13100000, daysAgo(90), 2);
+expense(95000000, daysAgo(60), 'Chi sơn hành lang Block B', proposals[1], 'HĐ-0067890');
+interest(13400000, daysAgo(5), 3);
+const insertedTx = await M.FundTransaction.insertMany(fundTx);
+for (const p of proposals.slice(0, 2)) {
+  await M.FundProposal.updateOne({ _id: p._id }, { $set: { expenseTxId: insertedTx.find((t) => String(t.proposalId) === String(p._id))._id } });
+}
 fund.balance = balance;
 await fund.save();
 
@@ -416,16 +461,15 @@ for (const status of scenarios) {
 await M.Ticket.insertMany(tickets);
 
 // ===== Tiện ích & booking =====
-// 3 kiểu: FREE (chỉ hiển thị) · WALK_IN (gói tháng / vé lẻ, lễ tân tra mã) · BOOKING (đặt slot).
-// WALK_IN và BOOKING có giờ mở cửa nằm trong giờ lễ tân 05:00–22:00 (BR-O15). Giá theo nhóm tuổi: người lớn / trẻ em (BR-O24).
+// 2 kiểu: FREE (chỉ hiển thị) · BOOKING (đặt slot, giờ mở cửa nằm trong giờ lễ tân 05:00–22:00, BR-O15).
 const amenities = await M.Amenity.insertMany([
   { name: 'Công viên nội khu', accessMode: 'FREE', location: 'Trung tâm khu căn hộ', openTime: '05:00', closeTime: '22:00', description: 'Thảm cỏ, ghế đá và khu vui chơi ngoài trời cho cư dân.' },
   { name: 'Đường dạo bộ', accessMode: 'FREE', location: 'Vòng quanh khu căn hộ' },
-  { name: 'Phòng gym', accessMode: 'WALK_IN', location: 'Tầng 3 khối đế', openTime: '05:00', closeTime: '22:00', perVisitFeeAdult: 50000, perVisitFeeChild: 30000, monthlyPassFeeAdult: 400000, monthlyPassFeeChild: 250000 },
-  { name: 'Phòng yoga', accessMode: 'WALK_IN', location: 'Tầng 3 khối đế', openTime: '06:00', closeTime: '21:00', perVisitFeeAdult: 60000, perVisitFeeChild: 40000, monthlyPassFeeAdult: 500000, monthlyPassFeeChild: 300000 },
-  { name: 'Hồ bơi', accessMode: 'WALK_IN', location: 'Tầng 5 khối đế', openTime: '05:00', closeTime: '21:00', perVisitFeeAdult: 40000, perVisitFeeChild: 25000, maxConcurrent: 40, monthlyPassFeeAdult: 450000, monthlyPassFeeChild: 280000 },
-  { name: 'Sân tennis', accessMode: 'BOOKING', location: 'Sân sau', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 100000, monthlyPassFeeAdult: 600000, monthlyPassFeeChild: 350000 },
-  { name: 'Sân cầu lông', accessMode: 'BOOKING', location: 'Tầng 2 khối đế', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 60000, monthlyPassFeeAdult: 350000, monthlyPassFeeChild: 200000 },
+  { name: 'Phòng gym', accessMode: 'BOOKING', location: 'Tầng 3 khối đế', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 15, feePerBooking: 50000 },
+  { name: 'Phòng yoga', accessMode: 'BOOKING', location: 'Tầng 3 khối đế', openTime: '06:00', closeTime: '21:00', slotDurationMinutes: 60, capacityPerSlot: 10, feePerBooking: 60000 },
+  { name: 'Hồ bơi', accessMode: 'BOOKING', location: 'Tầng 5 khối đế', openTime: '05:00', closeTime: '21:00', slotDurationMinutes: 60, capacityPerSlot: 40, feePerBooking: 40000 },
+  { name: 'Sân tennis', accessMode: 'BOOKING', location: 'Sân sau', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 100000 },
+  { name: 'Sân cầu lông', accessMode: 'BOOKING', location: 'Tầng 2 khối đế', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 60000 },
   { name: 'Khu BBQ Block A', accessMode: 'BOOKING', location: 'Sân thượng Block A', buildingId: buildings[0]._id, openTime: '10:00', closeTime: '22:00', slotDurationMinutes: 180, capacityPerSlot: 1, feePerBooking: 150000 },
 ]);
 const bookable = amenities.filter((a) => a.accessMode === 'BOOKING'); // chỉ tiện ích BOOKING mới có booking
@@ -464,25 +508,6 @@ for (let i = 0; i < 160; i += 1) {
   });
 }
 await M.Booking.insertMany(bookings);
-
-// ===== Gói tháng tiện ích demo (UC-D09): chủ hộ cudan1 có gói gym tháng này, vợ có gói tháng sau, cudan2 có gói sân tennis =====
-const amenityByName = Object.fromEntries(amenities.map((a) => [a.name, a]));
-const thisMonth = vnPeriod(now);
-const nextMonth = vnPeriod(periodEnd(thisMonth));
-const mkPass = (user, apartment, amenity, month, purchasedBy = user) => ({
-  userId: user._id,
-  apartmentId: apartment._id,
-  amenityId: amenity._id,
-  month,
-  ageGroup: 'ADULT',
-  fee: amenity.monthlyPassFeeAdult,
-  purchasedBy: purchasedBy._id,
-});
-await M.AmenityPass.insertMany([
-  mkPass(residentUsers[0], apartments[0], amenityByName['Phòng gym'], thisMonth),
-  mkPass(householdUsers[0], apartments[0], amenityByName['Phòng gym'], nextMonth, residentUsers[0]),
-  mkPass(residentUsers[1], apartments[1], amenityByName['Sân tennis'], thisMonth),
-]);
 
 // ===== Sổ khách, bảng tin, thông báo =====
 await M.GuestLog.insertMany([

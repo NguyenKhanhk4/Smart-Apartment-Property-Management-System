@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { Alert, App, Radio, Result, Skeleton } from 'antd';
+import { Alert, App, Result, Skeleton } from 'antd';
 import { ArrowLeftOutlined, ClockCircleOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { amenityApi, amenityPassApi, bookingApi } from '../../api/moduleD.api';
+import { amenityApi, bookingApi } from '../../api/moduleD.api';
 import AmenityIcon from '../../components/resident/AmenityIcon';
 import StatusBadge from '../../components/resident/StatusBadge';
 import SurfaceCard from '../../components/resident/SurfaceCard';
@@ -11,14 +11,13 @@ import { AMENITY_ACCESS_MODES } from '../../constants/enums';
 import { useApi } from '../../hooks/useApi';
 import { useResident } from '../../hooks/useResident';
 import { formatDate, formatMoney } from '../../utils/format';
-import { usePurchasePass } from '../amenityPasses/usePurchasePass';
-import { passSpan } from './passUtils';
 import { holdLabel } from './bookingHelpers';
+import { payBooking } from './payBooking';
 
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const DEFAULT_ADVANCE_DAYS = 14;
 
-const slotFee = (slot) => (slot.fee > 0 ? formatMoney(slot.fee) : slot.usesPass ? 'Miễn phí theo gói' : 'Miễn phí');
+const slotFee = (slot) => (slot.fee > 0 ? formatMoney(slot.fee) : 'Miễn phí');
 
 function Hero({ amenity }) {
   return amenity.imageUrl ? (
@@ -53,28 +52,15 @@ function PriceRow({ label, value, hint }) {
 
 /** Bảng giá theo kiểu tiện ích */
 function PriceTable({ a }) {
-  const sellsPass = a.accessMode !== 'FREE' && a.monthlyPassFeeAdult != null;
   return (
     <div>
       {a.accessMode === 'FREE' && <PriceRow label="Sử dụng" value="Miễn phí" />}
       {a.accessMode === 'BOOKING' && (
         <PriceRow
-          label="Lẻ lần"
+          label="Phí đặt chỗ"
           value={a.feePerBooking > 0 ? `${formatMoney(a.feePerBooking)}/lượt đặt` : 'Miễn phí'}
           hint={a.slotDurationMinutes ? `Mỗi lượt ${a.slotDurationMinutes} phút` : null}
         />
-      )}
-      {a.accessMode === 'WALK_IN' && (
-        <>
-          <PriceRow label="Vé lẻ · người lớn" value={a.perVisitFeeAdult > 0 ? `${formatMoney(a.perVisitFeeAdult)}/lượt` : 'Miễn phí'} />
-          <PriceRow label="Vé lẻ · trẻ em" value={a.perVisitFeeChild > 0 ? `${formatMoney(a.perVisitFeeChild)}/lượt` : 'Miễn phí'} hint="Trẻ nhỏ được miễn phí" />
-        </>
-      )}
-      {sellsPass && (
-        <>
-          <PriceRow label="Gói tháng · người lớn" value={`${formatMoney(a.monthlyPassFeeAdult)}/tháng`} />
-          <PriceRow label="Gói tháng · trẻ em" value={`${formatMoney(a.monthlyPassFeeChild)}/tháng`} />
-        </>
       )}
     </div>
   );
@@ -83,17 +69,16 @@ function PriceTable({ a }) {
 const chipBase = 'border-0 cursor-pointer rounded-[10px] text-sm';
 
 /** Đặt chỗ theo khung giờ (chỉ tiện ích BOOKING): chọn ngày → chọn giờ → xác nhận (tự xác nhận, BR-O12) */
-function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) {
+function BookingPanel({ amenity, apartmentId }) {
   const navigate = useNavigate();
   const { message } = App.useApp();
   const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [picked, setPicked] = useState(null); // slotStart đang chọn
   const [booking, setBooking] = useState(false);
-  const [payMode, setPayMode] = useState('invoice'); // 'now' đang khóa: chưa có module thanh toán
 
   const { data: info, loading, reload } = useApi(
     () => amenityApi.slots(amenity._id, { date, apartmentId }),
-    [amenity._id, date, apartmentId, refreshKey],
+    [amenity._id, date, apartmentId],
     { enabled: Boolean(apartmentId) },
   );
   const viewer = info?.viewer;
@@ -112,9 +97,16 @@ function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) 
     setBooking(true);
     try {
       const { data: booking } = await bookingApi.create({ apartmentId, amenityId: amenity._id, date, slotStart: picked });
-      // Giữ chỗ chờ thanh toán (khi Ban quản lý bật): nhắc thanh toán trước giờ hết hạn
-      if (booking?.status === 'PENDING_PAYMENT') message.warning(`${holdLabel(booking.holdExpiresAt)}. Vui lòng thanh toán tại quầy lễ tân.`, 6);
-      else message.success('Đặt chỗ thành công');
+      // Tiện ích có phí: giữ chỗ chờ thanh toán → sang payOS ngay; lỗi thì vẫn thanh toán lại được từ Lịch sử đặt
+      if (booking?.status === 'PENDING_PAYMENT') {
+        message.warning(`${holdLabel(booking.holdExpiresAt)}. Đang chuyển sang trang thanh toán…`, 6);
+        try {
+          await payBooking(booking._id);
+          return;
+        } catch (e) {
+          message.error(e.message);
+        }
+      } else message.success('Đặt chỗ thành công');
       navigate(`/r/amenities?tab=history&apartmentId=${apartmentId}`, { viewTransition: true });
     } catch (e) {
       message.error(e.message);
@@ -132,11 +124,7 @@ function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) 
       <div>
         <h2 className="m-0 text-base md:text-[17px] font-semibold">Đặt chỗ</h2>
         <p className="mt-1 mb-0 text-[13px] md:text-sm text-r-muted">
-          {hasPass
-            ? 'Bạn đã có gói tháng: chỉ cần chọn giờ, không mất phí lượt đặt.'
-            : sellsPass
-              ? 'Chọn giờ để đặt lẻ từng lượt, hoặc đăng ký gói tháng để đặt không mất phí lượt.'
-              : 'Chọn ngày và khung giờ còn trống.'}
+          Chọn ngày và khung giờ còn trống.
         </p>
       </div>
 
@@ -198,25 +186,20 @@ function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) 
             <b>{amenity.name}</b> · {formatDate(date)} · {slot.slotStart}–{slot.slotEnd}
           </div>
 
-          {slot.usesPass && <div className="px-3.5 py-3 rounded-xl bg-r-ok-bg text-r-ok-fg text-sm">Miễn phí theo gói tháng của bạn.</div>}
-          {!slot.usesPass && slot.fee === 0 && (
+          {slot.fee === 0 && (
             <div className="text-sm">
               Phí: <b>Miễn phí</b>
             </div>
           )}
-          {!slot.usesPass && slot.fee > 0 && (
+          {slot.fee > 0 && (
             <div className="flex flex-col gap-2.5">
               <div className="text-sm">
                 Phí lượt đặt: <b>{formatMoney(slot.fee)}</b>
               </div>
-              <Radio.Group value={payMode} onChange={(e) => setPayMode(e.target.value)} className="flex! flex-col gap-2">
-                <Radio value="invoice">Cộng vào hóa đơn cuối tháng</Radio>
-                <Radio value="now" disabled>
-                  Thanh toán ngay <span className="text-xs text-r-muted">· Sắp có</span>
-                </Radio>
-              </Radio.Group>
               <div className="px-3.5 py-3 rounded-xl bg-r-warn-bg text-r-warn-fg text-[13px] leading-normal">
-                Phí {formatMoney(slot.fee)} sẽ được cộng vào hóa đơn cuối tháng của căn hộ.
+                {info.rules.payOnline
+                  ? `Đặt xong sẽ chuyển sang trang thanh toán online (payOS). Chỗ được giữ ${info.rules.holdMinutes} phút, quá hạn chưa thanh toán thì tự hủy.`
+                  : `Phí ${formatMoney(slot.fee)} sẽ được cộng vào hóa đơn cuối tháng của căn hộ.`}
               </div>
             </div>
           )}
@@ -226,14 +209,17 @@ function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) 
               type="error"
               showIcon
               title="Bạn chưa được chủ hộ cho phép phát sinh phí tiện ích"
-              description="Hãy nhờ chủ hộ bật quyền trong mục Căn hộ và gia đình, hoặc chọn khung giờ miễn phí / dùng gói tháng."
+              description="Hãy nhờ chủ hộ bật quyền trong mục Căn hộ và gia đình, hoặc chọn khung giờ miễn phí."
             />
           )}
 
           <p className="m-0 text-xs text-r-muted leading-normal">
             Đặt xong là được xác nhận ngay. Check-in tại lễ tân hoặc bảo vệ từ {info.rules.checkinEarlyMinutes} phút trước giờ bắt đầu (không sớm hơn giờ mở
-            quầy {info.rules.receptionOpen}) đến {info.rules.noShowGraceMinutes} phút sau giờ bắt đầu; quá hạn tính là không đến và không thu phí. Hủy miễn phí
-            trước giờ bắt đầu. Mỗi căn tối đa {info.rules.maxActivePerApartment} booking chưa dùng.
+            quầy {info.rules.receptionOpen}) đến {info.rules.noShowGraceMinutes} phút sau giờ bắt đầu.{' '}
+            {amenity.feePerBooking > 0
+              ? `Tiện ích có phí: ${info.rules.payOnline ? 'thanh toán online ngay khi đặt (quá hạn giữ chỗ thì tự hủy)' : 'phí cộng vào hóa đơn tháng'}, hủy không hoàn tiền, được đổi giờ 1 lần trước giờ sử dụng ít nhất ${amenity.changeDeadlineHours ?? 24} giờ.`
+              : 'Hủy hoặc đổi giờ miễn phí trước giờ bắt đầu.'}{' '}
+            Mỗi căn tối đa {info.rules.maxActivePerApartment} booking chưa dùng.
           </p>
 
           <div className="flex gap-2.5">
@@ -261,12 +247,12 @@ function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) 
   );
 }
 
-// Chi tiết dịch vụ (UC-D05/D06/D09): thông tin, bảng giá, gói tháng; tiện ích BOOKING có thêm phần đặt chỗ theo giờ.
+// Chi tiết dịch vụ (UC-D05/D06): thông tin, bảng giá; tiện ích BOOKING có thêm phần đặt chỗ theo giờ.
 export default function AmenityBookingPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [search] = useSearchParams();
-  const { cards, card, apartmentId, setApartmentId, isHead, code } = useResident();
+  const { cards, apartmentId, setApartmentId } = useResident();
 
   // Link có ?apartmentId= → chọn đúng căn
   const wanted = search.get('apartmentId');
@@ -276,10 +262,6 @@ export default function AmenityBookingPage() {
 
   const amenity = useApi(() => amenityApi.get(id), [id]);
   const a = amenity.data;
-  const myPasses = useApi(() => amenityPassApi.mine({ apartmentId }), [apartmentId], { enabled: Boolean(apartmentId) });
-
-  const sellsPass = Boolean(a && a.accessMode !== 'FREE' && a.monthlyPassFeeAdult != null);
-  const purchase = usePurchasePass({ apartmentId, enabled: isHead && sellsPass, onDone: () => myPasses.reload() });
 
   const back = () => navigate(`/r/amenities${apartmentId ? `?apartmentId=${apartmentId}` : ''}`, { viewTransition: true });
 
@@ -298,10 +280,6 @@ export default function AmenityBookingPage() {
   }
   if (!a) return <Skeleton active paragraph={{ rows: 6 }} />;
 
-  const passes = (myPasses.data ?? []).filter((p) => p.status === 'ACTIVE' && String(p.amenityId) === String(a._id));
-  const mine = passes.filter((p) => String(p.userId) === String(card?.userId));
-  const myCurrent = mine.find((p) => p.isCurrent);
-  const others = passes.filter((p) => p.isCurrent && String(p.userId) !== String(card?.userId));
   const mode = AMENITY_ACCESS_MODES[a.accessMode];
 
   return (
@@ -318,16 +296,11 @@ export default function AmenityBookingPage() {
           <SurfaceCard as="section" className="p-4 md:p-5 flex flex-col gap-3.5">
             <Hero amenity={a} />
             <div className="flex items-center gap-2">
-              <StatusBadge tone={a.accessMode === 'BOOKING' ? 'info' : a.accessMode === 'WALK_IN' ? 'warn' : 'ok'}>{mode?.label ?? a.accessMode}</StatusBadge>
+              <StatusBadge tone={a.accessMode === 'BOOKING' ? 'info' : 'ok'}>{mode?.label ?? a.accessMode}</StatusBadge>
             </div>
             {a.location && <InfoLine icon={<EnvironmentOutlined />}>{a.location}</InfoLine>}
             <InfoLine icon={<ClockCircleOutlined />}>{a.openTime && a.closeTime ? `Mở cửa ${a.openTime}–${a.closeTime}` : 'Mở cửa tự do'}</InfoLine>
             {a.description && <p className="m-0 text-sm text-r-text leading-relaxed">{a.description}</p>}
-            {a.accessMode === 'WALK_IN' && (
-              <div className="px-3.5 py-3 rounded-xl bg-r-info-bg text-r-info-fg text-[13px] leading-normal">
-                Không cần đặt trước. Đến quầy lễ tân, đọc mã cư dân{code ? ` ${code}` : ''} để vào bằng gói tháng hoặc vé lẻ.
-              </div>
-            )}
             {a.accessMode === 'FREE' && (
               <div className="px-3.5 py-3 rounded-xl bg-r-ok-bg text-r-ok-fg text-[13px]">Không cần đặt, bạn có thể đến sử dụng trong giờ mở cửa.</div>
             )}
@@ -337,50 +310,14 @@ export default function AmenityBookingPage() {
             <h2 className="m-0 pt-2 text-[15px] font-semibold">Bảng giá</h2>
             <PriceTable a={a} />
           </SurfaceCard>
-
-          {sellsPass && (
-            <SurfaceCard as="section" className="p-4 md:p-5 flex flex-col gap-3" aria-label="Gói tháng">
-              <h2 className="m-0 text-[15px] font-semibold">Gói tháng</h2>
-              {myCurrent ? (
-                <div className="px-3.5 py-3 rounded-xl bg-r-ok-bg text-r-ok-fg text-sm leading-normal">
-                  Bạn đang có gói tháng, hết hạn {passSpan(myCurrent.month).expiry} (còn {passSpan(myCurrent.month).daysLeft} ngày).
-                  {a.accessMode === 'BOOKING' && ' Chỉ cần chọn giờ để đặt chỗ.'}
-                </div>
-              ) : (
-                <p className="m-0 text-sm text-r-muted">Bạn chưa có gói tháng của dịch vụ này.</p>
-              )}
-              {others.length > 0 && (
-                <p className="m-0 text-[13px] text-r-muted">
-                  Đã có gói:{' '}
-                  {others
-                    .map((p) => p.member?.fullName)
-                    .filter(Boolean)
-                    .join(', ')}
-                </p>
-              )}
-              {isHead ? (
-                <button
-                  type="button"
-                  disabled={!purchase.info}
-                  onClick={() => purchase.open({ memberId: String(card.userId), amenityId: String(a._id) })}
-                  className="h-11 rounded-[10px] border-0 bg-r-navy text-white text-sm font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Đăng ký gói tháng
-                </button>
-              ) : (
-                !myCurrent && <p className="m-0 text-[13px] text-r-muted">Chủ hộ đăng ký gói tháng cho bạn.</p>
-              )}
-            </SurfaceCard>
-          )}
         </div>
 
         {a.accessMode === 'BOOKING' && (
           <div className="flex-[2_1_480px] min-w-0">
-            <BookingPanel amenity={a} apartmentId={apartmentId} hasPass={Boolean(myCurrent)} sellsPass={sellsPass} refreshKey={passes.length} />
+            <BookingPanel amenity={a} apartmentId={apartmentId} />
           </div>
         )}
       </div>
-      {purchase.element}
     </div>
   );
 }

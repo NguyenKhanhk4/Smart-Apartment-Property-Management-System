@@ -30,7 +30,9 @@ export default function PaymentListPage() {
     () => ({
       page,
       limit: pageSize,
-      status,
+      // 'RECONCILE' = payOS quá 15 phút chưa rõ kết quả hoặc lệch số tiền → Kế toán đối soát với sao kê
+      status: status === 'RECONCILE' ? undefined : status,
+      needsReconcile: status === 'RECONCILE' ? true : undefined,
       method: method.length ? method.join(',') : undefined,
       from: range?.[0]?.startOf('day').toISOString(),
       to: range?.[1]?.endOf('day').toISOString(),
@@ -61,7 +63,19 @@ export default function PaymentListPage() {
       render: (v) => (v ? formatMoney(v) : '—'),
     },
     { title: 'Người thu', width: 160, render: (_, p) => p.confirmedBy?.fullName ?? (p.method === 'PAYOS' ? 'payOS' : '—') },
-    { title: 'Trạng thái', dataIndex: 'status', width: 120, render: (s) => <EnumTag map={PAYMENT_STATUS} value={s} /> },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      width: 150,
+      render: (s, p) => (
+        <Flex vertical gap={2}>
+          <span>
+            <EnumTag map={PAYMENT_STATUS} value={s} />
+          </span>
+          {p.needsReconcile && <Typography.Text type="warning">Cần đối soát</Typography.Text>}
+        </Flex>
+      ),
+    },
   ];
 
   return (
@@ -88,7 +102,10 @@ export default function PaymentListPage() {
               style={{ width: 150 }}
               value={status}
               onChange={reset(setStatus)}
-              options={Object.entries(PAYMENT_STATUS).map(([value, m]) => ({ value, label: m.label }))}
+              options={[
+                ...Object.entries(PAYMENT_STATUS).map(([value, m]) => ({ value, label: m.label })),
+                { value: 'RECONCILE', label: 'Cần đối soát' },
+              ]}
             />
             <Input.Search
               allowClear

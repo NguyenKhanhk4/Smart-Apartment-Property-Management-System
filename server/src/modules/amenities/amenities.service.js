@@ -21,28 +21,24 @@ const MODE_FIELDS = [
   'slotDurationMinutes',
   'capacityPerSlot',
   'feePerBooking',
-  'perVisitFeeAdult',
-  'perVisitFeeChild',
-  'maxConcurrent',
-  'monthlyPassFeeAdult',
-  'monthlyPassFeeChild',
+  'changeDeadlineHours',
 ];
 const COMMON_FIELDS = ['name', 'buildingId', 'location', 'description'];
 // Trường phí: đổi bất kỳ trường nào đều ghi audit AMENITY_FEE_CHANGED
-const FEE_FIELDS = ['feePerBooking', 'perVisitFeeAdult', 'perVisitFeeChild', 'monthlyPassFeeAdult', 'monthlyPassFeeChild'];
-// Khi đổi kiểu: bỏ giá trị cũ của các trường này (giờ mở cửa và gói tháng được giữ lại)
-const RESET_ON_MODE_CHANGE = ['slotDurationMinutes', 'capacityPerSlot', 'feePerBooking', 'perVisitFeeAdult', 'perVisitFeeChild', 'maxConcurrent'];
+const FEE_FIELDS = ['feePerBooking'];
+// Khi đổi kiểu: bỏ giá trị cũ của các trường này (giờ mở cửa được giữ lại)
+const RESET_ON_MODE_CHANGE = ['slotDurationMinutes', 'capacityPerSlot', 'feePerBooking'];
 
 const LABELS = {
   openTime: 'Giờ mở cửa',
   closeTime: 'Giờ đóng cửa',
   slotDurationMinutes: 'Thời lượng slot',
   capacityPerSlot: 'Sức chứa mỗi slot',
-  perVisitFeeAdult: 'Giá vé người lớn',
-  perVisitFeeChild: 'Giá vé trẻ em',
-  monthlyPassFeeAdult: 'Giá gói tháng người lớn',
-  monthlyPassFeeChild: 'Giá gói tháng trẻ em',
 };
+
+const DEFAULT_CHANGE_DEADLINE_HOURS = 24;
+// Lưới slot: đổi khi còn booking sắp tới thì booking cũ lệch khung giờ / vượt sức chứa thật
+const GRID_FIELDS = ['openTime', 'closeTime', 'slotDurationMinutes'];
 
 const blank = (v) => v === undefined || v === null || v === '';
 const orNull = (v) => (blank(v) ? null : v);
@@ -51,9 +47,8 @@ const pick = (obj, keys) => Object.fromEntries(keys.filter((k) => k in obj).map(
 /**
  * Kiểm tra giá trị tiện ích theo kiểu (accessMode) và trả đúng nhóm trường cần lưu (trường không thuộc kiểu → 0/null).
  * Gom hết lỗi theo field để form hiện đúng chỗ.
- *  - FREE: giờ mở cửa tùy chọn (chỉ hiển thị, KHÔNG áp BR-O15), không phí/slot/gói
- *  - WALK_IN: giờ mở cửa bắt buộc + BR-O15; giá vé người lớn/trẻ em bắt buộc; gói tháng, maxConcurrent tùy chọn
- *  - BOOKING: giờ mở cửa + BR-O15 (vừa ≥ 1 slot); slot, sức chứa bắt buộc; phí đặt mặc định 0; gói tháng tùy chọn
+ *  - FREE: giờ mở cửa tùy chọn (chỉ hiển thị, KHÔNG áp BR-O15), không phí/slot
+ *  - BOOKING: giờ mở cửa + BR-O15 (vừa ≥ 1 slot); slot, sức chứa bắt buộc; phí đặt mặc định 0
  */
 export async function resolveAmenityFields(raw) {
   const mode = raw.accessMode ?? MODE.BOOKING;
@@ -96,21 +91,6 @@ export async function resolveAmenityFields(raw) {
     required('slotDurationMinutes');
     required('capacityPerSlot');
   }
-  if (mode === MODE.WALK_IN) {
-    required('perVisitFeeAdult');
-    required('perVisitFeeChild');
-  }
-
-  // --- Gói tháng (WALK_IN / BOOKING): nhập đủ cả hai giá hoặc để trống cả hai (null = không bán gói) ---
-  const sellsPass = mode !== MODE.FREE;
-  const passAdult = sellsPass ? orNull(raw.monthlyPassFeeAdult) : null;
-  const passChild = sellsPass ? orNull(raw.monthlyPassFeeChild) : null;
-  if ((passAdult === null) !== (passChild === null)) {
-    details.push({
-      field: passAdult === null ? 'monthlyPassFeeAdult' : 'monthlyPassFeeChild',
-      message: 'Gói tháng cần nhập cả giá người lớn và giá trẻ em (hoặc để trống cả hai nếu không bán gói)',
-    });
-  }
 
   if (details.length) throw ApiError.badRequest(details[0].message, details);
 
@@ -121,11 +101,7 @@ export async function resolveAmenityFields(raw) {
     slotDurationMinutes: mode === MODE.BOOKING ? raw.slotDurationMinutes : null,
     capacityPerSlot: mode === MODE.BOOKING ? raw.capacityPerSlot : null,
     feePerBooking: mode === MODE.BOOKING ? (orNull(raw.feePerBooking) ?? 0) : 0,
-    perVisitFeeAdult: mode === MODE.WALK_IN ? raw.perVisitFeeAdult : 0,
-    perVisitFeeChild: mode === MODE.WALK_IN ? raw.perVisitFeeChild : 0,
-    maxConcurrent: mode === MODE.WALK_IN ? orNull(raw.maxConcurrent) : null,
-    monthlyPassFeeAdult: passAdult,
-    monthlyPassFeeChild: passChild,
+    changeDeadlineHours: orNull(raw.changeDeadlineHours) ?? DEFAULT_CHANGE_DEADLINE_HOURS,
   };
 }
 
@@ -135,11 +111,6 @@ export function presentAmenity(doc) {
   return {
     ...o,
     accessMode: accessModeOf(o),
-    perVisitFeeAdult: o.perVisitFeeAdult ?? 0,
-    perVisitFeeChild: o.perVisitFeeChild ?? 0,
-    maxConcurrent: o.maxConcurrent ?? null,
-    monthlyPassFeeAdult: o.monthlyPassFeeAdult ?? null,
-    monthlyPassFeeChild: o.monthlyPassFeeChild ?? null,
     priceSummary: priceSummaryOf(o),
   };
 }
@@ -211,6 +182,7 @@ export async function updateAmenity(user, id, body, files) {
   const modeChanged = body.accessMode !== undefined && body.accessMode !== oldMode;
   // Đổi kiểu làm các booking sắp tới mất nghĩa → chặn (BR-O19)
   if (modeChanged && (await hasUpcomingBookings(id))) throw new ApiError('AMENITY_HAS_ACTIVE_BOOKINGS');
+  await assertGridEditable(id, current, body);
 
   await normalizeBuilding(body);
   // Kiểm tra trên giá trị sau khi ghép (sửa 1 field vẫn phải hợp lệ với các field cũ). Đổi kiểu → nhóm trường riêng
@@ -226,10 +198,13 @@ export async function updateAmenity(user, id, body, files) {
   if (imageUrl) amenity.imageUrl = imageUrl;
   await amenity.save();
 
-  // Booking mới có thể chen vào giữa lúc kiểm tra và lúc ghi → kiểm tra lại, hoàn tác kiểu cũ (cùng cách với setAmenityStatus)
-  if (modeChanged && (await hasUpcomingBookings(id))) {
+  // Booking mới có thể chen vào giữa lúc kiểm tra và lúc ghi → kiểm tra lại, hoàn tác (cùng cách với setAmenityStatus)
+  try {
+    if (modeChanged && (await hasUpcomingBookings(id))) throw new ApiError('AMENITY_HAS_ACTIVE_BOOKINGS');
+    await assertGridEditable(id, current, body);
+  } catch (err) {
     await Amenity.updateOne({ _id: id }, { $set: pick(current, MODE_FIELDS) });
-    throw new ApiError('AMENITY_HAS_ACTIVE_BOOKINGS');
+    throw err;
   }
 
   const changes = {};
@@ -249,8 +224,30 @@ export async function updateAmenity(user, id, body, files) {
   return presentAmenity(amenity);
 }
 
-const hasUpcomingBookings = (amenityId) =>
-  Booking.exists({ amenityId, status: { $in: BOOKING_ACTIVE_STATUSES }, endAt: { $gt: new Date() } });
+const upcoming = (amenityId) => ({ amenityId, status: { $in: BOOKING_ACTIVE_STATUSES }, endAt: { $gt: new Date() } });
+const hasUpcomingBookings = (amenityId) => Booking.exists(upcoming(amenityId));
+
+/**
+ * Còn booking sắp tới thì không đổi giờ mở/đóng cửa, thời lượng slot, và không giảm sức chứa xuống dưới số chỗ
+ * đã đặt của slot đông nhất. Muốn đổi thì hủy / chờ hết các booking đó.
+ */
+async function assertGridEditable(id, current, body) {
+  const gridChanged = GRID_FIELDS.some((f) => body[f] !== undefined && body[f] !== current[f]);
+  if (gridChanged && (await hasUpcomingBookings(id))) {
+    throw new ApiError('AMENITY_HAS_ACTIVE_BOOKINGS', 'Còn booking sắp tới: không đổi được giờ mở cửa / thời lượng slot');
+  }
+  if (body.capacityPerSlot !== undefined && body.capacityPerSlot < (current.capacityPerSlot ?? 0)) {
+    const [top] = await Booking.aggregate([
+      { $match: upcoming(current._id) },
+      { $group: { _id: '$startAt', n: { $sum: 1 } } },
+      { $sort: { n: -1 } },
+      { $limit: 1 },
+    ]);
+    if (top && top.n > body.capacityPerSlot) {
+      throw new ApiError('AMENITY_HAS_ACTIVE_BOOKINGS', `Có khung giờ sắp tới đã đặt ${top.n} chỗ, không giảm sức chứa xuống ${body.capacityPerSlot} được`);
+    }
+  }
+}
 
 // ===== UC-D05: ngừng / kích hoạt lại (không xóa cứng — BR-O17; BR-O19) =====
 export async function setAmenityStatus(id, isActive) {

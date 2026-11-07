@@ -1,7 +1,9 @@
 import { Form, Input, Modal, Radio, Rate, Select } from 'antd';
 import { ticketApi } from '../../api/moduleE.api';
+import { QuoteItems } from '../repairQuotes/QuotePanel';
+import { formatMoney } from '../../utils/format';
 import { useAction, useApi } from '../../hooks/useApi';
-import { PRIORITIES, TICKET_STATUS, enumOptions } from '../../constants/enums';
+import { PRIORITIES, TICKET_SCOPES, TICKET_STATUS, TICKET_TYPES, enumOptions } from '../../constants/enums';
 import { keysOf } from '../../utils/status';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
 import { toFiles } from '../../utils/upload';
@@ -10,13 +12,11 @@ import { progressOptions } from './ticketActions';
 const TS = keysOf(TICKET_STATUS);
 
 const PROGRESS_LABEL = {
-  WAITING_QUOTE_APPROVAL: 'Gửi báo giá — chờ người nộp phí đồng ý',
   IN_PROGRESS: 'Đang xử lý (cập nhật tiến độ)',
   WAITING_PARTS: 'Chờ linh kiện',
   WAITING_CONFIRM: 'Đã xử lý xong — chờ cư dân nghiệm thu',
 };
 const NOTE_LABEL = {
-  WAITING_QUOTE_APPROVAL: 'Hạng mục và chi phí dự kiến',
   WAITING_PARTS: 'Linh kiện cần chờ, dự kiến ngày có',
   WAITING_CONFIRM: 'Ghi chú kết quả',
 };
@@ -133,11 +133,7 @@ export function ProgressModal({ ticket, open, onClose, onDone }) {
       <Form.Item name="status" label="Trạng thái">
         <Radio.Group options={options} style={{ display: 'flex', flexDirection: 'column', gap: 8 }} />
       </Form.Item>
-      <Form.Item
-        name="note"
-        label={NOTE_LABEL[status] ?? 'Ghi chú tiến độ'}
-        rules={[{ required: status === TS.WAITING_QUOTE_APPROVAL, message: 'Nhập hạng mục và chi phí dự kiến' }]}
-      >
+      <Form.Item name="note" label={NOTE_LABEL[status] ?? 'Ghi chú tiến độ'}>
         <Input.TextArea rows={3} maxLength={1000} showCount />
       </Form.Item>
       {resolved && <EvidencePhotosField name="images" label="Ảnh kết quả" />}
@@ -212,8 +208,9 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
   );
 }
 
-// Sự cố trong căn hộ — Người nộp phí đồng ý (→ Đang xử lý) hoặc từ chối (→ phiếu bị từ chối) báo giá
-export function QuoteDecisionModal({ ticket, open, onClose, onDone }) {
+// Sự cố trong căn hộ — Người nộp phí đồng ý (→ Đang xử lý) hoặc từ chối (→ phiếu bị từ chối) báo giá.
+// `quote`: bản báo giá đang chờ (form báo giá của Người 3); dữ liệu cũ không có thì lấy ghi chú trong lịch sử
+export function QuoteDecisionModal({ ticket, quote: pending, open, onClose, onDone }) {
   const quote = [...(ticket.history ?? [])].reverse().find((h) => h.action === 'QUOTE_REQUESTED');
   return (
     <ActionModal
@@ -222,11 +219,28 @@ export function QuoteDecisionModal({ ticket, open, onClose, onDone }) {
       onClose={onClose}
       onDone={onDone}
       okText="Gửi quyết định"
-      success={(res) => (res.data.status === TS.IN_PROGRESS ? 'Đã đồng ý, kỹ thuật viên sẽ tiến hành' : 'Đã từ chối báo giá')}
+      success={(res) =>
+        res.data.history?.at(-1)?.action === 'QUOTE_ACCEPTED'
+          ? 'Đã đồng ý, kỹ thuật viên sẽ tiến hành'
+          : res.data.status === TS.REJECTED
+            ? 'Đã từ chối báo giá'
+            : 'Đã từ chối chi phí phát sinh, kỹ thuật viên làm tiếp theo báo giá đã đồng ý'
+      }
       initialValues={{ accepted: true }}
       action={({ accepted, note }) => ticketApi.decideQuote(ticket._id, { accepted, note })}
     >
-      {quote?.note && (
+      {pending && (
+        <Form.Item label={`Báo giá ${pending.code}: ${formatMoney(pending.totalAmount)}`}>
+          {pending.previousAmount != null && (
+            <div className="mb-2">
+              Chi phí phát sinh so với số đã đồng ý {formatMoney(pending.previousAmount)}, cần bạn duyệt lại.
+            </div>
+          )}
+          {pending.note && <div style={{ whiteSpace: 'pre-wrap', marginBottom: 8 }}>{pending.note}</div>}
+          <QuoteItems quote={pending} />
+        </Form.Item>
+      )}
+      {!pending && quote?.note && (
         <Form.Item label="Nội dung báo giá">
           <div style={{ whiteSpace: 'pre-wrap' }}>{quote.note}</div>
         </Form.Item>
@@ -234,7 +248,7 @@ export function QuoteDecisionModal({ ticket, open, onClose, onDone }) {
       <Form.Item name="accepted" label="Quyết định">
         <Radio.Group
           options={[
-            { value: true, label: 'Đồng ý chi phí, tiến hành sửa' },
+            { value: true, label: 'Đồng ý chi phí, tiến hành sửa (tính vào thông báo phí kỳ sau khi nghiệm thu)' },
             { value: false, label: 'Từ chối, không sửa' },
           ]}
         />
@@ -245,3 +259,78 @@ export function QuoteDecisionModal({ ticket, open, onClose, onDone }) {
     </ActionModal>
   );
 }
+
+// M5-5 — đổi loại / phạm vi phiếu chưa bắt đầu xử lý; hạn SLA tính lại từ lúc đổi
+export function ReclassifyModal({ ticket, open, onClose, onDone }) {
+  const [form] = Form.useForm();
+  const type = Form.useWatch('type', form) ?? ticket.type;
+  return (
+    <ActionModal
+      title={`Đổi phân loại ${ticket.code}`}
+      open={open}
+      onClose={onClose}
+      onDone={onDone}
+      form={form}
+      okText="Đổi phân loại"
+      success="Đã đổi phân loại phiếu"
+      initialValues={{ type: ticket.type, scope: ticket.scope }}
+      action={({ type: nextType, scope, reason }) =>
+        ticketApi.classify(ticket._id, { type: nextType, ...(nextType === 'INCIDENT' && { scope }), reason })
+      }
+    >
+      <Form.Item name="type" label="Loại phiếu" extra="Đổi sang Phản ánh thì phiếu bỏ kỹ thuật viên, chuyển cho Trưởng BQL xử lý">
+        <Radio.Group optionType="button" buttonStyle="solid" options={enumOptions(TICKET_TYPES)} />
+      </Form.Item>
+      {type === 'INCIDENT' && (
+        <Form.Item name="scope" label="Phạm vi" extra="Trong căn hộ: phải gửi báo giá cho Người nộp phí trước khi sửa">
+          <Radio.Group options={enumOptions(TICKET_SCOPES)} />
+        </Form.Item>
+      )}
+      <Form.Item name="reason" label="Lý do" rules={[{ required: true, min: 5, message: 'Nhập lý do (tối thiểu 5 ký tự)' }]}>
+        <Input.TextArea rows={3} maxLength={500} showCount />
+      </Form.Item>
+    </ActionModal>
+  );
+}
+
+// M5-6 — gộp phiếu trùng vào phiếu chính (sự cố khu vực chung đang mở cùng tòa, cùng loại sự cố)
+export function MergeModal({ ticket, open, onClose, onDone }) {
+  const { data: similar = [], loading } = useApi(
+    () =>
+      ticketApi.similar({
+        apartmentId: ticket.apartmentId?._id ?? ticket.apartmentId,
+        categoryId: ticket.category?._id ?? ticket.category,
+        excludeId: ticket._id,
+      }),
+    [ticket._id],
+    { enabled: open },
+  );
+  return (
+    <ActionModal
+      title={`Gộp ${ticket.code} vào phiếu khác`}
+      open={open}
+      onClose={onClose}
+      onDone={onDone}
+      okText="Gộp phiếu"
+      success="Đã gộp phiếu"
+      action={({ parentId, note }) => ticketApi.merge(ticket._id, { parentId, note })}
+    >
+      <Form.Item
+        name="parentId"
+        label="Phiếu chính"
+        extra="Phiếu này sẽ đóng theo phiếu chính; người báo được thông báo khi xử lý xong"
+        rules={[{ required: true, message: 'Chọn phiếu chính' }]}
+      >
+        <Select
+          loading={loading}
+          placeholder={similar.length ? 'Chọn phiếu đang xử lý cùng sự cố' : 'Không có sự cố cùng loại đang mở trong tòa'}
+          options={similar.map((s) => ({ value: s._id, label: `${s.code} · ${s.title} (${TICKET_STATUS[s.status]?.label ?? s.status})` }))}
+        />
+      </Form.Item>
+      <Form.Item name="note" label="Ghi chú">
+        <Input.TextArea rows={2} maxLength={500} />
+      </Form.Item>
+    </ActionModal>
+  );
+}
+

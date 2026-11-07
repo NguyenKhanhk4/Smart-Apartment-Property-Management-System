@@ -50,6 +50,12 @@ export const ticketApi = {
   },
   confirm: (id, body) => http.patch(`/tickets/${id}/confirm`, body),
   runJob: (job) => http.post(`/tickets/jobs/${job}/run`),
+  /** M5-6: sự cố khu vực chung đang mở cùng tòa, cùng loại. params: { apartmentId?, categoryId, excludeId? } */
+  similar: (params) => http.get('/tickets/similar', { params }),
+  /** M5-5: body { type?, scope?, reason } */
+  classify: (id, body) => http.patch(`/tickets/${id}/classify`, body),
+  /** M5-6: body { parentId, note? } */
+  merge: (id, body) => http.patch(`/tickets/${id}/merge`, body),
 };
 
 // ===== UC-E07, E08: Sổ khách =====
@@ -87,6 +93,10 @@ export const reportApi = {
   tickets: (params) => http.get('/reports/tickets', { params }),
   maintenance: (params) => http.get('/reports/maintenance', { params }),
   amenityUsage: (params) => http.get('/reports/amenity-usage', { params }),
+  /** Mô đun 9 — Dashboard tài chính (UC60). params: { from, to } dạng YYYY-MM */
+  finance: (params) => http.get('/reports/finance', { params }),
+  /** Báo cáo giám sát cho Ban quản trị. params: { from, to } dạng YYYY-MM */
+  supervision: (params) => http.get('/reports/supervision', { params }),
 
   /** UC-E13 — tải file Excel/PDF, trả về tên file đã lưu */
   async download(params) {

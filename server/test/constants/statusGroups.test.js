@@ -15,8 +15,8 @@ test('ticket: nhóm Đang mở / Tính SLA / Kết thúc là tập con của TIC
   assertSubset(E.TICKET_FINAL_STATUSES, E.TICKET_STATUS, 'TICKET_FINAL_STATUSES');
 });
 
-test('ticket: mỗi trạng thái thuộc đúng 1 trong 3 nhóm Đang mở / Chờ nghiệm thu / Kết thúc', () => {
-  const buckets = [...E.TICKET_OPEN_STATUSES, E.TICKET_STATUS.WAITING_CONFIRM, ...E.TICKET_FINAL_STATUSES];
+test('ticket: mỗi trạng thái thuộc đúng 1 nhóm Đang mở / Chờ nghiệm thu / Kết thúc / Đã gộp (M5-6, đóng theo phiếu chính)', () => {
+  const buckets = [...E.TICKET_OPEN_STATUSES, E.TICKET_STATUS.WAITING_CONFIRM, ...E.TICKET_FINAL_STATUSES, E.TICKET_STATUS.MERGED];
   assert.deepEqual([...buckets].sort(), values(E.TICKET_STATUS).sort());
 });
 

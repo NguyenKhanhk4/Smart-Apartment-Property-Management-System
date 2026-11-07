@@ -1,23 +1,20 @@
-import { createRequire } from 'node:module';
-import ExcelJS from 'exceljs';
-import PDFDocument from 'pdfkit';
 import * as reports from './reports.service.js';
-import { fmtDateTimeVn, fmtDateVn } from '../../utils/time.js';
+import { col, fmtDate, fmtMoney, fmtPercent, renderReport } from '../../services/export.service.js';
+import { FundProposal, FundTransaction } from '../../models/index.js';
+import { periodLabel } from '../../utils/time.js';
+import { listLedger } from '../debts/debts.ledger.js';
+import { financeDashboard, supervisionReport } from './finance.service.js';
 
-// UC-E13 — Xuất báo cáo Excel/PDF. Mỗi loại báo cáo được chuyển về 1 "spec" chung
-// { title, filterText, summary: [[nhãn, giá trị, format]], sections: [{ title, columns, rows }] }
-// rồi render bằng exceljs hoặc pdfkit — số liệu giống hệt màn hình nguồn.
-
-const require = createRequire(import.meta.url);
-// pdfkit mặc định không có glyph tiếng Việt → dùng DejaVu Sans
-const FONT_REGULAR = require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans.ttf');
-const FONT_BOLD = require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf');
+// UC-E13 / UC65 — Xuất báo cáo Excel/PDF. Mỗi loại báo cáo được chuyển về 1 "spec" chung rồi dựng file bằng
+// dịch vụ xuất dùng chung (services/export.service.js) — số liệu giống hệt màn hình nguồn.
 
 const LABELS = {
   CLEANING: 'Phí vệ sinh',
   PARKING: 'Phí gửi xe',
   AMENITY: 'Phí tiện ích',
   ADJUSTMENT: 'Điều chỉnh',
+  OTHER: 'Khoản thu khác',
+  REPAIR: 'Sửa chữa trong căn',
   PAYOS: 'payOS (VietQR)',
   CASH: 'Tiền mặt',
   BANK_TRANSFER: 'Chuyển khoản',
@@ -27,16 +24,21 @@ const LABELS = {
   MEDIUM: 'Thường',
   HIGH: 'Cao',
   URGENT: 'Khẩn cấp',
+  // Sổ công nợ
+  PAID: 'Đã thanh toán',
+  UNPAID: 'Chưa thanh toán',
+  PARTIALLY_PAID: 'Thanh toán một phần',
+  OVERDUE: 'Quá hạn',
+  LONG_OVERDUE: 'Nợ quá hạn dài',
+  // Quỹ bảo trì
+  INITIAL_HANDOVER: 'Số dư ban đầu CĐT bàn giao',
+  INTEREST: 'Lãi tiền gửi',
+  ANNUAL_PLAN: 'Kế hoạch bảo trì năm',
+  UNSCHEDULED: 'Bảo trì đột xuất',
 };
+const PROPOSAL_LABELS = { PENDING: 'Chờ duyệt', APPROVED: 'Đã duyệt, chờ chi', REJECTED: 'Bị từ chối', PAID: 'Đã chi', CANCELLED: 'Đã rút' };
 const label = (v) => LABELS[v] ?? v ?? '';
 
-const fmtMoney = (n) => `${Math.round(n ?? 0).toLocaleString('vi-VN')} đ`;
-const fmtPercent = (n) => `${((n ?? 0) * 100).toFixed(1)}%`;
-const fmtDate = (d) => (d ? fmtDateVn(d) : '');
-const FORMATTERS = { money: fmtMoney, percent: fmtPercent, date: fmtDate };
-const formatValue = (value, format) => (FORMATTERS[format] ? FORMATTERS[format](value) : (value ?? ''));
-
-const col = (header, key, width = 16, format) => ({ header, key, width, format });
 
 // ===== Chuyển dữ liệu từng loại báo cáo → spec =====
 async function buildSpec(type, q) {
@@ -84,7 +86,7 @@ async function buildSpec(type, q) {
         summary: [
           ['Số căn quá hạn', r.totalApartments],
           ['Tổng nợ quá hạn', r.totalOutstanding, 'money'],
-          ['Chưa phân công đòi nợ', r.unassigned],
+          ['Nợ quá hạn dài (đã nhắc đủ số lần)', r.longOverdue],
         ],
         sections: [
           {
@@ -96,19 +98,30 @@ async function buildSpec(type, q) {
               col('Các kỳ', 'periodsText', 22),
               col('Số tiền nợ', 'outstanding', 18, 'money'),
               col('Số ngày quá hạn', 'daysOverdue', 12),
-              col('Phụ trách', 'assignedToText', 18),
+              col('Số lần nhắc', 'reminderCount', 10),
+              col('Tình trạng', 'caseText', 18),
             ],
             rows: r.items.map((x) => ({
               ...x,
               periodsText: x.periods.join(', '),
-              assignedToText: x.assignedTo ?? 'Chưa giao',
+              caseText:
+                x.caseStatus === 'LONG_OVERDUE'
+                  ? 'Nợ quá hạn dài'
+                  : x.promisedDate
+                    ? `Hẹn trả ${fmtDate(x.promisedDate)}`
+                    : 'Đang nhắc nợ',
             })),
           },
         ],
       };
     }
     case 'fund': {
-      const r = await reports.fundDashboard(q);
+      const { start, end } = reports.dateRange(q.from, q.to);
+      const [r, txs, proposals] = await Promise.all([
+        reports.fundDashboard(q),
+        FundTransaction.find({ occurredAt: { $gte: start, $lte: end } }).sort({ occurredAt: 1 }).populate('proposalId', 'code title').lean(),
+        FundProposal.find({ createdAt: { $gte: start, $lte: end } }).sort({ createdAt: 1 }).lean(),
+      ]);
       return {
         title: 'BÁO CÁO QUỸ BẢO TRÌ',
         filterText: `Từ ${fmtDate(q.from)} đến ${fmtDate(q.to)}`,
@@ -125,17 +138,176 @@ async function buildSpec(type, q) {
             rows: r.monthly,
           },
           {
-            title: 'Giao dịch gần nhất',
+            title: 'Sổ thu chi',
             columns: [
-              col('Ngày', 'occurredAt', 12, 'date'),
-              col('Loại', 'typeLabel', 8),
-              col('Số tiền', 'amount', 18, 'money'),
-              col('Nội dung', 'text', 40),
+              col('Ngày', 'occurredAt', 11, 'date'),
+              col('Số phiếu', 'code', 17),
+              col('Loại', 'typeLabel', 7),
+              col('Nội dung', 'text', 34),
+              col('Chứng từ', 'documentNo', 14),
+              col('Thu', 'income', 15, 'money'),
+              col('Chi', 'expense', 15, 'money'),
+              col('Số dư sau', 'balanceAfter', 16, 'money'),
             ],
-            rows: r.recentTransactions.map((t) => ({
+            rows: txs.map((t) => ({
               ...t,
               typeLabel: label(t.type),
-              text: t.description || t.proposalId?.title || t.source || '',
+              income: t.type === 'INCOME' ? t.amount : null,
+              expense: t.type === 'EXPENSE' ? t.amount : null,
+              text: [t.description || t.source, t.incomeSource && label(t.incomeSource), t.proposalId && `${t.proposalId.code ?? ''} ${t.proposalId.title}`]
+                .filter(Boolean)
+                .join(' · '),
+            })),
+          },
+          {
+            title: 'Đề xuất chi',
+            columns: [
+              col('Ngày lập', 'createdAt', 11, 'date'),
+              col('Mã', 'code', 17),
+              col('Hạng mục', 'title', 30),
+              col('Loại', 'planLabel', 18),
+              col('Số tiền', 'amount', 16, 'money'),
+              col('Trạng thái', 'statusLabel', 16),
+              col('Kết quả biểu quyết', 'finalNote', 26),
+            ],
+            rows: proposals.map((p) => ({ ...p, planLabel: label(p.planType), statusLabel: PROPOSAL_LABELS[p.status] ?? p.status })),
+          },
+        ],
+      };
+    }
+    case 'finance': {
+      const r = await financeDashboard(q);
+      return {
+        title: 'DASHBOARD TÀI CHÍNH',
+        filterText: `Kỳ ${periodLabel(q.from)} → ${periodLabel(q.to)}`,
+        summary: [
+          ['Phát hành trong khoảng kỳ', r.totals.billed, 'money'],
+          ['Đã thu của các kỳ này', r.totals.paidOfRange, 'money'],
+          ['Tỷ lệ thu', r.totals.collectionRate, 'percent'],
+          ['Tiền thu được trong khoảng (mọi kỳ)', r.totals.collected, 'money'],
+          ['Tiện ích trả ngay (ngoài thông báo phí)', r.totals.amenityDirect, 'money'],
+          ['Căn còn nợ / có khoản quá hạn', `${r.debt.apartments - r.debt.clear} / ${r.debt.overdueApartments} trên ${r.debt.apartments} căn`],
+          ['Tổng còn nợ hiện tại', r.debt.outstanding, 'money'],
+          ['Số dư trả trước', r.totals.prepaidBalance, 'money'],
+          ['Số dư Quỹ bảo trì', r.fund.balance, 'money'],
+        ],
+        sections: [
+          {
+            title: 'Theo tháng',
+            columns: [
+              col('Tháng', 'period', 10),
+              col('Phát hành', 'billed', 16, 'money'),
+              col('Đã thu của kỳ', 'paidOfPeriod', 16, 'money'),
+              col('Thu trong tháng', 'collected', 16, 'money'),
+              col('Tiền mặt', 'CASH', 14, 'money'),
+              col('Chuyển khoản', 'BANK_TRANSFER', 14, 'money'),
+              col('payOS', 'PAYOS', 14, 'money'),
+              col('Tiện ích trả ngay', 'amenityDirect', 14, 'money'),
+            ],
+            rows: r.byMonth,
+          },
+          {
+            title: 'Cơ cấu phí',
+            columns: [col('Loại phí', 'label', 22), col('Số tiền', 'amount', 18, 'money'), col('Tỷ trọng', 'share', 10, 'percent')],
+            rows: r.byFeeCategory.map((x) => ({ ...x, label: label(x.feeCategory) })),
+          },
+          {
+            title: 'Theo hình thức thanh toán',
+            columns: [col('Hình thức', 'label', 20), col('Số giao dịch', 'count', 12), col('Số tiền', 'amount', 18, 'money')],
+            rows: r.byMethod.map((x) => ({ ...x, label: label(x.method) })),
+          },
+        ],
+      };
+    }
+    case 'supervision': {
+      const r = await supervisionReport(q);
+      return {
+        title: 'BÁO CÁO GIÁM SÁT GỬI BAN QUẢN TRỊ',
+        filterText: `Kỳ ${periodLabel(q.from)} → ${periodLabel(q.to)}`,
+        summary: [
+          ['Số dư Quỹ bảo trì', r.fund.balance, 'money'],
+          ['Thu / chi quỹ trong khoảng', `${fmtMoney(r.fund.income)} / ${fmtMoney(r.fund.expense)}`],
+          ['Đề xuất chi đang chờ', r.fund.pendingProposals],
+          ['Tỷ lệ thu phí', r.billing.collectionRate, 'percent'],
+          ['Căn có khoản quá hạn', `${r.billing.overdueApartments}/${r.billing.apartments}`],
+          ['Sự cố / phản ánh trong khoảng', r.tickets.total],
+          ['Xử lý đúng hạn', r.tickets.onTimeRate, 'percent'],
+          ['Đánh giá trung bình', r.tickets.avgRating],
+        ],
+        sections: [
+          {
+            title: 'Thu phí theo tháng',
+            columns: [
+              col('Tháng', 'period', 10),
+              col('Phát hành', 'billed', 18, 'money'),
+              col('Đã thu của kỳ', 'paidOfPeriod', 18, 'money'),
+              col('Thu trong tháng', 'collected', 18, 'money'),
+            ],
+            rows: r.billing.byMonth,
+          },
+          {
+            title: 'Thu chi quỹ',
+            columns: [
+              col('Ngày', 'occurredAt', 11, 'date'),
+              col('Số phiếu', 'code', 17),
+              col('Loại', 'typeLabel', 7),
+              col('Nội dung', 'text', 36),
+              col('Số tiền', 'amount', 16, 'money'),
+            ],
+            rows: r.fund.transactions.map((t) => ({ ...t, typeLabel: label(t.type), text: t.description || t.proposalId?.title || t.source || '' })),
+          },
+          {
+            title: 'Đề xuất chi quỹ',
+            columns: [
+              col('Mã', 'code', 17),
+              col('Hạng mục', 'title', 30),
+              col('Số tiền', 'amount', 16, 'money'),
+              col('Trạng thái', 'statusLabel', 16),
+              col('Kết quả', 'finalNote', 26),
+            ],
+            rows: r.fund.proposals.map((p) => ({ ...p, statusLabel: PROPOSAL_LABELS[p.status] ?? p.status })),
+          },
+          {
+            title: 'Sự cố, phản ánh theo loại',
+            columns: [col('Loại', 'name', 26), col('Số lượng', 'count', 10)],
+            rows: r.tickets.byCategory,
+          },
+        ],
+      };
+    }
+    case 'ledger': {
+      const r = await listLedger({ buildingId: q.buildingId, status: q.status }, { all: true });
+      return {
+        title: 'SỔ CÔNG NỢ',
+        filterText: `Tại ngày ${fmtDate(new Date())}${q.status?.length ? ` · ${q.status.map(label).join(', ')}` : ''}`,
+        summary: [
+          ['Số dòng (căn + Người nộp phí)', r.pagination.total],
+          ['Tổng còn nợ', r.summary.outstanding, 'money'],
+          ['Trong đó quá hạn', r.summary.overdueAmount, 'money'],
+          ['Số dư trả trước', r.summary.prepaidBalance, 'money'],
+          ['Nợ quá hạn dài', r.summary.byStatus.LONG_OVERDUE ?? 0],
+          ['Giao dịch cần đối soát', r.summary.reconcileCount ?? 0],
+        ],
+        sections: [
+          {
+            title: 'Sổ công nợ',
+            columns: [
+              col('Căn', 'apt', 10),
+              col('Người nộp phí', 'payerName', 20),
+              col('Điện thoại', 'payerPhone', 13),
+              col('Đã phát hành', 'billed', 15, 'money'),
+              col('Đã trả', 'paid', 15, 'money'),
+              col('Còn nợ', 'outstanding', 15, 'money'),
+              col('Quá hạn', 'overdueAmount', 15, 'money'),
+              col('Số dư trả trước', 'prepaidBalance', 14, 'money'),
+              col('Tình trạng', 'statusLabel', 16),
+              col('Số lần nhắc', 'reminders', 9),
+            ],
+            rows: r.items.map((x) => ({
+              ...x,
+              apt: [x.buildingCode, x.apartmentCode].filter(Boolean).join('-'),
+              statusLabel: label(x.ledgerStatus),
+              reminders: x.case?.reminderCount ?? '',
             })),
           },
         ],
@@ -229,119 +401,6 @@ async function buildSpec(type, q) {
   }
 }
 
-// ===== Excel =====
-async function renderXlsx(spec) {
-  const wb = new ExcelJS.Workbook();
-  wb.creator = 'SAPMS';
-  wb.created = new Date();
-
-  const ws = wb.addWorksheet('Tổng quan');
-  ws.addRow([spec.title]).font = { bold: true, size: 14 };
-  ws.addRow([spec.filterText]).font = { italic: true };
-  ws.addRow([]);
-  for (const [k, v, format] of spec.summary) {
-    const row = ws.addRow([k, typeof v === 'number' && format !== 'percent' ? v : formatValue(v, format)]);
-    row.getCell(1).font = { bold: true };
-    if (format === 'money') row.getCell(2).numFmt = '#,##0" đ"';
-  }
-  ws.getColumn(1).width = 36;
-  ws.getColumn(2).width = 28;
-
-  for (const section of spec.sections) {
-    const sheet = wb.addWorksheet(section.title.slice(0, 31));
-    sheet.columns = section.columns.map((c) => ({ header: c.header, key: c.key, width: c.width }));
-    sheet.getRow(1).font = { bold: true };
-    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F4FF' } };
-    for (const row of section.rows) {
-      sheet.addRow(
-        Object.fromEntries(
-          section.columns.map((c) => [
-            c.key,
-            c.format === 'date' ? (row[c.key] ? new Date(row[c.key]) : null) : row[c.key],
-          ]),
-        ),
-      );
-    }
-    section.columns.forEach((c, i) => {
-      const column = sheet.getColumn(i + 1);
-      if (c.format === 'money') column.numFmt = '#,##0" đ"';
-      if (c.format === 'percent') column.numFmt = '0.0%';
-      if (c.format === 'date') column.numFmt = 'dd/mm/yyyy';
-    });
-    sheet.views = [{ state: 'frozen', ySplit: 1 }];
-  }
-  return Buffer.from(await wb.xlsx.writeBuffer());
-}
-
-// ===== PDF =====
-function renderPdf(spec) {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 36 });
-    const chunks = [];
-    doc.on('data', (c) => chunks.push(c));
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
-    doc.on('error', reject);
-
-    doc.registerFont('regular', FONT_REGULAR);
-    doc.registerFont('bold', FONT_BOLD);
-    const left = doc.page.margins.left;
-    const usable = doc.page.width - left - doc.page.margins.right;
-    const bottom = () => doc.page.height - doc.page.margins.bottom;
-
-    doc.font('bold').fontSize(16).text(spec.title, { align: 'center' });
-    doc.font('regular').fontSize(10).fillColor('#555').text(spec.filterText, { align: 'center' });
-    doc.text(`Xuất lúc ${fmtDateTimeVn(new Date())}`, { align: 'center' });
-    doc.moveDown().fillColor('#000');
-
-    for (const [k, v, format] of spec.summary) {
-      doc.font('bold').fontSize(10).text(`${k}: `, { continued: true });
-      doc.font('regular').text(String(formatValue(v, format)));
-    }
-
-    for (const section of spec.sections) {
-      doc.moveDown();
-      if (doc.y > bottom() - 60) doc.addPage();
-      doc.font('bold').fontSize(12).text(section.title, left);
-      doc.moveDown(0.3);
-
-      const totalWidth = section.columns.reduce((s, c) => s + c.width, 0);
-      const widths = section.columns.map((c) => (c.width / totalWidth) * usable);
-      const drawRow = (cells, { header = false } = {}) => {
-        doc.font(header ? 'bold' : 'regular').fontSize(9);
-        const height =
-          Math.max(...cells.map((t, i) => doc.heightOfString(String(t), { width: widths[i] - 6 }))) + 6;
-        if (doc.y + height > bottom()) doc.addPage();
-        const y = doc.y;
-        if (header) doc.rect(left, y, usable, height).fill('#e6f4ff').fillColor('#000');
-        let x = left;
-        cells.forEach((t, i) => {
-          doc.text(String(t), x + 3, y + 3, { width: widths[i] - 6 });
-          x += widths[i];
-        });
-        doc.moveTo(left, y + height).lineTo(left + usable, y + height).strokeColor('#ddd').stroke();
-        doc.x = left;
-        doc.y = y + height;
-      };
-
-      drawRow(section.columns.map((c) => c.header), { header: true });
-      if (!section.rows.length) drawRow(['Không có dữ liệu', ...section.columns.slice(1).map(() => '')]);
-      for (const row of section.rows) {
-        drawRow(section.columns.map((c) => formatValue(row[c.key], c.format)));
-      }
-    }
-    doc.end();
-  });
-}
-
 export async function exportReport(type, format, query) {
-  const spec = await buildSpec(type, query);
-  const stamp = new Date().toISOString().slice(0, 10);
-  if (format === 'pdf') {
-    return { buffer: await renderPdf(spec), filename: `bao-cao-${type}-${stamp}.pdf`, contentType: 'application/pdf' };
-  }
-  return {
-    buffer: await renderXlsx(spec),
-    filename: `bao-cao-${type}-${stamp}.xlsx`,
-    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  };
+  return renderReport(await buildSpec(type, query), format, `bao-cao-${type}`);
 }

@@ -7,9 +7,10 @@ import { validate } from '../../middlewares/validate.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId } from '../../utils/validators.js';
+import * as payosService from './payments.payos.js';
 import * as service from './payments.service.js';
 
-// Mô đun 4 — UC30 thu tiền mặt / chuyển khoản, UC35 biên lai, danh sách giao dịch. payOS (UC29) thêm ở bước sau.
+// Mô đun 4 — UC29 payOS, UC30 thu tiền mặt / chuyển khoản, UC35 biên lai, danh sách giao dịch.
 const router = Router();
 const MAX_AMOUNT = 10_000_000_000;
 
@@ -36,7 +37,13 @@ const listQuery = Joi.object({
   from: Joi.date().iso(),
   to: Joi.date().iso().min(Joi.ref('from')),
   q: Joi.string().trim().max(100).allow(''),
+  needsReconcile: Joi.boolean(),
 });
+
+const payosCreateBody = Joi.object({
+  invoiceIds: Joi.array().items(objectId().required()).min(1).max(24).unique().required(),
+});
+const orderParams = Joi.object({ orderCode: Joi.number().integer().min(1).max(Number.MAX_SAFE_INTEGER).required() });
 
 /**
  * @openapi
@@ -92,6 +99,52 @@ router.get(
   authorize('ACCOUNTANT', 'MANAGER', 'RESIDENT'),
   validate({ params: idParams }),
   async (req, res) => ok(res, await service.getReceipt(req.user, req.params.id)),
+);
+
+/**
+ * @openapi
+ * /payments/payos/create:
+ *   post:
+ *     tags: [Thanh toán]
+ *     summary: Người nộp phí chọn thông báo còn nợ → tạo link payOS (VietQR), hết hạn sau 15 phút. Đã có link còn hạn cho đúng các thông báo này → trả lại link cũ. Chưa cấu hình khóa → PAYOS_DISABLED
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [invoiceIds]
+ *             properties:
+ *               invoiceIds: { type: array, items: { type: string } }
+ */
+router.post('/payos/create', authenticate, authorize('RESIDENT'), validate({ body: payosCreateBody }), async (req, res) =>
+  created(res, await payosService.createPayosPayment(req.user, req.body), 'Đã tạo link thanh toán'),
+);
+
+/**
+ * @openapi
+ * /payments/payos/webhook:
+ *   post:
+ *     tags: [Thanh toán]
+ *     summary: payOS gọi về khi có tiền (KHÔNG cần đăng nhập — xác thực bằng chữ ký HMAC-SHA256 checksumKey). Gạch nợ đúng 1 lần theo orderCode. Khai báo URL này trong trang quản lý kênh thanh toán payOS (cần địa chỉ public, vd ngrok khi dev)
+ *     security: []
+ */
+router.post('/payos/webhook', async (req, res) => ok(res, await payosService.handlePayosWebhook(req.body)));
+
+/**
+ * @openapi
+ * /payments/payos/{orderCode}:
+ *   get:
+ *     tags: [Thanh toán]
+ *     summary: Trạng thái giao dịch payOS (trang kết quả sau khi thanh toán). Còn chờ thì server hỏi thẳng payOS và gạch nợ nếu đã trả — không phụ thuộc webhook
+ *     parameters:
+ *       - { in: path, name: orderCode, required: true, schema: { type: integer } }
+ */
+router.get(
+  '/payos/:orderCode',
+  authenticate,
+  authorize('RESIDENT', 'ACCOUNTANT', 'MANAGER'),
+  validate({ params: orderParams }),
+  async (req, res) => ok(res, await payosService.getPayosStatus(req.user, Number(req.params.orderCode))),
 );
 
 export default router;

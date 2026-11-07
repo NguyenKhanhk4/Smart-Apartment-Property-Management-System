@@ -1,14 +1,17 @@
 // UC-B02 — Tính dòng phí của hóa đơn kỳ P (chỉ đọc, không ghi): dùng chung cho xem trước, sinh thủ công và cron.
-// Phí vệ sinh, gửi xe tính cho chính kỳ P (thu trước); phí tiện ích phát sinh trong kỳ P−1 (thu sau).
+// Phí vệ sinh, gửi xe tính cho chính kỳ P (thu trước); phí tiện ích phát sinh trong kỳ P−1 (thu sau);
+// chi phí sửa chữa trong căn của phiếu đã nghiệm thu trước đầu kỳ P mà chưa tính (UC48).
 import {
   AMENITY_PASS_STATUS,
   APARTMENT_OCCUPANCY,
   BOOKING_BILLABLE_STATUSES,
   FEE_CALC_METHODS,
   FEE_CATEGORIES,
+  QUOTE_STATUS,
+  TICKET_STATUS,
   VISIT_STATUS,
 } from '../../constants/enums.js';
-import { AmenityPass, AmenityVisit, Booking } from '../../models/index.js';
+import { AmenityPass, AmenityVisit, Booking, RepairQuote } from '../../models/index.js';
 import { getPayer } from '../contracts/contracts.queries.js';
 import { getBillableVehicles } from '../vehicles/vehicles.queries.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -150,6 +153,41 @@ export async function collectAmenityCharges(apartmentId, prev, { invoiceId = nul
   };
 }
 
+export const REPAIR_FEE_CODE = 'REPAIR';
+
+/**
+ * Chi phí sửa chữa trong căn (UC48): báo giá đã đồng ý (bản ACCEPTED hiện hành) của phiếu sự cố Đã nghiệm thu (CLOSED)
+ * trước 00:00 ngày đầu kỳ `period`, chưa gộp vào thông báo nào (invoiceId null) → tính vào kỳ `period` ("kỳ tiếp theo").
+ * Phiếu bị từ chối / chưa nghiệm thu không tính. `invoiceId`: tính lại thông báo Nháp thì lấy cả bản đã gắn vào chính nó.
+ */
+export async function collectRepairCharges(apartmentId, period, { invoiceId = null } = {}) {
+  const quotes = await RepairQuote.find({
+    apartmentId,
+    status: QUOTE_STATUS.ACCEPTED,
+    invoiceId: invoiceId ? { $in: [null, invoiceId] } : null,
+  })
+    .populate('ticketId', 'code title status closedAt')
+    .sort({ sentAt: 1 })
+    .lean();
+  const cutoff = periodStart(period);
+  const billable = quotes.filter(
+    (q) => q.ticketId?.status === TICKET_STATUS.CLOSED && q.ticketId.closedAt && new Date(q.ticketId.closedAt) < cutoff,
+  );
+  return {
+    items: billable.map((q) =>
+      item(
+        FEE_CATEGORIES.REPAIR,
+        REPAIR_FEE_CODE,
+        `Sửa chữa: ${q.ticketId.title} (${q.ticketId.code}, nghiệm thu ${dayLabel(q.ticketId.closedAt)})`,
+        1,
+        q.totalAmount,
+        q._id,
+      ),
+    ),
+    repairQuoteIds: billable.map((q) => q._id),
+  };
+}
+
 /**
  * Bản nháp hóa đơn kỳ `period` cho 1 căn (apartment cần có buildingId đã populate `code`).
  * Bỏ qua căn chưa bàn giao trong kỳ hoặc chưa xác định được người nộp phí.
@@ -180,13 +218,23 @@ export async function buildInvoiceDraft(apartment, period, prices, { invoiceId =
   if (!payer) return { ...base, payer: null, items: [], totalAmount: 0, charges: null };
 
   const charges = await collectAmenityCharges(apartment._id, shiftPeriod(period, -1), { invoiceId });
-  const fixedItems = apartmentItems(apartment, prices, (end - start) / DAY_MS, (end - billFrom) / DAY_MS);
-  const items = [...fixedItems, ...(await parkingItems(apartment, period, prices)), ...charges.items];
+  const repairs = await collectRepairCharges(apartment._id, period, { invoiceId });
+  const items = [
+    ...apartmentItems(apartment, prices, (end - start) / DAY_MS, (end - billFrom) / DAY_MS),
+    ...(await parkingItems(apartment, period, prices)),
+    ...charges.items,
+    ...repairs.items,
+  ];
   return {
     ...base,
     payer,
     items,
     totalAmount: items.reduce((s, i) => s + i.amount, 0),
-    charges: { passIds: charges.passIds, visitIds: charges.visitIds, bookingIds: charges.bookingIds },
+    charges: {
+      passIds: charges.passIds,
+      visitIds: charges.visitIds,
+      bookingIds: charges.bookingIds,
+      repairQuoteIds: repairs.repairQuoteIds,
+    },
   };
 }

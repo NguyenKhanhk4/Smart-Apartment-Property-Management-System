@@ -17,6 +17,13 @@ export function uniqueConflictError(err) {
   return null;
 }
 
+/** a***@gmail.com — hiện cho người khác xem mà không lộ đủ email */
+export const maskEmail = (email) => {
+  if (!email) return null;
+  const [name, domain] = email.split('@');
+  return `${name[0]}***@${domain}`;
+};
+
 export const findUserByPhone = (phone, session = null) =>
   User.findOne({ phone: normalizePhone(phone) }).session(session);
 

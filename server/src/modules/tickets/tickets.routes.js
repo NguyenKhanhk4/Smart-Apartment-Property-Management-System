@@ -129,10 +129,29 @@ router.get('/queue', authenticate, authorize('STAFF:TECHNICIAN'), async (req, re
 
 /**
  * @openapi
+ * /tickets/similar:
+ *   get:
+ *     tags: [Ticket]
+ *     summary: 'M5-6 - Sự cố khu vực chung đang mở cùng tòa, cùng loại sự cố (gợi ý khi tạo phiếu, chọn phiếu chính khi gộp)'
+ *     parameters:
+ *       - { in: query, name: apartmentId, required: true, schema: { type: string } }
+ *       - { in: query, name: categoryId, required: true, schema: { type: string } }
+ *       - { in: query, name: excludeId, schema: { type: string } }
+ */
+router.get(
+  '/similar',
+  authenticate,
+  authorize('RESIDENT', ...DISPATCHERS),
+  validate({ query: Joi.object({ apartmentId: objectId(), categoryId: objectId().required(), excludeId: objectId() }) }), // cư dân 1 căn bỏ trống apartmentId
+  async (req, res) => ok(res, await service.findSimilarTickets(req.user, req.query)),
+);
+
+/**
+ * @openapi
  * /tickets/board:
  *   get:
  *     tags: [Ticket]
- *     summary: "Kanban điều phối sự cố của Trưởng BQL — { columns: [{ status, items }] }"
+ *     summary: 'Kanban điều phối sự cố của Trưởng BQL — trả về columns[] gồm status, items'
  *     parameters: [{ in: query, name: buildingId, schema: { type: string } }]
  */
 router.get(
@@ -241,6 +260,45 @@ router.patch(
   }),
   async (req, res) =>
     ok(res, await service.rejectTicket(req.user, req.params.id, req.body), 'Đã từ chối phản ánh'),
+);
+
+/**
+ * @openapi
+ * /tickets/{id}/classify:
+ *   patch:
+ *     tags: [Ticket]
+ *     summary: 'M5-5 - Đổi loại / phạm vi phiếu chưa bắt đầu xử lý, kèm lý do; SLA tính lại (Trưởng BQL, Lễ tân, KTV được giao)'
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.patch(
+  '/:id/classify',
+  authenticate,
+  authorize(...DISPATCHERS, 'STAFF:TECHNICIAN'),
+  validate({
+    params: idParams,
+    body: Joi.object({
+      type: Joi.string().valid(...values(TICKET_TYPES)),
+      scope: Joi.string().valid(...values(TICKET_SCOPES)),
+      reason: Joi.string().trim().min(5).max(500).required(),
+    }).or('type', 'scope'),
+  }),
+  async (req, res) => ok(res, await service.reclassifyTicket(req.user, req.params.id, req.body), 'Đã đổi phân loại phiếu'),
+);
+
+/**
+ * @openapi
+ * /tickets/{id}/merge:
+ *   patch:
+ *     tags: [Ticket]
+ *     summary: 'M5-6 - Gộp phiếu trùng vào phiếu chính; phiếu con đóng theo phiếu chính (Trưởng BQL, Lễ tân)'
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.patch(
+  '/:id/merge',
+  authenticate,
+  authorize(...DISPATCHERS),
+  validate({ params: idParams, body: Joi.object({ parentId: objectId().required(), note: Joi.string().trim().max(500).allow('') }) }),
+  async (req, res) => ok(res, await service.mergeTicket(req.user, req.params.id, req.body), 'Đã gộp phiếu'),
 );
 
 /**
