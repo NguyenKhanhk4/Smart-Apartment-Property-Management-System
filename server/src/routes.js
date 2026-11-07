@@ -37,7 +37,12 @@ import gatePassRoutes, { platesRouter } from './modules/gatePasses/gatePasses.ro
 import parkingCardRoutes from './modules/parkingCards/parkingCards.routes.js';
 import dutyShiftRoutes from './modules/dutyShifts/dutyShifts.routes.js';
 
+import auditLogRoutes from './modules/auditLogs/auditLogs.routes.js';
+
 const router = Router();
+
+// Module C — audit chỉ đọc (TM)
+router.use('/audit-logs', auditLogRoutes);
 
 /**
  * @openapi

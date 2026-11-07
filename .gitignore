@@ -35,3 +35,7 @@ Thumbs.db
 # Tài liệu Markdown - không push
 *.md
 
+
+# Local caches and Module C integration notes
+.cache/
+!deliverables/TM/module-c-preparation.md
