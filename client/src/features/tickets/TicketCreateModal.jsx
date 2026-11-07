@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Form, Input, Modal, Radio, Select, Upload } from 'antd';
+import { Alert, Form, Input, Modal, Radio, Select, Upload } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { complaintCategoryApi, lookupApi, ticketApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
 import ApartmentSelect from '../../components/ApartmentSelect';
-import { PRIORITIES, TICKET_SCOPES, TICKET_TYPES, enumOptions } from '../../constants/enums';
+import { PRIORITIES, TICKET_SCOPES, TICKET_STATUS, TICKET_TYPES, enumOptions } from '../../constants/enums';
 
 const MAX_SIZE = 5 * 1024 * 1024;
 
@@ -46,7 +46,14 @@ export default function TicketCreateModal({ open, onClose, onCreated, staff = fa
   };
 
   const categoryId = Form.useWatch('categoryId', form);
+  const scope = Form.useWatch('scope', form) ?? 'COMMON_AREA';
+  const apartmentId = Form.useWatch('apartmentId', form);
   const selected = categories.find((c) => c._id === categoryId);
+  // M5-6: báo trước sự cố khu vực chung cùng loại đang được xử lý trong tòa để tránh báo trùng
+  const checkSimilar = open && type === 'INCIDENT' && scope === 'COMMON_AREA' && Boolean(categoryId) && (!staff || Boolean(apartmentId));
+  const { data: similar = [] } = useApi(() => ticketApi.similar({ apartmentId, categoryId }), [categoryId, apartmentId, checkSimilar], {
+    enabled: checkSimilar,
+  });
 
   return (
     <Modal
@@ -99,6 +106,24 @@ export default function TicketCreateModal({ open, onClose, onCreated, staff = fa
         >
           <Select placeholder="Chọn danh mục" options={categories.map((c) => ({ value: c._id, label: c.name }))} />
         </Form.Item>
+        {checkSimilar && similar.length > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title="Sự cố cùng loại đang được xử lý trong tòa"
+            description={
+              <>
+                {similar.map((s) => (
+                  <div key={s._id}>
+                    {s.code} · {s.title} ({TICKET_STATUS[s.status]?.label ?? s.status})
+                  </div>
+                ))}
+                Nếu là cùng sự cố, bạn không cần gửi thêm. Vẫn gửi được nếu là sự cố khác.
+              </>
+            }
+          />
+        )}
         <Form.Item name="title" label="Tiêu đề" rules={[{ required: true, min: 5, max: 150, message: 'Tiêu đề 5-150 ký tự' }]}>
           <Input placeholder={type === 'COMPLAINT' ? 'Vd: Hành lang tầng 5 chưa được dọn' : 'Vd: Rò nước trần nhà tắm'} />
         </Form.Item>

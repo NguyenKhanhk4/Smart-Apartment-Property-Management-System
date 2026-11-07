@@ -7,7 +7,7 @@ import { connectDB, disconnectDB } from '../src/config/db.js';
 import { env } from '../src/config/env.js';
 import * as M from '../src/models/index.js';
 import { ensureDefaultConfigs } from '../src/services/systemConfig.service.js';
-import { DAY_MS, HOUR_MS, periodEnd, periodRange, startOfVnDay, vnPeriod } from '../src/utils/time.js';
+import { DAY_MS, HOUR_MS, periodRange, startOfVnDay, vnPeriod } from '../src/utils/time.js';
 
 const RESET = process.argv.includes('--reset');
 const PASSWORD = 'Sapms@123';
@@ -461,16 +461,15 @@ for (const status of scenarios) {
 await M.Ticket.insertMany(tickets);
 
 // ===== Tiện ích & booking =====
-// 3 kiểu: FREE (chỉ hiển thị) · WALK_IN (gói tháng / vé lẻ, lễ tân tra mã) · BOOKING (đặt slot).
-// WALK_IN và BOOKING có giờ mở cửa nằm trong giờ lễ tân 05:00–22:00 (BR-O15). Giá theo nhóm tuổi: người lớn / trẻ em (BR-O24).
+// 2 kiểu: FREE (chỉ hiển thị) · BOOKING (đặt slot, giờ mở cửa nằm trong giờ lễ tân 05:00–22:00, BR-O15).
 const amenities = await M.Amenity.insertMany([
   { name: 'Công viên nội khu', accessMode: 'FREE', location: 'Trung tâm khu căn hộ', openTime: '05:00', closeTime: '22:00', description: 'Thảm cỏ, ghế đá và khu vui chơi ngoài trời cho cư dân.' },
   { name: 'Đường dạo bộ', accessMode: 'FREE', location: 'Vòng quanh khu căn hộ' },
-  { name: 'Phòng gym', accessMode: 'WALK_IN', location: 'Tầng 3 khối đế', openTime: '05:00', closeTime: '22:00', perVisitFeeAdult: 50000, perVisitFeeChild: 30000, monthlyPassFeeAdult: 400000, monthlyPassFeeChild: 250000 },
-  { name: 'Phòng yoga', accessMode: 'WALK_IN', location: 'Tầng 3 khối đế', openTime: '06:00', closeTime: '21:00', perVisitFeeAdult: 60000, perVisitFeeChild: 40000, monthlyPassFeeAdult: 500000, monthlyPassFeeChild: 300000 },
-  { name: 'Hồ bơi', accessMode: 'WALK_IN', location: 'Tầng 5 khối đế', openTime: '05:00', closeTime: '21:00', perVisitFeeAdult: 40000, perVisitFeeChild: 25000, maxConcurrent: 40, monthlyPassFeeAdult: 450000, monthlyPassFeeChild: 280000 },
-  { name: 'Sân tennis', accessMode: 'BOOKING', location: 'Sân sau', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 100000, monthlyPassFeeAdult: 600000, monthlyPassFeeChild: 350000 },
-  { name: 'Sân cầu lông', accessMode: 'BOOKING', location: 'Tầng 2 khối đế', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 60000, monthlyPassFeeAdult: 350000, monthlyPassFeeChild: 200000 },
+  { name: 'Phòng gym', accessMode: 'BOOKING', location: 'Tầng 3 khối đế', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 15, feePerBooking: 50000 },
+  { name: 'Phòng yoga', accessMode: 'BOOKING', location: 'Tầng 3 khối đế', openTime: '06:00', closeTime: '21:00', slotDurationMinutes: 60, capacityPerSlot: 10, feePerBooking: 60000 },
+  { name: 'Hồ bơi', accessMode: 'BOOKING', location: 'Tầng 5 khối đế', openTime: '05:00', closeTime: '21:00', slotDurationMinutes: 60, capacityPerSlot: 40, feePerBooking: 40000 },
+  { name: 'Sân tennis', accessMode: 'BOOKING', location: 'Sân sau', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 100000 },
+  { name: 'Sân cầu lông', accessMode: 'BOOKING', location: 'Tầng 2 khối đế', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 60000 },
   { name: 'Khu BBQ Block A', accessMode: 'BOOKING', location: 'Sân thượng Block A', buildingId: buildings[0]._id, openTime: '10:00', closeTime: '22:00', slotDurationMinutes: 180, capacityPerSlot: 1, feePerBooking: 150000 },
 ]);
 const bookable = amenities.filter((a) => a.accessMode === 'BOOKING'); // chỉ tiện ích BOOKING mới có booking
@@ -509,25 +508,6 @@ for (let i = 0; i < 160; i += 1) {
   });
 }
 await M.Booking.insertMany(bookings);
-
-// ===== Gói tháng tiện ích demo (UC-D09): chủ hộ cudan1 có gói gym tháng này, vợ có gói tháng sau, cudan2 có gói sân tennis =====
-const amenityByName = Object.fromEntries(amenities.map((a) => [a.name, a]));
-const thisMonth = vnPeriod(now);
-const nextMonth = vnPeriod(periodEnd(thisMonth));
-const mkPass = (user, apartment, amenity, month, purchasedBy = user) => ({
-  userId: user._id,
-  apartmentId: apartment._id,
-  amenityId: amenity._id,
-  month,
-  ageGroup: 'ADULT',
-  fee: amenity.monthlyPassFeeAdult,
-  purchasedBy: purchasedBy._id,
-});
-await M.AmenityPass.insertMany([
-  mkPass(residentUsers[0], apartments[0], amenityByName['Phòng gym'], thisMonth),
-  mkPass(householdUsers[0], apartments[0], amenityByName['Phòng gym'], nextMonth, residentUsers[0]),
-  mkPass(residentUsers[1], apartments[1], amenityByName['Sân tennis'], thisMonth),
-]);
 
 // ===== Sổ khách, bảng tin, thông báo =====
 await M.GuestLog.insertMany([

@@ -35,9 +35,8 @@ export default function CounterBookingModal({ initialDate, onClose, onDone }) {
   });
   const slot = grid?.slots.find((s) => s.slotStart === slotStart);
 
-  // Phí áp cho người này: gói tháng của chính họ (đúng tháng của ngày đặt) → 0; ngược lại phí/lượt của slot
-  const hasPass = Boolean(person?.passes?.some((p) => p.amenityId === amenityId && p.month === date.format('YYYY-MM')));
-  const fee = slot ? (hasPass ? 0 : slot.fee) : 0;
+  // Phí áp cho người này: phí/lượt của slot
+  const fee = slot ? slot.fee : 0;
   const needsPayer = Boolean(person) && fee > 0 && !person.canIncurCharges;
   const payers = (person?.household ?? []).filter((m) => m.canIncurCharges && m.userId !== person?.person.userId && m.code);
 
@@ -176,7 +175,7 @@ export default function CounterBookingModal({ initialDate, onClose, onDone }) {
             {slot && (
               <Flex vertical gap={8}>
                 <Typography.Text>
-                  Phí: <Typography.Text strong>{fee > 0 ? formatMoney(fee) : hasPass ? 'Miễn phí theo gói tháng' : 'Miễn phí'}</Typography.Text>
+                  Phí: <Typography.Text strong>{fee > 0 ? formatMoney(fee) : 'Miễn phí'}</Typography.Text>
                 </Typography.Text>
                 {needsPayer && (
                   <div>

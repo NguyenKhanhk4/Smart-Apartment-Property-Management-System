@@ -22,27 +22,18 @@ const MODE_FIELDS = [
   'capacityPerSlot',
   'feePerBooking',
   'changeDeadlineHours',
-  'perVisitFeeAdult',
-  'perVisitFeeChild',
-  'maxConcurrent',
-  'monthlyPassFeeAdult',
-  'monthlyPassFeeChild',
 ];
 const COMMON_FIELDS = ['name', 'buildingId', 'location', 'description'];
 // Trường phí: đổi bất kỳ trường nào đều ghi audit AMENITY_FEE_CHANGED
-const FEE_FIELDS = ['feePerBooking', 'perVisitFeeAdult', 'perVisitFeeChild', 'monthlyPassFeeAdult', 'monthlyPassFeeChild'];
-// Khi đổi kiểu: bỏ giá trị cũ của các trường này (giờ mở cửa và gói tháng được giữ lại)
-const RESET_ON_MODE_CHANGE = ['slotDurationMinutes', 'capacityPerSlot', 'feePerBooking', 'perVisitFeeAdult', 'perVisitFeeChild', 'maxConcurrent'];
+const FEE_FIELDS = ['feePerBooking'];
+// Khi đổi kiểu: bỏ giá trị cũ của các trường này (giờ mở cửa được giữ lại)
+const RESET_ON_MODE_CHANGE = ['slotDurationMinutes', 'capacityPerSlot', 'feePerBooking'];
 
 const LABELS = {
   openTime: 'Giờ mở cửa',
   closeTime: 'Giờ đóng cửa',
   slotDurationMinutes: 'Thời lượng slot',
   capacityPerSlot: 'Sức chứa mỗi slot',
-  perVisitFeeAdult: 'Giá vé người lớn',
-  perVisitFeeChild: 'Giá vé trẻ em',
-  monthlyPassFeeAdult: 'Giá gói tháng người lớn',
-  monthlyPassFeeChild: 'Giá gói tháng trẻ em',
 };
 
 const DEFAULT_CHANGE_DEADLINE_HOURS = 24;
@@ -56,9 +47,8 @@ const pick = (obj, keys) => Object.fromEntries(keys.filter((k) => k in obj).map(
 /**
  * Kiểm tra giá trị tiện ích theo kiểu (accessMode) và trả đúng nhóm trường cần lưu (trường không thuộc kiểu → 0/null).
  * Gom hết lỗi theo field để form hiện đúng chỗ.
- *  - FREE: giờ mở cửa tùy chọn (chỉ hiển thị, KHÔNG áp BR-O15), không phí/slot/gói
- *  - WALK_IN: giờ mở cửa bắt buộc + BR-O15; giá vé người lớn/trẻ em bắt buộc; gói tháng, maxConcurrent tùy chọn
- *  - BOOKING: giờ mở cửa + BR-O15 (vừa ≥ 1 slot); slot, sức chứa bắt buộc; phí đặt mặc định 0; gói tháng tùy chọn
+ *  - FREE: giờ mở cửa tùy chọn (chỉ hiển thị, KHÔNG áp BR-O15), không phí/slot
+ *  - BOOKING: giờ mở cửa + BR-O15 (vừa ≥ 1 slot); slot, sức chứa bắt buộc; phí đặt mặc định 0
  */
 export async function resolveAmenityFields(raw) {
   const mode = raw.accessMode ?? MODE.BOOKING;
@@ -101,21 +91,6 @@ export async function resolveAmenityFields(raw) {
     required('slotDurationMinutes');
     required('capacityPerSlot');
   }
-  if (mode === MODE.WALK_IN) {
-    required('perVisitFeeAdult');
-    required('perVisitFeeChild');
-  }
-
-  // --- Gói tháng (WALK_IN / BOOKING): nhập đủ cả hai giá hoặc để trống cả hai (null = không bán gói) ---
-  const sellsPass = mode !== MODE.FREE;
-  const passAdult = sellsPass ? orNull(raw.monthlyPassFeeAdult) : null;
-  const passChild = sellsPass ? orNull(raw.monthlyPassFeeChild) : null;
-  if ((passAdult === null) !== (passChild === null)) {
-    details.push({
-      field: passAdult === null ? 'monthlyPassFeeAdult' : 'monthlyPassFeeChild',
-      message: 'Gói tháng cần nhập cả giá người lớn và giá trẻ em (hoặc để trống cả hai nếu không bán gói)',
-    });
-  }
 
   if (details.length) throw ApiError.badRequest(details[0].message, details);
 
@@ -127,11 +102,6 @@ export async function resolveAmenityFields(raw) {
     capacityPerSlot: mode === MODE.BOOKING ? raw.capacityPerSlot : null,
     feePerBooking: mode === MODE.BOOKING ? (orNull(raw.feePerBooking) ?? 0) : 0,
     changeDeadlineHours: orNull(raw.changeDeadlineHours) ?? DEFAULT_CHANGE_DEADLINE_HOURS,
-    perVisitFeeAdult: mode === MODE.WALK_IN ? raw.perVisitFeeAdult : 0,
-    perVisitFeeChild: mode === MODE.WALK_IN ? raw.perVisitFeeChild : 0,
-    maxConcurrent: mode === MODE.WALK_IN ? orNull(raw.maxConcurrent) : null,
-    monthlyPassFeeAdult: passAdult,
-    monthlyPassFeeChild: passChild,
   };
 }
 
@@ -141,11 +111,6 @@ export function presentAmenity(doc) {
   return {
     ...o,
     accessMode: accessModeOf(o),
-    perVisitFeeAdult: o.perVisitFeeAdult ?? 0,
-    perVisitFeeChild: o.perVisitFeeChild ?? 0,
-    maxConcurrent: o.maxConcurrent ?? null,
-    monthlyPassFeeAdult: o.monthlyPassFeeAdult ?? null,
-    monthlyPassFeeChild: o.monthlyPassFeeChild ?? null,
     priceSummary: priceSummaryOf(o),
   };
 }

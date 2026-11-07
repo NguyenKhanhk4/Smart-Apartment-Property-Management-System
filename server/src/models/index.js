@@ -37,9 +37,9 @@ export { WorkOrder } from './WorkOrder.js';
 // Module D — Tiện ích
 export { Amenity } from './Amenity.js';
 export { Booking } from './Booking.js';
+export { AmenityPass } from './AmenityPass.js'; // dữ liệu cũ (gói tháng) — chỉ phần tính phí đọc, chờ Người 3 gỡ
+export { AmenityVisit } from './AmenityVisit.js'; // dữ liệu cũ (lượt vào cửa) — như trên
 export { MemberCode } from './MemberCode.js';
-export { AmenityPass } from './AmenityPass.js';
-export { AmenityVisit } from './AmenityVisit.js';
 export { DutyShift } from './DutyShift.js';
 
 // Module E — Ticket, sổ khách, bảng tin, thông báo, tham số hệ thống

@@ -142,7 +142,7 @@ export default function BookingSchedulePage() {
       dataIndex: 'fee',
       width: 120,
       align: 'right',
-      render: (v, b) => (b.usesPass ? <Tag color="cyan">Gói tháng</Tag> : v > 0 ? formatMoney(v) : 'Miễn phí'),
+      render: (v) => (v > 0 ? formatMoney(v) : 'Miễn phí'),
     },
     {
       title: 'Trạng thái',
