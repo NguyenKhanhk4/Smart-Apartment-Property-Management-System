@@ -43,6 +43,7 @@ test('trường type dịch theo đối tượng: loại căn, loại hợp đ�
   assert.equal(formatAuditValue('type', 'LEASE', 'contracts'), 'Cho thuê');
   assert.equal(formatAuditValue('type', 'INCIDENT', 'tickets'), 'Sự cố kỹ thuật');
   assert.equal(formatAuditValue('type', 'RESIDENTIAL', 'tickets'), 'RESIDENTIAL');
+  assert.equal(formatAuditValue('occupancyStatus', 'UNDER_REPAIR', 'apartments'), 'Đang sửa chữa');
 });
 
 test('cột IP: có IP thì hiện IP; hệ thống tự chạy → "Hệ thống"; người dùng nhưng thiếu IP → "Không ghi nhận"', () => {

@@ -75,6 +75,7 @@ export const LABELS = {
   GATEPASS_REJECTED: 'Từ chối giấy chuyển đồ',
   GATEPASS_USED: 'Sử dụng giấy chuyển đồ',
   GATEPASS_EXPIRED: 'Giấy chuyển đồ hết hạn',
+  GATEPASS_CANCELLED: 'Hủy giấy chuyển đồ',
   // Phí, thanh toán, công nợ
   FEE_TYPE_CHANGED: 'Thay đổi bảng phí',
   AMENITY_FEE_CHANGED: 'Thay đổi phí tiện ích',
@@ -109,6 +110,7 @@ export const LABELS = {
   TICKET_QUOTE_DECIDED: 'Quyết định báo giá sửa chữa',
   TICKET_RECLASSIFIED: 'Đổi loại phiếu sự cố',
   TICKET_MERGED: 'Gộp phiếu sự cố trùng',
+  TICKET_COMPLAINT_RESPONDED: 'Trả lời phản ánh',
   REPAIR_QUOTE_SUBMITTED: 'Gửi báo giá sửa chữa',
   WORKORDER_ASSIGNED: 'Phân công phiếu bảo trì',
   COMPLAINT_CATEGORY_CHANGED: 'Thay đổi danh mục phản ánh',

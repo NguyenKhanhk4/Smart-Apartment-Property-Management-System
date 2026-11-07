@@ -1,6 +1,6 @@
 // Hiển thị giá trị cũ / mới của nhật ký hoạt động (UC06 bước 4). Thuần JS để test bằng node:test.
 import {
-  APARTMENT_STATUS, BOARD_TITLES, BOOKING_STATUS, CONTRACT_STATUS, CONTRACT_TYPES, FUND_PROPOSAL_STATUS, GATE_PASS_STATUS,
+  APARTMENT_OCCUPANCY, APARTMENT_STATUS, APARTMENT_TYPES, BOARD_TITLES, BOOKING_STATUS, CONTRACT_STATUS, CONTRACT_TYPES, FUND_PROPOSAL_STATUS, GATE_PASS_STATUS,
   INVOICE_STATUS, PARKING_CARD_STATUS, PRIORITIES, QUOTE_STATUS, ROLE_TITLES, ROLES, TICKET_STATUS, TICKET_TYPES,
   VEHICLE_STATUS, WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
@@ -12,9 +12,9 @@ const STATUS_BY_TARGET = {
   bookings: BOOKING_STATUS, fund_proposals: FUND_PROPOSAL_STATUS, apartments: APARTMENT_STATUS, repair_quotes: QUOTE_STATUS,
 };
 const STATUS_FIELDS = new Set(['status', 'fromStatus', 'toStatus']);
-// Trường `type` cũng phụ thuộc đối tượng. Loại căn: nhãn giống APARTMENT_TYPES trên nhánh của Bình (chưa vào main)
+// Trường `type` cũng phụ thuộc đối tượng (loại căn, loại hợp đồng, loại phiếu)
 const TYPE_BY_TARGET = {
-  apartments: { RESIDENTIAL: { label: 'Căn để ở' }, COMMERCIAL: { label: 'Căn kinh doanh' } },
+  apartments: APARTMENT_TYPES,
   contracts: CONTRACT_TYPES,
   tickets: TICKET_TYPES,
 };
@@ -23,6 +23,7 @@ const ACCOUNT_STATE = { true: { label: 'Đang hoạt động', color: 'success' 
 /** Trường trạng thái → { label, color } để hiện Tag; không phải trạng thái hoặc mã lạ → null */
 export function statusOf(field, value, targetType) {
   if (field === 'isActive' && typeof value === 'boolean') return ACCOUNT_STATE[value];
+  if (field === 'occupancyStatus' && typeof value === 'string') return APARTMENT_OCCUPANCY[value] ?? null;
   if (STATUS_FIELDS.has(field) && typeof value === 'string') return STATUS_BY_TARGET[targetType]?.[value] ?? null;
   return null;
 }
