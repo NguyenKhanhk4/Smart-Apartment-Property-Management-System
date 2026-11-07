@@ -1,4 +1,4 @@
-// Enum dùng chung toàn hệ thống — khớp srs_final.md §III.2.2 (Table Descriptions).
+// Enum dùng chung toàn hệ thống; bổ sung cron an ninh và thời hạn lưu khách Module 7, giữ quy ước các module hiện có.
 // Client có bản nhãn tiếng Việt tương ứng ở client/src/constants/enums.js.
 
 export const values = (enumObj) => Object.values(enumObj);
@@ -474,6 +474,7 @@ export const CRON_STATUS = Object.freeze({ SUCCESS: 'SUCCESS', FAILED: 'FAILED' 
 export const CRON_TRIGGERS = Object.freeze({ SCHEDULE: 'SCHEDULE', MANUAL: 'MANUAL' });
 
 export const CRON_JOBS = Object.freeze({
+  OPERATIONS_SECURITY: 'OPERATIONS_SECURITY',
   INVOICE_GENERATE: 'INVOICE_GENERATE',
   INVOICE_OVERDUE: 'INVOICE_OVERDUE',
   BILLING_REMIND: 'BILLING_REMIND', // nhắc Kế toán đến kỳ tính phí + nhắc Trưởng BQL duyệt quá hạn (X8)
@@ -609,6 +610,7 @@ export const AUDIT_TARGETS = Object.freeze({
 
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
 export const CONFIG_KEYS = Object.freeze({
+  GUEST_RETENTION_MONTHS: 'GUEST_RETENTION_MONTHS',
   SLA_HOURS_URGENT: 'SLA_HOURS_URGENT',
   SLA_HOURS_HIGH: 'SLA_HOURS_HIGH',
   SLA_HOURS_MEDIUM: 'SLA_HOURS_MEDIUM',
@@ -644,6 +646,7 @@ export const CONFIG_KEYS = Object.freeze({
 });
 
 export const DEFAULT_CONFIGS = Object.freeze([
+  { key: CONFIG_KEYS.GUEST_RETENTION_MONTHS, value: 12, scope: CONFIG_SCOPES.BUSINESS, description: 'Thời hạn lưu dữ liệu khách vãng lai (tháng) — Module 7' },
   // BUSINESS — Manager sửa (UC-E01)
   { key: CONFIG_KEYS.SLA_HOURS_URGENT, value: 24, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Khẩn cấp (giờ) — BR-O7' },
   { key: CONFIG_KEYS.SLA_HOURS_HIGH, value: 72, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Cao (giờ) — BR-O7' },
