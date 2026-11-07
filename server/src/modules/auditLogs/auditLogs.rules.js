@@ -5,7 +5,7 @@ import { objectId } from '../../utils/validators.js';
 
 export const FINANCIAL_ACTIONS = [
   'FEE_TYPE_CHANGED', 'AMENITY_FEE_CHANGED',
-  'INVOICE_GENERATED', 'INVOICE_ADJUSTED', 'INVOICE_CANCELLED', 'INVOICE_RECALCULATED',
+  'INVOICE_GENERATED', 'INVOICE_ADJUSTED', 'INVOICE_ADJUSTMENT_CANCELLED', 'INVOICE_CANCELLED', 'INVOICE_RECALCULATED',
   'INVOICE_ITEM_ADDED', 'INVOICE_ITEM_REMOVED', 'INVOICE_SUBMITTED', 'INVOICE_PUBLISHED', 'INVOICE_RETURNED',
   'PAYMENT_CONFIRMED', 'PREPAID_REFUNDED', 'DEBT_FOLLOWUP_RECORDED', 'DEBT_NOTICE_EXPORTED',
   'FUND_INCOME_RECORDED', 'FUND_VOTED', 'FUND_PROPOSAL_APPROVED', 'FUND_PROPOSAL_REJECTED',
@@ -43,7 +43,8 @@ const LABELS = {
   FEE_TYPE_CHANGED: 'Thay đổi bảng phí',
   CONFIG_CHANGED: 'Thay đổi cấu hình',
   INVOICE_GENERATED: 'Tạo thông báo phí',
-  INVOICE_ADJUSTED: 'Điều chỉnh thông báo phí',
+  INVOICE_ADJUSTED: 'Lập khoản điều chỉnh thông báo phí',
+  INVOICE_ADJUSTMENT_CANCELLED: 'Hủy khoản điều chỉnh thông báo phí',
   INVOICE_PUBLISHED: 'Phát hành thông báo phí',
   INVOICE_SUBMITTED: 'Trình duyệt thông báo phí',
   INVOICE_RETURNED: 'Trả lại thông báo phí',
@@ -57,7 +58,8 @@ const TARGET_LABELS = {
   maintenance_fund: 'Quỹ bảo trì', fund_transactions: 'Giao dịch quỹ', fund_proposals: 'Đề xuất chi quỹ',
   operating_expenses: 'Chi phí vận hành', users: 'Tài khoản', buildings: 'Tòa nhà', apartments: 'Căn hộ',
   contracts: 'Hợp đồng', residents: 'Cư dân', vehicles: 'Phương tiện', gate_passes: 'Giấy chuyển đồ',
-  parking_cards: 'Thẻ gửi xe', fee_types: 'Bảng phí', invoices: 'Thông báo phí', payments: 'Thanh toán',
+  parking_cards: 'Thẻ gửi xe', fee_types: 'Bảng phí', invoices: 'Thông báo phí', invoice_adjustments: 'Điều chỉnh thông báo phí',
+  payments: 'Thanh toán',
   debt_followups: 'Xử lý công nợ', repair_quotes: 'Báo giá sửa chữa', amenities: 'Tiện ích',
   amenity_passes: 'Gói tiện ích', amenity_visits: 'Lượt tiện ích', bookings: 'Đặt tiện ích',
   work_orders: 'Lệnh bảo trì', tickets: 'Sự cố và phản ánh', complaint_categories: 'Danh mục phản ánh',
@@ -69,7 +71,7 @@ export function auditOptions(isBoard) {
   const actions = values(AUDIT_ACTIONS).filter((v) => !isBoard || FINANCIAL_ACTIONS.includes(v) || v === AUDIT_ACTIONS.CONFIG_CHANGED);
   const targets = isBoard
     ? [AUDIT_TARGETS.MAINTENANCE_FUND, AUDIT_TARGETS.FUND_TRANSACTION, AUDIT_TARGETS.FUND_PROPOSAL,
-      AUDIT_TARGETS.FEE_TYPE, AUDIT_TARGETS.INVOICE, AUDIT_TARGETS.PAYMENT,
+      AUDIT_TARGETS.FEE_TYPE, AUDIT_TARGETS.INVOICE, AUDIT_TARGETS.INVOICE_ADJUSTMENT, AUDIT_TARGETS.PAYMENT,
       AUDIT_TARGETS.DEBT_FOLLOWUP, AUDIT_TARGETS.AMENITY, AUDIT_TARGETS.SYSTEM_CONFIG]
     : values(AUDIT_TARGETS);
   return {

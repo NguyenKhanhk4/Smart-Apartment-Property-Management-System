@@ -3,16 +3,15 @@
 //   - Tính lại: lấy lại đơn giá, xe, phí tiện ích, Người nộp phí mới nhất; giữ nguyên các khoản thu khác đã thêm tay.
 // Chỉ sửa được khi còn DRAFT; cập nhật có điều kiện (status + updatedAt) để 2 người sửa cùng lúc không ghi đè nhau.
 import { AUDIT_ACTIONS, AUDIT_TARGETS, FEE_CATEGORIES, INVOICE_STATUS } from '../../constants/enums.js';
-import { AmenityPass, AmenityVisit, Booking, Invoice, RepairQuote } from '../../models/index.js';
+import { AmenityPass, AmenityVisit, Booking, Invoice, InvoiceAdjustment, RepairQuote } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { getPriceTable } from '../feeTypes/feeTypes.queries.js';
-import { buildInvoiceDraft } from './invoices.builder.js';
+import { buildInvoiceDraft, totalsOf } from './invoices.builder.js';
 import { linkAmenityCharges, loadApartments } from './invoices.service.js';
 
 const OTHER = FEE_CATEGORIES.OTHER;
-const sumItems = (items) => items.reduce((s, i) => s + i.amount, 0);
 
 const audit = (action, user, invoice, metadata) =>
   logAudit({ action, user, targetType: AUDIT_TARGETS.INVOICE, targetId: invoice._id, metadata: { code: invoice.code, ...metadata } });
@@ -28,7 +27,7 @@ async function loadDraft(invoiceId) {
 async function saveItems(invoice, items, extra = {}, session = null) {
   const updated = await Invoice.findOneAndUpdate(
     { _id: invoice._id, status: INVOICE_STATUS.DRAFT, updatedAt: invoice.updatedAt },
-    { $set: { items, totalAmount: sumItems(items), ...extra } },
+    { $set: { items, ...totalsOf(items), ...extra } },
     { new: true, session },
   ).lean();
   if (!updated) throw new ApiError('CONCURRENT_UPDATE');
@@ -100,6 +99,7 @@ export async function recalculateDraft(user, invoiceId) {
       visitIds: draft.charges.visitIds,
       bookingIds: draft.charges.bookingIds,
       repairQuoteIds: draft.charges.repairQuoteIds,
+      adjustmentIds: draft.charges.adjustmentIds,
     };
     await unlinkStale(invoice._id, keep, session);
     return saveItems(invoice, items, { payerId: draft.payer.userId, payerSource: draft.payer.source }, session);
@@ -116,6 +116,7 @@ async function unlinkStale(invoiceId, keep, session) {
     [AmenityVisit, keep.visitIds],
     [Booking, keep.bookingIds],
     [RepairQuote, keep.repairQuoteIds],
+    [InvoiceAdjustment, keep.adjustmentIds],
   ]) {
     await Model.updateMany({ invoiceId, _id: { $nin: ids } }, { $set: { invoiceId: null } }, { session });
   }

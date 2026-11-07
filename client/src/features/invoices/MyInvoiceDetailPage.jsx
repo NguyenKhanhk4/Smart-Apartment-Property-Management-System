@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from 'react-router';
-import { Alert, Button, Skeleton } from 'antd';
+import { Alert, Button, Flex, Skeleton, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { invoiceApi } from '../../api/moduleB.api';
 import PageHeader from '../../components/PageHeader';
@@ -9,9 +9,10 @@ import { FEE_CATEGORIES, INVOICE_STATUS, PAYMENT_METHODS } from '../../constants
 import { useApi } from '../../hooks/useApi';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format';
 import PayosButton from '../payments/PayosButton';
+import { DownloadPdfButton } from './invoiceComponents';
 import { INVOICE_TONE, OUTSTANDING_STATUSES, outstandingOf, periodLabel } from './invoiceShared';
 
-// Mô đun 4 — UC28: chi tiết thông báo phí cho cư dân. Nút thanh toán online (payOS) thêm ở bước thanh toán.
+// Mô đun 4 — UC28: chi tiết thông báo phí cho cư dân: thanh toán payOS, hướng dẫn chuyển khoản, tải PDF.
 function Row({ label, value, strong, muted, danger }) {
   return (
     <div className="flex justify-between gap-4 py-1.5">
@@ -34,9 +35,12 @@ export default function MyInvoiceDetailPage() {
         className="mb-0"
         title={d ? `Phí tháng ${periodLabel(d.period)}` : 'Thông báo phí'}
         extra={
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/r/invoices', { viewTransition: true })}>
-            Danh sách
-          </Button>
+          <Flex gap={8} wrap>
+            {d && <DownloadPdfButton download={() => invoiceApi.downloadPdf(id)} />}
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/r/invoices', { viewTransition: true })}>
+              Danh sách
+            </Button>
+          </Flex>
         }
       />
 
@@ -87,6 +91,32 @@ export default function MyInvoiceDetailPage() {
                 )}
               </div>
             </SurfaceCard>
+
+            {d.isPayer && due && outstanding > 0 && d.payInfo && (
+              <SurfaceCard className="p-4 md:p-5">
+                <h2 className="text-base font-semibold mb-1">Hoặc chuyển khoản</h2>
+                {d.payInfo.configured ? (
+                  <>
+                    <Row label="Ngân hàng" value={d.payInfo.bankName} muted />
+                    <Row label="Số tài khoản" value={<Typography.Text copyable>{d.payInfo.accountNo}</Typography.Text>} muted />
+                    <Row label="Chủ tài khoản" value={d.payInfo.accountName} muted />
+                  </>
+                ) : (
+                  <p className="text-r-muted text-[13px] my-1">Liên hệ Ban quản lý để biết tài khoản nhận tiền.</p>
+                )}
+                <Row
+                  label="Nội dung chuyển khoản"
+                  value={
+                    <Typography.Text strong copyable>
+                      {d.payInfo.content}
+                    </Typography.Text>
+                  }
+                />
+                <p className="text-r-muted text-[12px] mt-1 mb-0">
+                  Ghi đúng nội dung để Kế toán gạch nợ nhanh. Chuyển khoản tay được ghi nhận sau khi Kế toán đối chiếu sao kê.
+                </p>
+              </SurfaceCard>
+            )}
 
             {d.payments?.length > 0 && (
               <SurfaceCard className="p-4 md:p-5">

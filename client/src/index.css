@@ -138,3 +138,8 @@
     animation-duration: 0.01ms !important;
   }
 }
+
+/* Dòng "Điều chỉnh" trong bảng dòng phí (Mô đun 4, M4-5): tô nhạt để Trưởng BQL thấy khi duyệt */
+.invoice-row-adjustment > td {
+  background: rgba(250, 178, 25, 0.12) !important;
+}

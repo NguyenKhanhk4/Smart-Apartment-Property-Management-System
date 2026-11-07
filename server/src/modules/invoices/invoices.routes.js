@@ -3,12 +3,15 @@ import Joi from 'joi';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
-import { INVOICE_STATUS } from '../../constants/enums.js';
+import { ADJUSTMENT_STATUS, INVOICE_STATUS } from '../../constants/enums.js';
+import { sendFile } from '../../services/export.service.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId, period } from '../../utils/validators.js';
+import * as adjustments from './invoices.adjustments.js';
 import * as approval from './invoices.approval.js';
 import * as drafts from './invoices.drafts.js';
+import * as pdf from './invoices.pdf.js';
 import * as queries from './invoices.queries.js';
 import * as service from './invoices.service.js';
 
@@ -164,6 +167,92 @@ router.delete('/:id/items/:index', authenticate, authorize('ACCOUNTANT'), valida
  */
 router.post('/:id/recalculate', authenticate, authorize('ACCOUNTANT'), validate({ params: idParams }), async (req, res) =>
   ok(res, await drafts.recalculateDraft(req.user, req.params.id), 'Đã tính lại'),
+);
+
+// ---- Khoản điều chỉnh thông báo đã phát hành (M4-5) ----
+const adjustmentBody = Joi.object({
+  amount: Joi.number().integer().invalid(0).min(-MAX_ITEM_AMOUNT).max(MAX_ITEM_AMOUNT).required(), // > 0 thu thêm, < 0 giảm trừ
+  reason: Joi.string().trim().min(10).max(500).required(),
+});
+const adjustmentQuery = Joi.object({
+  ...paginationQuery,
+  sort: sortable('createdAt', 'amount').default('-createdAt'),
+  period: period(),
+  status: csvEnum(Object.values(ADJUSTMENT_STATUS)),
+  apartmentId: objectId(),
+  sourceInvoiceId: objectId(),
+  invoiceId: objectId(),
+  waiting: Joi.boolean(),
+});
+const cancelBody = Joi.object({ reason: Joi.string().trim().min(5).max(500).required() });
+
+/**
+ * @openapi
+ * /invoices/adjustments:
+ *   get:
+ *     tags: [Phí & hóa đơn]
+ *     summary: Khoản điều chỉnh (lọc theo kỳ của thông báo chứa khoản đó — màn hình duyệt, trạng thái, căn, thông báo gốc; waiting = chưa vào thông báo nào). Kèm summary tổng tăng / giảm
+ */
+router.get('/adjustments', authenticate, authorize(...BILLING_ROLES), validate({ query: adjustmentQuery }), async (req, res) => {
+  const { items, pagination, summary } = await adjustments.listAdjustments(req.validated.query);
+  return paginated(res, items, pagination, { summary });
+});
+
+/**
+ * @openapi
+ * /invoices/adjustments/{id}/cancel:
+ *   post:
+ *     tags: [Phí & hóa đơn]
+ *     summary: Kế toán hủy khoản điều chỉnh chưa áp dụng (đang ở Nháp kỳ sau thì gỡ dòng khỏi Nháp). Ghi Audit Log
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ */
+router.post(
+  '/adjustments/:id/cancel',
+  authenticate,
+  authorize('ACCOUNTANT'),
+  validate({ params: idParams, body: cancelBody }),
+  async (req, res) => ok(res, await adjustments.cancelAdjustment(req.user, req.params.id, req.body), 'Đã hủy khoản điều chỉnh'),
+);
+
+/**
+ * @openapi
+ * /invoices/{id}/adjustments:
+ *   post:
+ *     tags: [Phí & hóa đơn]
+ *     summary: Kế toán lập khoản điều chỉnh cho thông báo ĐÃ PHÁT HÀNH (± kèm lý do) → tự vào thông báo Nháp kỳ sau của căn, Trưởng BQL duyệt cùng. Ghi Audit Log
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [amount, reason]
+ *             properties:
+ *               amount: { type: integer, example: -50000 }
+ *               reason: { type: string, example: 'Tính trùng phí gửi xe máy 29A-12345 tháng 10' }
+ */
+router.post(
+  '/:id/adjustments',
+  authenticate,
+  authorize('ACCOUNTANT'),
+  validate({ params: idParams, body: adjustmentBody }),
+  async (req, res) =>
+    created(res, await adjustments.createAdjustment(req.user, req.params.id, req.body), 'Đã lập khoản điều chỉnh vào kỳ sau'),
+);
+
+/**
+ * @openapi
+ * /invoices/{id}/pdf:
+ *   get:
+ *     tags: [Phí & hóa đơn]
+ *     summary: Tải PDF thông báo phí (thông tin tòa nhà, dòng phí, tài khoản nhận tiền, nội dung chuyển khoản mẫu). Quyền như xem chi tiết (X1)
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ */
+router.get('/:id/pdf', authenticate, authorize(...queries.STAFF_VIEW_ROLES, 'RESIDENT'), validate({ params: idParams }), async (req, res) =>
+  sendFile(res, await pdf.buildInvoicePdf(req.user, req.params.id)),
 );
 
 // ---- Trình duyệt / Duyệt & Phát hành / Trả lại: chọn theo danh sách id HOẶC cả kỳ ----

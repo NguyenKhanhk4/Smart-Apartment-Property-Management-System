@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import dayjs from 'dayjs';
 import { Button, Card, DatePicker, Flex, Input, Popconfirm, Segmented, Select, Space, Table, Typography } from 'antd';
-import { CheckOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
+import { BankOutlined, CheckOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
 import { invoiceApi } from '../../api/moduleB.api';
 import { lookupApi } from '../../api/moduleE.api';
 import EnumTag from '../../components/EnumTag';
@@ -13,6 +13,8 @@ import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { formatDate, formatMoney } from '../../utils/format';
+import AdjustmentsPanel from './AdjustmentsPanel';
+import BankInfoModal from './BankInfoModal';
 import { aptLabel, OUTSTANDING_STATUSES, outstandingOf, periodLabel } from './invoiceShared';
 
 // Mô đun 4 — UC27/UC28: danh sách thông báo phí theo kỳ. Kế toán trình duyệt Nháp; Trưởng BQL Duyệt & Phát hành / Trả lại.
@@ -35,6 +37,7 @@ export default function InvoiceListPage() {
   const [pageSize, setPageSize] = useState(20);
   const [selected, setSelected] = useState([]);
   const [returning, setReturning] = useState(null); // selector đang trả lại
+  const [bankOpen, setBankOpen] = useState(false);
   const period = month?.format('YYYY-MM');
 
   const { data: buildings = [] } = useApi(() => lookupApi.buildings(), []);
@@ -121,11 +124,18 @@ export default function InvoiceListPage() {
         subtitle="Kế toán tính phí → Trình duyệt → Trưởng BQL Duyệt & Phát hành. Cư dân chỉ thấy thông báo đã phát hành."
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Thông báo phí' }]}
         extra={
-          isAccountant && (
-            <Button onClick={() => navigate('/app/invoices/generate')} type="primary">
-              Tính phí
-            </Button>
-          )
+          <Space wrap>
+            {isManager && (
+              <Button icon={<BankOutlined />} onClick={() => setBankOpen(true)}>
+                Tài khoản nhận tiền
+              </Button>
+            )}
+            {isAccountant && (
+              <Button onClick={() => navigate('/app/invoices/generate')} type="primary">
+                Tính phí
+              </Button>
+            )}
+          </Space>
         }
       />
 
@@ -166,6 +176,8 @@ export default function InvoiceListPage() {
               }))}
             />
           </div>
+
+          {period && (status === 'DRAFT' || status === 'PENDING_APPROVAL') && <AdjustmentsPanel period={period} />}
 
           {selectable && (
             <Flex gap={8} wrap align="center">
@@ -219,6 +231,8 @@ export default function InvoiceListPage() {
           />
         </Flex>
       </Card>
+
+      <BankInfoModal open={bankOpen} onClose={() => setBankOpen(false)} />
 
       <ReasonModal
         open={Boolean(returning)}

@@ -14,6 +14,8 @@ import { Invoice, Payment, PrepaidBalance, PrepaidTransaction, Resident } from '
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { vnPeriod } from '../../utils/time.js';
+import { adjustmentsOf } from './invoices.adjustments.js';
+import { bankInfo, transferContent } from './invoices.payinfo.js';
 
 export const STAFF_VIEW_ROLES = [ROLES.ACCOUNTANT, ROLES.MANAGER];
 const RESIDENT_VISIBLE = [...INVOICE_PUBLISHED_STATUSES, INVOICE_STATUS.CANCELLED];
@@ -115,11 +117,19 @@ export async function getInvoice(user, id) {
     }
   }
 
-  const [payments, prepaidTransactions] = await Promise.all([
+  const [payments, prepaidTransactions, bank, adjustments] = await Promise.all([
     paymentsOf(invoice._id),
     PrepaidTransaction.find({ invoiceId: invoice._id }).select('type amount createdAt').lean(),
+    bankInfo(),
+    isStaff ? adjustmentsOf(invoice._id) : null,
   ]);
-  const result = { ...withOutstanding(invoice), payments, prepaidTransactions };
+  const result = {
+    ...withOutstanding(invoice),
+    payments,
+    prepaidTransactions,
+    payInfo: { ...bank, content: transferContent(invoice.buildingId?.code, invoice.apartmentId?.code, invoice.period) },
+    ...(isStaff && { adjustments }),
+  };
   if (!isStaff) {
     // Cư dân không cần thông tin quy trình nội bộ
     delete result.returnNote;

@@ -2,6 +2,20 @@
 // Theo quy ước axiosClient.js: trả nguyên envelope { success, data, pagination? }.
 import { apiClient, http } from './axiosClient';
 
+/** Tải file (PDF...) từ API, lưu bằng tên server đặt (Content-Disposition). Trả về tên file */
+async function downloadFile(url, fallback) {
+  const res = await apiClient.get(url, { responseType: 'blob' });
+  const match = /filename="?([^"]+)"?/.exec(res.headers['content-disposition'] ?? '');
+  const filename = match?.[1] ?? fallback;
+  const href = URL.createObjectURL(res.data);
+  const a = Object.assign(document.createElement('a'), { href, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+  return filename;
+}
+
 // ===== UC-B01: Danh mục phí & đơn giá theo thời gian =====
 export const feeTypeApi = {
   /** params: { code, feeCategory, state } */
@@ -28,6 +42,8 @@ export const invoiceApi = {
   /** Cư dân — params: { apartmentId, page, limit, status, period }. Kèm summary (còn nợ, số dư trả trước) */
   my: (params) => http.get('/invoices/my', { params }),
   get: (id) => http.get(`/invoices/${id}`),
+  /** Tải PDF thông báo phí (quyền như xem chi tiết) */
+  downloadPdf: (id) => downloadFile(`/invoices/${id}/pdf`, 'thong-bao-phi.pdf'),
 
   // Sửa Nháp (Kế toán)
   /** body: { description, amount } */
@@ -40,6 +56,13 @@ export const invoiceApi = {
   publish: (selector) => http.post('/invoices/publish', selector),
   /** body: { invoiceIds | period, reason } */
   returnBack: (body) => http.post('/invoices/return', body),
+
+  // Khoản điều chỉnh thông báo đã phát hành (M4-5) → tự vào Nháp kỳ sau
+  /** params: { period, status (CSV), apartmentId, sourceInvoiceId, invoiceId, waiting, page, limit }. Kèm summary */
+  adjustments: (params) => http.get('/invoices/adjustments', { params }),
+  /** Kế toán — body: { amount (± số nguyên ≠ 0), reason } */
+  createAdjustment: (id, body) => http.post(`/invoices/${id}/adjustments`, body),
+  cancelAdjustment: (adjustmentId, reason) => http.post(`/invoices/adjustments/${adjustmentId}/cancel`, { reason }),
 };
 
 // ===== Mô đun 4: Thanh toán (UC30 thu tiền mặt / chuyển khoản, UC35 biên lai) =====
@@ -49,6 +72,7 @@ export const paymentApi = {
   /** body: { invoiceId | apartmentId + payerId, method: CASH | BANK_TRANSFER, amount, bankRef?, note?, paidAt? } */
   recordOffline: (body) => http.post('/payments/offline', body),
   receipt: (id) => http.get(`/payments/${id}/receipt`),
+  downloadReceipt: (id) => downloadFile(`/payments/${id}/receipt.pdf`, 'bien-lai.pdf'),
 
   // payOS (UC29) — cư dân là Người nộp phí
   /** body: { invoiceIds } → { paymentId, orderCode, amount, checkoutUrl, qrCode, expiredAt, status } */
@@ -80,18 +104,7 @@ export const debtApi = {
   recordActivity: (id, body) => http.post(`/debts/cases/${id}/activities`, body),
 
   /** Tải PDF Thông báo nợ quá hạn, trả về tên file */
-  async downloadNotice(id) {
-    const res = await apiClient.get(`/debts/cases/${id}/notice.pdf`, { responseType: 'blob' });
-    const match = /filename="?([^"]+)"?/.exec(res.headers['content-disposition'] ?? '');
-    const filename = match?.[1] ?? 'thong-bao-no-qua-han.pdf';
-    const url = URL.createObjectURL(res.data);
-    const a = Object.assign(document.createElement('a'), { href: url, download: filename });
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    return filename;
-  },
+  downloadNotice: (id) => downloadFile(`/debts/cases/${id}/notice.pdf`, 'thong-bao-no-qua-han.pdf'),
 };
 
 // ===== Mô đun 4: Quỹ bảo trì 2% (UC33 Kế toán, UC34 Ban quản trị) =====

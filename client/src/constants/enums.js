@@ -257,9 +257,16 @@ export const CONTACT_METHODS = {
 };
 
 export const PREPAID_TX_TYPES = {
-  DEPOSIT: { label: 'Tiền thừa ghi vào số dư', color: 'green' },
+  DEPOSIT: { label: 'Ghi vào số dư', color: 'green' },
   APPLY: { label: 'Trừ vào thông báo phí', color: 'blue' },
   REFUND: { label: 'Hoàn tiền', color: 'orange' },
+};
+
+// Khoản điều chỉnh thông báo phí đã phát hành (M4-5)
+export const ADJUSTMENT_STATUS = {
+  PENDING: { label: 'Chờ vào kỳ sau', color: 'gold' },
+  APPLIED: { label: 'Đã áp dụng', color: 'green' },
+  CANCELLED: { label: 'Đã hủy', color: 'default' },
 };
 
 export const WORK_ORDER_STATUS = {
