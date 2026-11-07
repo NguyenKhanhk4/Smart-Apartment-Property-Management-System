@@ -1,4 +1,4 @@
-// Nhãn tiếng Việt + màu antd Tag cho enum. Key phải khớp server/src/constants/enums.js.
+// Nhãn enum frontend khớp server, gồm cron vận hành/an ninh Module 7.
 // Module nào thêm enum nghiệp vụ thì thêm vào đây theo cùng dạng { VALUE: { label, color } }.
 
 export const ROLES = {
@@ -361,6 +361,7 @@ export const OCCUPANT_CHANGE_TYPES = {
 
 // ===== Hệ thống =====
 export const CRON_JOBS = {
+  OPERATIONS_SECURITY: { label: 'Vận hành & an ninh (Module 7)' },
   INVOICE_GENERATE: { label: 'Tạo hóa đơn định kỳ', color: 'green' },
   INVOICE_OVERDUE: { label: 'Quét hóa đơn quá hạn', color: 'red' },
   BILLING_REMIND: { label: 'Nhắc tính phí / duyệt thông báo phí', color: 'gold' },

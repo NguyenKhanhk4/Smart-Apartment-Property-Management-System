@@ -1,4 +1,4 @@
-// API Module E (Phạm Lượng): Ticket, Sổ khách, Bảng tin & Thông báo, Báo cáo, Danh mục & tham số.
+// API dùng chung: giữ endpoint cũ, thêm nghiệp vụ Module 7 (TM): khách, bưu kiện, tuần tra và báo khẩn.
 // Theo quy ước axiosClient.js: trả nguyên envelope { success, data, pagination? }.
 import { apiClient, http } from './axiosClient';
 
@@ -58,6 +58,22 @@ export const ticketApi = {
 
 // ===== UC-E07, E08: Sổ khách =====
 export const guestApi = {
+  operations: (kind, params) => http.get(`/guests/operations/${kind}`, { params }),
+  alerts: () => http.get('/guests/alerts'),
+  summary: (params) => http.get('/guests/operations/summary', { params }),
+  confirm: (id, confirmed) => http.patch(`/guests/${id}/confirm`, { confirmed }),
+  receiveParcel: (body, files) => http.post('/guests/parcels', toForm(body, files)),
+  recipients: (id) => http.get(`/guests/parcels/${id}/recipients`),
+  receipt: (id) => http.get(`/guests/parcels/${id}/receipt`),
+  handover: (id, body) => http.patch(`/guests/parcels/${id}/handover`, body),
+  checkpoint: (body) => http.post('/guests/checkpoints', body),
+  updateCheckpoint: (id, active) => http.patch(`/guests/checkpoints/${id}`, { active }),
+  tour: (body) => http.post('/guests/tours', body),
+  scan: (id, body) => http.patch(`/guests/tours/${id}/scan`, body),
+  incident: (body, files = []) => http.post('/guests/incidents', toForm(body, files)),
+  acknowledge: (id) => http.patch(`/guests/incidents/${id}/acknowledge`),
+  broadcast: (id) => http.patch(`/guests/incidents/${id}/broadcast`),
+  endBroadcast: (id) => http.patch(`/guests/incidents/${id}/end-broadcast`),
   list: (params) => http.get('/guests', { params }),
   register: (body) => http.post('/guests', body),
   cancel: (id) => http.delete(`/guests/${id}`),
