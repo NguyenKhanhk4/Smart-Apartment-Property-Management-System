@@ -1,14 +1,18 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { FEE_CATEGORIES, values } from '../../constants/enums.js';
+import { FEE_CATEGORIES, LEDGER_STATUS, values } from '../../constants/enums.js';
+import { hasPermission } from '../../middlewares/authorize.js';
+import { sendFile } from '../../services/export.service.js';
+import { ApiError } from '../../utils/ApiError.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { ok } from '../../utils/response.js';
 import { periodStart, vnPeriod } from '../../utils/time.js';
-import { objectId, period } from '../../utils/validators.js';
+import { csvEnum, objectId, period } from '../../utils/validators.js';
 import { exportReport } from './reports.export.js';
 import * as reports from './reports.service.js';
+import { financeDashboard, supervisionReport } from './finance.service.js';
 
 const router = Router();
 router.use(authenticate);
@@ -139,14 +143,53 @@ router.get(
 
 /**
  * @openapi
+ * /reports/finance:
+ *   get:
+ *     tags: [Báo cáo]
+ *     summary: Dashboard tài chính (UC60) — thu theo tháng / hình thức, cơ cấu phí, tỷ lệ căn còn nợ, tiện ích trả ngay, Quỹ bảo trì. from/to dạng YYYY-MM
+ *     parameters:
+ *       - { in: query, name: from, schema: { type: string, example: '2026-01' } }
+ *       - { in: query, name: to, schema: { type: string, example: '2026-11' } }
+ */
+router.get(
+  '/finance',
+  authorize('MANAGER', 'ACCOUNTANT'),
+  validate({ query: Joi.object({ from: periodQuery.from, to: periodQuery.to }) }),
+  async (req, res) => ok(res, await financeDashboard(q(req))),
+);
+
+/**
+ * @openapi
+ * /reports/supervision:
+ *   get:
+ *     tags: [Báo cáo]
+ *     summary: Báo cáo giám sát cho Ban quản trị — Quỹ bảo trì (số dư, thu chi, đề xuất), tình hình thu phí, chất lượng xử lý sự cố. Không có công nợ từng căn
+ *     parameters:
+ *       - { in: query, name: from, schema: { type: string, example: '2026-01' } }
+ *       - { in: query, name: to, schema: { type: string, example: '2026-11' } }
+ */
+router.get(
+  '/supervision',
+  authorize('BOARD', 'MANAGER'),
+  validate({ query: Joi.object({ from: periodQuery.from, to: periodQuery.to }) }),
+  async (req, res) => ok(res, await supervisionReport(q(req))),
+);
+
+// Loại báo cáo xuất được theo vai trò; Ban quản trị chỉ xuất phần giám sát (5.6)
+const PERIOD_TYPES = ['billing', 'finance', 'supervision'];
+const BOARD_EXPORTS = ['supervision', 'fund', 'billing'];
+
+/**
+ * @openapi
  * /reports/export:
  *   get:
  *     tags: [Báo cáo]
  *     summary: Xuất báo cáo Excel/PDF (UC-E13) — Manager, Accountant
  *     description: |
- *       type=billing dùng from/to dạng YYYY-MM; fund/operations/amenity dùng from/to dạng ngày; debts không cần from/to.
+ *       billing / finance / supervision dùng from/to dạng YYYY-MM; fund / operations / amenity dùng from/to dạng ngày;
+ *       debts, ledger (sổ công nợ, lọc status CSV) không cần from/to. Ban quản trị chỉ xuất supervision, fund, billing.
  *     parameters:
- *       - { in: query, name: type, required: true, schema: { type: string, enum: [billing, debts, fund, operations, amenity] } }
+ *       - { in: query, name: type, required: true, schema: { type: string, enum: [billing, debts, fund, operations, amenity, finance, supervision, ledger] } }
  *       - { in: query, name: format, required: true, schema: { type: string, enum: [xlsx, pdf] } }
  *       - { in: query, name: from, schema: { type: string } }
  *       - { in: query, name: to, schema: { type: string } }
@@ -155,25 +198,25 @@ router.get(
  */
 router.get(
   '/export',
-  authorize('MANAGER', 'ACCOUNTANT'),
+  authorize('MANAGER', 'ACCOUNTANT', 'BOARD'),
   validate({
     query: Joi.object({
-      type: Joi.string().valid('billing', 'debts', 'fund', 'operations', 'amenity').required(),
+      type: Joi.string().valid('billing', 'debts', 'fund', 'operations', 'amenity', 'finance', 'supervision', 'ledger').required(),
       format: Joi.string().valid('xlsx', 'pdf').required(),
-      from: Joi.when('type', { is: 'billing', then: periodQuery.from, otherwise: dateQuery.from }),
-      to: Joi.when('type', { is: 'billing', then: periodQuery.to, otherwise: dateQuery.to }),
+      from: Joi.when('type', { is: Joi.valid(...PERIOD_TYPES), then: periodQuery.from, otherwise: dateQuery.from }),
+      to: Joi.when('type', { is: Joi.valid(...PERIOD_TYPES), then: periodQuery.to, otherwise: dateQuery.to }),
       buildingId: objectId(),
       feeCategory: Joi.string().valid(...values(FEE_CATEGORIES)),
       amenityId: objectId(),
+      status: csvEnum(Object.values(LEDGER_STATUS)),
     }),
   }),
   async (req, res) => {
     const { type, format, ...filters } = q(req);
-    const file = await exportReport(type, format, filters);
-    res.setHeader('Content-Type', file.contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-    res.send(file.buffer);
+    if (hasPermission(req.user, ['BOARD']) && !BOARD_EXPORTS.includes(type)) {
+      throw ApiError.forbidden('Ban quản trị chỉ xuất được báo cáo giám sát, quỹ bảo trì và tổng hợp thu phí');
+    }
+    sendFile(res, await exportReport(type, format, filters));
   },
 );
 

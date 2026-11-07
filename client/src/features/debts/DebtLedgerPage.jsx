@@ -10,6 +10,7 @@ import { useApi } from '../../hooks/useApi';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { formatMoney } from '../../utils/format';
 import { periodLabel } from '../invoices/invoiceShared';
+import { ExportButton } from '../reports/components';
 import { caseHint } from './debtShared';
 
 // Mô đun 4 — UC31 Sổ công nợ: mỗi dòng là 1 Người nộp phí tại 1 căn. Bấm dòng → sổ công nợ của căn.
@@ -115,6 +116,13 @@ export default function DebtLedgerPage() {
         title="Sổ công nợ"
         subtitle="Công nợ theo căn và Người nộp phí. Hệ thống tự nhắc nợ; nhắc đủ số lần mà chưa trả thì chuyển Nợ quá hạn dài để Trưởng BQL xử lý."
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Sổ công nợ' }]}
+        extra={
+          <ExportButton
+            type="ledger"
+            label="Xuất sổ công nợ"
+            params={{ buildingId, status: status === 'ALL' ? undefined : status }}
+          />
+        }
       />
       <Card>
         <Flex vertical gap={12}>
