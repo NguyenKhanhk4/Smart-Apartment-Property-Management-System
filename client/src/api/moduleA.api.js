@@ -46,6 +46,12 @@ export const contractsApi = {
 };
 
 // ===== UC-A07 & UC-A08: Cư dân & Căn hộ của tôi =====
+// ===== UC02: Mã kích hoạt / đặt lại mật khẩu in tại quầy (Lễ tân, Trưởng BQL) =====
+export const activationCodeApi = {
+  lookup: (phone) => http.get('/activation-codes/lookup', { params: { phone } }),
+  issue: (userId) => http.post('/activation-codes', { userId }),
+};
+
 export const residentsApi = {
   listByApartment: (apartmentId) => http.get(`/apartments/${apartmentId}/residents`),
   lookupPhone: (phone) => http.get('/residents/lookup', { params: { phone } }),

@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const activated = location.state?.activated;
+  const passwordReset = location.state?.passwordReset;
 
   const enter = (session) => {
     startSession(session);
@@ -46,11 +47,11 @@ export default function LoginPage() {
       <div className="w-8 h-0.5 bg-gold mt-2 mb-2" />
       <p className="m-0 mb-6 text-[13px] text-ink-2">Nhập thông tin tài khoản để truy cập hệ thống.</p>
 
-      {activated && (
+      {(activated || passwordReset) && (
         <Alert
           type="success"
           showIcon
-          title="Tài khoản đã được kích hoạt. Vui lòng đăng nhập."
+          title={passwordReset ? 'Mật khẩu đã được đặt lại. Vui lòng đăng nhập.' : 'Tài khoản đã được kích hoạt. Vui lòng đăng nhập.'}
           className="mb-4"
           closable
         />
@@ -82,6 +83,10 @@ export default function LoginPage() {
       </Form>
 
       <div className="mt-4 text-center text-[13px] text-ink-2">
+        <Link to="/forgot-password" className="font-semibold text-navy hover:text-gold transition-colors">
+          Quên mật khẩu?
+        </Link>
+        {' · '}
         Lần đầu sử dụng?{' '}
         <Link to="/activate" className="font-semibold text-navy hover:text-gold transition-colors">
           Kích hoạt tài khoản

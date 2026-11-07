@@ -5,6 +5,7 @@ import {
   AUDIT_TARGETS,
   CONSENT_POLICY_VERSION,
   ROLES,
+  VERIFICATION_CHANNELS,
   VERIFICATION_PURPOSES,
 } from '../../constants/enums.js';
 import { Apartment, Resident, User } from '../../models/index.js';
@@ -79,8 +80,16 @@ export async function startActivation({ phone, apartmentCode, email }) {
  * Từ chối điều khoản vẫn kích hoạt được, chỉ bị giới hạn chức năng (BR-X7).
  */
 export async function confirmActivation({ phone, code, password, consent }, { ip } = {}) {
-  const user = await findUserByPhone(phone).select('role activatedAt isActive');
-  if (!user?.isActive || user.activatedAt) throw invalidCode();
+  const user = await findUserByPhone(phone).select('role activatedAt isActive consents');
+  if (!user?.isActive) throw invalidCode();
+  // UC02 bước 7: trang kích hoạt cũng nhận mã đặt lại mật khẩu in tại quầy cho tài khoản đã kích hoạt
+  if (user.activatedAt) {
+    const record = await checkCode(user._id, VERIFICATION_PURPOSES.PASSWORD_RESET, code, {
+      channel: VERIFICATION_CHANNELS.DESK_CODE,
+    });
+    await applyPasswordReset(user, record, password, { ip, consent });
+    return { mode: 'PASSWORD_RESET' };
+  }
 
   const record = await checkCode(user._id, VERIFICATION_PURPOSES.ACTIVATION, code);
   const passwordHash = await bcrypt.hash(password, 10);
@@ -110,6 +119,76 @@ export async function confirmActivation({ phone, code, password, consent }, { ip
       { session },
     );
   });
+  return { mode: 'ACTIVATED' };
+}
+
+/**
+ * Đặt mật khẩu mới bằng mã còn hiệu lực, thu hồi mọi phiên (BR-S02). Quyết định về điều khoản
+ * chỉ ghi thêm khi khác lần gần nhất (người được cấp mã tại quầy chọn lại ở trang kích hoạt).
+ */
+async function applyPasswordReset(user, record, password, { ip, consent } = {}) {
+  const passwordHash = await bcrypt.hash(password, 10);
+  const now = new Date();
+  const consentChanged = consent && user.consents?.at(-1)?.action !== consent;
+
+  await withTransaction(async (session) => {
+    await claimCode(record._id, session);
+    const { modifiedCount } = await User.updateOne(
+      { _id: user._id, isActive: true, activatedAt: { $ne: null } },
+      {
+        $set: { passwordHash },
+        $inc: { tokenVersion: 1 },
+        ...(consentChanged && {
+          $push: { consents: { action: consent, policyVersion: CONSENT_POLICY_VERSION, createdAt: now } },
+        }),
+      },
+      { session },
+    );
+    if (!modifiedCount) throw invalidCode();
+    await logAudit(
+      {
+        action: AUDIT_ACTIONS.PASSWORD_RESET,
+        user: { id: user._id },
+        targetType: AUDIT_TARGETS.USER,
+        targetId: user._id,
+        metadata: { channel: record.channel, ...(consentChanged && { consent }) },
+        ip,
+      },
+      { session },
+    );
+  });
+}
+
+/**
+ * UC02 bước 1–2: gửi OTP đặt lại mật khẩu nếu SĐT có tài khoản đã kích hoạt và có email.
+ * Luôn trả cùng một kết quả (kể cả gửi quá sớm, quá số lần, lỗi email) để không dò được SĐT nào có tài khoản;
+ * người không có email được hướng dẫn ra quầy (Step 2a).
+ */
+export async function forgotPassword({ phone }) {
+  const user = await findUserByPhone(phone).select('email activatedAt isActive');
+  if (user?.isActive && user.activatedAt && user.email) {
+    try {
+      const code = await issueEmailOtp(user._id, VERIFICATION_PURPOSES.PASSWORD_RESET);
+      const text = `Mã đặt lại mật khẩu của bạn là ${code}. Mã có hiệu lực trong ${OTP_TTL_MINUTES} phút.`;
+      let sent = await sendMail({ to: user.email, subject: '[SAPMS] Mã đặt lại mật khẩu', text });
+      if (!sent && env.isDev && !env.smtp.enabled) {
+        console.log(`[dev] OTP đặt lại mật khẩu của ${user.email}: ${code}`);
+        sent = true;
+      }
+      if (!sent) await discardCodes(user._id, VERIFICATION_PURPOSES.PASSWORD_RESET);
+    } catch (err) {
+      if (!(err instanceof ApiError)) throw err;
+    }
+  }
+  return { expiresInMinutes: OTP_TTL_MINUTES, resendAfterSeconds: OTP_RESEND_SECONDS };
+}
+
+/** UC02 bước 3–4: OTP email hoặc mã in tại quầy, mật khẩu mới, thu hồi mọi phiên (MSG-S10) */
+export async function resetPassword({ phone, code, password }, { ip } = {}) {
+  const user = await findUserByPhone(phone).select('activatedAt isActive consents');
+  if (!user?.isActive || !user.activatedAt) throw invalidCode();
+  const record = await checkCode(user._id, VERIFICATION_PURPOSES.PASSWORD_RESET, code);
+  await applyPasswordReset(user, record, password, { ip });
 }
 
 /**

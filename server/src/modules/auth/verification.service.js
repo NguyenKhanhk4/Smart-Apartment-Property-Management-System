@@ -6,6 +6,10 @@ import { VerificationCode } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 
 export const OTP_TTL_MINUTES = 10;
+export const DESK_CODE_TTL_HOURS = 48; // BR-S05
+// Mã in tại quầy: 8 ký tự, bỏ chữ dễ nhầm (0/O, 1/I/L) vì người dùng tự gõ lại
+const DESK_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const DESK_CODE_LENGTH = 8;
 export const OTP_RESEND_SECONDS = 60;
 const MAX_ATTEMPTS = 5;
 // Mỗi mã chỉ thử được 5 lần, nên giới hạn số mã mỗi ngày để không đoán dần được bằng cách xin mã mới liên tục
@@ -54,9 +58,18 @@ export async function issueEmailOtp(userId, purpose) {
  * Kiểm tra mã còn hiệu lực. Tính lượt trước khi so sánh để nhiều request song song
  * cũng không thử được quá MAX_ATTEMPTS lần. Mã chưa bị đánh dấu đã dùng ở bước này.
  */
-export async function checkCode(userId, purpose, code) {
+export async function checkCode(userId, purpose, input, { channel } = {}) {
+  // Mã in có thể được gõ kèm khoảng trắng, gạch ngang, chữ thường
+  const code = String(input).replace(/[\s-]/g, '').toUpperCase();
   const record = await VerificationCode.findOneAndUpdate(
-    { userId, purpose, usedAt: null, expiresAt: { $gt: new Date() }, attempts: { $lt: MAX_ATTEMPTS } },
+    {
+      userId,
+      purpose,
+      ...(channel && { channel }),
+      usedAt: null,
+      expiresAt: { $gt: new Date() },
+      attempts: { $lt: MAX_ATTEMPTS },
+    },
     { $inc: { attempts: 1 } },
     { sort: { createdAt: -1 }, new: true },
   );
@@ -72,6 +85,22 @@ export async function claimCode(recordId, session) {
     { session },
   );
   if (!claimed) throw invalidCode();
+}
+
+/** Mã in tại quầy (UC02): hủy mã cũ cùng mục đích, kể cả OTP email; trả mã gốc để in 1 lần */
+export async function createDeskCode(userId, purpose, issuedBy) {
+  await voidCodes(userId, purpose);
+  const code = Array.from({ length: DESK_CODE_LENGTH }, () => DESK_ALPHABET[crypto.randomInt(DESK_ALPHABET.length)]).join('');
+  const expiresAt = new Date(Date.now() + DESK_CODE_TTL_HOURS * 60 * 60 * 1000);
+  await VerificationCode.create({
+    userId,
+    purpose,
+    channel: VERIFICATION_CHANNELS.DESK_CODE,
+    codeHash: await bcrypt.hash(code, 10),
+    expiresAt,
+    issuedBy,
+  });
+  return { code, expiresAt };
 }
 
 /** Gửi email thất bại: bỏ mã vừa tạo, người dùng được gửi lại ngay */

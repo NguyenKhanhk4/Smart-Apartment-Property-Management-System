@@ -6,6 +6,10 @@ export const authApi = {
   startActivation: (body) => http.post('/auth/activation/start', body),
   /** UC11. body { phone, code, password, confirmPassword, consent: 'ACCEPTED' | 'DECLINED' } */
   confirmActivation: (body) => http.post('/auth/activation/confirm', body),
+  /** UC02. body { phone } → luôn trả thành công để không dò được SĐT */
+  forgotPassword: (phone) => http.post('/auth/password/forgot', { phone }),
+  /** UC02. body { phone, code, password, confirmPassword } */
+  resetPassword: (body) => http.post('/auth/password/reset', body),
   /** body { email, password } → { user, accessToken, refreshToken } (hợp đồng với Module A) */
   login: (body) => http.post('/auth/login', body),
   /** body { refreshToken } → { accessToken, refreshToken } */

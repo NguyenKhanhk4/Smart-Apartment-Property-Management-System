@@ -7,6 +7,7 @@ import AdminLayout from '../layouts/AdminLayout';
 import ResidentLayout from '../layouts/ResidentLayout';
 import LoginPage from '../features/auth/LoginPage';
 import ActivationPage from '../features/auth/ActivationPage';
+import ForgotPasswordPage from '../features/auth/ForgotPasswordPage';
 import NotFoundPage from '../features/errors/NotFoundPage';
 
 // Mỗi mục trong config/menu.js thành một route con, có kiểm tra quyền riêng
@@ -36,6 +37,10 @@ const router = createBrowserRouter([
       {
         path: '/activate',
         element: <ActivationPage />,
+      },
+      {
+        path: '/forgot-password',
+        element: <ForgotPasswordPage />,
       },
     ],
   },

@@ -21,6 +21,7 @@ import amenityVisitRoutes from './modules/amenityVisits/amenityVisits.routes.js'
 import devAuthRoutes from './modules/devAuth/devAuth.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import userRoutes from './modules/users/users.routes.js';
+import activationCodeRoutes from './modules/auth/activationCodes.routes.js';
 import buildingRoutes from './modules/buildings/buildings.routes.js';
 import apartmentRoutes from './modules/apartments/apartments.routes.js';
 import contractRoutes from './modules/contracts/contracts.routes.js';
@@ -82,6 +83,7 @@ router.use('/amenity-visits', amenityVisitRoutes);
 // Module A — Vũ Việt (Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện)
 router.use('/auth', authLimiter, authRoutes);
 router.use('/users', userRoutes);
+router.use('/activation-codes', activationCodeRoutes);
 router.use('/buildings', buildingRoutes);
 router.use('/apartments', apartmentRoutes);
 router.use('/contracts', contractRoutes);

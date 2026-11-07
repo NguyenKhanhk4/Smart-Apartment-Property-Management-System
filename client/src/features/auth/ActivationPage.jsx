@@ -58,7 +58,9 @@ export default function ActivationPage() {
     const { phone, code, password, confirmPassword } = credentials;
     const res = await run(() => authApi.confirmActivation({ phone, code, password, confirmPassword, consent }));
     if (res) {
-      navigate('/login', { replace: true, state: { activated: true } });
+      // Mã đặt lại mật khẩu in tại quầy cũng nhập ở đây (UC02 bước 7)
+      const mode = res.data?.mode;
+      navigate('/login', { replace: true, state: mode === 'PASSWORD_RESET' ? { passwordReset: true } : { activated: true } });
     } else {
       // Mã sai hoặc hết hạn thì phải quay lại nhập mã
       setStep(1);

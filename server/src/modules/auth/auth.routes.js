@@ -15,10 +15,9 @@ const activationStartBody = Joi.object({
   email: Joi.string().trim().lowercase().email().required(),
 });
 
-const activationConfirmBody = Joi.object({
-  phone: phoneVn().required(),
-  code: Joi.string().trim().max(20).required(),
-  password: Joi.string()
+// BR-S02, MSG-S08: dùng chung cho kích hoạt và đặt lại mật khẩu
+const newPassword = () =>
+  Joi.string()
     .min(8)
     .max(100)
     .pattern(/^(?=.*[A-Za-z])(?=.*\d)/)
@@ -26,11 +25,25 @@ const activationConfirmBody = Joi.object({
     .messages({
       'string.pattern.base': 'Mật khẩu phải có ít nhất 8 ký tự, gồm cả chữ và số',
       'string.min': 'Mật khẩu phải có ít nhất 8 ký tự, gồm cả chữ và số',
-    }),
-  confirmPassword: Joi.any().valid(Joi.ref('password')).required().messages({
-    'any.only': 'Xác nhận mật khẩu không khớp',
-  }),
+    });
+const confirmPassword = () =>
+  Joi.any().valid(Joi.ref('password')).required().messages({ 'any.only': 'Xác nhận mật khẩu không khớp' });
+
+const activationConfirmBody = Joi.object({
+  phone: phoneVn().required(),
+  code: Joi.string().trim().max(20).required(),
+  password: newPassword(),
+  confirmPassword: confirmPassword(),
   consent: Joi.string().valid(CONSENT_ACTIONS.ACCEPTED, CONSENT_ACTIONS.DECLINED).required(),
+});
+
+const forgotBody = Joi.object({ phone: phoneVn().required() });
+
+const resetBody = Joi.object({
+  phone: phoneVn().required(),
+  code: Joi.string().trim().max(20).required(),
+  password: newPassword(),
+  confirmPassword: confirmPassword(),
 });
 
 const loginBody = Joi.object({
@@ -63,8 +76,39 @@ router.post('/activation/start', validate({ body: activationStartBody }), async 
  *     security: []
  */
 router.post('/activation/confirm', validate({ body: activationConfirmBody }), async (req, res) => {
-  await authService.confirmActivation(req.validated.body, { ip: req.ip });
-  ok(res, null, 'Tài khoản đã được kích hoạt. Vui lòng đăng nhập');
+  const result = await authService.confirmActivation(req.validated.body, { ip: req.ip });
+  const message =
+    result.mode === 'PASSWORD_RESET' ? 'Mật khẩu đã được đặt lại. Vui lòng đăng nhập' : 'Tài khoản đã được kích hoạt. Vui lòng đăng nhập';
+  ok(res, result, message);
+});
+
+/**
+ * @openapi
+ * /auth/password/forgot:
+ *   post:
+ *     tags: [Xác thực & Tài khoản]
+ *     summary: Gửi OTP đặt lại mật khẩu qua email; luôn trả cùng kết quả để không dò được SĐT — UC02
+ *     security: []
+ */
+router.post('/password/forgot', validate({ body: forgotBody }), async (req, res) => {
+  ok(
+    res,
+    await authService.forgotPassword(req.validated.body),
+    'Nếu số điện thoại có tài khoản và email, mã đã được gửi tới email. Không có email thì vui lòng đến quầy lễ tân',
+  );
+});
+
+/**
+ * @openapi
+ * /auth/password/reset:
+ *   post:
+ *     tags: [Xác thực & Tài khoản]
+ *     summary: Đặt mật khẩu mới bằng OTP email hoặc mã in tại quầy, thu hồi mọi phiên — UC02
+ *     security: []
+ */
+router.post('/password/reset', validate({ body: resetBody }), async (req, res) => {
+  await authService.resetPassword(req.validated.body, { ip: req.ip });
+  ok(res, null, 'Mật khẩu đã được đặt lại. Vui lòng đăng nhập');
 });
 
 /**
