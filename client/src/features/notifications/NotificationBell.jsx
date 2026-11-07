@@ -1,9 +1,12 @@
+// Chuông dùng chung kèm banner khẩn Module 7 trên mọi màn hình; polling và quyền tiếp nhận do backend kiểm soát.
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
-import { Badge, Button } from 'antd';
+import { Alert, App, Badge, Button } from 'antd';
 import { BellOutlined } from '@ant-design/icons';
-import { notificationApi } from '../../api/moduleE.api';
+import { guestApi, notificationApi } from '../../api/moduleE.api';
 import { usePolling } from '../../hooks/usePolling';
+import { useAuth } from '../../hooks/useAuth';
 
 /** Phát khi số thông báo chưa đọc thay đổi (đánh dấu đã đọc...) để chuông cập nhật ngay */
 export const NOTIFICATIONS_CHANGED = 'sapms:notifications-changed';
@@ -14,15 +17,27 @@ const POLL_MS = 60_000;
 export default function NotificationBell({ area, variant }) {
   const navigate = useNavigate();
   const [count, setCount] = useState(0);
+  const [alerts, setAlerts] = useState([]);
+  const [receiving, setReceiving] = useState(null);
+  const { hasRole } = useAuth();
+  const { message } = App.useApp();
+  const canSeeAlerts = hasRole('MANAGER', 'RESIDENT', 'STAFF:SECURITY', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN');
+  const receive = async (id) => {
+    setReceiving(id);
+    try { await guestApi.acknowledge(id); setAlerts((items) => items.filter((a) => a._id !== id)); message.success('Đã tiếp nhận sự cố'); }
+    catch (error) { message.error(error.message); }
+    finally { setReceiving(null); }
+  };
 
   const refresh = useCallback(() => {
     notificationApi
       .unreadCount()
       .then((res) => setCount(res.data.count))
       .catch(() => {});
-  }, []);
+    if (canSeeAlerts) guestApi.alerts().then((res) => setAlerts(res.data)).catch(() => {});
+  }, [canSeeAlerts]);
 
-  usePolling(refresh, POLL_MS);
+  usePolling(refresh, canSeeAlerts ? 15000 : POLL_MS);
   useEffect(() => {
     refresh();
     window.addEventListener(NOTIFICATIONS_CHANGED, refresh);
@@ -33,9 +48,13 @@ export default function NotificationBell({ area, variant }) {
     };
   }, [refresh]);
 
+  const banner = alerts.length ? createPortal(<div role="region" aria-label="Cảnh báo khẩn cấp" style={{ position: 'fixed', bottom: 76, left: 12, right: 12, zIndex: 1100, maxHeight: '30vh', overflowY: 'auto' }}>
+    {alerts.map((a) => <Alert key={a._id} type="error" showIcon title={`KHẨN CẤP · ${a.location}`} description={a.description}
+      action={a.canAcknowledge && <Button loading={receiving === a._id} onClick={() => receive(a._id)}>Đã tiếp nhận</Button>} />)}
+  </div>, document.body) : null;
   if (variant === 'resident') {
     return (
-      <button
+      <>{banner}<button
         type="button"
         aria-label={count > 0 ? `Thông báo, ${count} chưa đọc` : 'Thông báo'}
         onClick={() => navigate(`/${area}/notifications`, { viewTransition: true })}
@@ -47,18 +66,18 @@ export default function NotificationBell({ area, variant }) {
             {count > 99 ? '99+' : count}
           </span>
         )}
-      </button>
+      </button></>
     );
   }
 
   return (
-    <Badge count={count} size="small" offset={[-4, 4]}>
+    <>{banner}<Badge count={count} size="small" offset={[-4, 4]}>
       <Button
         type="text"
         aria-label="Thông báo"
         icon={<BellOutlined style={{ fontSize: 18 }} />}
         onClick={() => navigate(`/${area}/notifications`)}
       />
-    </Badge>
+    </Badge></>
   );
 }
