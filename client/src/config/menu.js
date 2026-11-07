@@ -19,7 +19,6 @@ import {
   HomeOutlined,
   NotificationOutlined,
   IdcardOutlined,
-  TagsOutlined,
   PieChartOutlined,
   ScheduleOutlined,
   SettingOutlined,
@@ -93,9 +92,6 @@ const WorkOrdersPage = lazy(() => import('../features/workOrders/WorkOrdersPage'
 const AmenitiesPage = lazy(() => import('../features/amenities/AmenitiesPage'));
 const MyCodePage = lazy(() => import('../features/memberCodes/MyCodePage'));
 const FamilyPage = lazy(() => import('../features/memberCodes/FamilyPage'));
-const MyPassesPage = lazy(() => import('../features/amenityPasses/MyPassesPage'));
-const AmenityPassesPage = lazy(() => import('../features/amenityPasses/AmenityPassesPage'));
-const AmenityDeskPage = lazy(() => import('../features/amenityVisits/AmenityDeskPage'));
 const BookingSchedulePage = lazy(() => import('../features/bookings/BookingSchedulePage'));
 const UtilitiesPage = lazy(() => import('../features/bookings/UtilitiesPage'));
 const AmenityBookingPage = lazy(() => import('../features/bookings/AmenityBookingPage'));
@@ -229,26 +225,6 @@ export const adminMenu = [
     path: 'amenities',
     roles: ['MANAGER'],
     component: AmenitiesPage,
-  },
-  // Gói tháng tiện ích (UC-D09): Trưởng BQL hủy được, Lễ tân chỉ xem
-  {
-    key: 'amenity-passes',
-    group: 'Tiện ích & khách',
-    label: 'Gói tháng',
-    icon: TagsOutlined,
-    path: 'amenity-passes',
-    roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
-    component: AmenityPassesPage,
-  },
-  // Quầy tiện ích (UC-D10): lễ tân tra mã, ghi lượt vào; Trưởng BQL chỉ xem. Bảo vệ dùng phần check-in ở Lịch đặt tiện ích
-  {
-    key: 'amenity-desk',
-    group: 'Tiện ích & khách',
-    label: 'Quầy tiện ích',
-    icon: ScanOutlined,
-    path: 'amenity-desk',
-    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
-    component: AmenityDeskPage,
   },
   // Lịch đặt tiện ích trong ngày (UC-D07): lễ tân mọi thao tác, bảo vệ check-in, Trưởng BQL chỉ xem
   {
@@ -557,7 +533,6 @@ export const receptionNav = [
     items: [
       { key: 'guests', badge: 'guestsPending', badgeTone: 'neutral' },
       { key: 'booking-schedule', badge: 'bookingsWaiting' },
-      { key: 'amenity-desk' },
       { key: 'tickets', badge: 'ticketsNew' },
       { key: 'vehicle-requests', badge: 'vehiclesPending' },
       { key: 'parking-cards' },
@@ -565,7 +540,7 @@ export const receptionNav = [
       { key: 'contracts' },
     ],
   },
-  { group: 'Cư dân và dịch vụ', items: [{ key: 'amenity-passes' }, { key: 'announcements' }, { key: 'activation-codes' }] },
+  { group: 'Cư dân và dịch vụ', items: [{ key: 'announcements' }, { key: 'activation-codes' }] },
   { group: 'Cấu hình', items: [{ key: 'buildings' }] },
 ];
 
@@ -592,8 +567,6 @@ export const residentMenu = [
   // Thẻ cư dân (UC-D11): mã chữ; trang Gia đình chỉ chủ hộ, mở từ nút trong "Mã của tôi"
   { key: 'my-code', label: 'Mã của tôi', icon: IdcardOutlined, path: 'my-code', component: MyCodePage },
   { key: 'family', label: 'Gia đình', path: 'my-code/family', component: FamilyPage, hideInMenu: true },
-  // Gói tháng tiện ích (UC-D09): mở từ "Mã của tôi" / "Gia đình" (thanh dưới đã khá chật)
-  { key: 'my-passes', label: 'Gói tháng', path: 'my-code/passes', component: MyPassesPage, hideInMenu: true },
   // Đặt tiện ích (UC-D06). 'amenities/bookings' (đường dẫn tĩnh) được ưu tiên hơn 'amenities/:id'
   { key: 'amenities', label: 'Tiện ích', icon: CoffeeOutlined, path: 'amenities', component: UtilitiesPage },
   { key: 'my-bookings', label: 'Lịch sử đặt', path: 'amenities/bookings', component: MyBookingsPage, hideInMenu: true },
