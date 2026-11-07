@@ -50,6 +50,8 @@ export const contractsApi = {
 export const activationCodeApi = {
   lookup: (phone) => http.get('/activation-codes/lookup', { params: { phone } }),
   issue: (userId) => http.post('/activation-codes', { userId }),
+  /** Đổi SĐT đăng nhập tại quầy; trả lại thông tin tra cứu theo số mới */
+  changePhone: (userId, phone) => http.post('/activation-codes/change-phone', { userId, phone }),
 };
 
 export const residentsApi = {

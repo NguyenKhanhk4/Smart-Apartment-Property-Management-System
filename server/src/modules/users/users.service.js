@@ -9,7 +9,9 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { sendMail } from '../../services/mail.service.js';
 import { uploadToCloudinary } from '../../services/upload.service.js';
 import { parseDateOfBirth, ensureCodes } from '../memberCodes/memberCodes.service.js';
-import { toPublicUser } from '../auth/auth.service.js';
+import { toPublicUser, verifyCurrentPassword } from '../auth/auth.service.js';
+import { voidAllCodes } from '../auth/verification.service.js';
+import { recordContactChange } from './contactChanges.js';
 import { signAccessToken, signRefreshToken } from '../auth/auth.tokens.js';
 
 /**
@@ -24,17 +26,31 @@ export async function getMe(userId) {
 /**
  * UC-A03: Cập nhật hồ sơ cá nhân
  */
-export async function updateMe(userId, { fullName, phone, dateOfBirth }) {
+/** SĐT không sửa ở đây (là tên đăng nhập); email sửa được, bỏ trống thì xóa */
+export async function updateMe(userId, { fullName, email, currentPassword, dateOfBirth }, { ip } = {}) {
   const user = await User.findById(userId);
   if (!user) throw ApiError.notFound('Không tìm thấy tài khoản');
+  const oldEmail = user.email ?? null;
 
   if (fullName !== undefined) user.fullName = fullName.trim();
-  if (phone !== undefined) user.phone = phone;
+  // Email là kênh khôi phục mật khẩu: đổi hoặc xóa phải nhập lại mật khẩu (chống chiếm tài khoản khi lộ phiên)
+  if (email !== undefined && (email?.trim().toLowerCase() || null) !== oldEmail) {
+    if (!currentPassword) throw ApiError.field('currentPassword', 'Nhập mật khẩu hiện tại để đổi email');
+    await verifyCurrentPassword(userId, currentPassword);
+    const nextEmail = email?.trim().toLowerCase() || null;
+    if (nextEmail && nextEmail !== user.email && (await User.exists({ email: nextEmail, _id: { $ne: user._id } }))) {
+      throw new ApiError('EMAIL_EXISTS', undefined, { details: [{ field: 'email', message: 'Email đã được sử dụng' }] });
+    }
+    user.email = nextEmail;
+  }
   if (dateOfBirth !== undefined) {
     user.dateOfBirth = parseDateOfBirth(dateOfBirth);
   }
 
   await saveUnique(() => user.save());
+  if ((user.email ?? null) !== oldEmail) {
+    await recordContactChange({ actor: { id: userId }, user, field: 'email', before: oldEmail, after: user.email, ip });
+  }
   return toPublicUser(user);
 }
 
@@ -88,15 +104,10 @@ export async function updateAvatar(userId, files) {
  * UC-A03: Đổi mật khẩu
  */
 export async function changePassword(userId, { currentPassword, newPassword }) {
+  // Sai mật khẩu hiện tại tính chung bộ đếm khóa với đăng nhập (BR-S03)
+  await verifyCurrentPassword(userId, currentPassword);
   const user = await User.findById(userId).select('+passwordHash +tokenVersion');
   if (!user) throw ApiError.notFound('Không tìm thấy tài khoản');
-
-  const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
-  if (!isMatch) {
-    throw ApiError.badRequest('Mật khẩu hiện tại không đúng', [
-      { field: 'currentPassword', message: 'Mật khẩu hiện tại không đúng' },
-    ]);
-  }
 
   user.passwordHash = await bcrypt.hash(newPassword, 10);
   user.tokenVersion = (user.tokenVersion ?? 0) + 1;
@@ -226,6 +237,7 @@ export async function createInternal(managerUser, { fullName, email, phone, role
 export async function updateInternal(managerUser, targetId, { fullName, email, phone, role, roleTitle, boardTitle }, { ip } = {}) {
   const target = await User.findById(targetId).select('+tokenVersion');
   if (!target) throw ApiError.notFound('Không tìm thấy tài khoản');
+  const before = { phone: target.phone, email: target.email ?? null };
   if (target.role === ROLES.RESIDENT) throw ApiError.badRequest('Không sửa tài khoản RESIDENT qua API này');
 
   const newRole = role ?? target.role;
@@ -257,9 +269,18 @@ export async function updateInternal(managerUser, targetId, { fullName, email, p
   target.role = newRole;
   target.roleTitle = newRoleTitle;
   target.boardTitle = newBoardTitle;
-  if (roleChanged || titleChanged) target.tokenVersion = (target.tokenVersion ?? 0) + 1;
+  const phoneChanged = target.phone !== before.phone;
+  // Đổi SĐT là đổi tên đăng nhập: thu hồi mọi phiên như khi đổi vai trò
+  if (roleChanged || titleChanged || phoneChanged) target.tokenVersion = (target.tokenVersion ?? 0) + 1;
 
   await saveUnique(() => target.save());
+  if (phoneChanged) {
+    await voidAllCodes(target._id);
+    await recordContactChange({ actor: managerUser, user: target, field: 'phone', before: before.phone, after: target.phone, ip });
+  }
+  if ((target.email ?? null) !== before.email) {
+    await recordContactChange({ actor: managerUser, user: target, field: 'email', before: before.email, after: target.email, ip });
+  }
 
   if (roleChanged || titleChanged) {
     await logAudit({

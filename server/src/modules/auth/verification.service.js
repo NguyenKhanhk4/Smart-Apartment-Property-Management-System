@@ -103,6 +103,9 @@ export async function createDeskCode(userId, purpose, issuedBy) {
   return { code, expiresAt };
 }
 
+/** Đổi SĐT: mã đã in / đã gửi theo số cũ không còn dùng được */
+export const voidAllCodes = (userId) => VerificationCode.updateMany({ userId, usedAt: null }, { usedAt: new Date() });
+
 /** Gửi email thất bại: bỏ mã vừa tạo, người dùng được gửi lại ngay */
 export const discardCodes = (userId, purpose) => VerificationCode.deleteMany({ userId, purpose, usedAt: null });
 

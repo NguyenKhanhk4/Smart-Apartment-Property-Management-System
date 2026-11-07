@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { App, Avatar, Button, Card, DatePicker, Form, Input, Tabs, Upload, Tag } from 'antd';
 import { useSearchParams } from 'react-router';
 import { isConsentLocked } from '../../utils/consent';
-import { PHONE_RULES } from '../../utils/phone';
 import {
   CameraOutlined,
   KeyOutlined,
@@ -28,6 +27,9 @@ export default function ProfilePage() {
   const { message } = App.useApp();
 
   const [profileForm] = Form.useForm();
+  // Đổi email phải nhập lại mật khẩu (email là kênh khôi phục mật khẩu)
+  const watchedEmail = Form.useWatch('email', profileForm);
+  const emailChanging = (watchedEmail?.trim().toLowerCase() || null) !== (user?.email ?? null);
   const [passwordForm] = Form.useForm();
 
   const [savingProfile, setSavingProfile] = useState(false);
@@ -50,12 +52,14 @@ export default function ProfilePage() {
     try {
       const payload = {
         fullName: values.fullName?.trim(),
-        phone: values.phone?.trim() || null,
+        email: values.email?.trim() || null,
+        ...(emailChanging && { currentPassword: values.currentPassword }),
         dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format('YYYY-MM-DD') : null,
       };
       const res = await usersApi.updateMe(payload);
       updateUser(res.data);
-      message.success('Cập nhật hồ sơ thành công');
+      profileForm.setFieldValue('currentPassword', undefined);
+      message.success(emailChanging ? 'Đã cập nhật. Thông báo đổi email đã gửi về email cũ.' : 'Cập nhật hồ sơ thành công');
     } catch (err) {
       message.error(err.message || 'Cập nhật thất bại');
     } finally {
@@ -142,7 +146,7 @@ export default function ProfilePage() {
                     {roleInfo.label}
                   </Tag>
                 )}
-                <span className="text-xs text-ink-3 dark:text-[#94A3B8]">{user?.email}</span>
+                <span className="text-xs text-ink-3 dark:text-[#94A3B8]">{user?.email || user?.phone}</span>
               </div>
               <p className="mt-2 mb-0 text-xs text-ink-3">
                 Định dạng JPG, PNG. Dung lượng tối đa 5MB.
@@ -169,18 +173,34 @@ export default function ProfilePage() {
             </Form.Item>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Form.Item name="email" label="Email (Chỉ xem)">
-                <Input size="large" disabled prefix={<MailOutlined className="text-ink-3" />} />
+              <Form.Item
+                name="phone"
+                label="Số điện thoại (tên đăng nhập)"
+                extra="Muốn đổi số điện thoại, vui lòng liên hệ Lễ tân hoặc Ban quản lý."
+              >
+                <Input size="large" disabled prefix={<PhoneOutlined className="text-ink-3" />} />
               </Form.Item>
 
               <Form.Item
-                name="phone"
-                label="Số điện thoại"
-                rules={PHONE_RULES}
+                name="email"
+                label="Email"
+                extra="Dùng để nhận mã khi kích hoạt và khi quên mật khẩu."
+                rules={[{ type: 'email', message: 'Email không đúng định dạng' }]}
               >
-                <Input size="large" prefix={<PhoneOutlined className="text-ink-3" />} placeholder="Chưa cập nhật" />
+                <Input size="large" prefix={<MailOutlined className="text-ink-3" />} placeholder="Chưa có email" />
               </Form.Item>
             </div>
+
+            {emailChanging && (
+              <Form.Item
+                name="currentPassword"
+                label="Mật khẩu hiện tại"
+                extra="Đổi hoặc xóa email cần nhập lại mật khẩu. Nhập sai 5 lần, tài khoản sẽ bị khóa 15 phút."
+                rules={[{ required: true, message: 'Nhập mật khẩu hiện tại để đổi email' }]}
+              >
+                <Input.Password size="large" prefix={<LockOutlined className="text-ink-3" />} autoComplete="current-password" />
+              </Form.Item>
+            )}
 
             <Form.Item
               name="dateOfBirth"

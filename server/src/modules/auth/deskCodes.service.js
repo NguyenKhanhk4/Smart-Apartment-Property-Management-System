@@ -3,9 +3,11 @@ import { AUDIT_ACTIONS, AUDIT_TARGETS, ROLES, VERIFICATION_PURPOSES } from '../.
 import { Apartment, Resident, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { findUserByPhone } from '../users/userLookup.js';
+import { findUserByPhone, phoneTakenError, uniqueConflictError } from '../users/userLookup.js';
+import { recordContactChange } from '../users/contactChanges.js';
+import { normalizePhone } from '../../utils/validators.js';
 import { decryptIdNumber, maskIdNumber } from '../residents/idCrypto.js';
-import { createDeskCode } from './verification.service.js';
+import { createDeskCode, voidAllCodes } from './verification.service.js';
 
 /**
  * Ai được cấp mã cho ai. Mã tại quầy đặt lại được mật khẩu, nên phải chặn việc nhân viên
@@ -55,6 +57,32 @@ export async function lookupForDeskCode(actor, phone) {
     canIssue: !blockReason,
     blockReason,
   };
+}
+
+/**
+ * Đổi SĐT tại quầy sau khi đối chiếu CCCD. SĐT là tên đăng nhập và hệ thống không gửi SMS nên người dùng
+ * không tự đổi được. Phân quyền giống cấp mã. Số mới đã có tài khoản thì từ chối, không gộp (BR-X5).
+ * Thu hồi mọi phiên, hủy mã chưa dùng, ghi audit, báo cho người dùng. Mật khẩu giữ nguyên.
+ */
+export async function changePhoneAtDesk(actor, userId, phone, { ip } = {}) {
+  const user = await User.findById(userId).select('+tokenVersion');
+  if (!user) throw ApiError.notFound('Không tìm thấy tài khoản');
+  const blockReason = issueBlockReason(actor, user);
+  if (blockReason) throw user.isActive ? ApiError.forbidden(blockReason.replace('cấp mã', 'đổi số')) : new ApiError('STATUS_CONFLICT', blockReason);
+
+  const nextPhone = normalizePhone(phone);
+  if (nextPhone === user.phone) throw ApiError.field('phone', 'Số mới trùng với số hiện tại');
+  if (await findUserByPhone(nextPhone)) throw phoneTakenError();
+
+  const before = user.phone;
+  user.phone = nextPhone;
+  user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+  await user.save().catch((err) => {
+    throw uniqueConflictError(err) ?? err;
+  });
+  await voidAllCodes(user._id);
+  await recordContactChange({ actor, user, field: 'phone', before, after: user.phone, ip });
+  return lookupForDeskCode(actor, user.phone);
 }
 
 /** Cấp mã mới (hủy mã tại quầy và OTP cũ cùng mục đích). Mã gốc chỉ trả 1 lần ở đây để in */

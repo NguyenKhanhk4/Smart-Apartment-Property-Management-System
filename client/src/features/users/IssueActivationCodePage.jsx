@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Alert, Button, Card, Checkbox, Descriptions, Input, Modal, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Descriptions, Form, Input, Modal, Tag, Typography } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { activationCodeApi } from '../../api/moduleA.api';
 import PageHeader from '../../components/PageHeader';
 import { roleLabelOf } from '../../constants/enums';
 import { useAction } from '../../hooks/useApi';
 import { formatDateTime } from '../../utils/format';
-import { isValidPhone } from '../../utils/phone';
+import { PHONE_RULES, isValidPhone } from '../../utils/phone';
 
 const STATUS = {
   PENDING: { label: 'Chờ kích hoạt', color: 'warning' },
@@ -45,6 +45,7 @@ export default function IssueActivationCodePage() {
   const [checked, setChecked] = useState(false);
   const [issued, setIssued] = useState(null);
   const [phoneError, setPhoneError] = useState(null);
+  const [changingPhone, setChangingPhone] = useState(false);
 
   const [lookup, looking] = useAction((phone) => activationCodeApi.lookup(phone), {
     success: () => null, // kết quả hiện ngay trên trang, không cần thông báo
@@ -58,6 +59,18 @@ export default function IssueActivationCodePage() {
     onDone: (res) => {
       setIssued(res.data);
       setChecked(false);
+    },
+  });
+
+  // Đổi SĐT đăng nhập sau khi đối chiếu CCCD; số mới đã có tài khoản thì server từ chối (BR-X5)
+  const [phoneForm] = Form.useForm();
+  const [changePhone, savingPhone] = useAction(({ phone }) => activationCodeApi.changePhone(account.userId, phone.trim()), {
+    success: (res) => `Đã đổi số điện thoại sang ${res.data.phone}. Người dùng đăng nhập bằng số mới, mật khẩu giữ nguyên.`,
+    onDone: (res) => {
+      setAccount(res.data);
+      setChecked(false);
+      setChangingPhone(false);
+      phoneForm.resetFields();
     },
   });
 
@@ -75,8 +88,8 @@ export default function IssueActivationCodePage() {
   return (
     <>
       <PageHeader
-        title="Cấp mã kích hoạt"
-        subtitle="Cấp mã in cho người không có email hoặc không khớp dữ liệu đăng ký, sau khi đối chiếu CCCD."
+        title="Cấp mã kích hoạt, đổi số điện thoại"
+        subtitle="Cấp mã in hoặc đổi số điện thoại đăng nhập tại quầy, sau khi đối chiếu CCCD."
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Cấp mã kích hoạt' }]}
       />
       <Card className="max-w-2xl">
@@ -118,9 +131,12 @@ export default function IssueActivationCodePage() {
                 <Checkbox className="mt-4" checked={checked} onChange={(e) => setChecked(e.target.checked)}>
                   Đã đối chiếu CCCD và họ tên của người đến quầy với thông tin trên
                 </Checkbox>
-                <div className="mt-4">
+                <div className="mt-4 flex flex-wrap gap-2">
                   <Button type="primary" disabled={!checked} loading={issuing} onClick={() => issue().catch(() => {})}>
                     Cấp mã
+                  </Button>
+                  <Button disabled={!checked} onClick={() => setChangingPhone(true)}>
+                    Đổi số điện thoại
                   </Button>
                 </div>
               </>
@@ -130,6 +146,33 @@ export default function IssueActivationCodePage() {
           </div>
         )}
       </Card>
+
+      <Modal
+        open={changingPhone}
+        title="Đổi số điện thoại đăng nhập"
+        okText="Đổi số"
+        cancelText="Hủy"
+        confirmLoading={savingPhone}
+        onOk={() => phoneForm.submit()}
+        onCancel={() => {
+          setChangingPhone(false);
+          phoneForm.resetFields();
+        }}
+        destroyOnHidden
+      >
+        <Alert
+          type="warning"
+          showIcon
+          className="mb-4"
+          title={`Đổi số cho ${account?.fullName ?? ''} (số hiện tại ${account?.phone ?? ''})`}
+          description="Mọi thiết bị đang đăng nhập sẽ bị đăng xuất và các mã chưa dùng bị hủy. Người dùng nhận thông báo về việc đổi số."
+        />
+        <Form form={phoneForm} layout="vertical" onFinish={(values) => changePhone(values).catch(() => {})}>
+          <Form.Item name="phone" label="Số điện thoại mới" rules={PHONE_RULES}>
+            <Input placeholder="0912345678" />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         open={Boolean(issued)}

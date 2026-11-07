@@ -1,6 +1,7 @@
 // N1: 1 SĐT = 1 tài khoản (BR-S01, BR-X5); email không bắt buộc; có trạng thái chờ kích hoạt
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
+import bcrypt from 'bcryptjs';
 import { User } from '../../src/models/index.js';
 import { createInternal } from '../../src/modules/users/users.service.js';
 import { normalizePhone } from '../../src/utils/validators.js';
@@ -138,16 +139,22 @@ test('API tra SĐT và thêm thành viên: phân quyền, validate; có userId t
   assert.equal((await addMember({ apartmentId, phone: '0912345671', userId: String(resident._id) })).status, 404);
 });
 
-test('hồ sơ: không xóa được SĐT của mình; đổi sang SĐT đã có trả 409', async () => {
-  const me = await createUser('RESIDENT', { phone: '0912345671' });
-  await createUser('RESIDENT', { phone: '0912345672' });
-  const patchMe = (body) => app.request('PATCH', '/users/me', { user: asUser(me), body });
+test('hồ sơ: không tự đổi được SĐT (tên đăng nhập); đổi email cần mật khẩu, trùng thì 409, bỏ trống thì xóa', async () => {
+  const me = await createUser('RESIDENT', { phone: '0912345671', email: 'toi@example.com', passwordHash: bcrypt.hashSync(PASSWORD, 4) });
+  await createUser('RESIDENT', { phone: '0912345672', email: 'nguoikhac@example.com' });
+  const patchMe = (body) => app.request('PATCH', '/users/me', { user: asUser(me), body: { currentPassword: PASSWORD, ...body } });
 
-  assert.equal((await patchMe({ phone: '' })).status, 400);
-  assert.equal((await patchMe({ phone: null })).status, 400);
-  const taken = await patchMe({ phone: '0912345672' });
+  // Trường phone bị bỏ qua (validate bỏ trường lạ): gửi kèm cũng không đổi được SĐT
+  await patchMe({ phone: '0912345673', fullName: 'Thử Đổi Số' });
+  assert.equal((await User.findById(me._id).lean()).phone, '0912345671');
+
+  const taken = await patchMe({ email: 'NguoiKhac@example.com' });
   assert.equal(taken.status, 409);
-  assert.equal(taken.body.errorCode, 'PHONE_EXISTS');
-  assert.equal((await patchMe({ phone: '+84912345673' })).status, 200);
-  assert.equal((await User.findById(me._id).lean()).phone, '0912345673');
+  assert.equal(taken.body.errorCode, 'EMAIL_EXISTS');
+  assert.equal((await patchMe({ email: 'Moi@Example.com', fullName: 'Tên Mới' })).status, 200);
+  const saved = await User.findById(me._id).lean();
+  assert.equal(saved.email, 'moi@example.com');
+  assert.equal(saved.fullName, 'Tên Mới');
+  assert.equal((await patchMe({ email: '' })).status, 200);
+  assert.equal((await User.findById(me._id).lean()).email, null);
 });

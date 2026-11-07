@@ -23,7 +23,7 @@ import {
 } from './idCrypto.js';
 import { findOrCreateResidentUser, inviteNewResident, linkResident } from './residentAccounts.js';
 import { toPublicUser } from '../auth/auth.service.js';
-import { findUserByPhone } from '../users/userLookup.js';
+import { findUserByPhone, maskEmail } from '../users/userLookup.js';
 
 /**
  * Danh sách thành viên đang hoạt động trong căn hộ (UC-A07, BR-A8)
@@ -86,12 +86,6 @@ export async function listApartmentResidents(apartmentId, viewer) {
 
   return results;
 }
-
-const maskEmail = (email) => {
-  if (!email) return null;
-  const [name, domain] = email.split('@');
-  return `${name[0]}***@${domain}`;
-};
 
 /**
  * Tra tài khoản theo SĐT để lễ tân đối chiếu trước khi gắn vào căn hộ (BR-X5).

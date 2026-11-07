@@ -216,8 +216,27 @@ async function recordFailedLogin(userId, now) {
       },
     ],
     { new: true, updatePipeline: true },
-  ).select('+lockedUntil');
-  return updated?.lockedUntil > now;
+  ).select('+lockedUntil +failedLoginCount');
+  return { locked: updated?.lockedUntil > now, count: updated?.failedLoginCount ?? 0 };
+}
+
+/**
+ * Hỏi lại mật khẩu hiện tại trước thao tác nhạy cảm (đổi mật khẩu, đổi email). Sai thì tính chung bộ đếm
+ * với đăng nhập (BR-S03): người đang cầm phiên của người khác cũng chỉ được đoán 5 lần rồi bị khóa 15 phút.
+ */
+export async function verifyCurrentPassword(userId, password, { now = new Date() } = {}) {
+  const user = await User.findById(userId).select('+passwordHash +lockedUntil');
+  if (!user) throw ApiError.notFound('Không tìm thấy tài khoản');
+  if (user.lockedUntil > now) throw new ApiError('ACCOUNT_LOCKED_TEMP');
+  if (!user.passwordHash || !(await bcrypt.compare(String(password ?? ''), user.passwordHash))) {
+    const { locked, count } = await recordFailedLogin(user._id, now);
+    if (locked) throw new ApiError('ACCOUNT_LOCKED_TEMP');
+    throw ApiError.field(
+      'currentPassword',
+      `Mật khẩu hiện tại không đúng. Sai thêm ${MAX_FAILED_LOGINS - count} lần, tài khoản sẽ bị khóa ${LOGIN_LOCK_MINUTES} phút`,
+    );
+  }
+  await User.updateOne({ _id: user._id }, { $set: { failedLoginCount: 0 } });
 }
 
 /** Căn hộ đang ở của cư dân, để client biết có cần màn hình Chọn căn hộ không (UC01 bước 5) */
@@ -251,7 +270,7 @@ export async function login({ phone, password }, { now = new Date() } = {}) {
   if (!user.activatedAt || !user.passwordHash) throw new ApiError('ACCOUNT_NOT_ACTIVATED');
 
   if (!(await bcrypt.compare(password, user.passwordHash))) {
-    throw new ApiError((await recordFailedLogin(user._id, now)) ? 'ACCOUNT_LOCKED_TEMP' : 'AUTH_INVALID_CREDENTIALS');
+    throw new ApiError((await recordFailedLogin(user._id, now)).locked ? 'ACCOUNT_LOCKED_TEMP' : 'AUTH_INVALID_CREDENTIALS');
   }
   if (!user.isActive) throw new ApiError('FORBIDDEN_ROLE', 'Tài khoản đã bị khóa');
 

@@ -33,4 +33,22 @@ router.post('/', authenticate, DESK, validate({ body: Joi.object({ userId: objec
   created(res, await service.issueDeskCode(req.user, req.validated.body.userId, { ip: req.ip }), 'Đã cấp mã');
 });
 
+/**
+ * @openapi
+ * /activation-codes/change-phone:
+ *   post:
+ *     tags: [Xác thực & Tài khoản]
+ *     summary: Đổi SĐT (tên đăng nhập) tại quầy sau khi đối chiếu CCCD; thu hồi mọi phiên
+ */
+router.post(
+  '/change-phone',
+  authenticate,
+  DESK,
+  validate({ body: Joi.object({ userId: objectId().required(), phone: phoneVn().required() }) }),
+  async (req, res) => {
+    const { userId, phone } = req.validated.body;
+    ok(res, await service.changePhoneAtDesk(req.user, userId, phone, { ip: req.ip }), 'Đã đổi số điện thoại');
+  },
+);
+
 export default router;

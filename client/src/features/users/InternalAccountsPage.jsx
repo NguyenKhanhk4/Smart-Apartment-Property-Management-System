@@ -269,6 +269,7 @@ export default function InternalAccountsPage() {
       title: 'Email',
       dataIndex: 'email',
       key: 'email',
+      render: (email) => email || <span className="text-ink-3 italic">Chưa có</span>,
     },
     {
       title: 'Số điện thoại',

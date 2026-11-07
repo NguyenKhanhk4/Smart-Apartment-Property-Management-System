@@ -14,9 +14,11 @@ import * as usersService from './users.service.js';
 // Module A — Vũ Việt. UC-A03 (Hồ sơ cá nhân), UC-A04 (Quản lý tài khoản nội bộ)
 const router = Router();
 
+// SĐT là tên đăng nhập nên không tự đổi được (SRS màn hình 5); nhờ Lễ tân / Trưởng BQL
 const updateMeBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100),
-  phone: phoneVn(),
+  email: Joi.string().trim().lowercase().email().allow('', null), // nhận OTP kích hoạt, quên mật khẩu
+  currentPassword: Joi.string().max(100), // bắt buộc khi đổi email (kiểm tra ở service)
   dateOfBirth: ymd().allow('', null),
 }).min(1);
 
@@ -121,7 +123,7 @@ router.get('/me', authenticate, async (req, res) => {
  *         description: Hồ sơ đã được cập nhật
  */
 router.patch('/me', authenticate, validate({ body: updateMeBody }), async (req, res) => {
-  const user = await usersService.updateMe(req.user.id, req.validated.body);
+  const user = await usersService.updateMe(req.user.id, req.validated.body, { ip: req.ip });
   ok(res, user, 'Cập nhật thông tin thành công');
 });
 
