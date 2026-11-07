@@ -7,7 +7,7 @@ import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { formatDateTime } from '../../utils/format';
-import { fieldLabel, formatAuditValue, ipLabel, statusOf, targetText } from './auditFormat';
+import { fieldLabel, formatAuditValue, ipLabel, statusOf, targetText, visibleMetadata } from './auditFormat';
 
 const NO_DATA = 'Không có dữ liệu cho bộ lọc đã chọn'; // MSG-D01
 
@@ -49,7 +49,7 @@ function ChangesTable({ changes, targetType }) {
 
 /** Thông tin kèm theo khác (mã phiếu, lý do...) */
 function AuditMetadata({ metadata, targetType }) {
-  const items = Object.entries(metadata ?? {}).map(([key, value]) => ({
+  const items = visibleMetadata(metadata).map(([key, value]) => ({
     key,
     label: fieldLabel(key),
     children: <span style={{ overflowWrap: 'anywhere' }}><AuditValue field={key} value={value} targetType={targetType} strong /></span>,
@@ -170,7 +170,7 @@ export default function AuditLogsPage() {
               <Typography.Title level={5}>Giá trị cũ và mới</Typography.Title>
               <ChangesTable changes={selected.changes} targetType={selected.targetType} />
             </div>
-            {Object.keys(selected.metadata ?? {}).length ? (
+            {visibleMetadata(selected.metadata).length ? (
               <div>
                 <Typography.Title level={5}>Thông tin thêm</Typography.Title>
                 <AuditMetadata metadata={selected.metadata} targetType={selected.targetType} />

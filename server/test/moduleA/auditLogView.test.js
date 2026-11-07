@@ -11,7 +11,7 @@ import { setStatus, updateInternal } from '../../src/modules/users/users.service
 import { logAudit } from '../../src/services/auditLog.service.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import mongoose from 'mongoose';
-import { asUser, createApartment, createManager, createUser } from '../helpers/fixtures.js';
+import { asUser, createApartment, createManager, createUser, linkResident } from '../helpers/fixtures.js';
 import { startApp, tokenFor } from '../helpers/http.js';
 
 let app;
@@ -103,8 +103,15 @@ test('UC06: bản ghi hiện mã dễ đọc; bản ghi đã xóa dùng metadata
   await logAudit({ action: 'TICKET_CLOSED', targetType: 'tickets', targetId: new mongoose.Types.ObjectId(), metadata: { code: 'TK-DA-XOA' } });
   await logAudit({ action: 'CONTRACT_EXPIRED', targetType: 'contracts', targetId: new mongoose.Types.ObjectId() });
 
+  const resident = await createUser('RESIDENT', { fullName: 'Nguyễn Văn Ở' });
+  const link = await linkResident(resident, apartment);
+  await logAudit({ action: 'RESIDENT_ASSIGNED', targetType: 'residents', targetId: link._id });
+  await logAudit({ action: 'ROLE_PERMISSIONS_CHANGED', targetType: 'role_permissions', metadata: { roleKey: 'RECEPTIONIST', roleLabel: 'Lễ tân' } });
+
   const { body } = await list(manager);
   const nameOf = (action) => body.data.find((l) => l.action === action).targetName;
+  assert.equal(nameOf('RESIDENT_ASSIGNED'), 'Nguyễn Văn Ở (A-1203)'); // dòng cư dân: tên người + mã căn
+  assert.equal(nameOf('ROLE_PERMISSIONS_CHANGED'), 'Vai trò Lễ tân'); // không có ID: lấy vai trò từ metadata
   assert.equal(nameOf('APARTMENT_CHANGED'), 'A-1203');
   assert.equal(nameOf('TICKET_CLOSED'), 'TK-DA-XOA');
   assert.equal(nameOf('CONTRACT_EXPIRED'), null);

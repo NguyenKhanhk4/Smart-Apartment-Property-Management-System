@@ -12,10 +12,10 @@ import NotFoundPage from '../features/errors/NotFoundPage';
 
 // Mỗi mục trong config/menu.js thành một route con, có kiểm tra quyền riêng
 const toRoutes = (menu) =>
-  menu.map(({ path, roles, component: Page }) => ({
+  menu.map(({ key, path, roles, component: Page }) => ({
     path,
     element: (
-      <RequireAuth roles={roles}>
+      <RequireAuth roles={roles} menuKey={key}>
         <Page />
       </RequireAuth>
     ),

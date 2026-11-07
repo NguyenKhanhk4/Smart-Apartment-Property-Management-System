@@ -14,6 +14,7 @@
 
 import axios from 'axios';
 import { authStorage } from '../utils/authStorage';
+import { notifyPermissionsChanged } from '../utils/permissionEvents';
 import { readErrorPayload } from './errorPayload';
 import {
   DEFAULT_ERROR_MESSAGE,
@@ -111,6 +112,8 @@ apiClient.interceptors.response.use(
   async (error) => {
     // Request tải file (responseType 'blob') nhận body lỗi dạng Blob → đọc lại để lấy message của server
     if (error.response?.data instanceof Blob) error.response.data = await readErrorPayload(error.response.data);
+    // UC04: Trưởng BQL vừa tắt quyền này → nạp lại quyền để ẩn menu tương ứng
+    if (error.response?.data?.errorCode === 'PERMISSION_REVOKED') notifyPermissionsChanged();
     if (!shouldTryRefresh(error)) throw toApiError(error);
 
     const { config } = error;

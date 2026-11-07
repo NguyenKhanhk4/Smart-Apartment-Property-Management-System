@@ -61,6 +61,7 @@ const navItems = residentWebNav.map((key) => residentMenu.find((m) => m.key === 
 export function WebHeader() {
   const { pathname } = useLocation();
   const { code } = useResident();
+  const { canSee } = useAuth(); // UC04: ẩn mục bị Trưởng BQL tắt quyền Xem
   const activeKey = pathname.split('/')[2];
 
   return (
@@ -72,7 +73,7 @@ export function WebHeader() {
         </Link>
 
         <nav aria-label="Điều hướng chính" className="flex flex-wrap gap-1 flex-1">
-          {navItems.map(({ key, path, label }) => {
+          {navItems.filter(canSee).map(({ key, path, label }) => {
             const active = activeKey === path.split('/')[0];
             return (
               <NavLink

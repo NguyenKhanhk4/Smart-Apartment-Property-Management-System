@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fieldLabel, formatAuditValue, ipLabel, statusOf, targetText } from '../src/features/auditLogs/auditFormat.js';
+import { fieldLabel, formatAuditValue, ipLabel, statusOf, targetText, visibleMetadata } from '../src/features/auditLogs/auditFormat.js';
 
 test('giá trị cũ / mới: trống, đúng sai, tiền, vai trò, mảng, object', () => {
   assert.equal(formatAuditValue('role', undefined), '—');
@@ -50,6 +50,12 @@ test('cột IP: có IP thì hiện IP; hệ thống tự chạy → "Hệ thốn
   assert.equal(ipLabel({ ip: '10.0.0.1', performedBy: { fullName: 'A' } }), '10.0.0.1');
   assert.equal(ipLabel({ performedBy: null }), 'Hệ thống');
   assert.equal(ipLabel({ performedBy: { fullName: 'A' } }), 'Không ghi nhận');
+});
+
+test('Thông tin thêm: ẩn mã kỹ thuật roleKey, roleLabel hiện là "Vai trò"', () => {
+  assert.deepEqual(visibleMetadata({ roleKey: 'SECURITY', roleLabel: 'Bảo vệ', reason: 'x' }), [['roleLabel', 'Bảo vệ'], ['reason', 'x']]);
+  assert.equal(fieldLabel('roleLabel'), 'Vai trò');
+  assert.deepEqual(visibleMetadata(null), []);
 });
 
 test('nhãn trường: có nhãn thì dịch, chưa có thì giữ tên gốc', () => {

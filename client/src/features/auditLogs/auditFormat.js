@@ -52,6 +52,7 @@ export const FIELD_LABELS = {
   generatedBy: 'Cách lập', created: 'Số đã tạo', failed: 'Số lỗi', skipped: 'Số bỏ qua', exists: 'Số đã có',
   total: 'Tổng', overdueTotal: 'Tổng quá hạn', invoices: 'Thông báo phí', credit: 'Tiền dư', reference: 'Mã tham chiếu',
   orderCode: 'Mã đơn', promisedDate: 'Ngày hẹn trả', cardNumber: 'Số thẻ', recipientCount: 'Số người nhận',
+  roleLabel: 'Vai trò',
 };
 
 // Giá trị dạng mã của một số trường → chữ
@@ -65,6 +66,11 @@ const VALUE_LABELS = {
 const PERIOD = /^(\d{4})-(\d{2})$/; // kỳ phí '2026-11' → '11/2026'
 
 export const fieldLabel = (field) => FIELD_LABELS[field] ?? field;
+
+// Mã kỹ thuật đã có bản dễ đọc đi kèm (vd roleKey 'SECURITY' đi với roleLabel 'Bảo vệ'): không hiện trong "Thông tin thêm"
+const HIDDEN_FIELDS = new Set(['roleKey']);
+/** Các trường của metadata nên hiện cho người đọc */
+export const visibleMetadata = (metadata) => Object.entries(metadata ?? {}).filter(([key]) => !HIDDEN_FIELDS.has(key));
 
 /**
  * Mã bản ghi dễ đọc: mã / tên server tra được (TK-…, A-1203, tên người…); thao tác hàng loạt theo kỳ → "Cả kỳ 11/2026";

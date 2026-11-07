@@ -1,7 +1,7 @@
 // UC06 – Xem nhật ký hoạt động (BR-S10, BR-X2, BR-D02). Chỉ đọc; Ban quản trị chỉ thấy phần tài chính.
 import mongoose from 'mongoose';
 import { AUDIT_ACTIONS, AUDIT_TARGETS, ROLES } from '../../constants/enums.js';
-import { AuditLog, User } from '../../models/index.js';
+import { AuditLog, Resident, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { col, renderReport } from '../../services/export.service.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -142,6 +142,10 @@ async function targetNames(logs) {
   }
   const names = new Map();
   await Promise.all([...groups].map(async ([type, ids]) => {
+    if (SPECIAL_NAMES[type]) {
+      for (const [id, name] of await SPECIAL_NAMES[type]([...ids])) names.set(`${type}:${id}`, name);
+      return;
+    }
     const Model = Object.values(mongoose.models).find((M) => M.collection.collectionName === type);
     const fields = Model ? NAME_FIELDS.filter((f) => Model.schema.path(f)) : [];
     if (!fields.length) return;
@@ -154,9 +158,27 @@ async function targetNames(logs) {
   return names;
 }
 
+// Bản ghi tự nó không có tên dễ đọc: ghép từ bản ghi liên quan
+const SPECIAL_NAMES = {
+  // Dòng cư dân trong căn: tên người (tài khoản hoặc nhân khẩu không tài khoản) + mã căn → "Nguyễn Văn A (A102)"
+  residents: async (ids) => {
+    const docs = await Resident.find({ _id: { $in: ids } })
+      .select('fullName userId apartmentId')
+      .populate('userId', 'fullName')
+      .populate('apartmentId', 'code')
+      .lean();
+    return docs.map((d) => {
+      const person = d.userId?.fullName ?? d.fullName ?? 'Cư dân';
+      return [String(d._id), d.apartmentId?.code ? `${person} (${d.apartmentId.code})` : person];
+    });
+  },
+};
+
+// Log không gắn ID bản ghi: lấy tên từ metadata (mã phiếu, vai trò được phân quyền...)
 const nameOf = (names, log) =>
   (log.targetId && names.get(`${normalizeTarget(log.targetType)}:${log.targetId}`))
-  ?? (typeof log.metadata?.code === 'string' ? log.metadata.code : null);
+  ?? (typeof log.metadata?.code === 'string' ? log.metadata.code : null)
+  ?? (typeof log.metadata?.roleLabel === 'string' ? `Vai trò ${log.metadata.roleLabel}` : null);
 
 /** Dạng trả về cho client: nhãn, giá trị cũ / mới đã che, IP chỉ cho Trưởng BQL */
 function present(user, log, names = new Map()) {

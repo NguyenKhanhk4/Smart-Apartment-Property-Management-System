@@ -15,14 +15,14 @@ export default function CommandPalette({ open, onClose }) {
 }
 
 function PaletteDialog({ onClose }) {
-  const { hasRole } = useAuth();
+  const { canSee } = useAuth();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);
 
   const commands = useMemo(
-    () => adminMenu.filter((m) => !m.hideInMenu && hasRole(...(m.roles ?? []))),
-    [hasRole],
+    () => adminMenu.filter((m) => !m.hideInMenu && canSee(m)),
+    [canSee],
   );
   const results = query.trim()
     ? commands.filter((c) => normalize(`${c.label} ${c.group ?? ''}`).includes(normalize(query.trim())))

@@ -48,6 +48,7 @@ export const LABELS = {
   EMAIL_CHANGED: 'Đổi email',
   CONSENT_CHANGED: 'Đổi lựa chọn điều khoản dữ liệu',
   AUDIT_LOG_EXPORTED: 'Xuất nhật ký hoạt động',
+  ROLE_PERMISSIONS_CHANGED: 'Thay đổi phân quyền vai trò',
   CONFIG_CHANGED: 'Thay đổi cấu hình',
   // Tòa, căn, hợp đồng, cư dân
   BUILDING_CHANGED: 'Thay đổi tòa nhà',
@@ -132,7 +133,7 @@ const TARGET_LABELS = {
   amenity_passes: 'Gói tiện ích', amenity_visits: 'Lượt tiện ích', bookings: 'Đặt tiện ích',
   work_orders: 'Lệnh bảo trì', tickets: 'Sự cố và phản ánh', complaint_categories: 'Danh mục phản ánh',
   announcements: 'Bảng tin', system_configs: 'Cấu hình hệ thống', duty_shifts: 'Ca trực',
-  audit_logs: 'Nhật ký hoạt động', assets: 'Thiết bị',
+  audit_logs: 'Nhật ký hoạt động', assets: 'Thiết bị', role_permissions: 'Phân quyền',
 };
 // Log cũ ghi targetType theo tên model ('Resident', 'Contract'...). Không sửa dữ liệu trên DB dùng chung:
 // đọc theo tên mới, và khi lọc theo đối tượng thì gồm cả tên cũ (giống bảng của scripts/migrateAuditTargets.js)
