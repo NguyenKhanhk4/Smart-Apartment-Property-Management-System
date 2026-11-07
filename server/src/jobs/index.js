@@ -11,6 +11,7 @@ import { expireGatePasses } from '../modules/gatePasses/gatePasses.jobs.js';
 import { remindExpiringLeases } from '../modules/contracts/contracts.jobs.js';
 import { reconcilePayosPayments } from '../modules/payments/payments.payos.js';
 import { remindDebts } from '../modules/debts/debts.jobs.js';
+import { remindQuotes } from '../modules/repairQuotes/repairQuotes.service.js';
 
 /**
  * Đăng ký mọi cron job (node-cron, múi giờ Asia/Ho_Chi_Minh — srs_final.md §2.4).
@@ -34,6 +35,8 @@ export const JOBS = [
   { name: CRON_JOBS.INVOICE_OVERDUE, schedule: '15 0 * * *', handler: markOverdueInvoices },
   // UC31 — 08:30 hằng ngày nhắc nợ quá hạn (N ngày/lần, tối đa M lần → Nợ quá hạn dài báo Trưởng BQL); quá ngày hẹn trả → báo lại
   { name: CRON_JOBS.DEBT_REMIND, schedule: '30 8 * * *', handler: remindDebts },
+  // UC48 — mỗi giờ (phút 20): báo giá sửa chữa chờ quá N ngày → nhắc Người nộp phí; quá M ngày → tự đóng phiếu (X8)
+  { name: CRON_JOBS.QUOTE_REMIND, schedule: '20 * * * *', handler: remindQuotes },
   // UC29 — mỗi 5 phút hỏi payOS các giao dịch còn chờ (phòng webhook không về); quá 15 phút chưa rõ → Cần đối soát
   { name: CRON_JOBS.PAYMENT_RECONCILE, schedule: '*/5 * * * *', handler: reconcilePayosPayments },
   // BR-O5 / BR-O14 — mỗi 5 phút: booking quá giờ check-in → NO_SHOW, đã dùng xong → COMPLETED

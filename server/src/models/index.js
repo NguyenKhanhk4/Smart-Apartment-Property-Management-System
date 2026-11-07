@@ -20,6 +20,7 @@ export { PrepaidBalance } from './PrepaidBalance.js';
 export { PrepaidTransaction } from './PrepaidTransaction.js';
 export { InvoiceAdjustment } from './InvoiceAdjustment.js';
 export { DebtFollowup } from './DebtFollowup.js';
+export { RepairQuote } from './RepairQuote.js'; // báo giá sửa chữa trong căn hộ (Mô đun 5, phần Người 3)
 
 // Module C — Quỹ bảo trì, chi phí vận hành, audit log
 export { MaintenanceFund } from './MaintenanceFund.js';

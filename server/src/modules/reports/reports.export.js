@@ -18,6 +18,8 @@ const LABELS = {
   PARKING: 'Phí gửi xe',
   AMENITY: 'Phí tiện ích',
   ADJUSTMENT: 'Điều chỉnh',
+  OTHER: 'Khoản thu khác',
+  REPAIR: 'Sửa chữa trong căn',
   PAYOS: 'payOS (VietQR)',
   CASH: 'Tiền mặt',
   BANK_TRANSFER: 'Chuyển khoản',

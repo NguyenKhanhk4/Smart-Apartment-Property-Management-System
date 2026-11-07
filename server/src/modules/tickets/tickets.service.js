@@ -27,6 +27,7 @@ import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { HOUR_MS, fmtDateTimeVn } from '../../utils/time.js';
 import { getPayer } from '../contracts/contracts.queries.js';
 import { getOnDuty, isUserOnDuty } from '../dutyShifts/dutyShifts.service.js';
+import { recordQuoteDecision } from '../repairQuotes/repairQuotes.service.js';
 import { BOARD_STATUSES, computeDeadlines, groupBoard, progressError } from './ticket.rules.js';
 
 const { NEW, ASSIGNED, WAITING_QUOTE_APPROVAL, IN_PROGRESS, WAITING_PARTS, WAITING_CONFIRM, CLOSED, REJECTED } =
@@ -422,6 +423,10 @@ export async function updateProgress(user, id, { status, note }, files = []) {
   assertNotFinal(ticket);
   const transitionError = progressError(ticket, status);
   if (transitionError) throw ApiError.field('status', transitionError);
+  // Gửi báo giá phải qua form báo giá (hạng mục + chi phí) của Người 3: POST /repair-quotes
+  if (status === WAITING_QUOTE_APPROVAL) {
+    throw ApiError.field('status', 'Gửi báo giá bằng form báo giá sửa chữa (hạng mục và chi phí dự kiến)');
+  }
 
   // Báo đã xử lý xong phải có ảnh bằng chứng để Manager/Lễ tân kiểm tra
   if (status === WAITING_CONFIRM && !files.length) {
@@ -557,6 +562,8 @@ export async function decideQuote(user, id, { accepted, note }, { now = new Date
     note,
   });
   await ticket.save();
+  // Ghi quyết định lên bản báo giá đang chờ (Người 3) — chi phí được tính vào thông báo phí khi nghiệm thu
+  await recordQuoteDecision(ticket._id, { accepted, note, userId: user.id, now });
 
   await logAudit({
     action: AUDIT_ACTIONS.TICKET_QUOTE_DECIDED,

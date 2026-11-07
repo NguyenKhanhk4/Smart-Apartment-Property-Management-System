@@ -85,6 +85,8 @@ export const TICKET_HISTORY_ACTIONS = {
   QUOTE_REQUESTED: { label: 'Gửi báo giá', color: 'purple' },
   QUOTE_ACCEPTED: { label: 'Cư dân đồng ý phí', color: 'green' },
   QUOTE_DECLINED: { label: 'Cư dân từ chối phí', color: 'gray' },
+  QUOTE_REVISED: { label: 'Cập nhật báo giá', color: 'purple' },
+  QUOTE_EXPIRED: { label: 'Báo giá quá hạn, tự đóng', color: 'gray' },
   WAITING_PARTS: { label: 'Chờ linh kiện', color: 'orange' },
   RESOLVED: { label: 'Đã xử lý xong', color: 'blue' },
   CONFIRMED: { label: 'Cư dân nghiệm thu', color: 'green' },
@@ -145,6 +147,7 @@ export const FEE_CATEGORIES = {
   AMENITY: { label: 'Phí tiện ích', color: 'purple' },
   ADJUSTMENT: { label: 'Điều chỉnh', color: 'gold' },
   OTHER: { label: 'Khoản thu khác', color: 'magenta' },
+  REPAIR: { label: 'Sửa chữa trong căn', color: 'volcano' },
 };
 
 // ===== Module B — Phí & đơn giá (UC-B01) =====
@@ -188,6 +191,15 @@ export const INVOICE_STATUS = {
   PAID: { label: 'Đã thanh toán', color: 'green' },
   OVERDUE: { label: 'Quá hạn', color: 'red' },
   CANCELLED: { label: 'Đã hủy', color: 'default' },
+};
+
+// Báo giá sửa chữa trong căn hộ (UC48, UC40)
+export const QUOTE_STATUS = {
+  PENDING: { label: 'Chờ đồng ý', color: 'gold' },
+  ACCEPTED: { label: 'Đã đồng ý', color: 'green' },
+  DECLINED: { label: 'Đã từ chối', color: 'red' },
+  EXPIRED: { label: 'Quá hạn phản hồi', color: 'default' },
+  SUPERSEDED: { label: 'Đã thay bằng bản mới', color: 'default' },
 };
 
 // Công nợ (UC31): hồ sơ nợ quá hạn của 1 Người nộp phí tại 1 căn
@@ -338,6 +350,7 @@ export const CRON_JOBS = {
   BILLING_REMIND: { label: 'Nhắc tính phí / duyệt thông báo phí', color: 'gold' },
   PAYMENT_RECONCILE: { label: 'Đối soát giao dịch payOS', color: 'blue' },
   DEBT_REMIND: { label: 'Nhắc nợ quá hạn', color: 'red' },
+  QUOTE_REMIND: { label: 'Nhắc / tự đóng báo giá sửa chữa', color: 'purple' },
   BOOKING_COMPLETE: { label: 'Hoàn tất / không đến booking tiện ích', color: 'cyan' },
   WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
   TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },

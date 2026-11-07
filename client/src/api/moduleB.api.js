@@ -57,6 +57,16 @@ export const paymentApi = {
   payosStatus: (orderCode) => http.get(`/payments/payos/${orderCode}`),
 };
 
+// ===== Mô đun 5 (phần Người 3): Báo giá sửa chữa trong căn hộ (UC48). Quyết định: ticketApi.decideQuote =====
+export const repairQuoteApi = {
+  /** KTV — body: { ticketId, items: [{ description, quantity, unitPrice }], note? } → { quote, ticketStatus, needsApproval } */
+  submit: (body) => http.post('/repair-quotes', body),
+  /** Các phiên bản báo giá của 1 phiếu → { items, reapprovalPercent } */
+  byTicket: (ticketId) => http.get(`/repair-quotes/ticket/${ticketId}`),
+  /** Kế toán / Trưởng BQL — params: { status (CSV), billed, apartmentId, page, limit } */
+  list: (params) => http.get('/repair-quotes', { params }),
+};
+
 // ===== Mô đun 4: Công nợ (UC23 kiểm tra công nợ căn, UC31 sổ công nợ & xử lý nợ quá hạn dài) =====
 export const debtApi = {
   /** params: { page, limit, sort, buildingId, apartmentId, payerId, q, status (CSV LEDGER_STATUS), hasBalance }. Kèm summary */
