@@ -29,6 +29,12 @@ const updateMemberBody = Joi.object({
   dateOfBirth: ymd().allow('', null),
 }).min(1);
 
+const familyDeclarationBody = Joi.object({
+  apartmentId: objectId().required(),
+  fullName: Joi.string().trim().min(2).max(100).required(),
+  dateOfBirth: ymd().allow(null),
+});
+
 const changesQuerySchema = Joi.object({
   from: Joi.date().iso().optional(),
   to: Joi.date().iso().optional(),
@@ -118,6 +124,18 @@ router.get(
   async (req, res) => {
     const list = await service.myApartments(req.user.id);
     ok(res, list);
+  },
+);
+
+// UC15 — khai báo nhân khẩu gia đình từ tài khoản chủ hộ.
+router.post(
+  '/me/family',
+  authenticate,
+  authorize('RESIDENT'),
+  validate({ body: familyDeclarationBody }),
+  async (req, res) => {
+    const member = await service.declareFamilyMember(req.user, req.validated.body, req.ip);
+    created(res, member);
   },
 );
 

@@ -64,6 +64,7 @@ export const residentsApi = {
   updateMember: (id, body) => http.patch(`/residents/${id}`, body),
   removeMember: (id) => http.patch(`/residents/${id}/remove`),
   myApartments: () => http.get('/residents/me/apartments'),
+  declareFamilyMember: (body) => http.post('/residents/me/family', body),
   revealIdNumber: (id) => http.get(`/residents/${id}/id-number`),
   listChanges: (params) => http.get('/residents/changes', { params }),
   exportChanges: async (params) => {

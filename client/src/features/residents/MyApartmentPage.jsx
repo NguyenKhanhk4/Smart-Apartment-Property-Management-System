@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import dayjs from 'dayjs';
 import {
   Card,
   Segmented,
@@ -14,6 +15,10 @@ import {
   Avatar,
   Badge,
   Spin,
+  DatePicker,
+  Form,
+  Input,
+  Modal,
 } from 'antd';
 import {
   HomeOutlined,
@@ -31,7 +36,7 @@ import EnumTag from '../../components/EnumTag';
 import { APARTMENT_STATUS, RELATION_TYPES } from '../../constants/enums';
 import { formatDate } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
-import { useApi } from '../../hooks/useApi';
+import { useAction, useApi } from '../../hooks/useApi';
 import { useResident } from '../../hooks/useResident';
 import { residentsApi } from '../../api/moduleA.api';
 
@@ -47,6 +52,8 @@ export default function MyApartmentPage() {
   } = useApi(residentsApi.myApartments, []);
 
   const [selectedAptId, setSelectedAptId] = useState(null);
+  const [declaringApartment, setDeclaringApartment] = useState(null);
+  const [familyForm] = Form.useForm();
   // Căn đang chọn đồng bộ với ô chọn căn trên header (useResident): mặc định theo header, đổi ở đây thì header đổi theo
   const { apartmentId: headerAptId, setApartmentId: setHeaderAptId } = useResident();
   const pickApartment = (id) => {
@@ -62,15 +69,29 @@ export default function MyApartmentPage() {
 
   // Căn hộ hiện tại đang chọn
   const currentApartment = apartments.find((a) => a.apartmentId === activeAptId);
+  const canDeclareFamily = currentApartment?.isHead && currentApartment.relationType === 'OWNER';
 
   // Load danh sách thành viên trong căn hộ đang chọn
   const {
     data: members = [],
     loading: loadingMembers,
+    reload: reloadMembers,
   } = useApi(
     () => (activeAptId ? residentsApi.listByApartment(activeAptId) : Promise.resolve({ data: [] })),
     [activeAptId],
     { enabled: Boolean(activeAptId) },
+  );
+
+  const [declareMember, declaringMember] = useAction(
+    ({ fullName, dateOfBirth }) => residentsApi.declareFamilyMember({
+      apartmentId: declaringApartment.apartmentId,
+      fullName: fullName.trim(),
+      dateOfBirth: dateOfBirth?.format('YYYY-MM-DD'),
+    }),
+    {
+      success: 'Đã khai báo thành viên gia đình',
+      onDone: () => { setDeclaringApartment(null); reloadMembers(); },
+    },
   );
 
   if (loadingApts) {
@@ -215,6 +236,11 @@ export default function MyApartmentPage() {
             <span>Danh sách thành viên ({members.length})</span>
           </div>
         }
+        extra={canDeclareFamily && (
+          <Button type="primary" onClick={() => setDeclaringApartment(currentApartment)}>
+            Khai báo thành viên gia đình
+          </Button>
+        )}
       >
         <List
           loading={loadingMembers}
@@ -261,6 +287,24 @@ export default function MyApartmentPage() {
           )}
         />
       </Card>
+
+      <Modal title={`Khai báo thành viên gia đình${declaringApartment ? ` · Căn ${declaringApartment.code}` : ''}`}
+        open={Boolean(declaringApartment)} destroyOnHidden okText="Lưu" cancelText="Hủy"
+        confirmLoading={declaringMember} cancelButtonProps={{ disabled: declaringMember }}
+        onCancel={() => { if (!declaringMember) setDeclaringApartment(null); }}
+        onOk={() => familyForm.submit()}>
+        <Form form={familyForm} preserve={false} layout="vertical" disabled={declaringMember}
+          onFinish={(values) => declareMember(values).catch(() => {})}>
+          <Form.Item name="fullName" label="Họ và tên" rules={[{
+            required: true, min: 2, transform: (value) => value?.trim(), message: 'Nhập họ và tên có ít nhất 2 ký tự',
+          }]}>
+            <Input maxLength={100} autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="dateOfBirth" label="Ngày sinh">
+            <DatePicker className="w-full" format="DD/MM/YYYY" minDate={dayjs('1900-01-01')} maxDate={dayjs()} placeholder="" />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* Lối tắt tiện ích nhanh cho cư dân */}
       <Card

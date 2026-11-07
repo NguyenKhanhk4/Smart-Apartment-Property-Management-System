@@ -112,6 +112,54 @@ export async function lookupAccountByPhone(phone) {
   };
 }
 
+async function createFamilyMemberWithoutAccount(data, contractId, session) {
+  const [resident] = await Resident.create([{
+    userId: null,
+    fullName: data.fullName.trim(),
+    dateOfBirth: data.dateOfBirth ? parseDateOfBirth(data.dateOfBirth) : null,
+    apartmentId: data.apartmentId,
+    relationType: RELATION_TYPES.FAMILY_MEMBER,
+    contractId,
+    isActive: true,
+    moveInDate: new Date(),
+    ...buildIdNumberFields(data.idNumber?.trim() || null),
+  }], { session });
+  return resident;
+}
+
+function logFamilyMemberAssignment(actor, resident, ip, session) {
+  return logAudit({
+    action: AUDIT_ACTIONS.RESIDENT_ASSIGNED,
+    user: actor,
+    targetType: AUDIT_TARGETS.RESIDENT,
+    targetId: resident._id,
+    metadata: { apartmentId: resident.apartmentId, userId: resident.userId, relationType: resident.relationType },
+    ip,
+  }, { session });
+}
+
+/** UC15 — Chủ hộ tự khai báo nhân khẩu gia đình đang ở tại căn. */
+export function declareFamilyMember(actor, { apartmentId, fullName, dateOfBirth }, ip) {
+  return withTransaction(async (session) => {
+    const { head } = await getHousehold(apartmentId, session);
+    if (head?.userId !== String(actor.id) || head.relationType !== RELATION_TYPES.OWNER) {
+      throw new ApiError('HOUSEHOLD_HEAD_REQUIRED', 'Chỉ chủ hộ được khai báo thành viên gia đình tại căn này');
+    }
+
+    // Ghi vào bản ghi chủ hộ để xung đột với thao tác kết thúc cư trú chạy đồng thời.
+    const owner = await Resident.findOneAndUpdate(
+      { apartmentId, userId: actor.id, relationType: RELATION_TYPES.OWNER, isActive: true },
+      { $set: { updatedAt: new Date() } },
+      { session },
+    ).select('contractId').lean();
+    if (!owner) throw new ApiError('HOUSEHOLD_HEAD_REQUIRED');
+
+    const member = await createFamilyMemberWithoutAccount({ apartmentId, fullName, dateOfBirth }, owner.contractId, session);
+    await logFamilyMemberAssignment(actor, member, ip, session);
+    return { _id: member._id, apartmentId, fullName: member.fullName, dateOfBirth: member.dateOfBirth };
+  });
+}
+
 /**
  * Thêm thành viên hộ gia đình (Lễ tân) — UC-A07
  * - Luôn là FAMILY_MEMBER (OWNER/TENANT do Hợp đồng tạo). Căn hộ phải OWNED hoặc RENTED.
@@ -151,13 +199,7 @@ export async function addMember(receptionistUser, data, ip) {
       if (data.phone || data.userId || data.email || !data.fullName?.trim()) {
         throw ApiError.badRequest('Nhân khẩu không tài khoản cần họ tên và không gửi thông tin đăng nhập');
       }
-      const [resident] = await Resident.create([{
-        userId: null, fullName: data.fullName.trim(),
-        dateOfBirth: data.dateOfBirth ? parseDateOfBirth(data.dateOfBirth) : null,
-        apartmentId, relationType: RELATION_TYPES.FAMILY_MEMBER, contractId: activeContract._id,
-        isActive: true, moveInDate: new Date(), ...buildIdNumberFields(idNumber?.trim() || null),
-      }], { session });
-      savedResident = resident;
+      savedResident = await createFamilyMemberWithoutAccount(data, activeContract._id, session);
     } else {
       account = await findOrCreateResidentUser(data, session);
       const alreadyActive = await Resident.exists({ apartmentId, userId: account.user._id, isActive: true }).session(session);
@@ -176,17 +218,7 @@ export async function addMember(receptionistUser, data, ip) {
       );
     }
 
-    await logAudit(
-      {
-        action: AUDIT_ACTIONS.RESIDENT_ASSIGNED,
-        user: receptionistUser,
-        targetType: AUDIT_TARGETS.RESIDENT,
-        targetId: savedResident._id,
-        metadata: { apartmentId, userId: account?.user._id ?? null, relationType: RELATION_TYPES.FAMILY_MEMBER },
-        ip,
-      },
-      { session },
-    );
+    await logFamilyMemberAssignment(receptionistUser, savedResident, ip, session);
   });
 
   const activationInviteSent = account ? await inviteNewResident(account) : null;
