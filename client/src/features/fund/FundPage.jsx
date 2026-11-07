@@ -30,6 +30,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatDate, formatMoney, moneyInputProps } from '../../utils/format';
 import { toFiles } from '../../utils/upload';
 import EvidencePhotos from '../../components/EvidencePhotos';
+import { ExportButton } from '../reports/components';
 
 // Mô đun 4 — Quỹ bảo trì 2% (UC33, UC34). Hệ thống chỉ theo dõi, quỹ thuộc Ban quản trị.
 // Kế toán: ghi nhận thu quỹ, lập đề xuất chi. Ban quản trị: biểu quyết ở trang chi tiết đề xuất. Trưởng BQL: theo dõi, nghiệm thu.
@@ -61,14 +62,22 @@ export default function FundPage() {
         subtitle="Quỹ thuộc Ban quản trị, hệ thống ghi nhận thu chi có chứng từ. Chi quỹ phải được Ban quản trị biểu quyết đủ tỷ lệ."
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Quỹ bảo trì' }]}
         extra={
-          isAccountant && (
-            <Flex gap={8} wrap>
+          <Flex gap={8} wrap>
+            <ExportButton
+              type="fund"
+              label="Xuất sổ thu chi"
+              roles={['ACCOUNTANT', 'MANAGER', 'BOARD']}
+              params={{ from: dayjs().startOf('year').toISOString(), to: dayjs().toISOString() }}
+            />
+            {isAccountant && (
+              <>
               <Button onClick={() => setModal('income')}>Ghi nhận thu quỹ</Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setModal('proposal')}>
-                Lập đề xuất chi
-              </Button>
-            </Flex>
-          )
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setModal('proposal')}>
+                  Lập đề xuất chi
+                </Button>
+              </>
+            )}
+          </Flex>
         }
       />
       <Flex vertical gap={16}>

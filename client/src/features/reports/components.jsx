@@ -4,12 +4,12 @@ import { DownloadOutlined, FileExcelOutlined, FilePdfOutlined } from '@ant-desig
 import { reportApi } from '../../api/moduleE.api';
 import { useAuth } from '../../hooks/useAuth';
 
-/** UC-E13 — Nút xuất Excel/PDF, kế thừa bộ lọc đang xem. Chỉ Manager/Accountant. */
-export function ExportButton({ type, params }) {
+/** UC-E13 / UC65 — Nút xuất Excel/PDF, kế thừa bộ lọc đang xem. Mặc định Manager/Accountant; `roles` mở thêm (vd Ban quản trị). */
+export function ExportButton({ type, params, roles = ['MANAGER', 'ACCOUNTANT'], label = 'Xuất báo cáo' }) {
   const { message } = App.useApp();
   const { hasRole } = useAuth();
   const [loading, setLoading] = useState(false);
-  if (!hasRole('MANAGER', 'ACCOUNTANT')) return null;
+  if (!hasRole(...roles)) return null;
 
   const download = async ({ key: format }) => {
     setLoading(true);
@@ -34,7 +34,7 @@ export function ExportButton({ type, params }) {
       }}
     >
       <Button icon={<DownloadOutlined />} loading={loading}>
-        Xuất báo cáo
+        {label}
       </Button>
     </Dropdown>
   );

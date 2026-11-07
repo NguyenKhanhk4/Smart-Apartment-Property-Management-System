@@ -53,9 +53,13 @@ const byPair = (from, as, extraMatch = [], pipeline = []) => ({
  * Sổ công nợ. query: { buildingId, apartmentId, payerId, q (mã căn), status: LEDGER_STATUS[], hasBalance, page, limit, sort }.
  * Trả về { items, pagination, summary } — summary tính trên toàn bộ dòng khớp bộ lọc (không phụ thuộc trang).
  */
-export async function listLedger({ buildingId, apartmentId, payerId, q, status, hasBalance, sort = '-outstanding', ...query }, { now = new Date() } = {}) {
+export async function listLedger(
+  { buildingId, apartmentId, payerId, q, status, hasBalance, sort = '-outstanding', ...query },
+  { now = new Date(), all = false } = {},
+) {
   const today = startOfVnDay(now);
-  const { page, limit, skip } = getPagination(query);
+  // all = true: lấy hết các dòng (xuất Excel/PDF), bỏ phân trang
+  const { page, limit, skip } = all ? { page: 1, limit: 1_000_000, skip: 0 } : getPagination(query);
   const base = { ...(apartmentId && { apartmentId: oid(apartmentId) }), ...(payerId && { payerId: oid(payerId) }) };
 
   const pipeline = [

@@ -85,6 +85,10 @@ export const reportApi = {
   tickets: (params) => http.get('/reports/tickets', { params }),
   maintenance: (params) => http.get('/reports/maintenance', { params }),
   amenityUsage: (params) => http.get('/reports/amenity-usage', { params }),
+  /** Mô đun 9 — Dashboard tài chính (UC60). params: { from, to } dạng YYYY-MM */
+  finance: (params) => http.get('/reports/finance', { params }),
+  /** Báo cáo giám sát cho Ban quản trị. params: { from, to } dạng YYYY-MM */
+  supervision: (params) => http.get('/reports/supervision', { params }),
 
   /** UC-E13 — tải file Excel/PDF, trả về tên file đã lưu */
   async download(params) {

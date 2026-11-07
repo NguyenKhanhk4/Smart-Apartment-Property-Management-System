@@ -114,6 +114,8 @@ const BillingReportPage = lazy(() => import('../features/reports/BillingReportPa
 const FundDashboardPage = lazy(() => import('../features/reports/FundDashboardPage'));
 const OperationsDashboardPage = lazy(() => import('../features/reports/OperationsDashboardPage'));
 const AmenityUsagePage = lazy(() => import('../features/reports/AmenityUsagePage'));
+const FinanceDashboardPage = lazy(() => import('../features/reports/FinanceDashboardPage'));
+const SupervisionPage = lazy(() => import('../features/reports/SupervisionPage'));
 
 // ===== Sự cố & Tiện ích (Người 4) =====
 const DutyShiftsPage = lazy(() => import('../features/dutyShifts/DutyShiftsPage'));
@@ -286,6 +288,24 @@ export const adminMenu = [
     hideInMenu: true,
   },
   // Báo cáo (UC-E10..E14)
+  {
+    key: 'report-finance',
+    group: 'Báo cáo',
+    label: 'Dashboard tài chính',
+    icon: DashboardOutlined,
+    path: 'report-finance',
+    roles: ['MANAGER', 'ACCOUNTANT'],
+    component: FinanceDashboardPage,
+  },
+  {
+    key: 'report-supervision',
+    group: 'Báo cáo',
+    label: 'Báo cáo giám sát',
+    icon: FileTextOutlined,
+    path: 'report-supervision',
+    roles: ['BOARD', 'MANAGER'],
+    component: SupervisionPage,
+  },
   {
     key: 'report-billing',
     group: 'Báo cáo',
