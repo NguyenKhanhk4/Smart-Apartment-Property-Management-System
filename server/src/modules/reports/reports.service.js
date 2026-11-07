@@ -5,6 +5,7 @@ import {
   BOOKING_BILLABLE_STATUSES,
   BOOKING_LEGACY_STATUSES,
   BOOKING_STATUS,
+  DEBT_OPEN_STATUSES,
   DEBT_STATUS,
   FUND_TX_TYPES,
   INVOICE_STATUS,
@@ -258,17 +259,18 @@ export async function debtReport({ buildingId }) {
     { $sort: { outstanding: -1 } },
   ]);
 
+  // Hồ sơ nợ đang mở (UC31) — 1 căn có thể có nhiều Người nộp phí, lấy mức nặng nhất
   const followups = await DebtFollowup.find({
     apartmentId: { $in: rows.map((r) => r._id) },
-<<<<<<< HEAD
-    status: DEBT_STATUS.OPEN,
-=======
-    status: 'OPEN',
->>>>>>> origin/minh
+    status: { $in: [...DEBT_OPEN_STATUSES] },
   })
-    .populate('assignedTo', 'fullName')
+    .select('apartmentId status reminderCount promisedDate activities')
     .lean();
-  const fuMap = Object.fromEntries(followups.map((f) => [String(f.apartmentId), f]));
+  const fuMap = {};
+  for (const f of followups) {
+    const k = String(f.apartmentId);
+    if (!fuMap[k] || f.status === DEBT_STATUS.LONG_OVERDUE) fuMap[k] = f;
+  }
   const now = Date.now();
 
   const items = rows.map(({ _id, ...r }) => ({
@@ -276,13 +278,15 @@ export async function debtReport({ buildingId }) {
     ...r,
     periods: r.periods.sort(),
     daysOverdue: Math.max(0, Math.floor((now - new Date(r.oldestDueDate).getTime()) / DAY_MS)),
-    assignedTo: fuMap[String(_id)]?.assignedTo?.fullName ?? null,
-    lastContactAt: fuMap[String(_id)]?.activities?.at(-1)?.at ?? null,
+    caseStatus: fuMap[String(_id)]?.status ?? null,
+    reminderCount: fuMap[String(_id)]?.reminderCount ?? 0,
+    promisedDate: fuMap[String(_id)]?.promisedDate ?? null,
+    lastContactAt: fuMap[String(_id)]?.activities?.filter((a) => a.by).at(-1)?.at ?? null,
   }));
   return {
     totalApartments: items.length,
     totalOutstanding: items.reduce((s, i) => s + i.outstanding, 0),
-    unassigned: items.filter((i) => !i.assignedTo).length,
+    longOverdue: items.filter((i) => i.caseStatus === DEBT_STATUS.LONG_OVERDUE).length,
     items,
   };
 }

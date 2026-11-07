@@ -21,7 +21,8 @@ const LABELS = {
   PARKING: 'Phí gửi xe',
   AMENITY: 'Phí tiện ích',
   ADJUSTMENT: 'Điều chỉnh',
-<<<<<<< HEAD
+  OTHER: 'Khoản thu khác',
+  REPAIR: 'Sửa chữa trong căn',
   PAYOS: 'payOS (VietQR)',
 =======
   VNPAY: 'VNPay',
@@ -95,7 +96,7 @@ async function buildSpec(type, q) {
         summary: [
           ['Số căn quá hạn', r.totalApartments],
           ['Tổng nợ quá hạn', r.totalOutstanding, 'money'],
-          ['Chưa phân công đòi nợ', r.unassigned],
+          ['Nợ quá hạn dài (đã nhắc đủ số lần)', r.longOverdue],
         ],
         sections: [
           {
@@ -107,12 +108,18 @@ async function buildSpec(type, q) {
               col('Các kỳ', 'periodsText', 22),
               col('Số tiền nợ', 'outstanding', 18, 'money'),
               col('Số ngày quá hạn', 'daysOverdue', 12),
-              col('Phụ trách', 'assignedToText', 18),
+              col('Số lần nhắc', 'reminderCount', 10),
+              col('Tình trạng', 'caseText', 18),
             ],
             rows: r.items.map((x) => ({
               ...x,
               periodsText: x.periods.join(', '),
-              assignedToText: x.assignedTo ?? 'Chưa giao',
+              caseText:
+                x.caseStatus === 'LONG_OVERDUE'
+                  ? 'Nợ quá hạn dài'
+                  : x.promisedDate
+                    ? `Hẹn trả ${fmtDate(x.promisedDate)}`
+                    : 'Đang nhắc nợ',
             })),
           },
         ],
