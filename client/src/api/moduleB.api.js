@@ -93,3 +93,32 @@ export const debtApi = {
     return filename;
   },
 };
+
+// ===== Mô đun 4: Quỹ bảo trì 2% (UC33 Kế toán, UC34 Ban quản trị) =====
+// Form có ảnh (chứng từ, báo giá, hóa đơn) gửi multipart, ảnh ở field `images`
+function toMultipart(body, files = []) {
+  if (!files.length) return body;
+  const form = new FormData();
+  Object.entries(body).forEach(([k, v]) => v != null && v !== '' && form.append(k, v));
+  files.forEach((f) => form.append('images', f));
+  return form;
+}
+
+export const fundApi = {
+  overview: () => http.get('/fund'),
+  /** params: { page, limit, type, from, to } */
+  transactions: (params) => http.get('/fund/transactions', { params }),
+  /** body: { incomeSource, amount, occurredAt?, documentNo, description? } */
+  recordIncome: (body, files) => http.post('/fund/incomes', toMultipart(body, files)),
+  /** params: { page, limit, status (CSV) } */
+  proposals: (params) => http.get('/fund/proposals', { params }),
+  proposal: (id) => http.get(`/fund/proposals/${id}`),
+  /** body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair? } */
+  createProposal: (body, files) => http.post('/fund/proposals', toMultipart(body, files)),
+  /** body: { decision: AGREE | DISAGREE, comment? } */
+  vote: (id, body) => http.post(`/fund/proposals/${id}/votes`, body),
+  cancel: (id, reason) => http.post(`/fund/proposals/${id}/cancel`, { reason }),
+  acceptWork: (id) => http.post(`/fund/proposals/${id}/accept-work`),
+  /** body: { amount, occurredAt?, documentNo, description? } */
+  recordExpense: (id, body, files) => http.post(`/fund/proposals/${id}/expense`, toMultipart(body, files)),
+};
