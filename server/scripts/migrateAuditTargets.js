@@ -23,7 +23,8 @@ const LEGACY_TARGETS = {
 export async function migrateAuditTargets() {
   let updated = 0;
   for (const [legacy, target] of Object.entries(LEGACY_TARGETS)) {
-    const res = await AuditLog.updateMany({ targetType: legacy }, { $set: { targetType: target } });
+    // Driver gốc: model AuditLog chặn mọi lệnh sửa (BR-S10), chỉ script chuyển dữ liệu này được phép
+    const res = await AuditLog.collection.updateMany({ targetType: legacy }, { $set: { targetType: target } });
     updated += res.modifiedCount;
   }
   return updated;

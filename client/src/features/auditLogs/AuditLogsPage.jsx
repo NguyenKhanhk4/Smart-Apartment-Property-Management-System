@@ -1,40 +1,95 @@
 import { useMemo, useState } from 'react';
-import { Alert, Button, Card, DatePicker, Descriptions, Drawer, Flex, Input, Select, Table, Tag, Typography } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { Alert, App, Button, Card, DatePicker, Descriptions, Drawer, Dropdown, Flex, Input, Select, Table, Tag, Typography } from 'antd';
+import { DownloadOutlined, FileExcelOutlined, FilePdfOutlined, ReloadOutlined } from '@ant-design/icons';
 import { auditLogApi } from '../../api/moduleC.api';
 import PageHeader from '../../components/PageHeader';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { formatDateTime, formatMoney } from '../../utils/format';
+import { formatDateTime } from '../../utils/format';
+import { fieldLabel, formatAuditValue, ipLabel, statusOf, targetText } from './auditFormat';
 
-const DETAIL_LABELS = {
-  amount: 'Số tiền', balanceBefore: 'Số dư trước giao dịch', balanceAfter: 'Số dư sau giao dịch',
-  fundId: 'Mã quỹ', transactionId: 'Mã giao dịch', proposalId: 'Mã đề xuất', source: 'Nguồn thu',
-  description: 'Nội dung', occurredAt: 'Thời điểm thu/chi', period: 'Kỳ', receiptNo: 'Số phiếu thu',
-  invoiceId: 'Mã thông báo phí', invoiceIds: 'Các thông báo phí', totalAmount: 'Tổng tiền',
-  paidAmount: 'Đã thanh toán', method: 'Phương thức', before: 'Trước thay đổi', after: 'Sau thay đổi',
-  key: 'Tham số', value: 'Giá trị', reason: 'Lý do', oldValue: 'Giá trị cũ', newValue: 'Giá trị mới',
-  count: 'Số lượng', decision: 'Quyết định', status: 'Trạng thái', fromStatus: 'Trạng thái trước', toStatus: 'Trạng thái sau',
-};
+const NO_DATA = 'Không có dữ liệu cho bộ lọc đã chọn'; // MSG-D01
 
-function AuditMetadata({ metadata }) {
-  const items = Object.entries(metadata ?? {}).map(([key, value]) => {
-    let content = value == null ? '—' : String(value);
-    if (['amount', 'balanceBefore', 'balanceAfter', 'totalAmount', 'paidAmount'].includes(key) && typeof value === 'number') {
-      content = formatMoney(value);
-    } else if (key === 'occurredAt' && value) {
-      content = formatDateTime(value);
-    } else if (value && typeof value === 'object') {
-      content = <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: 13, margin: 0 }}>{JSON.stringify(value, null, 2)}</pre>;
+/** Một giá trị: trạng thái hiện thẻ màu như các trang khác, còn lại hiện chữ */
+function AuditValue({ field, value, targetType, strong = false }) {
+  const status = statusOf(field, value, targetType);
+  if (status) return <Tag color={status.color}>{status.label}</Tag>;
+  const text = formatAuditValue(field, value, targetType);
+  return strong ? <Typography.Text strong>{text}</Typography.Text> : <Typography.Text type="secondary">{text}</Typography.Text>;
+}
+
+/** Bản ghi: mã dễ đọc (rê chuột thấy ID); không tra được mã thì ID rút gọn, copy được */
+function TargetCell({ log }) {
+  const text = targetText(log);
+  if (text) return <span title={log.targetId ?? undefined}>{text}</span>;
+  if (!log.targetId) return '—';
+  return <Typography.Text copyable={{ text: log.targetId }} title={log.targetId}>{log.targetId.slice(0, 8)}…</Typography.Text>;
+}
+
+/** UC06 bước 4: bảng giá trị cũ / mới (BR-S10) */
+function ChangesTable({ changes, targetType }) {
+  if (!changes?.length) return <Typography.Text type="secondary">Hành động này không ghi giá trị cũ / mới.</Typography.Text>;
+  return (
+    <Table
+      size="small"
+      bordered
+      pagination={false}
+      rowKey={(c) => c.field}
+      dataSource={changes}
+      scroll={{ x: 480 }}
+      columns={[
+        { title: 'Trường', dataIndex: 'field', width: 160, render: fieldLabel },
+        { title: 'Giá trị cũ', dataIndex: 'before', render: (v, c) => <AuditValue field={c.field} value={v} targetType={targetType} /> },
+        { title: 'Giá trị mới', dataIndex: 'after', render: (v, c) => <AuditValue field={c.field} value={v} targetType={targetType} strong /> },
+      ]}
+    />
+  );
+}
+
+/** Thông tin kèm theo khác (mã phiếu, lý do...) */
+function AuditMetadata({ metadata, targetType }) {
+  const items = Object.entries(metadata ?? {}).map(([key, value]) => ({
+    key,
+    label: fieldLabel(key),
+    children: <span style={{ overflowWrap: 'anywhere' }}><AuditValue field={key} value={value} targetType={targetType} strong /></span>,
+  }));
+  return items.length ? <Descriptions bordered size="small" column={1} items={items} /> : null;
+}
+
+/** UC06 bước 5 (UC65): xuất đúng bộ lọc đang xem (BR-D02), xong báo MSG-G06 */
+function ExportButton({ params }) {
+  const { message } = App.useApp();
+  const [loading, setLoading] = useState(false);
+  const download = async ({ key: format }) => {
+    setLoading(true);
+    try {
+      const name = await auditLogApi.download({ ...params, format });
+      message.success(`Đã xuất file ${name}`);
+    } catch (e) {
+      message.error(e.message || 'Xuất file thất bại, vui lòng thử lại');
+    } finally {
+      setLoading(false);
     }
-    return { key, label: DETAIL_LABELS[key] ?? key, children: content };
-  });
-  return items.length ? <Descriptions bordered size="small" column={1} items={items} /> : <Typography.Text type="secondary">Không có nội dung bổ sung.</Typography.Text>;
+  };
+  return (
+    <Dropdown
+      menu={{
+        items: [
+          { key: 'xlsx', icon: <FileExcelOutlined style={{ color: '#217346' }} />, label: 'Excel (.xlsx)' },
+          { key: 'pdf', icon: <FilePdfOutlined style={{ color: '#d4380d' }} />, label: 'PDF' },
+        ],
+        onClick: download,
+      }}
+    >
+      <Button icon={<DownloadOutlined />} loading={loading}>Xuất file</Button>
+    </Dropdown>
+  );
 }
 
 export default function AuditLogsPage() {
   const { hasRole } = useAuth();
+  const isBoard = hasRole('BOARD');
   const [filters, setFilters] = useState({});
   const [name, setName] = useState('');
   const q = useDebouncedValue(name, 350);
@@ -42,28 +97,35 @@ export default function AuditLogsPage() {
   const [limit, setLimit] = useState(20);
   const [selected, setSelected] = useState(null);
   const options = useApi(() => auditLogApi.options(), []);
-  const params = useMemo(() => ({ ...filters, q: q || undefined, page, limit }), [filters, q, page, limit]);
+  const exportParams = useMemo(() => ({ ...filters, q: q || undefined }), [filters, q]);
+  const params = useMemo(() => ({ ...exportParams, page, limit }), [exportParams, page, limit]);
   const list = useApi(() => auditLogApi.list(params), [params]);
   const change = (key, value) => {
     setFilters((old) => ({ ...old, [key]: value || undefined }));
     setPage(1);
   };
+  const title = isBoard ? 'Nhật ký hoạt động tài chính' : 'Nhật ký hoạt động';
 
   const columns = [
     { title: 'Thời điểm', dataIndex: 'createdAt', width: 165, render: formatDateTime },
     { title: 'Người thực hiện', width: 180, render: (_, r) => r.performedBy?.fullName ?? 'Hệ thống' },
     { title: 'Hành động', dataIndex: 'actionLabel', width: 240 },
     { title: 'Đối tượng', dataIndex: 'targetType', render: (v, r) => <Tag>{r.targetLabel ?? v ?? '—'}</Tag> },
-    { title: 'Mã bản ghi', dataIndex: 'targetId', width: 220, render: (v) => v ? <Typography.Text copyable={{ text: v }} title={v}>{v.slice(0, 8)}…</Typography.Text> : '—' },
+    { title: 'Bản ghi', dataIndex: 'targetId', width: 220, render: (_, r) => <TargetCell log={r} /> },
     { title: '', width: 80, render: (_, r) => <Button type="link" onClick={() => setSelected(r)} aria-label={`Xem nhật ký ${r.actionLabel}`}>Xem</Button> },
   ];
 
   return (
     <Flex vertical gap={16}>
-      <PageHeader title="Nhật ký hoạt động" subtitle="Lịch sử thao tác được lưu theo thời gian, chỉ dùng để tra cứu."
-        breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Nhật ký hoạt động' }]}
-        extra={<Button icon={<ReloadOutlined />} onClick={list.reload} loading={list.loading}>Làm mới</Button>} />
-      {hasRole('BOARD') ? <Alert type="info" showIcon title="Ban quản trị chỉ xem nhật ký tài chính. Thông tin nhạy cảm được ẩn." /> : null}
+      <PageHeader title={title} subtitle="Lịch sử thao tác được lưu theo thời gian, chỉ dùng để tra cứu, không sửa hoặc xóa được."
+        breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: title }]}
+        extra={(
+          <Flex gap={8} wrap>
+            <ExportButton params={exportParams} />
+            <Button icon={<ReloadOutlined />} onClick={list.reload} loading={list.loading}>Làm mới</Button>
+          </Flex>
+        )} />
+      {isBoard ? <Alert type="info" showIcon title="Ban quản trị chỉ xem nhật ký tài chính. Thông tin nhạy cảm được ẩn." /> : null}
       <Card size="small">
         <Flex wrap gap={12}>
           <DatePicker.RangePicker aria-label="Khoảng ngày nhật ký" format="DD/MM/YYYY" style={{ maxWidth: '100%' }}
@@ -87,7 +149,7 @@ export default function AuditLogsPage() {
       ) : null}
       <Card size="small" title="Lịch sử hoạt động">
         <Table rowKey="_id" dataSource={list.data ?? []} columns={columns} loading={list.loading} scroll={{ x: 1100 }}
-          locale={{ emptyText: 'Chưa có nhật ký phù hợp với bộ lọc' }}
+          locale={{ emptyText: NO_DATA }}
           pagination={{ current: page, pageSize: limit, total: list.pagination?.total ?? 0, showSizeChanger: true,
             showTotal: (total) => `${total} nhật ký`,
             onChange: (next, size) => { setPage(size === limit ? next : 1); setLimit(size); } }} />
@@ -100,13 +162,20 @@ export default function AuditLogsPage() {
               { key: 'user', label: 'Người thực hiện', children: selected.performedBy?.fullName ?? 'Hệ thống' },
               { key: 'action', label: 'Hành động', children: selected.actionLabel },
               { key: 'target', label: 'Đối tượng', children: selected.targetLabel ?? selected.targetType ?? '—' },
-              { key: 'id', label: 'Mã bản ghi', children: selected.targetId ?? '—' },
-              ...(hasRole('MANAGER') ? [{ key: 'ip', label: 'Địa chỉ IP', children: selected.ip ?? '—' }] : []),
+              { key: 'name', label: 'Bản ghi', children: targetText(selected) ?? '—' },
+              ...(selected.targetId ? [{ key: 'id', label: 'ID hệ thống', children: <Typography.Text copyable type="secondary">{selected.targetId}</Typography.Text> }] : []),
+              ...(isBoard ? [] : [{ key: 'ip', label: 'Địa chỉ IP', children: ipLabel(selected) }]),
             ]} />
             <div>
-              <Typography.Title level={5}>Nội dung thay đổi</Typography.Title>
-              <AuditMetadata metadata={selected.metadata} />
+              <Typography.Title level={5}>Giá trị cũ và mới</Typography.Title>
+              <ChangesTable changes={selected.changes} targetType={selected.targetType} />
             </div>
+            {Object.keys(selected.metadata ?? {}).length ? (
+              <div>
+                <Typography.Title level={5}>Thông tin thêm</Typography.Title>
+                <AuditMetadata metadata={selected.metadata} targetType={selected.targetType} />
+              </div>
+            ) : null}
           </Flex>
         ) : null}
       </Drawer>

@@ -4,6 +4,7 @@ export const ERROR_CODES = Object.freeze({
   UNAUTHORIZED: { status: 401, message: 'Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn' },
   FORBIDDEN_ROLE: { status: 403, message: 'Bạn không có quyền thực hiện thao tác này' },
   NOT_FOUND: { status: 404, message: 'Không tìm thấy dữ liệu' },
+  NO_DATA: { status: 404, message: 'Không có dữ liệu cho bộ lọc đã chọn' }, // MSG-D01
   AUTH_INVALID_CREDENTIALS: { status: 401, message: 'Số điện thoại hoặc mật khẩu không đúng' },
   ACCOUNT_LOCKED_TEMP: { status: 423, message: 'Tài khoản bị tạm khóa 15 phút do nhập sai mật khẩu 5 lần liên tiếp' },
   ACCOUNT_NOT_ACTIVATED: { status: 403, message: 'Tài khoản chưa được kích hoạt. Vui lòng kích hoạt tài khoản trước khi đăng nhập' },

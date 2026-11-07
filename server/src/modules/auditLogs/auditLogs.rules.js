@@ -30,26 +30,94 @@ export const auditQuery = Joi.object({
   q: Joi.string().trim().max(100).allow(''),
 });
 
-const LABELS = {
+// UC06 bước 5 (UC65): xuất đúng bộ lọc đang xem (BR-D02), không phân trang
+export const auditExportQuery = auditQuery
+  .fork(['page', 'limit'], (s) => s.strip())
+  .keys({ format: Joi.string().valid('xlsx', 'pdf').required() });
+
+// Nhãn tiếng Việt của mọi hành động; test kiểm tra hành động mới thêm vào AUDIT_ACTIONS phải có nhãn
+export const LABELS = {
+  // Tài khoản (Mô đun 1)
+  ROLE_ASSIGNED: 'Gán vai trò tài khoản',
+  ACCOUNT_LOCKED: 'Khóa tài khoản',
+  ACCOUNT_UNLOCKED: 'Mở khóa tài khoản',
+  ACCOUNT_ACTIVATED: 'Kích hoạt tài khoản',
+  PASSWORD_RESET: 'Đặt lại mật khẩu',
+  ACTIVATION_CODE_ISSUED: 'Cấp mã kích hoạt tại quầy',
+  PHONE_CHANGED: 'Đổi số điện thoại đăng nhập',
+  EMAIL_CHANGED: 'Đổi email',
+  CONSENT_CHANGED: 'Đổi lựa chọn điều khoản dữ liệu',
+  AUDIT_LOG_EXPORTED: 'Xuất nhật ký hoạt động',
+  CONFIG_CHANGED: 'Thay đổi cấu hình',
+  // Tòa, căn, hợp đồng, cư dân
+  BUILDING_CHANGED: 'Thay đổi tòa nhà',
+  APARTMENT_CHANGED: 'Thay đổi căn hộ',
+  CONTRACT_CREATED: 'Tạo hợp đồng',
+  CONTRACT_UPDATED: 'Sửa hợp đồng',
+  CONTRACT_TERMINATED: 'Chấm dứt hợp đồng',
+  CONTRACT_EXPIRED: 'Hợp đồng hết hạn',
+  RESIDENT_ASSIGNED: 'Thêm cư dân vào căn',
+  RESIDENT_REMOVED: 'Cho cư dân rời căn',
+  RESIDENT_UPDATED: 'Sửa thông tin cư dân',
+  RESIDENT_CHANGES_EXPORTED: 'Xuất báo cáo biến động nhân khẩu',
+  RESIDENT_ID_VIEWED: 'Xem số CCCD',
+  VEHICLE_APPROVED: 'Duyệt đăng ký xe',
+  VEHICLE_REJECTED: 'Từ chối đăng ký xe',
+  VEHICLE_CANCELLED: 'Hủy đăng ký xe',
+  PARKING_CARD_ISSUED: 'Cấp thẻ gửi xe',
+  PARKING_CARD_DISABLED: 'Khóa thẻ gửi xe',
+  PARKING_CARD_RETURNED: 'Trả thẻ gửi xe',
+  PARKING_CARD_LOST: 'Báo mất thẻ gửi xe',
+  GATEPASS_CREATED: 'Tạo giấy chuyển đồ',
+  GATEPASS_OWNER_APPROVED: 'Chủ hộ đồng ý giấy chuyển đồ',
+  GATEPASS_OWNER_REJECTED: 'Chủ hộ từ chối giấy chuyển đồ',
+  GATEPASS_APPROVED: 'Duyệt giấy chuyển đồ',
+  GATEPASS_REJECTED: 'Từ chối giấy chuyển đồ',
+  GATEPASS_USED: 'Sử dụng giấy chuyển đồ',
+  GATEPASS_EXPIRED: 'Giấy chuyển đồ hết hạn',
+  // Phí, thanh toán, công nợ
+  FEE_TYPE_CHANGED: 'Thay đổi bảng phí',
+  AMENITY_FEE_CHANGED: 'Thay đổi phí tiện ích',
+  INVOICE_GENERATED: 'Tạo thông báo phí',
+  INVOICE_ADJUSTED: 'Điều chỉnh thông báo phí',
+  INVOICE_CANCELLED: 'Hủy thông báo phí',
+  INVOICE_RECALCULATED: 'Tính lại thông báo phí',
+  INVOICE_ITEM_ADDED: 'Thêm khoản vào thông báo phí',
+  INVOICE_ITEM_REMOVED: 'Bỏ khoản khỏi thông báo phí',
+  INVOICE_SUBMITTED: 'Trình duyệt thông báo phí',
+  INVOICE_PUBLISHED: 'Phát hành thông báo phí',
+  INVOICE_RETURNED: 'Trả lại thông báo phí',
+  PAYMENT_CONFIRMED: 'Xác nhận thanh toán',
+  BOOKING_PAYMENT_CONFIRMED: 'Xác nhận thanh toán đặt tiện ích',
+  PREPAID_REFUNDED: 'Hoàn tiền trả trước',
+  DEBT_FOLLOWUP_RECORDED: 'Ghi nhận xử lý công nợ',
+  DEBT_NOTICE_EXPORTED: 'Xuất giấy báo nợ',
+  // Quỹ bảo trì
+  FUND_INCOME_RECORDED: 'Ghi nhận thu quỹ',
   FUND_PROPOSAL_CREATED: 'Tạo đề xuất chi quỹ',
   FUND_PROPOSAL_CANCELLED: 'Rút đề xuất chi quỹ',
-  FUND_WORK_ACCEPTED: 'Nghiệm thu sửa chữa từ quỹ',
-  FUND_EXPENSE_RECORDED: 'Ghi nhận chi quỹ',
-  FUND_INCOME_RECORDED: 'Ghi nhận thu quỹ',
   FUND_VOTED: 'Biểu quyết chi quỹ',
   FUND_PROPOSAL_APPROVED: 'Duyệt đề xuất chi quỹ',
   FUND_PROPOSAL_REJECTED: 'Từ chối đề xuất chi quỹ',
-  PAYMENT_CONFIRMED: 'Xác nhận thanh toán',
-  FEE_TYPE_CHANGED: 'Thay đổi bảng phí',
-  CONFIG_CHANGED: 'Thay đổi cấu hình',
-  INVOICE_GENERATED: 'Tạo thông báo phí',
-  INVOICE_ADJUSTED: 'Điều chỉnh thông báo phí',
-  INVOICE_PUBLISHED: 'Phát hành thông báo phí',
-  INVOICE_SUBMITTED: 'Trình duyệt thông báo phí',
-  INVOICE_RETURNED: 'Trả lại thông báo phí',
-  ACCOUNT_LOCKED: 'Khóa tài khoản',
-  ACCOUNT_UNLOCKED: 'Mở khóa tài khoản',
-  ROLE_ASSIGNED: 'Gán quyền tài khoản',
+  FUND_WORK_ACCEPTED: 'Nghiệm thu sửa chữa từ quỹ',
+  FUND_EXPENSE_RECORDED: 'Ghi nhận chi quỹ',
+  // Sự cố, bảo trì, phản ánh
+  TICKET_ASSIGNED: 'Phân công xử lý sự cố',
+  TICKET_CLAIMED: 'Nhận xử lý sự cố',
+  TICKET_ESCALATED: 'Chuyển cấp sự cố',
+  TICKET_CLOSED: 'Đóng phiếu sự cố',
+  TICKET_QUOTE_DECIDED: 'Quyết định báo giá sửa chữa',
+  TICKET_RECLASSIFIED: 'Đổi loại phiếu sự cố',
+  TICKET_MERGED: 'Gộp phiếu sự cố trùng',
+  REPAIR_QUOTE_SUBMITTED: 'Gửi báo giá sửa chữa',
+  WORKORDER_ASSIGNED: 'Phân công phiếu bảo trì',
+  COMPLAINT_CATEGORY_CHANGED: 'Thay đổi danh mục phản ánh',
+  DUTY_SHIFT_CREATED: 'Tạo ca trực',
+  DUTY_SHIFT_DELETED: 'Xóa ca trực',
+  // Tiện ích, bảng tin
+  BOOKING_CANCELLED_BY_STAFF: 'Nhân viên hủy đặt tiện ích',
+  AMENITY_VISIT_CANCELLED: 'Hủy lượt vào tiện ích',
+  ANNOUNCEMENT_PUBLISHED: 'Đăng bảng tin',
 };
 export const auditActionLabel = (action) => LABELS[action] ?? action.replaceAll('_', ' ');
 
@@ -62,8 +130,26 @@ const TARGET_LABELS = {
   amenity_passes: 'Gói tiện ích', amenity_visits: 'Lượt tiện ích', bookings: 'Đặt tiện ích',
   work_orders: 'Lệnh bảo trì', tickets: 'Sự cố và phản ánh', complaint_categories: 'Danh mục phản ánh',
   announcements: 'Bảng tin', system_configs: 'Cấu hình hệ thống', duty_shifts: 'Ca trực',
+  audit_logs: 'Nhật ký hoạt động', assets: 'Thiết bị',
 };
-export const auditTargetLabel = (target) => TARGET_LABELS[target] ?? target ?? '—';
+// Log cũ ghi targetType theo tên model ('Resident', 'Contract'...). Không sửa dữ liệu trên DB dùng chung:
+// đọc theo tên mới, và khi lọc theo đối tượng thì gồm cả tên cũ (giống bảng của scripts/migrateAuditTargets.js)
+export const LEGACY_TARGETS = {
+  User: AUDIT_TARGETS.USER,
+  Building: AUDIT_TARGETS.BUILDING,
+  Apartment: AUDIT_TARGETS.APARTMENT,
+  Contract: AUDIT_TARGETS.CONTRACT,
+  Resident: AUDIT_TARGETS.RESIDENT,
+  Vehicle: AUDIT_TARGETS.VEHICLE,
+  GatePass: AUDIT_TARGETS.GATE_PASS,
+  ParkingCard: AUDIT_TARGETS.PARKING_CARD,
+};
+/** Tên đối tượng mới → [tên mới, các tên cũ] để lọc */
+export const targetTypeAliases = (target) => [target, ...Object.keys(LEGACY_TARGETS).filter((k) => LEGACY_TARGETS[k] === target)];
+/** Đổi tên cũ về tên collection */
+export const normalizeTarget = (target) => LEGACY_TARGETS[target] ?? target;
+
+export const auditTargetLabel = (target) => TARGET_LABELS[normalizeTarget(target)] ?? target ?? '—';
 
 export function auditOptions(isBoard) {
   const actions = values(AUDIT_ACTIONS).filter((v) => !isBoard || FINANCIAL_ACTIONS.includes(v) || v === AUDIT_ACTIONS.CONFIG_CHANGED);
