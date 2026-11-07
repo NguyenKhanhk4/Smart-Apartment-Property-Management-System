@@ -9,6 +9,7 @@ import PageTransition from '../motion/PageTransition';
 import { ResidentProvider } from './resident/ResidentProvider';
 import { MobileHeader, WebHeader } from './resident/ResidentHeader';
 import BottomNav from './resident/BottomNav';
+import ConsentBanner from '../components/resident/ConsentBanner';
 
 // Khu cư dân chỉ có bản sáng theo thiết kế: bỏ class `dark` trên <html> khi ở đây (các trang cũ còn dùng `dark:`),
 // rời khu thì trả lại theo lựa chọn của người dùng.
@@ -35,6 +36,7 @@ export default function ResidentLayout() {
           {isWide ? <WebHeader /> : <MobileHeader title={HEADER_TITLES[pathname.replace(/\/$/, '')]} />}
 
           <main className={isWide ? 'max-w-[1200px] mx-auto px-6 pt-8 pb-12' : 'px-5 pt-5 pb-28'}>
+            <ConsentBanner />
             <Suspense fallback={<PageLoader />}>
               <PageTransition key={pathname}>
                 <Outlet />

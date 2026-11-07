@@ -3,6 +3,7 @@ import Joi from 'joi';
 import { BOARD_TITLES, CONSENT_ACTIONS, ROLES, ROLE_TITLES, values } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
+import { requireConsent } from '../../middlewares/requireConsent.js';
 import { validate } from '../../middlewares/validate.js';
 import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery } from '../../utils/pagination.js';
@@ -144,7 +145,7 @@ router.patch('/me/consent', authenticate, validate({ body: updateConsentBody }),
  *       200:
  *         description: Ảnh đại diện đã được cập nhật
  */
-router.patch('/me/avatar', authenticate, uploadImages('avatar', 1), async (req, res) => {
+router.patch('/me/avatar', authenticate, requireConsent, uploadImages('avatar', 1), async (req, res) => {
   const user = await usersService.updateAvatar(req.user.id, req.files);
   ok(res, user, 'Cập nhật ảnh đại diện thành công');
 });

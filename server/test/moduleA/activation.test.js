@@ -6,6 +6,7 @@ import { env } from '../../src/config/env.js';
 import { requireConsent } from '../../src/middlewares/requireConsent.js';
 import { AuditLog, User, VerificationCode } from '../../src/models/index.js';
 import { confirmActivation, login, startActivation } from '../../src/modules/auth/auth.service.js';
+import { OTP_DAILY_LIMIT } from '../../src/modules/auth/verification.service.js';
 import * as contracts from '../../src/modules/contracts/contracts.service.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { asUser, createApartment, createReceptionist, createUser, linkResident } from '../helpers/fixtures.js';
@@ -285,4 +286,45 @@ test('hợp đồng tạo cư dân mới: chờ kích hoạt, không có mật k
   await startActivation({ phone: '0912000090', apartmentCode: 'C-5', email: 'chumoi@example.com' });
   await confirmActivation({ phone: '0912000090', code: lastOtp(), password: PASSWORD, consent: 'ACCEPTED' });
   assert.ok((await login({ email: 'chumoi@example.com', password: PASSWORD })).accessToken);
+});
+
+test('start: mỗi tài khoản tối đa OTP_DAILY_LIMIT mã trong 24 giờ; mã cũ hơn 24 giờ không tính', async () => {
+  const { identity } = await pendingResident();
+  const ageAll = (ms) => VerificationCode.collection.updateMany({}, { $set: { createdAt: new Date(Date.now() - ms) } });
+
+  for (let i = 0; i < OTP_DAILY_LIMIT; i += 1) {
+    await startActivation(identity);
+    await ageAll(61_000);
+  }
+  await assert.rejects(startActivation(identity), { errorCode: 'OTP_DAILY_LIMIT', status: 429 });
+  assert.equal(mails.length, OTP_DAILY_LIMIT);
+
+  await ageAll(25 * 60 * 60 * 1000);
+  await startActivation(identity);
+  assert.equal(mails.length, OTP_DAILY_LIMIT + 1);
+});
+
+test('BR-X7 qua API: cư dân từ chối thì bị khóa đăng ký xe và tải ảnh; đồng ý thì mở; nhân viên không bị khóa', async () => {
+  const { user, request } = await readyToConfirm();
+  await confirmActivation({ ...request, consent: 'DECLINED' });
+  const resident = asUser(await User.findById(user._id));
+  const call = (method, path, actor, body) => app.request(method, path, { user: actor, body });
+
+  const vehicle = await call('POST', '/vehicles', resident, {});
+  assert.equal(vehicle.status, 403);
+  assert.equal(vehicle.body.errorCode, 'CONSENT_REQUIRED');
+  assert.equal((await call('PATCH', '/users/me/avatar', resident)).body.errorCode, 'CONSENT_REQUIRED');
+
+  await call('PATCH', '/users/me/consent', resident, { action: 'ACCEPTED' });
+  // Qua được bước điều khoản, dừng ở bước kiểm tra dữ liệu
+  assert.equal((await call('POST', '/vehicles', resident, {})).status, 400);
+  assert.equal((await call('PATCH', '/users/me/avatar', resident)).status, 400);
+
+  const staff = asUser(await createUser('STAFF', { roleTitle: 'TECHNICIAN' }));
+  let passed = false;
+  await requireConsent({ user: staff }, {}, () => {
+    passed = true;
+  });
+  assert.equal(passed, true);
+  assert.equal((await call('PATCH', '/users/me/avatar', staff)).status, 400);
 });

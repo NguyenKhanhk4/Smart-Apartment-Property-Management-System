@@ -8,6 +8,9 @@ import { ApiError } from '../../utils/ApiError.js';
 export const OTP_TTL_MINUTES = 10;
 export const OTP_RESEND_SECONDS = 60;
 const MAX_ATTEMPTS = 5;
+// Mỗi mã chỉ thử được 5 lần, nên giới hạn số mã mỗi ngày để không đoán dần được bằng cách xin mã mới liên tục
+export const OTP_DAILY_LIMIT = 5;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const invalidCode = () =>
   new ApiError('ACTIVATION_CODE_INVALID', undefined, {
@@ -27,6 +30,13 @@ export async function issueEmailOtp(userId, purpose) {
     createdAt: { $gt: new Date(Date.now() - OTP_RESEND_SECONDS * 1000) },
   });
   if (recentlySent) throw new ApiError('OTP_RESEND_TOO_SOON');
+  const sentToday = await VerificationCode.countDocuments({
+    userId,
+    purpose,
+    channel: VERIFICATION_CHANNELS.EMAIL_OTP,
+    createdAt: { $gt: new Date(Date.now() - DAY_MS) },
+  });
+  if (sentToday >= OTP_DAILY_LIMIT) throw new ApiError('OTP_DAILY_LIMIT');
 
   await voidCodes(userId, purpose);
   const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');

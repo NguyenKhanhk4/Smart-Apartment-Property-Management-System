@@ -73,6 +73,7 @@ export const ERROR_MESSAGES = {
   ACTIVATION_DATA_MISMATCH: 'Số điện thoại, mã căn hộ hoặc email không khớp với dữ liệu đăng ký. Vui lòng liên hệ quầy lễ tân.',
   ACTIVATION_CODE_INVALID: 'Mã không đúng hoặc đã hết hạn.',
   ACTIVATION_EMAIL_FAILED: 'Chưa gửi được mã qua email. Vui lòng thử lại hoặc đến quầy lễ tân để lấy mã kích hoạt.',
+  OTP_DAILY_LIMIT: 'Bạn đã yêu cầu quá nhiều mã trong 24 giờ. Vui lòng đến quầy lễ tân để được hỗ trợ.',
   OTP_RESEND_TOO_SOON: 'Vui lòng đợi 60 giây rồi gửi lại mã.',
   CONSENT_REQUIRED: 'Chức năng này cần bạn đồng ý với điều khoản dữ liệu cá nhân.',
   PHONE_EXISTS: 'Số điện thoại đã được sử dụng bởi tài khoản khác.',

@@ -114,6 +114,7 @@ export const ERROR_CODES = Object.freeze({
   ACTIVATION_DATA_MISMATCH: { status: 400, message: 'Số điện thoại, mã căn hộ hoặc email không khớp với dữ liệu đăng ký. Vui lòng liên hệ quầy lễ tân' },
   ACTIVATION_CODE_INVALID: { status: 400, message: 'Mã không đúng hoặc đã hết hạn' },
   ACTIVATION_EMAIL_FAILED: { status: 503, message: 'Chưa gửi được mã qua email. Vui lòng thử lại hoặc đến quầy lễ tân để lấy mã kích hoạt' },
+  OTP_DAILY_LIMIT: { status: 429, message: 'Bạn đã yêu cầu quá nhiều mã trong 24 giờ. Vui lòng đến quầy lễ tân để được hỗ trợ' },
   OTP_RESEND_TOO_SOON: { status: 429, message: 'Vui lòng đợi 60 giây rồi gửi lại mã' },
   CONSENT_REQUIRED: { status: 403, message: 'Chức năng này cần bạn đồng ý với điều khoản dữ liệu cá nhân' },
   PHONE_EXISTS: { status: 409, message: 'Số điện thoại đã được sử dụng bởi tài khoản khác' },

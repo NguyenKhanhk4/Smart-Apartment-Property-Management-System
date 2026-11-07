@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { App, Avatar, Button, Card, DatePicker, Form, Input, Tabs, Upload, Tag } from 'antd';
+import { useSearchParams } from 'react-router';
+import { isConsentLocked } from '../../utils/consent';
 import { PHONE_RULES } from '../../utils/phone';
 import {
   CameraOutlined,
@@ -21,6 +23,8 @@ import { roleHome } from '../../routes/roleHome';
 // UC-A03: Trang hồ sơ cá nhân và đổi mật khẩu (/app/profile và /r/profile)
 export default function ProfilePage() {
   const { user, updateUser, startSession } = useAuth();
+  const [searchParams] = useSearchParams();
+  const avatarLocked = isConsentLocked(user); // BR-X7: cư dân chưa đồng ý thì không tải ảnh được
   const { message } = App.useApp();
 
   const [profileForm] = Form.useForm();
@@ -113,15 +117,16 @@ export default function ProfilePage() {
               />
               <Upload
                 showUploadList={false}
+                disabled={avatarLocked}
                 beforeUpload={() => false}
                 onChange={handleAvatarUpload}
                 accept="image/png,image/jpeg"
               >
                 <button
                   type="button"
-                  disabled={uploadingAvatar}
+                  disabled={uploadingAvatar || avatarLocked}
                   className="absolute bottom-0 right-0 bg-navy hover:bg-gold text-white p-2 rounded-full cursor-pointer shadow transition-colors border-0"
-                  title="Thay đổi ảnh đại diện"
+                  title={avatarLocked ? 'Cần đồng ý điều khoản dữ liệu cá nhân để tải ảnh' : 'Thay đổi ảnh đại diện'}
                 >
                   <CameraOutlined className="text-xs" />
                 </button>
@@ -293,7 +298,8 @@ export default function ProfilePage() {
         </div>
       ),
     },
-    { key: 'consent', label: 'Dữ liệu cá nhân', children: <ConsentTab /> },
+    // Màn hình 5 của SRS: chỉ cư dân có mục đồng ý điều khoản
+    ...(user?.role === 'RESIDENT' ? [{ key: 'consent', label: 'Dữ liệu cá nhân', children: <ConsentTab /> }] : []),
   ];
 
   return (
@@ -308,7 +314,7 @@ export default function ProfilePage() {
       />
 
       <Card className="shadow-xs border-line">
-        <Tabs items={tabItems} defaultActiveKey="info" />
+        <Tabs items={tabItems} defaultActiveKey={tabItems.some((t) => t.key === searchParams.get('tab')) ? searchParams.get('tab') : 'info'} />
       </Card>
     </div>
   );
