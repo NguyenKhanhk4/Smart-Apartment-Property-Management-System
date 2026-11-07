@@ -5,6 +5,7 @@ import {
   TICKET_FINAL_STATUSES,
   TICKET_OPEN_STATUSES,
   TICKET_SCOPES,
+  TICKET_SLA_STATUSES,
   TICKET_STATUS,
   TICKET_TYPES,
 } from '../../constants/enums.js';
@@ -28,6 +29,82 @@ export function computeDeadlines({ type, slaHours, ackMinutes, responseHours, no
     ackDueAt: incident ? at(ackMinutes * MINUTE_MS) : null,
     responseDueAt: incident ? null : at(responseHours * HOUR_MS),
   };
+}
+
+// ---------------------------------------------------------------------------
+// M5-2 — SLA tạm dừng: Chờ cư dân đồng ý phí dừng không giới hạn; Chờ linh kiện dừng tối đa `partsMaxMs`
+// (TICKET_PARTS_PAUSE_HOURS) rồi chạy tiếp. Vào trạng thái dừng ghi slaPausedAt; rời đi thì dueDate cộng bù phần đã dừng.
+// ---------------------------------------------------------------------------
+export const SLA_PAUSE_STATUSES = Object.freeze([WAITING_QUOTE_APPROVAL, WAITING_PARTS]);
+
+/** Thời gian (ms) được cộng bù vào dueDate nếu rời trạng thái dừng lúc `now` */
+export function slaPauseCreditMs(ticket, now, partsMaxMs) {
+  if (!ticket.slaPausedAt || !SLA_PAUSE_STATUSES.includes(ticket.status)) return 0;
+  const elapsed = Math.max(0, now.getTime() - new Date(ticket.slaPausedAt).getTime());
+  return ticket.status === WAITING_PARTS ? Math.min(elapsed, partsMaxMs) : elapsed;
+}
+
+/** Hạn hoàn thành thực tế tại `now` (đã tính phần đang dừng) */
+export function effectiveDueDate(ticket, now, partsMaxMs) {
+  if (!ticket.dueDate) return null;
+  return new Date(new Date(ticket.dueDate).getTime() + slaPauseCreditMs(ticket, now, partsMaxMs));
+}
+
+/** Quá hạn hoàn thành? Chờ cư dân đồng ý phí không bao giờ quá hạn (ngoài TICKET_SLA_STATUSES) */
+export function isOverdue(ticket, now, partsMaxMs) {
+  if (!TICKET_SLA_STATUSES.includes(ticket.status) || !ticket.dueDate) return false;
+  return effectiveDueDate(ticket, now, partsMaxMs) < now;
+}
+
+/**
+ * Filter Mongo tương đương isOverdue. Chờ linh kiện đang dừng từ p: dueDate + min(now − p, max) < now
+ * ⟺ dueDate < p hoặc dueDate < now − max. Phiếu cũ không có slaPausedAt coi như không dừng.
+ */
+export function overdueFilter(now, partsMaxMs, statuses = TICKET_SLA_STATUSES) {
+  const running = statuses.filter((s) => s !== WAITING_PARTS);
+  const or = [];
+  if (running.length) or.push({ status: { $in: running }, dueDate: { $lt: now } });
+  if (statuses.includes(WAITING_PARTS)) {
+    or.push({
+      status: WAITING_PARTS,
+      $or: [
+        { slaPausedAt: null, dueDate: { $lt: now } },
+        { dueDate: { $lt: new Date(now.getTime() - partsMaxMs) } },
+        { $expr: { $lt: ['$dueDate', '$slaPausedAt'] } },
+      ],
+    });
+  }
+  return or.length ? { $or: or } : { _id: null };
+}
+
+/**
+ * Gọi TRƯỚC khi đổi `ticket.status` sang `to` (document Mongoose hoặc object): rời trạng thái dừng → cộng bù dueDate;
+ * vào trạng thái dừng → ghi slaPausedAt.
+ */
+export function applySlaTransition(ticket, to, now, partsMaxMs) {
+  if (ticket.status === to) return;
+  if (ticket.slaPausedAt) {
+    if (ticket.dueDate) ticket.dueDate = effectiveDueDate(ticket, now, partsMaxMs);
+    ticket.slaPausedAt = null;
+    ticket.partsAlertedAt = null;
+  }
+  if (SLA_PAUSE_STATUSES.includes(to)) ticket.slaPausedAt = now;
+}
+
+/** Cảnh báo chờ linh kiện quá hạn dừng (chưa cảnh báo) */
+export const partsPauseExceeded = (ticket, now, partsMaxMs) =>
+  ticket.status === WAITING_PARTS &&
+  Boolean(ticket.slaPausedAt) &&
+  !ticket.partsAlertedAt &&
+  now.getTime() - new Date(ticket.slaPausedAt).getTime() > partsMaxMs;
+
+/**
+ * M5-3 — Trạng thái quay về khi bản báo giá lại (vượt ngưỡng %) bị từ chối / quá hạn: trạng thái ngay trước lần chuyển
+ * sang Chờ cư dân đồng ý phí gần nhất (Đang xử lý / Chờ linh kiện); không xác định được thì Đang xử lý.
+ */
+export function quoteResumeStatus(ticket) {
+  const entry = [...(ticket.history ?? [])].reverse().find((h) => h.toStatus === WAITING_QUOTE_APPROVAL && h.fromStatus !== WAITING_QUOTE_APPROVAL);
+  return [IN_PROGRESS, WAITING_PARTS].includes(entry?.fromStatus) ? entry.fromStatus : IN_PROGRESS;
 }
 
 // Trạng thái KTV được tự chuyển tới (WAITING_QUOTE_APPROVAL → IN_PROGRESS do cư dân quyết định, không phải KTV)

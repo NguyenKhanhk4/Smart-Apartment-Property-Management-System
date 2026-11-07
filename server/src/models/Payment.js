@@ -17,6 +17,7 @@ const paymentSchema = new Schema(
     apartmentId: { type: ObjectId, ref: 'Apartment' },
     payerId: { type: ObjectId, ref: 'User' }, // Người nộp phí đã trả (X1)
     invoiceId: { type: ObjectId, ref: 'Invoice', default: null }, // thông báo đầu tiên được phân bổ (đọc nhanh / dữ liệu cũ)
+    bookingId: { type: ObjectId, ref: 'Booking', default: null }, // payOS trả phí booking tiện ích (không qua thông báo phí)
     allocations: { type: [allocationSchema], default: [] },
     creditAmount: { type: Number, default: 0, min: 0 }, // tiền thừa ghi vào Số dư trả trước
     method: { type: String, enum: values(PAYMENT_METHODS), required: true },

@@ -13,7 +13,6 @@ import {
   PAYMENT_STATUS,
   REVIEW_STATUS,
   TICKET_OPEN_STATUSES,
-  TICKET_SLA_STATUSES,
   TICKET_STATUS,
   WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
@@ -33,6 +32,8 @@ import {
 } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { DAY_MS, HOUR_MS, endOfVnDay, periodRange, startOfVnDay } from '../../utils/time.js';
+import { partsPauseMs } from '../tickets/tickets.service.js';
+import { overdueFilter } from '../tickets/ticket.rules.js';
 
 const TZ = 'Asia/Ho_Chi_Minh';
 const oid = (id) => new mongoose.Types.ObjectId(String(id));
@@ -355,6 +356,7 @@ export async function ticketReport({ from, to, buildingId }) {
   const match = { createdAt: { $gte: start, $lte: end } };
   if (buildingId) match.buildingId = oid(buildingId);
   const now = new Date();
+  const partsMs = await partsPauseMs();
 
   const [facets] = await Ticket.aggregate([
     { $match: match },
@@ -370,7 +372,7 @@ export async function ticketReport({ from, to, buildingId }) {
           { $sort: { count: -1 } },
         ],
         overdue: [
-          { $match: { status: { $in: TICKET_SLA_STATUSES }, dueDate: { $lt: now } } },
+          { $match: overdueFilter(now, partsMs) }, // M5-2: trừ thời gian tạm dừng SLA (ticket.rules)
           { $count: 'count' },
         ],
         resolution: [

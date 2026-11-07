@@ -43,6 +43,8 @@ export const bookingApi = {
   checkInByQr: (token) => http.post('/bookings/check-in-by-qr', { token }),
   /** Lễ tân xác nhận đã thu tiền booking đang giữ chỗ */
   markPaid: (id, paymentRef) => http.patch(`/bookings/${id}/mark-paid`, paymentRef ? { paymentRef } : {}),
+  /** Cư dân tạo link payOS trả phí booking đang giữ chỗ → { checkoutUrl, orderCode, expiredAt } */
+  payos: (id) => http.post(`/bookings/${id}/payos`),
   /** Cư dân đổi sang khung giờ khác. body: { date: 'YYYY-MM-DD', slotStart: 'HH:mm' } */
   reschedule: (id, body) => http.patch(`/bookings/${id}/reschedule`, body),
 };

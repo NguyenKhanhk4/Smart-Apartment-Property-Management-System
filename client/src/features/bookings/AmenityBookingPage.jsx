@@ -14,6 +14,7 @@ import { formatDate, formatMoney } from '../../utils/format';
 import { usePurchasePass } from '../amenityPasses/usePurchasePass';
 import { passSpan } from './passUtils';
 import { holdLabel } from './bookingHelpers';
+import { payBooking } from './payBooking';
 
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const DEFAULT_ADVANCE_DAYS = 14;
@@ -112,9 +113,16 @@ function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) 
     setBooking(true);
     try {
       const { data: booking } = await bookingApi.create({ apartmentId, amenityId: amenity._id, date, slotStart: picked });
-      // Giữ chỗ chờ thanh toán (khi Ban quản lý bật): nhắc thanh toán trước giờ hết hạn
-      if (booking?.status === 'PENDING_PAYMENT') message.warning(`${holdLabel(booking.holdExpiresAt)}. Vui lòng thanh toán tại quầy lễ tân.`, 6);
-      else message.success('Đặt chỗ thành công');
+      // Tiện ích có phí: giữ chỗ chờ thanh toán → sang payOS ngay; lỗi thì vẫn thanh toán lại được từ Lịch sử đặt
+      if (booking?.status === 'PENDING_PAYMENT') {
+        message.warning(`${holdLabel(booking.holdExpiresAt)}. Đang chuyển sang trang thanh toán…`, 6);
+        try {
+          await payBooking(booking._id);
+          return;
+        } catch (e) {
+          message.error(e.message);
+        }
+      } else message.success('Đặt chỗ thành công');
       navigate(`/r/amenities?tab=history&apartmentId=${apartmentId}`, { viewTransition: true });
     } catch (e) {
       message.error(e.message);
@@ -232,8 +240,11 @@ function BookingPanel({ amenity, apartmentId, hasPass, sellsPass, refreshKey }) 
 
           <p className="m-0 text-xs text-r-muted leading-normal">
             Đặt xong là được xác nhận ngay. Check-in tại lễ tân hoặc bảo vệ từ {info.rules.checkinEarlyMinutes} phút trước giờ bắt đầu (không sớm hơn giờ mở
-            quầy {info.rules.receptionOpen}) đến {info.rules.noShowGraceMinutes} phút sau giờ bắt đầu; quá hạn tính là không đến và không thu phí. Hủy miễn phí
-            trước giờ bắt đầu. Mỗi căn tối đa {info.rules.maxActivePerApartment} booking chưa dùng.
+            quầy {info.rules.receptionOpen}) đến {info.rules.noShowGraceMinutes} phút sau giờ bắt đầu.{' '}
+            {amenity.feePerBooking > 0
+              ? `Tiện ích có phí: thanh toán online ngay khi đặt (quá hạn giữ chỗ thì tự hủy), hủy không hoàn tiền, được đổi giờ 1 lần trước giờ sử dụng ít nhất ${amenity.changeDeadlineHours ?? 24} giờ.`
+              : 'Hủy hoặc đổi giờ miễn phí trước giờ bắt đầu.'}{' '}
+            Mỗi căn tối đa {info.rules.maxActivePerApartment} booking chưa dùng.
           </p>
 
           <div className="flex gap-2.5">
