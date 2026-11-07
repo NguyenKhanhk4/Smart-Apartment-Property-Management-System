@@ -26,7 +26,7 @@ export async function completeBookings(now = new Date()) {
 }
 
 /**
- * [Cron mỗi phút] BOOKING_HOLD_EXPIRE (Người 4): giữ chỗ chờ thanh toán quá holdExpiresAt → CANCELLED, trả slot cho người khác.
+ * [Cron mỗi phút] BOOKING_HOLD_EXPIRE: giữ chỗ chờ thanh toán quá holdExpiresAt → CANCELLED, trả slot cho người khác.
  * Cập nhật có điều kiện từng booking nên trùng với lúc thanh toán / cư dân hủy chỉ một bên thắng. Trả về số booking đã hủy.
  */
 export async function expireBookingHolds(now = new Date()) {
