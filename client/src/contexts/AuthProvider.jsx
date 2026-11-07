@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from './AuthContext';
 import { authApi } from '../api/auth.api';
 import { SESSION_EXPIRED_EVENT } from '../api/axiosClient';
-import { authStorage } from '../utils/authStorage';
+import { SESSION_EXPIRED_FLAG, authStorage } from '../utils/authStorage';
 import { hasRole as matchRoles } from '../utils/permission';
 
 /**
@@ -15,7 +15,15 @@ export function AuthProvider({ children }) {
 
   // Refresh token thất bại ở bất kỳ request nào → xóa phiên; RequireAuth sẽ đưa về /login.
   useEffect(() => {
-    const handleExpired = () => setUser(null);
+    const handleExpired = () => {
+      // Trang đăng nhập đọc cờ này để hiện MSG-S03 (UC01 Step 7a)
+      try {
+        window.sessionStorage.setItem(SESSION_EXPIRED_FLAG, '1');
+      } catch {
+        // Không lưu được thì chỉ thiếu thông báo
+      }
+      setUser(null);
+    };
     window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
   }, []);

@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { env } from '../../config/env.js';
 import { AUDIT_ACTIONS, AUDIT_TARGETS, BOARD_TITLES, CONSENT_ACTIONS, CONSENT_POLICY_VERSION, ROLES } from '../../constants/enums.js';
 import { Resident, User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -10,7 +11,6 @@ import { uploadToCloudinary } from '../../services/upload.service.js';
 import { parseDateOfBirth, ensureCodes } from '../memberCodes/memberCodes.service.js';
 import { toPublicUser } from '../auth/auth.service.js';
 import { signAccessToken, signRefreshToken } from '../auth/auth.tokens.js';
-import { generateTemporaryPassword } from '../../utils/password.js';
 
 /**
  * UC-A03: Xem hồ sơ cá nhân
@@ -122,18 +122,21 @@ export async function listInternal(query = {}) {
   if (query.roleTitle) filter.roleTitle = query.roleTitle;
   if (query.boardTitle) filter.boardTitle = query.boardTitle;
   if (query.isActive !== undefined) filter.isActive = query.isActive;
+  if (query.status === 'LOCKED') filter.isActive = false;
+  if (query.status === 'ACTIVE') Object.assign(filter, { isActive: true, activatedAt: { $ne: null } });
+  if (query.status === 'PENDING') Object.assign(filter, { isActive: true, activatedAt: null });
 
   if (query.q) {
     const rx = new RegExp(escapeRegex(query.q), 'i');
     filter.$or = [{ fullName: rx }, { email: rx }, { phone: rx }];
   }
 
-  const { items, pagination } = await paginate(User, filter, query, {
-    select: '-passwordHash',
-  });
+  const { items, pagination } = await paginate(User, filter, query, { select: '+lockedUntil' });
+  const now = new Date();
 
   return {
-    items: items.map(toPublicUser),
+    // Khóa tạm do nhập sai mật khẩu 5 lần (BR-S03): Trưởng BQL gỡ được bằng nút Mở khóa
+    items: items.map((u) => ({ ...toPublicUser(u), tempLockedUntil: u.lockedUntil > now ? u.lockedUntil : null })),
     pagination,
   };
 }
@@ -172,21 +175,19 @@ async function saveUnique(write) {
  * UC-A04: Tạo tài khoản nội bộ (Trưởng BQL). Mật khẩu tạm gửi qua email; chỉ trả về API khi gửi email thất bại.
  */
 export async function createInternal(managerUser, { fullName, email, phone, role, roleTitle, boardTitle }, { ip } = {}) {
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmail = email?.trim().toLowerCase() || null;
   const titleForRole = role === ROLES.STAFF ? roleTitle : null;
   const boardForRole = role === ROLES.BOARD ? boardTitle : null;
 
   await assertSingleHolder({ role, boardTitle: boardForRole });
   await assertPhoneAndEmailFree({ phone, email: normalizedEmail });
 
-  const temporaryPassword = generateTemporaryPassword();
+  // UC03 bước 3: tạo ở trạng thái Chờ kích hoạt, không có mật khẩu (BR-S02); nhân viên tự đặt ở UC11
   const newUser = await saveUnique(async () =>
     User.create({
       fullName: fullName.trim(),
       email: normalizedEmail,
       phone,
-      passwordHash: await bcrypt.hash(temporaryPassword, 10),
-      activatedAt: new Date(),
       role,
       roleTitle: titleForRole,
       boardTitle: boardForRole,
@@ -203,24 +204,26 @@ export async function createInternal(managerUser, { fullName, email, phone, role
     ip,
   });
 
-  const emailSent = await sendMail({
-    to: normalizedEmail,
-    subject: 'Thông tin tài khoản nội bộ SAPMS',
-    text: `Xin chào ${fullName},\n\nTài khoản của bạn đã được khởi tạo trong hệ thống SAPMS với vai trò ${role}.\nMật khẩu tạm thời: ${temporaryPassword}\n\nVui lòng đăng nhập và đổi mật khẩu ngay trong lần đầu tiên sử dụng.`,
-  });
+  // Không có email thì Trưởng BQL cấp mã kích hoạt tại quầy (UC02)
+  const inviteSent =
+    Boolean(normalizedEmail) &&
+    (await sendMail({
+      to: normalizedEmail,
+      subject: '[SAPMS] Kích hoạt tài khoản nhân viên',
+      text:
+        `Xin chào ${fullName.trim()},\n\nTài khoản SAPMS của bạn đã được tạo. Vui lòng kích hoạt và tự đặt mật khẩu tại: ` +
+        `${env.clientUrls[0]}/activate\nKhi kích hoạt, nhập số điện thoại ${newUser.phone} và email này (nhân viên không cần mã căn hộ). ` +
+        'Sau đó đăng nhập bằng số điện thoại.',
+    }));
 
-  return {
-    user: toPublicUser(newUser),
-    emailSent,
-    ...(emailSent ? {} : { temporaryPassword }),
-  };
+  return { user: toPublicUser(newUser), inviteSent };
 }
 
 /**
  * UC-A04: Cập nhật tài khoản nội bộ (Trưởng BQL). Không sửa tài khoản cư dân qua API này.
  * Đổi vai trò / chức danh → tăng tokenVersion để phiên đăng nhập cũ (quyền cũ) hết hiệu lực.
  */
-export async function updateInternal(managerUser, targetId, { fullName, phone, role, roleTitle, boardTitle }, { ip } = {}) {
+export async function updateInternal(managerUser, targetId, { fullName, email, phone, role, roleTitle, boardTitle }, { ip } = {}) {
   const target = await User.findById(targetId).select('+tokenVersion');
   if (!target) throw ApiError.notFound('Không tìm thấy tài khoản');
   if (target.role === ROLES.RESIDENT) throw ApiError.badRequest('Không sửa tài khoản RESIDENT qua API này');
@@ -243,6 +246,14 @@ export async function updateInternal(managerUser, targetId, { fullName, phone, r
 
   if (fullName !== undefined) target.fullName = fullName.trim();
   if (phone !== undefined) target.phone = phone;
+  // UC03 bước 4: được sửa email; bỏ trống thì xóa email (người không có email kích hoạt bằng mã tại quầy)
+  if (email !== undefined) {
+    const nextEmail = email?.trim().toLowerCase() || null;
+    if (nextEmail && nextEmail !== target.email && (await User.exists({ email: nextEmail, _id: { $ne: target._id } }))) {
+      throw new ApiError('EMAIL_EXISTS', undefined, { details: [{ field: 'email', message: 'Email đã được sử dụng' }] });
+    }
+    target.email = nextEmail;
+  }
   target.role = newRole;
   target.roleTitle = newRoleTitle;
   target.boardTitle = newBoardTitle;

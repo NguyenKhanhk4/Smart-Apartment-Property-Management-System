@@ -4,6 +4,7 @@ import { Alert, Button, Form, Input } from 'antd';
 import { ArrowRightOutlined, LockOutlined, PhoneOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { PHONE_RULES } from '../../utils/phone';
 import { authApi } from '../../api/auth.api';
+import { SESSION_EXPIRED_FLAG } from '../../utils/authStorage';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi } from '../../hooks/useApi';
 import { roleLabelOf } from '../../constants/enums';
@@ -21,6 +22,15 @@ export default function LoginPage() {
 
   const activated = location.state?.activated;
   const passwordReset = location.state?.passwordReset;
+  const [sessionExpired] = useState(() => {
+    try {
+      const expired = window.sessionStorage.getItem(SESSION_EXPIRED_FLAG) === '1';
+      window.sessionStorage.removeItem(SESSION_EXPIRED_FLAG);
+      return expired;
+    } catch {
+      return false;
+    }
+  });
 
   const enter = (session) => {
     startSession(session);
@@ -52,6 +62,10 @@ export default function LoginPage() {
       <h2 className="m-0 text-2xl font-semibold tracking-tight text-ink">Đăng nhập</h2>
       <div className="w-8 h-0.5 bg-gold mt-2 mb-2" />
       <p className="m-0 mb-6 text-[13px] text-ink-2">Nhập thông tin tài khoản để truy cập hệ thống.</p>
+
+      {sessionExpired && (
+        <Alert type="warning" showIcon title="Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." className="mb-4" closable />
+      )}
 
       {(activated || passwordReset) && (
         <Alert

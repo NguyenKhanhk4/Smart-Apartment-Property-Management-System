@@ -49,16 +49,16 @@ const listInternalQuery = Joi.object({
   roleTitle: Joi.string().valid(...values(ROLE_TITLES)),
   boardTitle: Joi.string().valid(...values(BOARD_TITLES)),
   isActive: Joi.boolean(),
+  status: Joi.string().valid('PENDING', 'ACTIVE', 'LOCKED'),
   q: Joi.string().trim().max(100),
 });
 
 const createInternalBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100).required(),
-  email: Joi.string().trim().lowercase().email().required(),
+  email: Joi.string().trim().lowercase().email().allow('', null), // Không bắt buộc: không có thì cấp mã tại quầy (UC02)
   phone: phoneVn().required(),
-  role: Joi.string()
-    .valid(ROLES.MANAGER, ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD)
-    .required(),
+  // UC03 bước 2: không tạo Trưởng BQL trên giao diện (dùng npm run db:set-manager)
+  role: Joi.string().valid(ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD).required(),
   roleTitle: Joi.when('role', {
     is: ROLES.STAFF,
     then: Joi.string().valid(...values(ROLE_TITLES)).required().messages({ 'any.required': 'Chức danh là bắt buộc với nhân viên' }),
@@ -73,6 +73,7 @@ const createInternalBody = Joi.object({
 
 const updateInternalBody = Joi.object({
   fullName: Joi.string().trim().min(2).max(100),
+  email: Joi.string().trim().lowercase().email().allow('', null),
   phone: phoneVn(),
   role: Joi.string().valid(ROLES.MANAGER, ROLES.ACCOUNTANT, ROLES.STAFF, ROLES.BOARD),
   roleTitle: Joi.string().valid(...values(ROLE_TITLES), null),

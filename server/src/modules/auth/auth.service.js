@@ -35,6 +35,8 @@ export function toPublicUser(user) {
     boardTitle: user.boardTitle ?? null,
     isActive: user.isActive,
     consentStatus: user.consents?.at(-1)?.action ?? null, // BR-X7
+    // UC03: Chờ kích hoạt / Hoạt động / Đã khóa
+    accountStatus: user.isActive === false ? 'LOCKED' : user.activatedAt ? 'ACTIVE' : 'PENDING',
   };
 }
 

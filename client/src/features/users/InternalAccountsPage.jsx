@@ -13,12 +13,9 @@ import {
   Table,
   Tag,
   Tooltip,
-  Typography,
 } from 'antd';
 import { PHONE_RULES } from '../../utils/phone';
 import {
-  CheckCircleOutlined,
-  CopyOutlined,
   EditOutlined,
   LockOutlined,
   PlusOutlined,
@@ -36,155 +33,88 @@ import {
   roleLabelOf,
 } from '../../constants/enums';
 import PageHeader from '../../components/PageHeader';
+import { formatDateTime } from '../../utils/format';
 
-const { Paragraph, Text } = Typography;
-
-// Vai trò nội bộ có thể tạo/sửa
+// Vai trò nội bộ (lọc, hiển thị). Trưởng BQL không tạo trên giao diện (UC03 bước 2), thay bằng npm run db:set-manager
 const INTERNAL_ROLES = {
   MANAGER: ROLES.MANAGER,
   ACCOUNTANT: ROLES.ACCOUNTANT,
   STAFF: ROLES.STAFF,
   BOARD: ROLES.BOARD,
 };
+const { MANAGER: _manager, ...CREATABLE_ROLES } = INTERNAL_ROLES;
 
-// Modal tạo mới tài khoản nội bộ (Trưởng BQL)
+// UC03: Chờ kích hoạt / Hoạt động / Đã khóa
+const ACCOUNT_STATUS = {
+  PENDING: { label: 'Chờ kích hoạt', color: 'warning' },
+  ACTIVE: { label: 'Hoạt động', color: 'success' },
+  LOCKED: { label: 'Đã khóa', color: 'error' },
+};
+
+// Modal tạo mới tài khoản nội bộ (Trưởng BQL). Không tạo mật khẩu: nhân viên tự kích hoạt (UC11) hoặc nhận mã tại quầy (UC02)
 function CreateAccountModal({ open, onClose, onDone }) {
   const [form] = Form.useForm();
   const selectedRole = Form.useWatch('role', form);
-  const [createdResult, setCreatedResult] = useState(null);
 
-  const [createAccount, saving] = useAction(
-    (values) => usersApi.createInternal(values),
-    {
-      onDone: (res) => {
-        if (res.data?.temporaryPassword) {
-          // Lưu kết quả để hiển thị mật khẩu tạm
-          setCreatedResult(res.data);
-        } else {
-          onClose();
-          onDone();
-        }
-      },
-    },
-  );
-
-  const handleClose = () => {
-    form.resetFields();
-    if (createdResult) {
-      setCreatedResult(null);
+  const [createAccount, saving] = useAction((values) => usersApi.createInternal(values), {
+    success: (res) =>
+      res.data?.inviteSent
+        ? 'Đã tạo tài khoản nhân viên. Email mời kích hoạt đã được gửi.'
+        : 'Đã tạo tài khoản nhân viên. Chưa gửi được email mời: cấp mã tại menu Cấp mã kích hoạt.',
+    onDone: () => {
+      form.resetFields();
+      onClose();
       onDone();
-    }
-    onClose();
-  };
+    },
+  });
 
   return (
-    <>
-      <Modal
-        title="Thêm tài khoản nội bộ"
-        open={open && !createdResult}
-        onCancel={handleClose}
-        onOk={() => form.submit()}
-        confirmLoading={saving}
-        destroyOnHidden
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          preserve={false}
-          onFinish={(v) => createAccount(v).catch(() => {})}
+    <Modal
+      title="Thêm tài khoản nội bộ"
+      open={open}
+      onCancel={() => {
+        form.resetFields();
+        onClose();
+      }}
+      onOk={() => form.submit()}
+      confirmLoading={saving}
+      destroyOnHidden
+    >
+      <Form form={form} layout="vertical" preserve={false} onFinish={(v) => createAccount(v).catch(() => {})}>
+        <Form.Item name="fullName" label="Họ và tên" rules={[{ required: true, message: 'Vui lòng nhập họ và tên' }]}>
+          <Input placeholder="vd: Nguyễn Văn Quản" />
+        </Form.Item>
+
+        <Form.Item name="phone" label="Số điện thoại (dùng để đăng nhập)" rules={PHONE_RULES}>
+          <Input placeholder="vd: 0901234567" />
+        </Form.Item>
+
+        <Form.Item
+          name="email"
+          label="Email (không bắt buộc)"
+          extra="Có email thì nhân viên nhận thư mời kích hoạt. Không có email thì cấp mã tại menu Cấp mã kích hoạt."
+          rules={[{ type: 'email', message: 'Email không đúng định dạng' }]}
         >
-          <Form.Item
-            name="fullName"
-            label="Họ và tên"
-            rules={[{ required: true, message: 'Vui lòng nhập họ và tên' }]}
-          >
-            <Input placeholder="vd: Nguyễn Văn Quản" />
+          <Input placeholder="vd: ketoan@sapms.vn" />
+        </Form.Item>
+
+        <Form.Item name="role" label="Vai trò hệ thống" rules={[{ required: true, message: 'Vui lòng chọn vai trò' }]}>
+          <Select options={enumOptions(CREATABLE_ROLES)} placeholder="Chọn vai trò" />
+        </Form.Item>
+
+        {selectedRole === 'STAFF' && (
+          <Form.Item name="roleTitle" label="Chức danh nhân viên" rules={[{ required: true, message: 'Vui lòng chọn chức danh' }]}>
+            <Select options={enumOptions(ROLE_TITLES)} placeholder="Chọn chức danh" />
           </Form.Item>
+        )}
 
-          <Form.Item
-            name="email"
-            label="Email"
-            rules={[
-              { required: true, message: 'Vui lòng nhập email' },
-              { type: 'email', message: 'Email không đúng định dạng' },
-            ]}
-          >
-            <Input placeholder="vd: manager@sapms.vn" />
+        {selectedRole === 'BOARD' && (
+          <Form.Item name="boardTitle" label="Chức danh Ban quản trị" rules={[{ required: true, message: 'Vui lòng chọn chức danh' }]}>
+            <Select options={enumOptions(BOARD_TITLES)} placeholder="Chọn chức danh" />
           </Form.Item>
-
-          <Form.Item
-            name="phone"
-            label="Số điện thoại"
-            rules={PHONE_RULES}
-          >
-            <Input placeholder="vd: 0901234567" />
-          </Form.Item>
-
-          <Form.Item
-            name="role"
-            label="Vai trò hệ thống"
-            rules={[{ required: true, message: 'Vui lòng chọn vai trò' }]}
-          >
-            <Select options={enumOptions(INTERNAL_ROLES)} placeholder="Chọn vai trò" />
-          </Form.Item>
-
-          {selectedRole === 'STAFF' && (
-            <Form.Item
-              name="roleTitle"
-              label="Chức danh nhân viên"
-              rules={[{ required: true, message: 'Vui lòng chọn chức danh' }]}
-            >
-              <Select options={enumOptions(ROLE_TITLES)} placeholder="Chọn chức danh" />
-            </Form.Item>
-          )}
-
-          {selectedRole === 'BOARD' && (
-            <Form.Item
-              name="boardTitle"
-              label="Chức danh Ban quản trị"
-              rules={[{ required: true, message: 'Vui lòng chọn chức danh' }]}
-            >
-              <Select options={enumOptions(BOARD_TITLES)} placeholder="Chọn chức danh" />
-            </Form.Item>
-          )}
-        </Form>
-      </Modal>
-
-      {/* Modal hiển thị mật khẩu tạm khi chưa gửi được email */}
-      <Modal
-        title="Thông tin tài khoản vừa tạo"
-        open={Boolean(createdResult)}
-        onOk={handleClose}
-        onCancel={handleClose}
-        cancelButtonProps={{ style: { display: 'none' } }}
-        okText="Đã lưu mật khẩu"
-      >
-        <div className="py-2">
-          <p className="text-sm text-ink mb-3">
-            Tài khoản cho nhân sự <Text strong>{createdResult?.user?.fullName}</Text> ({createdResult?.user?.email}) đã được tạo thành công!
-          </p>
-
-          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-4">
-            <Text type="warning" className="block text-xs font-semibold uppercase tracking-wider mb-1">
-              Mật khẩu tạm thời (Chỉ hiển thị một lần duy nhất)
-            </Text>
-            <Paragraph
-              copyable={{
-                text: createdResult?.temporaryPassword,
-                icon: [<CopyOutlined key="copy" />, <CheckCircleOutlined key="copied" />],
-              }}
-              className="text-lg font-mono font-bold text-navy dark:text-gold m-0 select-all"
-            >
-              {createdResult?.temporaryPassword}
-            </Paragraph>
-          </div>
-
-          <p className="text-xs text-ink-3 m-0">
-            Hệ thống chưa gửi được email tự động đến người dùng. Vui lòng sao chép mật khẩu trên và gửi trực tiếp cho nhân sự này.
-          </p>
-        </div>
-      </Modal>
-    </>
+        )}
+      </Form>
+    </Modal>
   );
 }
 
@@ -225,11 +155,17 @@ function EditAccountModal({ user, open, onClose, onDone }) {
           roleTitle: user?.roleTitle,
           boardTitle: user?.boardTitle,
         }}
-        // Email chỉ hiển thị, không đổi được → không gửi lên server
-        onFinish={({ email: _email, ...v }) => updateAccount(v).catch(() => {})}
+        // Tài khoản Trưởng BQL: không gửi vai trò, vì không tự đổi vai trò của mình được
+        onFinish={({ role, roleTitle, boardTitle, ...v }) =>
+          updateAccount(user?.role === 'MANAGER' ? v : { ...v, role, roleTitle, boardTitle }).catch(() => {})
+        }
       >
-        <Form.Item name="email" label="Email (Không thể thay đổi)">
-          <Input disabled />
+        <Form.Item
+          name="email"
+          label="Email (không bắt buộc)"
+          rules={[{ type: 'email', message: 'Email không đúng định dạng' }]}
+        >
+          <Input />
         </Form.Item>
 
         <Form.Item
@@ -253,7 +189,10 @@ function EditAccountModal({ user, open, onClose, onDone }) {
           label="Vai trò hệ thống"
           rules={[{ required: true, message: 'Vui lòng chọn vai trò' }]}
         >
-          <Select options={enumOptions(INTERNAL_ROLES)} />
+          <Select
+            options={enumOptions(user?.role === 'MANAGER' ? INTERNAL_ROLES : CREATABLE_ROLES)}
+            disabled={user?.role === 'MANAGER'}
+          />
         </Form.Item>
 
         {selectedRole === 'STAFF' && (
@@ -298,13 +237,11 @@ export default function InternalAccountsPage() {
     setFilters((prev) => ({ ...prev, page: 1, ...patch }));
   };
 
-  const handleToggleStatus = async (targetUser) => {
+  const handleToggleStatus = async (targetUser, isActive = !targetUser.isActive) => {
     try {
-      await usersApi.setStatus(targetUser._id, !targetUser.isActive);
+      await usersApi.setStatus(targetUser._id, isActive);
       message.success(
-        targetUser.isActive
-          ? `Đã khóa tài khoản ${targetUser.fullName}`
-          : `Đã mở khóa tài khoản ${targetUser.fullName}`,
+        isActive ? `Đã mở khóa tài khoản ${targetUser.fullName}` : `Đã khóa tài khoản ${targetUser.fullName}`,
       );
       reload();
     } catch (err) {
@@ -349,14 +286,20 @@ export default function InternalAccountsPage() {
     },
     {
       title: 'Trạng thái',
-      dataIndex: 'isActive',
-      key: 'isActive',
-      render: (isActive) =>
-        isActive ? (
-          <Tag color="success">Hoạt động</Tag>
-        ) : (
-          <Tag color="error">Đã khóa</Tag>
-        ),
+      key: 'accountStatus',
+      render: (_, record) => {
+        const status = ACCOUNT_STATUS[record.accountStatus] ?? ACCOUNT_STATUS.ACTIVE;
+        return (
+          <Space size={4} wrap>
+            <Tag color={status.color}>{status.label}</Tag>
+            {record.tempLockedUntil && (
+              <Tooltip title={`Nhập sai mật khẩu 5 lần, tự mở lúc ${formatDateTime(record.tempLockedUntil)}`}>
+                <Tag color="orange">Khóa tạm</Tag>
+              </Tooltip>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: 'Hành động',
@@ -375,6 +318,20 @@ export default function InternalAccountsPage() {
                 onClick={() => setEditingUser(record)}
               />
             </Tooltip>
+
+            {record.tempLockedUntil && (
+              <Popconfirm
+                title="Gỡ khóa tạm"
+                description={`Cho "${record.fullName}" đăng nhập lại ngay, không chờ hết 15 phút?`}
+                onConfirm={() => handleToggleStatus(record, true)}
+                okText="Gỡ khóa"
+                cancelText="Hủy"
+              >
+                <Tooltip title="Gỡ khóa tạm do nhập sai mật khẩu">
+                  <Button type="text" size="small" className="text-amber-600" icon={<UnlockOutlined />} />
+                </Tooltip>
+              </Popconfirm>
+            )}
 
             {record.isActive ? (
               <Popconfirm
@@ -466,11 +423,8 @@ export default function InternalAccountsPage() {
               placeholder="Trạng thái"
               allowClear
               style={{ width: 160 }}
-              options={[
-                { value: true, label: 'Đang hoạt động' },
-                { value: false, label: 'Đã khóa' },
-              ]}
-              onChange={(isActive) => handleFilterChange({ isActive })}
+              options={Object.entries(ACCOUNT_STATUS).map(([value, { label }]) => ({ value, label }))}
+              onChange={(status) => handleFilterChange({ status })}
             />
           </Flex>
         </Flex>
