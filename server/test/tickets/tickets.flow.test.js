@@ -30,7 +30,7 @@ const notified = async (user) => Notification.countDocuments({ userId: user._id 
 
 test('cư dân gửi sự cố: có hạn nhận phiếu; báo KTV đang trực, không báo KTV ngoài ca', async () => {
   const { user, apartment } = await createHousehold();
-  const category = await createCategory();
+  const category = await createCategory({ defaultPriority: 'HIGH' }); // mức Cao: báo ngay kể cả ngoài giờ hành chính
   const [inShift, offShift] = await Promise.all([createTechnician(), createTechnician()]);
   await onShift(inShift);
 
@@ -46,7 +46,7 @@ test('cư dân gửi sự cố: có hạn nhận phiếu; báo KTV đang trực,
 
 test('không có ai trong ca: báo tất cả KTV đang hoạt động', async () => {
   const { user, apartment } = await createHousehold();
-  const category = await createCategory();
+  const category = await createCategory({ defaultPriority: 'URGENT' });
   const [a, b] = await Promise.all([createTechnician(), createTechnician()]);
   await service.createTicket(asUser(user), { categoryId: category._id, title: 'Mất điện sảnh', description: 'Sảnh tầng 1 mất điện từ sáng', apartmentId: apartment._id }, []);
   assert.equal(await notified(a), 1);

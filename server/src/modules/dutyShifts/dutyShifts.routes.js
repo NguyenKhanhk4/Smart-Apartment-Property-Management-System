@@ -26,19 +26,18 @@ const roleTitle = () => Joi.string().valid(...values(DUTY_ROLE_TITLES));
  *       - { in: query, name: userId, schema: { type: string } }
  *   post:
  *     tags: [Ca trực]
- *     summary: Trưởng BQL xếp ca (lặp repeatDays ngày liên tiếp). Trùng giờ với ca khác của cùng người → DUTY_SHIFT_OVERLAP
+ *     summary: Trưởng BQL xếp ca cho 1 hoặc nhiều người cùng khung giờ (lặp repeatDays ngày liên tiếp). Có người trùng giờ với ca khác của chính họ → DUTY_SHIFT_OVERLAP, không tạo ca nào
  *     requestBody:
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [roleTitle, userId, startAt, endAt]
+ *             required: [roleTitle, userIds, startAt, endAt]
  *             properties:
  *               roleTitle: { type: string, enum: [TECHNICIAN, SECURITY] }
- *               userId: { type: string }
+ *               userIds: { type: array, items: { type: string }, description: '1 ca có thể nhiều người trực' }
  *               startAt: { type: string, format: date-time }
  *               endAt: { type: string, format: date-time }
- *               isBackup: { type: boolean, description: 'Người trực dự phòng nhận cảnh báo khẩn' }
  *               repeatDays: { type: integer, minimum: 1, maximum: 31 }
  *               note: { type: string }
  */
@@ -64,10 +63,9 @@ router.post(
   validate({
     body: Joi.object({
       roleTitle: roleTitle().required(),
-      userId: objectId().required(),
+      userIds: Joi.array().items(objectId()).min(1).max(30).required(),
       startAt: Joi.date().iso().required(),
       endAt: Joi.date().iso().required(),
-      isBackup: Joi.boolean().default(false),
       repeatDays: Joi.number().integer().min(1).max(31).default(1),
       note: Joi.string().trim().max(300).allow(''),
     }),
@@ -80,7 +78,7 @@ router.post(
  * /duty-shifts/on-duty:
  *   get:
  *     tags: [Ca trực]
- *     summary: Ai đang trực lúc này — { primary[], backup[], hasSchedule }
+ *     summary: Ai đang trực lúc này — { onDuty[], hasSchedule }
  *     parameters: [{ in: query, name: roleTitle, required: true, schema: { type: string, enum: [TECHNICIAN, SECURITY] } }]
  */
 router.get(

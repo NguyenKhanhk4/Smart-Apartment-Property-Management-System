@@ -20,10 +20,9 @@ function shiftTime(s) {
 
 function OnDutyCard({ roleTitle }) {
   const { data, loading } = useApi(() => dutyShiftApi.onDuty(roleTitle), [roleTitle]);
-  const person = (p, backup) => (
+  const person = (p) => (
     <Flex key={p._id} align="center" gap={8} wrap>
       <Typography.Text strong>{p.fullName}</Typography.Text>
-      {backup && <Tag color="purple">Dự phòng</Tag>}
       {p.phone && (
         <a href={`tel:${p.phone}`}>
           <PhoneOutlined /> {p.phone}
@@ -38,8 +37,7 @@ function OnDutyCard({ roleTitle }) {
         <Skeleton active paragraph={{ rows: 1 }} title={false} />
       ) : data?.hasSchedule ? (
         <Flex vertical gap={6}>
-          {data.primary.map((p) => person(p, false))}
-          {data.backup.map((p) => person(p, true))}
+          {data.onDuty.map(person)}
         </Flex>
       ) : (
         <Typography.Text type="warning">Hiện không có ai trong ca trực</Typography.Text>
@@ -48,7 +46,7 @@ function OnDutyCard({ roleTitle }) {
   );
 }
 
-// Người 4 — Lịch ca trực theo tuần. Trưởng BQL xếp / hủy ca; Kỹ thuật viên, Bảo vệ xem lịch và ca của mình.
+// Lịch ca trực theo tuần. Trưởng BQL xếp / hủy ca; Kỹ thuật viên, Bảo vệ xem lịch và ca của mình.
 export default function DutyShiftsPage() {
   const { user, hasRole } = useAuth();
   const isManager = hasRole('MANAGER');
@@ -71,7 +69,7 @@ export default function DutyShiftsPage() {
     <>
       <PageHeader
         title="Lịch ca trực"
-        subtitle="Kỹ thuật viên và Bảo vệ theo ca; người trực dự phòng nhận cảnh báo khẩn khi người trực chính chưa xử lý."
+        subtitle="Kỹ thuật viên và Bảo vệ theo ca, 1 ca có thể nhiều người trực. Ngoài giờ hành chính chỉ sự cố Khẩn cấp / Cao báo người trực ngay."
         extra={
           isManager && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(dayjs())}>
@@ -134,7 +132,6 @@ export default function DutyShiftsPage() {
                           <Typography.Text strong>{shiftTime(s)}</Typography.Text>
                           <Typography.Text ellipsis>{s.userId?.fullName ?? '—'}</Typography.Text>
                           <Flex gap={4} wrap>
-                            {s.isBackup && <Tag color="purple">Dự phòng</Tag>}
                             {mine && <Tag color="gold">Ca của tôi</Tag>}
                           </Flex>
                           {s.note && (

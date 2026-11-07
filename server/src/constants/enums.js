@@ -639,6 +639,9 @@ export const CONFIG_KEYS = Object.freeze({
   // Sự cố & tiện ích (Người 4)
   TICKET_ACK_MINUTES: 'TICKET_ACK_MINUTES',
   TICKET_PARTS_PAUSE_HOURS: 'TICKET_PARTS_PAUSE_HOURS',
+  TECH_WORK_START: 'TECH_WORK_START',
+  TECH_WORK_END: 'TECH_WORK_END',
+  TECH_WORK_DAYS: 'TECH_WORK_DAYS',
   COMPLAINT_RESPONSE_HOURS: 'COMPLAINT_RESPONSE_HOURS',
   BOOKING_PAYMENT_HOLD_MINUTES: 'BOOKING_PAYMENT_HOLD_MINUTES',
 });
@@ -672,6 +675,9 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, value: 500, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi xe máy' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_CAR, value: 100, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi ô tô' },
   { key: CONFIG_KEYS.TICKET_ACK_MINUTES, value: 30, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn kỹ thuật viên nhận sự cố kể từ lúc gửi (phút)' },
+  { key: CONFIG_KEYS.TECH_WORK_START, value: '07:00', scope: CONFIG_SCOPES.BUSINESS, description: 'Giờ hành chính kỹ thuật bắt đầu (HH:mm). Ngoài giờ chỉ sự cố Khẩn cấp / Cao báo người trực ngay' },
+  { key: CONFIG_KEYS.TECH_WORK_END, value: '17:00', scope: CONFIG_SCOPES.BUSINESS, description: 'Giờ hành chính kỹ thuật kết thúc (HH:mm)' },
+  { key: CONFIG_KEYS.TECH_WORK_DAYS, value: [1, 2, 3, 4, 5], scope: CONFIG_SCOPES.BUSINESS, description: 'Ngày làm việc hành chính kỹ thuật (1 = Thứ 2 … 7 = Chủ nhật); ngày khác là ngoài giờ' },
   { key: CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA dừng tối đa N giờ khi chờ linh kiện, quá thì cảnh báo Trưởng BQL — M5-2' },
   { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
   { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán qua payOS (phút); 0 hoặc chưa cấu hình payOS = phí gộp vào thông báo phí tháng' },

@@ -19,7 +19,7 @@ import { Apartment, ComplaintCategory, Ticket, User } from '../../models/index.j
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyApartment, notifyRoles } from '../../services/notification.service.js';
 import { getActiveApartmentIds, resolveResidentApartment } from '../../services/residency.service.js';
-import { getConfig } from '../../services/systemConfig.service.js';
+import { getConfig, getConfigs } from '../../services/systemConfig.service.js';
 import { uploadToCloudinary } from '../../services/upload.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { nextMonthlyCode, retryOnDuplicate } from '../../utils/codeGenerator.js';
@@ -30,10 +30,12 @@ import { getOnDuty, isUserOnDuty } from '../dutyShifts/dutyShifts.service.js';
 import { recordQuoteDecision } from '../repairQuotes/repairQuotes.service.js';
 import {
   BOARD_STATUSES,
+  ackStartAt,
   applySlaTransition,
   computeDeadlines,
   groupBoard,
   isOverdue,
+  normalizeWorkHours,
   overdueFilter,
   progressError,
   quoteResumeStatus,
@@ -54,6 +56,12 @@ const DISPATCHERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
  * Quá hạn / leo thang chỉ xét TICKET_SLA_STATUSES; SLA tạm dừng khi chờ cư dân đồng ý phí và chờ linh kiện
  * (tối đa TICKET_PARTS_PAUSE_HOURS) — M5-2, quy tắc ở ticket.rules.
  */
+/** Giờ hành chính kỹ thuật (tham số), đã kiểm tra hợp lệ */
+export async function workHoursOf() {
+  const c = await getConfigs([CONFIG_KEYS.TECH_WORK_START, CONFIG_KEYS.TECH_WORK_END, CONFIG_KEYS.TECH_WORK_DAYS]);
+  return normalizeWorkHours({ start: c[CONFIG_KEYS.TECH_WORK_START], end: c[CONFIG_KEYS.TECH_WORK_END], days: c[CONFIG_KEYS.TECH_WORK_DAYS] });
+}
+
 export async function partsPauseMs() {
   return Number(await getConfig(CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS)) * HOUR_MS;
 }
@@ -119,10 +127,10 @@ async function assertCanView(user, ticket) {
 const notifyReporter = (ticket, payload) =>
   ticket.createdByStaff ? notifyApartment(ticket.apartmentId, payload) : notify(ticket.createdBy, payload);
 
-/** KTV cần báo khi có sự cố mới: người trực chính đang trong ca (không có thì dự phòng); chưa xếp lịch thì mọi KTV */
+/** KTV cần báo khi có sự cố mới: mọi người đang trực; lúc đó không ai trực thì mọi KTV đang hoạt động */
 async function technicianRecipients(now = new Date()) {
   const duty = await getOnDuty(TECHNICIAN, now);
-  if (duty.hasSchedule) return (duty.primary.length ? duty.primary : duty.backup).map((p) => p._id);
+  if (duty.hasSchedule) return duty.onDuty.map((p) => p._id);
   const all = await User.find({ role: ROLES.STAFF, roleTitle: TECHNICIAN, isActive: true }).select('_id').lean();
   return all.map((u) => u._id);
 }
@@ -138,16 +146,20 @@ async function placeTicket({ apartment, reporterId, staff = null, body, files })
 
   const imageUrls = await uploadToCloudinary(files, 'tickets');
   const now = new Date();
-  const [ackMinutes, responseHours] = await Promise.all([
+  const [ackMinutes, responseHours, wh] = await Promise.all([
     getConfig(CONFIG_KEYS.TICKET_ACK_MINUTES),
     getConfig(CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS),
+    workHoursOf(),
   ]);
+  // Ngoài giờ hành chính, sự cố mức thường chờ đầu giờ làm việc tiếp theo (không báo người trực đêm, hạn nhận tính từ lúc đó)
+  const ackFrom = ackStartAt(category.defaultPriority, now, wh);
   const deadlines = computeDeadlines({
     type,
     slaHours: category.slaHours, // BR-O7
     ackMinutes: Number(ackMinutes),
     responseHours: Number(responseHours),
     now,
+    ackFrom,
   });
 
   const ticket = await retryOnDuplicate(async () =>
@@ -178,7 +190,7 @@ async function placeTicket({ apartment, reporterId, staff = null, body, files })
     link: ticketLink(ticket, false),
   };
   await notifyRoles(DISPATCHERS, payload);
-  if (type === INCIDENT) {
+  if (type === INCIDENT && ackFrom.getTime() === now.getTime()) {
     await notify(await technicianRecipients(now), { ...payload, title: `Sự cố mới cần nhận ${ticket.code}` });
   }
   return ticket;
@@ -281,14 +293,14 @@ export async function listQueue(user, { now = new Date() } = {}) {
       .lean(),
     getOnDuty(TECHNICIAN, now),
   ]);
-  const onDuty = [...duty.primary, ...duty.backup].some((p) => String(p._id) === user.id);
+  const onDuty = duty.onDuty.some((p) => String(p._id) === user.id);
   const partsMs = await partsPauseMs();
   return { items: items.map((t) => ({ ...t, isOverdue: isOverdue(t, now, partsMs) })), hasSchedule: duty.hasSchedule, onDuty };
 }
 
 /**
  * KTV bấm "Nhận" sự cố trong hàng chờ. Cập nhật có điều kiện (còn NEW, chưa ai nhận) nên 2 người bấm cùng lúc
- * chỉ 1 người nhận được. Đang có lịch trực thì chỉ người trong ca (chính hoặc dự phòng) được nhận.
+ * chỉ 1 người nhận được. Đang có lịch trực thì chỉ người trong ca được nhận.
  */
 export async function claimTicket(user, id, { now = new Date() } = {}) {
   const duty = await getOnDuty(TECHNICIAN, now);
@@ -658,17 +670,20 @@ export async function reclassifyTicket(user, id, { type, scope, reason }, { now 
   if (nextType === ticket.type && nextScope === ticket.scope) throw ApiError.badRequest('Loại và phạm vi phiếu không thay đổi');
   const typeChanged = nextType !== ticket.type;
 
-  const [category, ackMinutes, responseHours] = await Promise.all([
+  const [category, ackMinutes, responseHours, wh] = await Promise.all([
     ComplaintCategory.findById(ticket.category).select('slaHours').lean(),
     getConfig(CONFIG_KEYS.TICKET_ACK_MINUTES),
     getConfig(CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS),
+    workHoursOf(),
   ]);
+  const ackFrom = ackStartAt(ticket.priority, now, wh);
   const deadlines = computeDeadlines({
     type: nextType,
     slaHours: category?.slaHours ?? (await slaHoursOf(ticket.priority)),
     ackMinutes: Number(ackMinutes),
     responseHours: Number(responseHours),
     now,
+    ackFrom,
   });
 
   const from = `${TYPE_LABEL[ticket.type]} / ${SCOPE_LABEL[ticket.scope]}`;
@@ -698,7 +713,7 @@ export async function reclassifyTicket(user, id, { type, scope, reason }, { now 
   if (typeChanged) {
     const payload = { type: NOTIFICATION_TYPES.TICKET, title: `Phiếu ${ticket.code} chuyển thành ${TYPE_LABEL[nextType]}`, content: ticket.title, refId: ticket._id, link: ticketLink(ticket, false) };
     if (nextType === COMPLAINT) await notifyRoles(['MANAGER'], payload);
-    else await notify(await technicianRecipients(now), { ...payload, title: `Sự cố mới cần nhận ${ticket.code}` });
+    else if (ackFrom.getTime() === now.getTime()) await notify(await technicianRecipients(now), { ...payload, title: `Sự cố mới cần nhận ${ticket.code}` });
     if (prevTech && prevTech !== user.id) await notify(prevTech, { ...payload, title: `Phiếu ${ticket.code} không còn giao cho bạn` });
   }
   return ticket;
