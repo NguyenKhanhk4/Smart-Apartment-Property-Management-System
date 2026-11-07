@@ -6,6 +6,7 @@ import { apiClient, http } from './axiosClient';
 export const usersApi = {
   me: () => http.get('/users/me'),
   updateMe: (body) => http.patch('/users/me', body),
+  updateConsent: (action) => http.patch('/users/me/consent', { action }),
   updateAvatar: (file) => {
     const form = new FormData();
     form.append('avatar', file);
@@ -45,6 +46,14 @@ export const contractsApi = {
 };
 
 // ===== UC-A07 & UC-A08: Cư dân & Căn hộ của tôi =====
+// ===== UC02: Mã kích hoạt / đặt lại mật khẩu in tại quầy (Lễ tân, Trưởng BQL) =====
+export const activationCodeApi = {
+  lookup: (phone) => http.get('/activation-codes/lookup', { params: { phone } }),
+  issue: (userId) => http.post('/activation-codes', { userId }),
+  /** Đổi SĐT đăng nhập tại quầy; trả lại thông tin tra cứu theo số mới */
+  changePhone: (userId, phone) => http.post('/activation-codes/change-phone', { userId, phone }),
+};
+
 export const residentsApi = {
   listByApartment: (apartmentId) => http.get(`/apartments/${apartmentId}/residents`),
   lookupPhone: (phone) => http.get('/residents/lookup', { params: { phone } }),

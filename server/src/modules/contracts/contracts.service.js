@@ -17,7 +17,7 @@ import { DAY_MS, endOfVnDay, startOfVnDay } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { ensureCodes } from '../memberCodes/memberCodes.service.js';
 import { disableActiveCardsByApartment } from '../parkingCards/parkingCards.service.js';
-import { findOrCreateResidentUser, linkResident, welcomeNewResident } from '../residents/residentAccounts.js';
+import { findOrCreateResidentUser, inviteNewResident, linkResident } from '../residents/residentAccounts.js';
 
 /**
  * Danh sách hợp đồng phân trang, lọc theo tòa/căn/loại/trạng thái/sắp hết hạn (UC-A06)
@@ -103,7 +103,7 @@ export async function createContract(receptionistUser, data, file, ip) {
   const endDate = contractDay(data.endDate);
   const fileUrl = await uploadContractFile(file);
 
-  let account = null; // { user, tempPass } của người đứng tên
+  let account = null; // { user, created } của người đứng tên
   let savedContract = null;
 
   await withTransaction(async (session) => {
@@ -210,8 +210,8 @@ export async function createContract(receptionistUser, data, file, ip) {
     );
   });
 
-  // Sau commit: email mật khẩu tạm (nếu vừa tạo tài khoản), thông báo, đồng bộ mã cư dân
-  const temporaryPassword = await welcomeNewResident(account);
+  // Sau commit: email mời kích hoạt (nếu vừa tạo tài khoản), thông báo, đồng bộ mã cư dân
+  const activationInviteSent = await inviteNewResident(account);
   await notify(account.user._id, {
     type: NOTIFICATION_TYPES.SYSTEM,
     title: 'Hợp đồng mới đã được tạo',
@@ -225,7 +225,7 @@ export async function createContract(receptionistUser, data, file, ip) {
     console.error('[module-a] ensureCodes', apartmentId, err.message);
   }
 
-  return { contract: savedContract, temporaryPassword };
+  return { contract: savedContract, activationInviteSent };
 }
 
 /**

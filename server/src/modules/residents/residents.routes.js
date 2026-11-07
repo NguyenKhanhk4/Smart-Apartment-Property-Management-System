@@ -14,7 +14,7 @@ const router = Router();
 const addMemberBody = Joi.object({
   apartmentId: objectId().required(),
   userId: objectId(), // Tài khoản có sẵn lễ tân đã xác nhận
-  email: Joi.string().trim().lowercase().email().when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
+  email: Joi.string().trim().lowercase().email().allow('', null), // Không bắt buộc (BR-X4)
   fullName: Joi.string().trim().min(2).max(100).when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
   phone: phoneVn().required(),
   idNumber: Joi.string().trim().allow('', null),

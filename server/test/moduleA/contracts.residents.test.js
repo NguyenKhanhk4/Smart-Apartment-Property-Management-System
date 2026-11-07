@@ -6,7 +6,6 @@ import * as contracts from '../../src/modules/contracts/contracts.service.js';
 import { remindExpiringLeases } from '../../src/modules/contracts/contracts.jobs.js';
 import { getPayer } from '../../src/modules/contracts/contracts.queries.js';
 import * as residents from '../../src/modules/residents/residents.service.js';
-import { tempPasswordForResponse } from '../../src/modules/residents/residentAccounts.js';
 import { periodStart } from '../../src/utils/time.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { asUser, createApartment, createManager, createReceptionist, createResidentUser, linkResident } from '../helpers/fixtures.js';
@@ -79,7 +78,7 @@ test('updateContract: hợp đồng đã chấm dứt → 409 STATUS_CONFLICT, k
   assert.equal((await Contract.findById(contract._id)).endDate, null);
 });
 
-test('addMember: response không chứa passwordHash / tokenVersion; email lỗi thì trả mật khẩu tạm', async () => {
+test('addMember: tài khoản mới chờ kích hoạt, không có mật khẩu; response không lộ dữ liệu nhạy cảm; báo khi chưa gửi được email mời', async () => {
   const receptionist = asUser(await createReceptionist());
   const { apartment } = await saleWithOwner();
   const res = await residents.addMember(receptionist, {
@@ -92,8 +91,12 @@ test('addMember: response không chứa passwordHash / tokenVersion; email lỗi
   assert.equal(json.user.passwordHash, undefined);
   assert.equal(json.user.tokenVersion, undefined);
   assert.equal(json.user.email, 'member@test.local');
-  // SMTP chưa cấu hình trong test → email không gửi được → lễ tân cần mật khẩu để báo trực tiếp
-  assert.match(res.temporaryPassword, /^[A-Za-z0-9]{10}$/);
+  // SMTP chưa cấu hình trong test → lễ tân cần biết để hướng dẫn cư dân kích hoạt
+  assert.equal(res.activationInviteSent, false);
+  assert.equal('temporaryPassword' in res, false);
+  const saved = await User.findOne({ email: 'member@test.local' }).select('+passwordHash').lean();
+  assert.equal(saved.passwordHash, undefined);
+  assert.equal(saved.activatedAt, null);
 });
 
 test('createContract: SĐT đã có tài khoản mà chưa xác nhận → 409, không tạo gì; không báo gì cho người đó', async () => {
@@ -198,12 +201,6 @@ test('lookupAccountByPhone: chưa có / cư dân (đã che email, CCCD) / nội 
   assert.equal(found.idNumber, '********1234');
 
   assert.deepEqual(await residents.lookupAccountByPhone(manager.phone), { phone: manager.phone, exists: true, isResident: false });
-});
-
-test('tempPasswordForResponse: chỉ trả mật khẩu tạm khi gửi email thất bại', () => {
-  assert.equal(tempPasswordForResponse('Abc123xyzQ', true), null);
-  assert.equal(tempPasswordForResponse('Abc123xyzQ', false), 'Abc123xyzQ');
-  assert.equal(tempPasswordForResponse(null, false), null);
 });
 
 test('removeMember / updateMember: thành viên đã rời căn → 409 STATUS_CONFLICT', async () => {

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useAuth } from '../../hooks/useAuth';
 import { memberCodeApi } from '../../api/moduleD.api';
 import { residentsApi, vehicleApi } from '../../api/moduleA.api';
 import { useApi } from '../../hooks/useApi';
@@ -18,9 +19,31 @@ const COUNTED_VEHICLE_STATUS = [VEHICLE.PENDING, VEHICLE.APPROVED];
  *   cards         mọi căn tôi có quyền (đổi căn bằng setApartmentId)
  *   memberCount, vehicleCount — undefined khi đang tải hoặc tải lỗi
  */
+// Nhớ căn đang chọn theo từng tài khoản khi tải lại trang (UC01: "the chosen apartment is kept in the session")
+const storageKey = (userId) => `sapms_apartment_${userId}`;
+const readPicked = (userId) => {
+  try {
+    return window.localStorage.getItem(storageKey(userId));
+  } catch {
+    return null;
+  }
+};
+
 export function ResidentProvider({ children }) {
+  const userId = useAuth().user?.id;
   const { data: cards = [], loading } = useApi(() => memberCodeApi.mine(), []);
-  const [pickedId, setPickedId] = useState(null);
+  const [pickedId, setPickedId] = useState(() => readPicked(userId));
+  const pick = useCallback(
+    (id) => {
+      setPickedId(id);
+      try {
+        window.localStorage.setItem(storageKey(userId), id);
+      } catch {
+        // Không lưu được thì vẫn đổi căn trong phiên hiện tại
+      }
+    },
+    [userId],
+  );
 
   const card = cards.find((c) => c.apartment._id === pickedId) ?? cards[0] ?? null;
   const apartmentId = card?.apartment._id ?? null;
@@ -36,7 +59,7 @@ export function ResidentProvider({ children }) {
       card,
       apartment: card?.apartment ?? null,
       apartmentId,
-      setApartmentId: setPickedId,
+      setApartmentId: pick,
       isHead: Boolean(card?.isHead),
       code: card?.code ?? null,
       memberCount: enabled ? members.data?.length : undefined,
@@ -44,7 +67,7 @@ export function ResidentProvider({ children }) {
         ? vehicles.data?.filter((v) => COUNTED_VEHICLE_STATUS.includes(v.status)).length
         : undefined,
     }),
-    [loading, cards, card, apartmentId, enabled, members.data, vehicles.data],
+    [loading, cards, card, apartmentId, pick, enabled, members.data, vehicles.data],
   );
 
   return <ResidentContext.Provider value={value}>{children}</ResidentContext.Provider>;

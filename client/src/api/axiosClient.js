@@ -48,7 +48,7 @@ export const apiClient = axios.create({
 // Instance riêng, không gắn interceptor, để gọi refresh mà không bị vòng lặp 401.
 const refreshClient = axios.create({ baseURL: API_BASE_URL, timeout: 30000 });
 
-const NO_REFRESH_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout'];
+const NO_REFRESH_PATHS = ['/auth/login', '/auth/activation', '/auth/password', '/auth/refresh', '/auth/logout'];
 
 apiClient.interceptors.request.use((config) => {
   const token = authStorage.getAccessToken();

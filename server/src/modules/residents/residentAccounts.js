@@ -1,25 +1,23 @@
 // Tài khoản cư dân + liên kết căn hộ, dùng chung cho Hợp đồng (UC-A06) và Thêm thành viên (UC-A07).
 // Trước đây mỗi nơi tự chép logic tạo user / gửi mail mật khẩu tạm / gắn resident.
-import bcrypt from 'bcryptjs';
+import { env } from '../../config/env.js';
 import { ROLES } from '../../constants/enums.js';
 import { Resident, User } from '../../models/index.js';
 import { sendMail } from '../../services/mail.service.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { generateTemporaryPassword } from '../../utils/password.js';
 import { normalizePhone } from '../../utils/validators.js';
 import { parseDateOfBirth } from '../memberCodes/memberCodes.service.js';
 import { assertPhoneAndEmailFree, findUserByPhone, uniqueConflictError } from '../users/userLookup.js';
 import { buildIdNumberFields } from './idCrypto.js';
 
-const escapeHtml = (text) =>
-  String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-
 /**
- * Lấy tài khoản cư dân đã được lễ tân xác nhận (userId), hoặc tạo mới với mật khẩu tạm khi SĐT chưa có tài khoản.
+ * Lấy tài khoản cư dân đã được lễ tân xác nhận (userId), hoặc tạo mới ở trạng thái chờ kích hoạt khi SĐT chưa có tài khoản.
+ * Hệ thống không tạo và không gửi mật khẩu; cư dân tự đặt khi kích hoạt (BR-S02, UC11).
  * SĐT đã có tài khoản mà chưa xác nhận → 409 ACCOUNT_CONFIRM_REQUIRED, tránh gõ nhầm số gắn nhầm người.
- * Không ghi đè thông tin của tài khoản có sẵn (BR-X5). Tạo mới cần họ tên và email vì đăng nhập còn dùng email đến UC01.
+ * Không ghi đè thông tin của tài khoản có sẵn (BR-X5). Tạo mới cần họ tên; email không bắt buộc (BR-X4),
+ * không có email thì Lễ tân cấp mã kích hoạt tại quầy (UC02).
  * SĐT thuộc tài khoản nội bộ → 409 PHONE_EXISTS.
- * @returns {{ user, tempPass: string|null }} tempPass chỉ có khi vừa tạo tài khoản
+ * @returns {{ user, created: boolean }}
  */
 export async function findOrCreateResidentUser({ userId, email, fullName, phone, dateOfBirth }, session = null) {
   if (userId) {
@@ -28,7 +26,7 @@ export async function findOrCreateResidentUser({ userId, email, fullName, phone,
     if (user.role !== ROLES.RESIDENT) throw ApiError.badRequest('Chỉ tài khoản cư dân mới có thể đứng tên / làm thành viên căn hộ');
     // SĐT gửi kèm là số lễ tân đã đối chiếu: phải vẫn thuộc đúng tài khoản này
     if (phone && normalizePhone(phone) !== user.phone) throw new ApiError('ACCOUNT_CONFIRM_REQUIRED');
-    return { user, tempPass: null };
+    return { user, created: false };
   }
 
   if (!phone) throw ApiError.field('phone', 'Số điện thoại là bắt buộc');
@@ -43,11 +41,10 @@ export async function findOrCreateResidentUser({ userId, email, fullName, phone,
     });
   }
 
-  if (!email || !fullName) throw ApiError.badRequest('Tạo tài khoản mới cần họ tên và email');
-  const normEmail = email.trim().toLowerCase();
+  if (!fullName) throw ApiError.field('fullName', 'Tạo tài khoản mới cần họ tên');
+  const normEmail = email?.trim().toLowerCase() || null;
   await assertPhoneAndEmailFree({ phone, email: normEmail }, session);
 
-  const tempPass = generateTemporaryPassword();
   const [user] = await User.create(
     [
       {
@@ -55,8 +52,6 @@ export async function findOrCreateResidentUser({ userId, email, fullName, phone,
         email: normEmail,
         phone,
         dateOfBirth: dateOfBirth ? parseDateOfBirth(dateOfBirth) : null,
-        passwordHash: await bcrypt.hash(tempPass, 10),
-        activatedAt: new Date(),
         role: ROLES.RESIDENT,
         isActive: true,
       },
@@ -65,7 +60,7 @@ export async function findOrCreateResidentUser({ userId, email, fullName, phone,
   ).catch((err) => {
     throw uniqueConflictError(err) ?? err;
   });
-  return { user, tempPass };
+  return { user, created: true };
 }
 
 /**
@@ -102,22 +97,17 @@ export async function linkResident({ userId, apartmentId, relationType, contract
   return created;
 }
 
-/** Mật khẩu tạm chỉ trả về API khi KHÔNG gửi được email — lễ tân báo trực tiếp cho cư dân */
-export const tempPasswordForResponse = (tempPass, emailSent) => (tempPass && !emailSent ? tempPass : null);
-
 /**
- * Gửi email chào mừng kèm mật khẩu tạm cho tài khoản vừa tạo (gọi SAU khi transaction commit).
- * Trả về mật khẩu tạm cần hiển thị cho lễ tân (null nếu email đã gửi hoặc không tạo tài khoản mới).
+ * Mời cư dân vừa tạo tài khoản đi kích hoạt (gọi SAU khi transaction commit); email không chứa mật khẩu.
+ * @returns {boolean|null} đã gửi được email hay chưa (không có email thì false); null nếu không tạo tài khoản mới
  */
-export async function welcomeNewResident({ user, tempPass }) {
-  if (!tempPass) return null;
-  const sent = await sendMail({
+export async function inviteNewResident({ user, created }) {
+  if (!created) return null;
+  if (!user.email) return false;
+  const link = `${env.clientUrls[0]}/activate`;
+  return sendMail({
     to: user.email,
-    subject: '[SAPMS] Thông tin tài khoản cư dân',
-    text: `Chào mừng bạn đến với hệ thống SAPMS.\nEmail đăng nhập: ${user.email}\nMật khẩu tạm thời: ${tempPass}\nVui lòng đổi mật khẩu sau khi đăng nhập.`,
-    html:
-      `<p>Chào mừng bạn đến với hệ thống <b>SAPMS</b>.</p><p><b>Email:</b> ${escapeHtml(user.email)}</p>` +
-      `<p><b>Mật khẩu tạm:</b> <code>${escapeHtml(tempPass)}</code></p><p>Vui lòng đổi mật khẩu sau khi đăng nhập.</p>`,
+    subject: '[SAPMS] Kích hoạt tài khoản cư dân',
+    text: `Tài khoản SAPMS của bạn đã được tạo. Vui lòng kích hoạt và tự đặt mật khẩu tại: ${link}\nKhi kích hoạt, bạn cần số điện thoại, mã căn hộ và email này. Đăng nhập bằng số điện thoại.`,
   });
-  return tempPasswordForResponse(tempPass, sent);
 }
