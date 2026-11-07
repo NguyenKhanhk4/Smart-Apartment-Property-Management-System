@@ -61,9 +61,7 @@ const unusedFilter = (apartmentId, now) => ({
   $or: [{ endAt: { $gt: now } }, { endAt: null }],
 });
 
-// ===================================================================================================
 // Lưới slot
-// ===================================================================================================
 /**
  * Lưới slot của một ngày: sức chứa / đã đặt / còn lại, phí áp cho người xem, và lý do khóa.
  * Người xem là cư dân: phí = 0 nếu có gói tháng còn hiệu lực ngày đó; chọn căn bằng apartmentId (bắt buộc nếu ở nhiều căn).
@@ -74,6 +72,7 @@ export async function getSlots(user, amenityId, { date, apartmentId }, { now = n
   if (accessModeOf(amenity) !== AMENITY_ACCESS_MODES.BOOKING) throw new ApiError('AMENITY_NOT_BOOKABLE');
   const dayStart = parseDay(date);
   const cfg = await getBookingConfig();
+  const holdMinutes = Number(await getConfig(CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES));
 
   const rows = await Booking.find({
     amenityId,
@@ -163,15 +162,16 @@ export async function getSlots(user, amenityId, { date, apartmentId }, { now = n
       checkinEarlyMinutes: cfg.checkinEarlyMinutes,
       noShowGraceMinutes: cfg.noShowGraceMinutes,
       receptionOpen: cfg.receptionOpen,
+      // Tiện ích có phí: true = giữ chỗ holdMinutes phút và trả qua payOS ngay; false = phí cộng vào thông báo phí tháng
+      payOnline: holdMinutes > 0 && isPayosEnabled(),
+      holdMinutes,
     },
     viewer,
     slots,
   };
 }
 
-// ===================================================================================================
 // Đặt chỗ
-// ===================================================================================================
 /** Cư dân tự đặt */
 export const createBooking = (user, body, opts) => placeBooking({ ...body, bookerId: user.id }, opts);
 
@@ -211,13 +211,11 @@ async function placeBooking(
     const amenity = await Amenity.findOneAndUpdate({ _id: amenityId }, { $inc: { lockVersion: 1 } }, { returnDocument: 'after', session }).lean();
     if (!amenity) throw ApiError.notFound('Không tìm thấy tiện ích');
 
-    // 1. Tiện ích: đúng tòa, đang hoạt động, kiểu BOOKING
     const apartment = await Apartment.findById(apartmentId).select('buildingId').session(session).lean();
     if (!amenityVisibleTo(amenity, apartment)) throw ApiError.notFound('Không tìm thấy tiện ích');
     if (!amenity.isActive) throw new ApiError('AMENITY_INACTIVE');
     if (accessModeOf(amenity) !== AMENITY_ACCESS_MODES.BOOKING) throw new ApiError('AMENITY_NOT_BOOKABLE');
 
-    // 2. Slot khớp lưới, trong BOOKING_ADVANCE_DAYS, chưa qua
     const dayStart = parseDay(date);
     const slot = buildSlotGrid(amenity).find((s) => s.slotStart === slotStart);
     if (!slot) throw ApiError.field('slotStart', 'Khung giờ không khớp lưới của tiện ích');
@@ -228,23 +226,21 @@ async function placeBooking(
     const endAt = atTime(dayStart, slot.slotEnd);
     if (isSlotPast(startAt, now, cfg)) throw ApiError.field('slotStart', 'Khung giờ đã qua');
 
-    // 3. Căn không nợ quá hạn (BR-F8)
+    // BR-F8: căn không nợ quá hạn
     await assertNoOverdue(apartmentId, now);
 
-    // 4. Giới hạn booking chưa dùng của căn (BR-O3)
+    // BR-O3: giới hạn booking chưa dùng của căn
     const unused = await Booking.countDocuments({ ...unusedFilter(apartmentId, now), ...notReplaced }).session(session);
     if (unused >= cfg.maxActivePerApartment) throw new ApiError('BOOKING_LIMIT_EXCEEDED');
 
-    // 5. Căn chưa đặt slot này
     const sameSlot = { amenityId, startAt, status: { $in: ACTIVE }, ...notReplaced };
     if (await Booking.exists({ ...sameSlot, apartmentId }).session(session)) {
       throw new ApiError('BOOKING_SLOT_CONFLICT', 'Căn hộ đã đặt khung giờ này');
     }
 
-    // 6. Còn chỗ (APPROVED + CHECKED_IN)
     if ((await Booking.countDocuments(sameSlot).session(session)) >= amenity.capacityPerSlot) throw new ApiError('BOOKING_SLOT_CONFLICT');
 
-    // 7. Phí snapshot: có gói tháng còn hiệu lực → 0, ngược lại phí/lượt (BR-O13). Phí > 0 phải là chủ hộ hoặc được bật quyền (BR-O26)
+    // Phí snapshot: có gói tháng còn hiệu lực → 0, ngược lại phí/lượt (BR-O13). Phí > 0 phải là chủ hộ hoặc được bật quyền (BR-O26)
     usedPass = await getActivePass(bookerId, amenityId, startAt);
     // Đổi lịch booking đã trả tiền: giữ đúng số đã trả, không thu thêm / không hoàn chênh lệch khi tiện ích đổi giá
     const prepaid = Boolean(replacing?.paidAt);
@@ -322,9 +318,7 @@ async function placeBooking(
   return { ...presentBooking(booking, amenity), qrToken: qrTokenOf(booking), ...(staff && { checkedIn }) };
 }
 
-// ===================================================================================================
 // Đặt hộ tại quầy (UC-D07): lễ tân nhập mã cư dân của người đến
-// ===================================================================================================
 export async function createCounterBooking(staff, { memberCode, payerCode, amenityId, date, slotStart, checkInNow = false }, { now = new Date() } = {}) {
   const record = await resolveMemberCode(memberCode);
   const payer = payerCode ? await resolvePayer(payerCode, record.apartmentId) : null;
@@ -339,9 +333,7 @@ const presentBooking = (booking, amenity) => ({
   amenity: amenity && { _id: amenity._id, name: amenity.name, imageUrl: amenity.imageUrl ?? null, location: amenity.location ?? null },
 });
 
-// ===================================================================================================
 // Hủy (cư dân): miễn phí trước giờ bắt đầu (BR-O4)
-// ===================================================================================================
 export async function cancelBooking(user, id, { reason } = {}, { now = new Date() } = {}) {
   if (user.role === ROLES.STAFF) return cancelByStaff(user, id, { reason }, { now });
   const booking = await Booking.findById(id).lean();
@@ -384,9 +376,7 @@ export async function cancelBooking(user, id, { reason } = {}, { now = new Date(
   return presentBooking(cancelled, amenity);
 }
 
-// ===================================================================================================
 // Lịch sử
-// ===================================================================================================
 /** Chủ hộ: booking cả hộ; thành viên: booking do mình đặt. scope = upcoming (chưa kết thúc) | past */
 export async function listMyBookings(user, { apartmentId, scope = 'upcoming', page, limit }, { now = new Date() } = {}) {
   const id = await resolveApartmentId(user.id, apartmentId);
@@ -418,9 +408,7 @@ export async function listMyBookings(user, { apartmentId, scope = 'upcoming', pa
   };
 }
 
-// ===================================================================================================
 // Lễ tân hủy: bắt buộc lý do, chỉ booking APPROVED, người đặt không bị tính phí (BR-O16)
-// ===================================================================================================
 const MIN_STAFF_REASON = 5;
 
 async function cancelByStaff(user, id, { reason } = {}, { now }) {
@@ -473,9 +461,7 @@ async function cancelByStaff(user, id, { reason } = {}, { now }) {
   return loadBookingView(cancelled._id, await getBookingConfig());
 }
 
-// ===================================================================================================
 // Check-in (lễ tân / bảo vệ): BR-O14
-// ===================================================================================================
 /**
  * APPROVED và now ∈ [max(startAt − CHECKIN_EARLY_MINUTES, giờ lễ tân mở cửa), startAt + NO_SHOW_GRACE_MINUTES] → CHECKED_IN.
  * `code` (tùy chọn): mã cư dân của người đến — phải thuộc đúng căn đã đặt, khác căn → BOOKING_WRONG_HOUSEHOLD.
@@ -509,9 +495,7 @@ export async function checkInBooking(user, id, { code } = {}, { now = new Date()
   return loadBookingView(updated._id, cfg);
 }
 
-// ===================================================================================================
 // Lịch trong ngày (lễ tân, bảo vệ, Trưởng BQL)
-// ===================================================================================================
 /** Bỏ dấu + hạ chữ thường để tìm "nguyen van" ra "Nguyễn Văn" */
 const fold = (text) =>
   String(text ?? '')
@@ -578,18 +562,14 @@ export async function getSchedule(user, { date, amenityId, q } = {}, { now = new
   };
 }
 
-// ===================================================================================================
-// Vé QR (Người 4): Lễ tân / Bảo vệ quét mã trên điện thoại cư dân → check-in theo đúng quy tắc khung giờ BR-O14
-// ===================================================================================================
+// Vé QR: Lễ tân / Bảo vệ quét mã trên điện thoại cư dân → check-in theo đúng quy tắc khung giờ BR-O14
 export async function checkInByQr(user, { token }, opts) {
   const id = verifyBookingQr(token);
   if (!id) throw new ApiError('BOOKING_QR_INVALID');
   return checkInBooking(user, id, {}, opts);
 }
 
-// ===================================================================================================
-// Thanh toán giữ chỗ (Người 4): cổng thanh toán (Người 3, actor = null) hoặc Lễ tân thu tại quầy gọi hàm này
-// ===================================================================================================
+// Thanh toán giữ chỗ: Lễ tân thu tại quầy xác nhận; tiền payOS đi qua confirmGatewayPayment
 export async function confirmBookingPayment(actor, id, { paymentRef } = {}, { now = new Date() } = {}) {
   // Có điều kiện: còn giữ chỗ và chưa hết hạn — trùng với cron hủy giữ chỗ quá hạn thì chỉ một bên thắng
   const paid = await Booking.findOneAndUpdate(
@@ -666,9 +646,7 @@ async function announcePaid(actor, paid) {
   return { ...presentBooking(paid, amenity), qrToken: qrTokenOf(paid) };
 }
 
-// ===================================================================================================
-// Đổi lịch (Người 4): sang slot khác của cùng tiện ích trước giờ bắt đầu; kiểm tra như đặt mới, booking cũ hủy sau cùng
-// ===================================================================================================
+// Đổi lịch: sang slot khác của cùng tiện ích trước giờ bắt đầu; kiểm tra như đặt mới, booking cũ hủy sau cùng
 /**
  * Lý do không đổi lịch được (null = được). Quy tắc Mô đun 6:
  *  - chỉ booking đã xác nhận (đang chờ thanh toán thì thanh toán hoặc hủy rồi đặt lại — tránh gia hạn giữ chỗ vô hạn);

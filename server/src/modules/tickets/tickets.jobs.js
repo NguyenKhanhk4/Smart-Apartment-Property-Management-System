@@ -145,7 +145,7 @@ const SLA_ALERTS = {
 };
 
 /**
- * [Cron 5 phút] Cảnh báo SLA (Người 4): sự cố chưa ai nhận quá hạn nhận phiếu (TICKET_ACK_MINUTES) → báo Trưởng BQL
+ * [Cron 5 phút] Cảnh báo SLA: sự cố chưa ai nhận quá hạn nhận phiếu (TICKET_ACK_MINUTES) → báo Trưởng BQL
  * kèm email + KTV trực dự phòng; phản ánh chưa phản hồi quá hạn (COMPLAINT_RESPONSE_HOURS) → báo Trưởng BQL.
  * Chờ linh kiện quá TICKET_PARTS_PAUSE_HOURS → báo Trưởng BQL (M5-2), SLA chạy tiếp.
  * Mỗi vi phạm chỉ báo 1 lần (updateOne có điều kiện trên cột *AlertedAt). Trả về số cảnh báo đã gửi.

@@ -1,6 +1,6 @@
-// Quy tắc phiếu sự cố / phản ánh (Người 4) — logic thuần, không đọc DB.
+// Quy tắc phiếu sự cố / phản ánh — logic thuần, không đọc DB.
 // Máy trạng thái sự cố: Mới → Đã nhận → (Chờ cư dân đồng ý phí) → Đang xử lý ⇄ Chờ linh kiện → Đã xong (chờ nghiệm thu)
-// → Đã nghiệm thu. Phản ánh không vào hàng chờ Kỹ thuật mà chuyển sang màn hình xử lý của Trưởng BQL (Người 2).
+// → Đã nghiệm thu. Phản ánh không vào hàng chờ Kỹ thuật mà chuyển sang màn hình xử lý của Trưởng BQL.
 import {
   TICKET_FINAL_STATUSES,
   TICKET_OPEN_STATUSES,
@@ -31,10 +31,8 @@ export function computeDeadlines({ type, slaHours, ackMinutes, responseHours, no
   };
 }
 
-// ---------------------------------------------------------------------------
 // M5-2 — SLA tạm dừng: Chờ cư dân đồng ý phí dừng không giới hạn; Chờ linh kiện dừng tối đa `partsMaxMs`
 // (TICKET_PARTS_PAUSE_HOURS) rồi chạy tiếp. Vào trạng thái dừng ghi slaPausedAt; rời đi thì dueDate cộng bù phần đã dừng.
-// ---------------------------------------------------------------------------
 export const SLA_PAUSE_STATUSES = Object.freeze([WAITING_QUOTE_APPROVAL, WAITING_PARTS]);
 
 /** Thời gian (ms) được cộng bù vào dueDate nếu rời trạng thái dừng lúc `now` */

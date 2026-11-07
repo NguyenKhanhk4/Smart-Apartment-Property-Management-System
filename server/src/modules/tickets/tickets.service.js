@@ -127,7 +127,7 @@ async function technicianRecipients(now = new Date()) {
 
 /**
  * Lõi tạo phiếu cho cả cư dân tự gửi và Lễ tân tạo hộ. Sự cố → hàng chờ Kỹ thuật (báo KTV đang trực);
- * phản ánh → màn hình xử lý của Trưởng BQL (Người 2). Phản ánh không phân biệt phạm vi (luôn COMMON_AREA).
+ * phản ánh → màn hình xử lý của Trưởng BQL. Phản ánh không phân biệt phạm vi (luôn COMMON_AREA).
  */
 async function placeTicket({ apartment, reporterId, staff = null, body, files }) {
   const { categoryId, title, description, type = INCIDENT, scope = TICKET_SCOPES.COMMON_AREA } = body;
@@ -258,7 +258,7 @@ export async function listAssignees() {
   return techs.map((t) => ({ ...t, openTickets: loadMap[String(t._id)] ?? 0 }));
 }
 
-// ===== Hàng chờ sự cố theo ca (Người 4) =====
+// ===== Hàng chờ sự cố theo ca =====
 const QUEUE_FILTER = { type: INCIDENT, status: NEW, assignedTo: null };
 
 /** Sự cố mới chưa ai nhận, khẩn cấp lên đầu rồi cũ trước; kèm cờ KTV hiện tại có đang trong ca không */
@@ -596,7 +596,7 @@ export async function decideQuote(user, id, { accepted, note }, { now = new Date
     note: !accepted && revision ? ['Không đồng ý chi phí phát sinh — tiếp tục theo báo giá đã đồng ý', note].filter(Boolean).join(': ') : note,
   });
   await ticket.save();
-  // Ghi quyết định lên bản báo giá đang chờ (Người 3) — chi phí được tính vào thông báo phí khi nghiệm thu
+  // Ghi quyết định lên bản báo giá đang chờ — chi phí được tính vào thông báo phí khi nghiệm thu
   await recordQuoteDecision(ticket._id, { accepted, note, userId: user.id, now });
 
   await logAudit({
