@@ -4,7 +4,7 @@ import { Button, Result, Spin } from 'antd';
 import { paymentApi } from '../../api/moduleB.api';
 import { useApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
-import { formatDateTime, formatMoney } from '../../utils/format';
+import { formatDate, formatDateTime, formatMoney } from '../../utils/format';
 import { periodLabel } from '../invoices/invoiceShared';
 
 // payOS đưa cư dân về đây sau khi thanh toán / hủy: /r/payments/result?orderCode=...&status=PAID|CANCELLED...
@@ -31,6 +31,23 @@ export default function PaymentResultPage() {
   if (!orderCode) return <Result status="warning" title="Thiếu mã giao dịch" extra={<BackButton />} />;
   if (!p) return res.loading ? <Spin size="large" className="block! mx-auto mt-16" /> : <Result status="error" title="Không tìm thấy giao dịch" extra={<BackButton />} />;
 
+  // Phí booking tiện ích (Mô đun 6): không có biên lai thông báo phí, quay về Lịch sử đặt
+  if (p.status === 'SUCCESS' && p.booking) {
+    const ok = p.creditAmount === 0;
+    return (
+      <Result
+        status={ok ? 'success' : 'warning'}
+        title={ok ? `Đặt tiện ích thành công ${formatMoney(p.amount)}` : 'Đã nhận tiền nhưng không giữ được chỗ'}
+        subTitle={
+          <>
+            {p.booking.amenity?.name} · {formatDate(p.booking.date)} {p.booking.slotStart}–{p.booking.slotEnd}
+            {!ok && <div>{formatMoney(p.creditAmount)} đã vào Số dư trả trước, được trừ vào thông báo phí kỳ sau</div>}
+          </>
+        }
+        extra={<BackButton booking />}
+      />
+    );
+  }
   if (p.status === 'SUCCESS') {
     return (
       <Result
@@ -57,7 +74,7 @@ export default function PaymentResultPage() {
     );
   }
   if (p.status === 'FAILED') {
-    return <Result status="warning" title="Thanh toán chưa hoàn tất" subTitle="Giao dịch đã bị hủy hoặc hết hạn. Bạn có thể thanh toán lại." extra={<BackButton />} />;
+    return <Result status="warning" title="Thanh toán chưa hoàn tất" subTitle="Giao dịch đã bị hủy hoặc hết hạn. Bạn có thể thanh toán lại." extra={<BackButton booking={Boolean(p.booking)} />} />;
   }
   return (
     <Result
@@ -83,10 +100,10 @@ export default function PaymentResultPage() {
   );
 }
 
-function BackButton() {
+function BackButton({ booking = false }) {
   return (
-    <Link to="/r/invoices">
-      <Button>Về Phí dịch vụ</Button>
+    <Link to={booking ? '/r/amenities?tab=history' : '/r/invoices'}>
+      <Button>{booking ? 'Về Lịch sử đặt tiện ích' : 'Về Phí dịch vụ'}</Button>
     </Link>
   );
 }

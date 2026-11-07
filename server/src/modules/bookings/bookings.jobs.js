@@ -7,6 +7,7 @@ import { Booking } from '../../models/index.js';
 import { notify } from '../../services/notification.service.js';
 import { addMinutes } from '../../utils/time.js';
 import { getBookingConfig } from '../amenities/slot.utils.js';
+import { HOLD_EXPIRED_REASON } from './booking.payment.js';
 
 /** Trả về số booking đã chuyển trạng thái. Cập nhật có điều kiện status nên chạy chồng / chạy lại an toàn. */
 export async function completeBookings(now = new Date()) {
@@ -36,7 +37,7 @@ export async function expireBookingHolds(now = new Date()) {
   for (const booking of expired) {
     const res = await Booking.updateOne(
       { _id: booking._id, status: BOOKING_STATUS.PENDING_PAYMENT },
-      { $set: { status: BOOKING_STATUS.CANCELLED, cancelledAt: now, cancelReason: 'Quá hạn giữ chỗ chờ thanh toán' } },
+      { $set: { status: BOOKING_STATUS.CANCELLED, cancelledAt: now, cancelReason: HOLD_EXPIRED_REASON } },
     );
     if (!res.modifiedCount) continue;
     affected += 1;

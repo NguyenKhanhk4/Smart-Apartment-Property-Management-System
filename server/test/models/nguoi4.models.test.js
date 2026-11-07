@@ -30,11 +30,12 @@ test('enum: booking có trạng thái giữ chỗ chờ thanh toán', () => {
   assert.equal(BOOKING_STATUS.PENDING_PAYMENT, 'PENDING_PAYMENT');
 });
 
-test('cấu hình: có tham số SLA nhận phiếu, SLA phản hồi phản ánh và thời gian giữ chỗ (mặc định tắt)', () => {
+test('cấu hình: có tham số SLA nhận phiếu, SLA phản hồi phản ánh và giữ chỗ 15 phút (Mô đun 6), chờ linh kiện dừng SLA 48 giờ (M5-2)', () => {
   const byKey = Object.fromEntries(DEFAULT_CONFIGS.map((c) => [c.key, c]));
   assert.equal(byKey[CONFIG_KEYS.TICKET_ACK_MINUTES].value, 30);
   assert.equal(byKey[CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS].value, 48);
-  assert.equal(byKey[CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES].value, 0);
+  assert.equal(byKey[CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES].value, 15);
+  assert.equal(byKey[CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS].value, 48);
 });
 
 test('cron: có job cảnh báo SLA và job hủy giữ chỗ quá hạn', () => {

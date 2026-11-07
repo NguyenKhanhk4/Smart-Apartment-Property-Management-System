@@ -379,7 +379,8 @@ export const TICKET_OPEN_STATUSES = Object.freeze([
   TICKET_STATUS.IN_PROGRESS,
   TICKET_STATUS.WAITING_PARTS,
 ]);
-// Tính SLA hoàn thành / leo thang: tạm dừng khi đang chờ cư dân đồng ý phí (lỗi không thuộc Ban quản lý)
+// Tính SLA hoàn thành / leo thang: tạm dừng khi đang chờ cư dân đồng ý phí (lỗi không thuộc Ban quản lý).
+// Chờ linh kiện vẫn nằm trong nhóm này nhưng được cộng tối đa TICKET_PARTS_PAUSE_HOURS (M5-2, xem ticket.rules)
 export const TICKET_SLA_STATUSES = Object.freeze(
   TICKET_OPEN_STATUSES.filter((s) => s !== TICKET_STATUS.WAITING_QUOTE_APPROVAL),
 );
@@ -618,6 +619,7 @@ export const CONFIG_KEYS = Object.freeze({
   UPLOAD_MAX_SIZE_MB: 'UPLOAD_MAX_SIZE_MB',
   // Sự cố & tiện ích (Người 4)
   TICKET_ACK_MINUTES: 'TICKET_ACK_MINUTES',
+  TICKET_PARTS_PAUSE_HOURS: 'TICKET_PARTS_PAUSE_HOURS',
   COMPLAINT_RESPONSE_HOURS: 'COMPLAINT_RESPONSE_HOURS',
   BOOKING_PAYMENT_HOLD_MINUTES: 'BOOKING_PAYMENT_HOLD_MINUTES',
 });
@@ -653,8 +655,9 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, value: 500, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi xe máy' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_CAR, value: 100, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi ô tô' },
   { key: CONFIG_KEYS.TICKET_ACK_MINUTES, value: 30, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn kỹ thuật viên nhận sự cố kể từ lúc gửi (phút)' },
+  { key: CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA dừng tối đa N giờ khi chờ linh kiện, quá thì cảnh báo Trưởng BQL — M5-2' },
   { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
-  { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 0, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán (phút); 0 = tắt, phí gộp vào hóa đơn tháng' },
+  { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán qua payOS (phút); 0 hoặc chưa cấu hình payOS = phí gộp vào thông báo phí tháng' },
   // TECHNICAL — tham số kỹ thuật, Trưởng BQL sửa
   { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 5, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10' },
 ]);

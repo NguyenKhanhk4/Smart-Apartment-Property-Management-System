@@ -173,3 +173,50 @@ test('phân quyền API báo giá: chỉ KTV gửi; cư dân không xem danh sá
     await app.close();
   }
 });
+
+// ----- M5-3: báo giá lại vượt ngưỡng bị từ chối / quá hạn → không đóng phiếu đang sửa dở -----
+test('báo giá lại vượt 10% bị Người nộp phí từ chối → phiếu quay về trạng thái trước, giữ báo giá đã đồng ý', async () => {
+  const { ownerUser, tech, techDoc, ticket } = await setup();
+  await submitQuote(tech, { ticketId: ticket._id, items: items(1_000_000) }, { now: NOW });
+  await decideQuote(ownerUser, ticket._id, { accepted: true }, { now: NOW });
+  await updateProgress(tech, ticket._id, { status: 'WAITING_PARTS', note: 'Chờ bơm' });
+
+  await submitQuote(tech, { ticketId: ticket._id, items: items(1_500_000) }, { now: later(1) });
+  const t = await decideQuote(ownerUser, ticket._id, { accepted: false, note: 'Đắt quá' }, { now: later(1) });
+  assert.equal(t.status, 'WAITING_PARTS');
+  assert.equal(t.quoteDecision.accepted, true, 'vẫn giữ quyết định đồng ý báo giá cũ');
+  assert.equal(t.closedAt, undefined);
+  assert.deepEqual((await quotesOf(ticket._id)).map((q) => q.status), ['ACCEPTED', 'DECLINED']);
+  assert.match(t.history.at(-1).note, /báo giá đã đồng ý/);
+
+  // KTV làm tiếp được và nghiệm thu thì tính theo báo giá cũ
+  const resumed = await updateProgress(tech, ticket._id, { status: 'IN_PROGRESS' });
+  assert.equal(resumed.status, 'IN_PROGRESS');
+  assert.ok(await Notification.exists({ userId: techDoc._id, title: /từ chối báo giá/ }));
+});
+
+test('báo giá lại vượt 10% quá 5 ngày không phản hồi → quay về Đang xử lý, không đóng phiếu', async () => {
+  const { ownerUser, tech, ticket } = await setup();
+  await submitQuote(tech, { ticketId: ticket._id, items: items(1_000_000) }, { now: NOW });
+  await decideQuote(ownerUser, ticket._id, { accepted: true }, { now: NOW });
+  await submitQuote(tech, { ticketId: ticket._id, items: items(2_000_000) }, { now: later(1) });
+
+  await remindQuotes(later(7));
+  const t = await Ticket.findById(ticket._id).lean();
+  assert.equal(t.status, 'IN_PROGRESS');
+  assert.equal(t.quoteDecision.accepted, true);
+  assert.equal(t.history.at(-1).action, 'QUOTE_EXPIRED');
+  assert.deepEqual((await quotesOf(ticket._id)).map((q) => q.status), ['ACCEPTED', 'EXPIRED']);
+});
+
+test('M5-2: chờ cư dân đồng ý phí không trừ SLA — đồng ý sau 3 ngày thì hạn được lùi đúng 3 ngày', async () => {
+  const { ownerUser, tech, ticket } = await setup();
+  const due = (await Ticket.findById(ticket._id).lean()).dueDate.getTime();
+  await submitQuote(tech, { ticketId: ticket._id, items: items(500_000) }, { now: NOW });
+  const paused = await Ticket.findById(ticket._id).lean();
+  assert.equal(paused.slaPausedAt.getTime(), NOW.getTime());
+
+  const t = await decideQuote(ownerUser, ticket._id, { accepted: true }, { now: later(3) });
+  assert.equal(t.slaPausedAt, null);
+  assert.equal(t.dueDate.getTime(), due + 3 * DAY_MS);
+});
