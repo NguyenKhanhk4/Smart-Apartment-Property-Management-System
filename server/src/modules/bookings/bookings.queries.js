@@ -63,7 +63,6 @@ export async function presentDayBookings(bookings, cfg) {
       startAt,
       endAt: b.endAt ?? atTime(b.date, b.slotEnd),
       fee: b.fee,
-      usesPass: Boolean(b.passId),
       invoiceId: b.invoiceId ?? null,
       holdExpiresAt: b.holdExpiresAt ?? null,
       paidAt: b.paidAt ?? null,

@@ -11,14 +11,13 @@ import AmenityFormModal from './AmenityFormModal';
 
 const configValue = (configs, key, fallback) => configs.find((c) => c.key === key)?.value ?? fallback;
 
-// Chi tiết vận hành theo kiểu: BOOKING có slot + sức chứa, WALK_IN có giới hạn số người cùng lúc
+// Chi tiết vận hành theo kiểu: BOOKING có slot + sức chứa
 function operationOf(r) {
   if (r.accessMode === 'BOOKING') return `Slot ${r.slotDurationMinutes} phút · ${r.capacityPerSlot} căn / slot`;
-  if (r.accessMode === 'WALK_IN') return r.maxConcurrent ? `Tối đa ${r.maxConcurrent} người cùng lúc` : 'Không giới hạn số người';
   return 'Không cần đặt chỗ';
 }
 
-// UC-D05 — Quản lý tiện ích (Manager): kiểu tiện ích, giờ mở cửa, slot, sức chứa, giá theo nhóm tuổi, gói tháng, ngừng/kích hoạt
+// UC-D05 — Quản lý tiện ích (Manager): kiểu tiện ích, giờ mở cửa, slot, sức chứa, phí đặt chỗ, ngừng/kích hoạt
 export default function AmenitiesPage() {
   const { message } = App.useApp();
   const [filters, setFilters] = useState({ page: 1, limit: 50, sort: 'name' });
@@ -31,10 +30,6 @@ export default function AmenitiesPage() {
   const reception = {
     open: configValue(configs, 'RECEPTION_OPEN_TIME', '05:00'),
     close: configValue(configs, 'RECEPTION_CLOSE_TIME', '22:00'),
-  };
-  const ages = {
-    childFreeAge: configValue(configs, 'CHILD_FREE_AGE', 6),
-    childAdultAge: configValue(configs, 'CHILD_ADULT_AGE', 12),
   };
 
   const toggle = async (a) => {
@@ -105,17 +100,6 @@ export default function AmenitiesPage() {
       render: (v, r) => {
         if (r.accessMode === 'FREE') return <Tag color="green">Miễn phí</Tag>;
         if (!v) return <Typography.Text type="secondary">—</Typography.Text>;
-        const parts = v.split(' · Gói ');
-        if (parts.length > 1) {
-          return (
-            <Flex vertical gap={1}>
-              <Typography.Text style={{ fontSize: 12.5, lineHeight: 1.25 }}>{parts[0]}</Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 11, lineHeight: 1.2 }}>
-                Gói {parts[1]}
-              </Typography.Text>
-            </Flex>
-          );
-        }
         return <Typography.Text style={{ fontSize: 12.5, lineHeight: 1.25 }}>{v}</Typography.Text>;
       },
     },
@@ -219,7 +203,6 @@ export default function AmenitiesPage() {
           amenity={editing._id ? editing : null}
           buildings={buildings}
           reception={reception}
-          ages={ages}
           open
           onClose={() => setEditing(null)}
           onDone={reload}

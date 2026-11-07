@@ -20,7 +20,7 @@ const Badge = ({ status }) => (
   <StatusBadge tone={BOOKING_STATUS[status]?.tone}>{BOOKING_STATUS[status]?.label ?? status}</StatusBadge>
 );
 const timeOf = (b) => `${b.slotStart}–${b.slotEnd}`;
-const feeOf = (b) => (b.fee > 0 ? formatMoney(b.fee) : b.passId ? 'Gói tháng' : 'Miễn phí');
+const feeOf = (b) => (b.fee > 0 ? formatMoney(b.fee) : 'Miễn phí');
 const startOf = (b) => dayjs(b.startAt ?? b.date);
 
 // Tab "Lịch sử đặt": chủ hộ thấy cả hộ, thành viên thấy lượt mình đặt. Hủy được khi còn trước giờ bắt đầu.

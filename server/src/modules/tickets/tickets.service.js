@@ -39,8 +39,9 @@ import {
   quoteResumeStatus,
 } from './ticket.rules.js';
 
-const { NEW, ASSIGNED, WAITING_QUOTE_APPROVAL, IN_PROGRESS, WAITING_PARTS, WAITING_CONFIRM, CLOSED, REJECTED } =
+const { NEW, ASSIGNED, WAITING_QUOTE_APPROVAL, IN_PROGRESS, WAITING_PARTS, WAITING_CONFIRM, CLOSED, REJECTED, MERGED } =
   TICKET_STATUS;
+const { COMMON_AREA } = TICKET_SCOPES;
 const { INCIDENT, COMPLAINT } = TICKET_TYPES;
 const TECHNICIAN = ROLE_TITLES.TECHNICIAN;
 const DISPATCHERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
@@ -92,6 +93,7 @@ const ticketLink = (ticket, forResident) =>
 
 function assertNotFinal(ticket) {
   if (TICKET_FINAL_STATUSES.includes(ticket.status)) throw new ApiError('TICKET_ALREADY_CLOSED');
+  if (ticket.status === MERGED) throw ApiError.badRequest('Phiếu đã được gộp vào phiếu khác, thao tác trên phiếu chính');
 }
 
 async function findTicketOr404(id) {
@@ -237,6 +239,13 @@ export async function getTicket(user, id) {
   if (!ticket) throw ApiError.notFound('Không tìm thấy phản ánh');
   await assertCanView(user, ticket);
   ticket.isOverdue = isOverdue(ticket, new Date(), await partsPauseMs());
+  // M5-6: phiếu con hiện phiếu chính; phiếu chính hiện các phiếu đã gộp vào (chỉ mã, căn, trạng thái)
+  const [parent, children] = await Promise.all([
+    ticket.mergedInto ? Ticket.findById(ticket.mergedInto).select('code title status').lean() : null,
+    Ticket.find({ mergedInto: ticket._id }).select('code status apartmentId').populate('apartmentId', 'code').lean(),
+  ]);
+  ticket.mergedParent = parent;
+  ticket.mergedChildren = children.map((c) => ({ _id: c._id, code: c.code, status: c.status, apartmentCode: c.apartmentId?.code ?? null }));
   return ticket;
 }
 
@@ -419,6 +428,7 @@ export async function rejectTicket(user, id, { reason }) {
   if (ticket.type === COMPLAINT) ticket.respondedAt ??= ticket.closedAt; // đã phản hồi cư dân → dừng SLA phản hồi
   ticket.history.push({ by: user.id, action: ACT.REJECTED, fromStatus, toStatus: REJECTED, note: reason });
   await ticket.save();
+  await closeMergedChildren(ticket, ticket.closedAt);
 
   await notifyReporter(ticket, {
     type: NOTIFICATION_TYPES.TICKET,
@@ -464,7 +474,10 @@ export async function updateProgress(user, id, { status, note }, files = []) {
   const fromStatus = ticket.status;
   applySlaTransition(ticket, status, now, await partsPauseMs());
   ticket.status = status;
-  if (status === WAITING_CONFIRM) ticket.resolvedAt = now;
+  if (status === WAITING_CONFIRM) {
+    ticket.resolvedAt = now;
+    ticket.confirmRemindedAt = null;
+  }
   ticket.history.push({
     at: now,
     by: user.id,
@@ -538,6 +551,7 @@ export async function confirmTicket(user, id, { accepted, rating, comment, reaso
   await ticket.save();
 
   if (accepted) {
+    await closeMergedChildren(ticket, now);
     await logAudit({
       action: AUDIT_ACTIONS.TICKET_CLOSED,
       user,
@@ -619,3 +633,169 @@ export async function decideQuote(user, id, { accepted, note }, { now = new Date
   });
   return ticket;
 }
+
+// ===== M5-5: đổi loại / phạm vi phiếu =====
+const RECLASSIFIABLE = [NEW, ASSIGNED];
+const TYPE_LABEL = { [INCIDENT]: 'Sự cố kỹ thuật', [COMPLAINT]: 'Phản ánh' };
+const SCOPE_LABEL = { [COMMON_AREA]: 'Khu vực chung', [TICKET_SCOPES.IN_APARTMENT]: 'Trong căn hộ' };
+
+/**
+ * Trưởng BQL / Lễ tân, hoặc KTV được giao (sau khảo sát) đổi loại / phạm vi phiếu chưa bắt đầu xử lý, bắt buộc lý do.
+ * Hạn SLA tính lại từ lúc đổi theo loại mới. Đổi sang Phản ánh → bỏ KTV, chuyển bàn xử lý của Trưởng BQL;
+ * đổi sang Sự cố → về hàng chờ Kỹ thuật. Chỉ đổi phạm vi thì giữ nguyên trạng thái và người nhận.
+ */
+export async function reclassifyTicket(user, id, { type, scope, reason }, { now = new Date() } = {}) {
+  const ticket = await findTicketOr404(id);
+  const prevTech = ticket.assignedTo ? String(ticket.assignedTo) : null;
+  if (!isDispatcher(user) && !(isTechnician(user) && prevTech === user.id)) {
+    throw ApiError.forbidden('Chỉ Trưởng BQL, Lễ tân hoặc kỹ thuật viên được giao mới đổi phân loại phiếu');
+  }
+  assertNotFinal(ticket);
+  if (!RECLASSIFIABLE.includes(ticket.status)) throw ApiError.badRequest('Chỉ đổi phân loại được phiếu chưa bắt đầu xử lý (Mới / Đã nhận)');
+
+  const nextType = type ?? ticket.type;
+  const nextScope = nextType === COMPLAINT ? COMMON_AREA : (scope ?? ticket.scope);
+  if (nextType === ticket.type && nextScope === ticket.scope) throw ApiError.badRequest('Loại và phạm vi phiếu không thay đổi');
+  const typeChanged = nextType !== ticket.type;
+
+  const [category, ackMinutes, responseHours] = await Promise.all([
+    ComplaintCategory.findById(ticket.category).select('slaHours').lean(),
+    getConfig(CONFIG_KEYS.TICKET_ACK_MINUTES),
+    getConfig(CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS),
+  ]);
+  const deadlines = computeDeadlines({
+    type: nextType,
+    slaHours: category?.slaHours ?? (await slaHoursOf(ticket.priority)),
+    ackMinutes: Number(ackMinutes),
+    responseHours: Number(responseHours),
+    now,
+  });
+
+  const from = `${TYPE_LABEL[ticket.type]} / ${SCOPE_LABEL[ticket.scope]}`;
+  const to = `${TYPE_LABEL[nextType]} / ${SCOPE_LABEL[nextScope]}`;
+  const fromStatus = ticket.status;
+  ticket.set({ type: nextType, scope: nextScope, ...deadlines, ackAlertedAt: null, responseAlertedAt: null, respondedAt: null });
+  if (typeChanged) {
+    ticket.set({ status: NEW, assignedTo: null, assignedBy: null, assignedAt: null });
+  }
+  ticket.history.push({ at: now, by: user.id, action: ACT.RECLASSIFIED, fromStatus, toStatus: ticket.status, note: `${from} → ${to}. Lý do: ${reason}` });
+  await ticket.save();
+
+  await logAudit({
+    action: AUDIT_ACTIONS.TICKET_RECLASSIFIED,
+    user,
+    targetType: AUDIT_TARGETS.TICKET,
+    targetId: ticket._id,
+    metadata: { code: ticket.code, from, to, reason },
+  });
+  await notifyReporter(ticket, {
+    type: NOTIFICATION_TYPES.TICKET,
+    title: `Phiếu ${ticket.code} được đổi phân loại`,
+    content: `${from} → ${to}. Lý do: ${reason}`,
+    refId: ticket._id,
+    link: ticketLink(ticket, true),
+  });
+  if (typeChanged) {
+    const payload = { type: NOTIFICATION_TYPES.TICKET, title: `Phiếu ${ticket.code} chuyển thành ${TYPE_LABEL[nextType]}`, content: ticket.title, refId: ticket._id, link: ticketLink(ticket, false) };
+    if (nextType === COMPLAINT) await notifyRoles(['MANAGER'], payload);
+    else await notify(await technicianRecipients(now), { ...payload, title: `Sự cố mới cần nhận ${ticket.code}` });
+    if (prevTech && prevTech !== user.id) await notify(prevTech, { ...payload, title: `Phiếu ${ticket.code} không còn giao cho bạn` });
+  }
+  return ticket;
+}
+
+// ===== M5-6: phiếu trùng =====
+const OPEN_OR_RESOLVED = [...TICKET_OPEN_STATUSES, WAITING_CONFIRM];
+
+/**
+ * Sự cố khu vực chung đang mở cùng tòa, cùng loại sự cố — gợi ý khi tạo phiếu để cư dân / Lễ tân không báo trùng,
+ * và để Trưởng BQL chọn phiếu chính khi gộp. Chỉ trả mã, tiêu đề, trạng thái (không lộ căn / người báo).
+ */
+export async function findSimilarTickets(user, { apartmentId, categoryId, excludeId }) {
+  const apartment =
+    user.role === ROLES.RESIDENT
+      ? await resolveResidentApartment(user.id, apartmentId)
+      : await Apartment.findById(apartmentId).select('buildingId').lean();
+  if (!apartment) throw ApiError.notFound('Không tìm thấy căn hộ');
+  return Ticket.find({
+    type: INCIDENT,
+    scope: COMMON_AREA,
+    category: categoryId,
+    buildingId: apartment.buildingId ?? null,
+    status: { $in: OPEN_OR_RESOLVED },
+    ...(excludeId && { _id: { $ne: excludeId } }),
+  })
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .select('code title status createdAt')
+    .lean();
+}
+
+/**
+ * Trưởng BQL / Lễ tân gộp phiếu trùng `id` vào phiếu chính `parentId`: cả hai là sự cố khu vực chung cùng tòa;
+ * phiếu con chưa bắt đầu xử lý → MERGED, bỏ người nhận; phiếu chính còn đang xử lý. Phiếu con đóng theo phiếu chính.
+ */
+export async function mergeTicket(user, id, { parentId, note }, { now = new Date() } = {}) {
+  if (String(id) === String(parentId)) throw ApiError.badRequest('Không gộp phiếu vào chính nó');
+  const [child, parent] = await Promise.all([findTicketOr404(id), findTicketOr404(parentId)]);
+  assertNotFinal(child);
+  assertNotFinal(parent);
+  const commonIncident = (t) => t.type === INCIDENT && t.scope === COMMON_AREA;
+  if (!commonIncident(child) || !commonIncident(parent)) throw ApiError.badRequest('Chỉ gộp sự cố kỹ thuật ở khu vực chung');
+  if (String(child.buildingId ?? '') !== String(parent.buildingId ?? '')) throw ApiError.badRequest('Hai phiếu phải cùng tòa nhà');
+  if (!RECLASSIFIABLE.includes(child.status)) throw ApiError.badRequest('Chỉ gộp được phiếu chưa bắt đầu xử lý (Mới / Đã nhận)');
+  if (!OPEN_OR_RESOLVED.includes(parent.status)) throw ApiError.badRequest('Phiếu chính đã đóng');
+
+  const prevTech = child.assignedTo ? String(child.assignedTo) : null;
+  const fromStatus = child.status;
+  child.set({ status: MERGED, mergedInto: parent._id, assignedTo: null, assignedBy: null, assignedAt: null });
+  child.history.push({ at: now, by: user.id, action: ACT.MERGED, fromStatus, toStatus: MERGED, note: [`Gộp vào phiếu ${parent.code}`, note].filter(Boolean).join(' — ') });
+  parent.history.push({ at: now, by: user.id, action: ACT.MERGED, fromStatus: parent.status, toStatus: parent.status, note: `Gộp phiếu trùng ${child.code}` });
+  await child.save();
+  await parent.save();
+
+  await logAudit({
+    action: AUDIT_ACTIONS.TICKET_MERGED,
+    user,
+    targetType: AUDIT_TARGETS.TICKET,
+    targetId: child._id,
+    metadata: { code: child.code, parent: parent.code, note },
+  });
+  await notifyReporter(child, {
+    type: NOTIFICATION_TYPES.TICKET,
+    title: `Sự cố ${child.code} đã được gộp`,
+    content: `Sự cố bạn báo trùng với "${parent.title}" (${parent.code}) đang được xử lý. Bạn sẽ được báo khi xử lý xong.`,
+    refId: child._id,
+    link: ticketLink(child, true),
+  });
+  if (prevTech) {
+    await notify(prevTech, { type: NOTIFICATION_TYPES.TICKET, title: `Phiếu ${child.code} đã gộp vào ${parent.code}`, content: child.title, refId: parent._id, link: ticketLink(parent, false) });
+  }
+  return child;
+}
+
+/** Phiếu chính đóng (Đã nghiệm thu / Từ chối) → các phiếu đã gộp đóng theo cùng trạng thái, báo người báo phiếu */
+export async function closeMergedChildren(parent, now = new Date()) {
+  const children = await Ticket.find({ mergedInto: parent._id, status: MERGED }).select('code title apartmentId createdBy createdByStaff').lean();
+  const text = parent.status === CLOSED ? 'đã xử lý xong' : 'đã bị từ chối';
+  for (const child of children) {
+    const res = await Ticket.updateOne(
+      { _id: child._id, status: MERGED },
+      {
+        $set: { status: parent.status, closedAt: now, ...(parent.status === REJECTED && { rejectReason: `Đóng theo phiếu ${parent.code}` }) },
+        $inc: { __v: 1 },
+        $push: { history: { at: now, by: null, action: parent.status === CLOSED ? ACT.AUTO_CLOSED : ACT.REJECTED, fromStatus: MERGED, toStatus: parent.status, note: `Đóng theo phiếu chính ${parent.code}` } },
+      },
+    );
+    if (!res.modifiedCount) continue;
+    await notifyReporter(child, {
+      type: NOTIFICATION_TYPES.TICKET,
+      title: `Sự cố ${child.code} ${text}`,
+      content: `Đóng theo phiếu chính ${parent.code} — "${parent.title}".`,
+      refId: child._id,
+      link: ticketLink(child, true),
+    });
+  }
+  return children.length;
+}
+

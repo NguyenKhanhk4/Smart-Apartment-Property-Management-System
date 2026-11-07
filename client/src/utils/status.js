@@ -14,6 +14,7 @@ const TICKET_STATUS_HEX = {
   WAITING_CONFIRM: '#faad14',
   CLOSED: '#52c41a',
   REJECTED: '#8c8c8c',
+  MERGED: '#bfbfbf',
 };
 const FALLBACK_HEX = '#bfbfbf';
 export const ticketStatusColor = (status) => TICKET_STATUS_HEX[status] ?? FALLBACK_HEX;

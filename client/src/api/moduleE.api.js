@@ -48,6 +48,12 @@ export const ticketApi = {
   },
   confirm: (id, body) => http.patch(`/tickets/${id}/confirm`, body),
   runJob: (job) => http.post(`/tickets/jobs/${job}/run`),
+  /** M5-6: sự cố khu vực chung đang mở cùng tòa, cùng loại. params: { apartmentId?, categoryId, excludeId? } */
+  similar: (params) => http.get('/tickets/similar', { params }),
+  /** M5-5: body { type?, scope?, reason } */
+  classify: (id, body) => http.patch(`/tickets/${id}/classify`, body),
+  /** M5-6: body { parentId, note? } */
+  merge: (id, body) => http.patch(`/tickets/${id}/merge`, body),
 };
 
 // ===== UC-E07, E08: Sổ khách =====
