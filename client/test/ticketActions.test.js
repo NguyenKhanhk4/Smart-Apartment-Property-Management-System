@@ -60,3 +60,22 @@ test('KTV được giao: gửi báo giá sự cố trong căn khi Đã nhận / 
   assert.equal(ticketActions({ ...mine, scope: 'COMMON_AREA', status: 'ASSIGNED' }, me, tech).canQuote, false);
   assert.equal(ticketActions({ ...mine, status: 'ASSIGNED', assignedTo: { _id: 'other' } }, me, tech).canQuote, false);
 });
+
+test('M5-5 đổi phân loại: điều phối hoặc KTV được giao, chỉ khi Mới / Đã nhận', () => {
+  const dispatcher = can('MANAGER');
+  const tech = can('STAFF:TECHNICIAN');
+  assert.equal(ticketActions(base, me, dispatcher).canReclassify, true);
+  assert.equal(ticketActions({ ...base, status: 'IN_PROGRESS' }, me, dispatcher).canReclassify, false);
+  assert.equal(ticketActions({ ...base, status: 'ASSIGNED', assignedTo: { _id: 'u1' } }, me, tech).canReclassify, true);
+  assert.equal(ticketActions({ ...base, status: 'ASSIGNED', assignedTo: { _id: 'u2' } }, me, tech).canReclassify, false);
+  assert.equal(ticketActions(base, me, can('RESIDENT')).canReclassify, false);
+});
+
+test('M5-6 gộp phiếu: điều phối, sự cố khu vực chung chưa bắt đầu; phiếu đã gộp không phân công được', () => {
+  const dispatcher = can('STAFF:RECEPTIONIST');
+  assert.equal(ticketActions(base, me, dispatcher).canMerge, true);
+  assert.equal(ticketActions({ ...base, scope: 'IN_APARTMENT' }, me, dispatcher).canMerge, false);
+  assert.equal(ticketActions({ ...base, status: 'IN_PROGRESS' }, me, dispatcher).canMerge, false);
+  assert.equal(ticketActions(base, me, can('STAFF:TECHNICIAN')).canMerge, false);
+  assert.equal(ticketActions({ ...base, status: 'MERGED' }, me, dispatcher).canAssign, false);
+});

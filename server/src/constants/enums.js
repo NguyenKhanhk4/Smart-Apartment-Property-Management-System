@@ -322,34 +322,31 @@ export const BOOKING_BILLABLE_STATUSES = Object.freeze([
 // Luồng duyệt cũ: chỉ còn trong dữ liệu cũ, không tạo mới và không đưa vào báo cáo / ô chọn
 export const BOOKING_LEGACY_STATUSES = Object.freeze([BOOKING_STATUS.PENDING, BOOKING_STATUS.REJECTED]);
 
-// Kiểu tiện ích (BR-O15, BR-O22..O24): FREE = đi vào tự do, không đặt/không phí; WALK_IN = đến thẳng, lễ tân tra mã
-// (gói tháng / vé lẻ / miễn phí trẻ nhỏ); BOOKING = đặt slot độc quyền. Bản ghi cũ không có accessMode coi là BOOKING.
+// Kiểu tiện ích: FREE = đi vào tự do, không đặt/không phí; BOOKING = đặt slot (UC44, UC45).
+// Bản ghi cũ không có accessMode coi là BOOKING.
 export const AMENITY_ACCESS_MODES = Object.freeze({
   FREE: 'FREE',
-  WALK_IN: 'WALK_IN',
   BOOKING: 'BOOKING',
 });
 
-// Nhóm tuổi tính giá (BR-O24)
+// Nhóm tuổi theo ngày sinh (hiển thị ở mã cư dân, đặt hộ tại quầy)
 export const AGE_GROUPS = Object.freeze({
   CHILD_FREE: 'CHILD_FREE',
   CHILD: 'CHILD',
   ADULT: 'ADULT',
 });
 
-// Gói tháng tiện ích (UC-D09, BR-O22): theo người, theo tháng dương lịch, hiệu lực ngay khi mua
+// Dữ liệu cũ gói tháng / lượt vào cửa (đã bỏ khỏi nghiệp vụ). Chỉ model AmenityPass, AmenityVisit và phần tính phí
+// (invoices.*, Người 3) còn đọc — gỡ cùng lúc khi Người 3 bỏ dòng gói tháng / vé lẻ khỏi thông báo phí.
 export const AMENITY_PASS_STATUS = Object.freeze({
   ACTIVE: 'ACTIVE',
   CANCELLED: 'CANCELLED',
 });
-
-// Lượt vào tiện ích WALK_IN (UC-D10, BR-O23): PASS = dùng gói tháng (0đ), SINGLE = vé lẻ (có phí), FREE = vé lẻ giá 0
 export const VISIT_CHARGE_TYPES = Object.freeze({
   PASS: 'PASS',
   SINGLE: 'SINGLE',
   FREE: 'FREE',
 });
-
 export const VISIT_STATUS = Object.freeze({
   VALID: 'VALID',
   CANCELLED: 'CANCELLED',
@@ -381,6 +378,7 @@ export const TICKET_STATUS = Object.freeze({
   WAITING_CONFIRM: 'WAITING_CONFIRM',
   CLOSED: 'CLOSED',
   REJECTED: 'REJECTED',
+  MERGED: 'MERGED', // M5-6: phiếu trùng đã gộp vào phiếu chính (mergedInto), đóng theo phiếu chính
 });
 
 // Nhóm trạng thái ticket — mọi nơi (service, cron, báo cáo, client) dùng các nhóm này, không tự liệt kê.
@@ -419,6 +417,8 @@ export const TICKET_HISTORY_ACTIONS = Object.freeze({
   SLA_ALERTED: 'SLA_ALERTED',
   AUTO_CLOSED: 'AUTO_CLOSED',
   REJECTED: 'REJECTED',
+  RECLASSIFIED: 'RECLASSIFIED', // M5-5: đổi loại / phạm vi phiếu
+  MERGED: 'MERGED', // M5-6: gộp phiếu trùng vào phiếu chính
 });
 
 // Loại phiếu: sự cố kỹ thuật vào hàng chờ Kỹ thuật; phản ánh chuyển sang màn hình xử lý của Người 2
@@ -528,7 +528,6 @@ export const AUDIT_ACTIONS = Object.freeze({
   ANNOUNCEMENT_PUBLISHED: 'ANNOUNCEMENT_PUBLISHED',
   WORKORDER_ASSIGNED: 'WORKORDER_ASSIGNED',
   AMENITY_FEE_CHANGED: 'AMENITY_FEE_CHANGED',
-  AMENITY_PASS_CANCELLED: 'AMENITY_PASS_CANCELLED',
   BOOKING_CANCELLED_BY_STAFF: 'BOOKING_CANCELLED_BY_STAFF',
   AMENITY_VISIT_CANCELLED: 'AMENITY_VISIT_CANCELLED',
   // Module A (Vũ Việt)
@@ -573,6 +572,8 @@ export const AUDIT_ACTIONS = Object.freeze({
   DUTY_SHIFT_DELETED: 'DUTY_SHIFT_DELETED',
   TICKET_CLAIMED: 'TICKET_CLAIMED',
   TICKET_QUOTE_DECIDED: 'TICKET_QUOTE_DECIDED',
+  TICKET_RECLASSIFIED: 'TICKET_RECLASSIFIED',
+  TICKET_MERGED: 'TICKET_MERGED',
   BOOKING_PAYMENT_CONFIRMED: 'BOOKING_PAYMENT_CONFIRMED',
 });
 
@@ -596,7 +597,6 @@ export const AUDIT_TARGETS = Object.freeze({
   FUND_PROPOSAL: 'fund_proposals',
   FUND_TRANSACTION: 'fund_transactions',
   AMENITY: 'amenities',
-  AMENITY_PASS: 'amenity_passes',
   AMENITY_VISIT: 'amenity_visits',
   BOOKING: 'bookings',
   WORK_ORDER: 'work_orders',
@@ -633,8 +633,6 @@ export const CONFIG_KEYS = Object.freeze({
   RECEPTION_CLOSE_TIME: 'RECEPTION_CLOSE_TIME',
   CHILD_FREE_AGE: 'CHILD_FREE_AGE',
   CHILD_ADULT_AGE: 'CHILD_ADULT_AGE',
-  WALK_IN_VISIT_MINUTES: 'WALK_IN_VISIT_MINUTES',
-  PASS_EXPIRY_REMIND_DAYS: 'PASS_EXPIRY_REMIND_DAYS',
   PARKING_CAPACITY_MOTORBIKE: 'PARKING_CAPACITY_MOTORBIKE',
   PARKING_CAPACITY_CAR: 'PARKING_CAPACITY_CAR',
   UPLOAD_MAX_SIZE_MB: 'UPLOAD_MAX_SIZE_MB',
@@ -651,7 +649,7 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.SLA_HOURS_HIGH, value: 72, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Cao (giờ) — BR-O7' },
   { key: CONFIG_KEYS.SLA_HOURS_MEDIUM, value: 168, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Thường (giờ) — BR-O7' },
   { key: CONFIG_KEYS.SLA_HOURS_LOW, value: 168, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Thấp (giờ)' },
-  { key: CONFIG_KEYS.TICKET_AUTO_CLOSE_DAYS, value: 7, scope: CONFIG_SCOPES.BUSINESS, description: 'Tự đóng ticket chờ xác nhận sau N ngày — BR-O9' },
+  { key: CONFIG_KEYS.TICKET_AUTO_CLOSE_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Cư dân không nghiệm thu sau N ngày thì tự chuyển Đã nghiệm thu (không tính sao), nhắc trước 1 ngày — M5-1' },
   { key: CONFIG_KEYS.PAYMENT_TERM_DAYS, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn thanh toán hóa đơn (ngày) — BR-F8' },
   { key: CONFIG_KEYS.DEBT_REMINDER_INTERVAL_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Nhắc nợ quá hạn N ngày/lần (lần đầu ngay ngày đầu quá hạn) — UC31, X8' },
   { key: CONFIG_KEYS.QUOTE_REMIND_DAYS, value: 2, scope: CONFIG_SCOPES.BUSINESS, description: 'Báo giá sửa chữa chờ quá N ngày chưa phản hồi thì nhắc Người nộp phí — UC48, X8' },
@@ -671,8 +669,6 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.RECEPTION_CLOSE_TIME, value: '22:00', scope: CONFIG_SCOPES.BUSINESS, description: 'Giờ lễ tân kết thúc (HH:mm) — BR-O15' },
   { key: CONFIG_KEYS.CHILD_FREE_AGE, value: 6, scope: CONFIG_SCOPES.BUSINESS, description: 'Dưới số tuổi này được vào tiện ích miễn phí, cần người lớn đi kèm — BR-O24' },
   { key: CONFIG_KEYS.CHILD_ADULT_AGE, value: 12, scope: CONFIG_SCOPES.BUSINESS, description: 'Từ số tuổi này tính giá người lớn; từ CHILD_FREE_AGE đến dưới mốc này tính giá trẻ em — BR-O24' },
-  { key: CONFIG_KEYS.WALK_IN_VISIT_MINUTES, value: 120, scope: CONFIG_SCOPES.BUSINESS, description: 'Thời lượng 1 lượt vào tiện ích vào cửa (phút), dùng đếm số người đang ở trong — BR-O23' },
-  { key: CONFIG_KEYS.PASS_EXPIRY_REMIND_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Nhắc gia hạn gói tháng trong N ngày cuối tháng — BR-O22' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, value: 500, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi xe máy' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_CAR, value: 100, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi ô tô' },
   { key: CONFIG_KEYS.TICKET_ACK_MINUTES, value: 30, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn kỹ thuật viên nhận sự cố kể từ lúc gửi (phút)' },

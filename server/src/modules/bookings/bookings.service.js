@@ -15,7 +15,6 @@ import { amenityVisibleTo, canIncurCharges } from '../amenities/access.queries.j
 import { assertNoOverdue, hasOverdueInvoice } from '../amenities/overdue.js';
 import { accessModeOf, formatVnd } from '../amenities/pricing.js';
 import { atTime, buildSlotGrid, getBookingConfig, toVnYmd, vnDayStart } from '../amenities/slot.utils.js';
-import { getActivePass } from '../amenityPasses/passes.queries.js';
 import { assertMember, getMyHouseholds } from '../household/household.service.js';
 import { ensureCodes, resolveApartmentId, resolveMemberCode } from '../memberCodes/memberCodes.service.js';
 import { checkInWindow, findDayBookings, isInCheckInWindow, loadBookingView, presentDayBookings, vnHHmm } from './bookings.queries.js';
@@ -83,20 +82,16 @@ export async function getSlots(user, amenityId, { date, apartmentId }, { now = n
     .lean();
 
   let viewer = null;
-  let baseFee = amenity.feePerBooking;
-  let usesPass = false;
+  const baseFee = amenity.feePerBooking;
   let myApartmentId = null;
   if (user.role === ROLES.RESIDENT) {
     myApartmentId = await resolveApartmentId(user.id, apartmentId);
     const { me } = await assertMember(user.id, myApartmentId);
-    const [pass, canCharge, overdue, activeCount] = await Promise.all([
-      getActivePass(user.id, amenityId, dayStart),
+    const [canCharge, overdue, activeCount] = await Promise.all([
       canIncurCharges(user.id, myApartmentId, me.isHead),
       hasOverdueInvoice(myApartmentId, now),
       Booking.countDocuments(unusedFilter(myApartmentId, now)),
     ]);
-    usesPass = Boolean(pass);
-    if (pass) baseFee = 0;
     viewer = {
       apartmentId: myApartmentId,
       isHead: me.isHead,
@@ -105,7 +100,6 @@ export async function getSlots(user, amenityId, { date, apartmentId }, { now = n
       activeCount,
       maxActive: cfg.maxActivePerApartment,
       limitReached: activeCount >= cfg.maxActivePerApartment,
-      passId: pass?._id ?? null,
     };
   }
 
@@ -132,7 +126,6 @@ export async function getSlots(user, amenityId, { date, apartmentId }, { now = n
       booked,
       remaining,
       fee: baseFee,
-      usesPass,
       available: lockReason === null,
       lockReason,
       lockMessage: lockReason ? LOCK_MESSAGES[lockReason].replace('{days}', cfg.advanceDays) : null,
@@ -203,7 +196,6 @@ async function placeBooking(
   const cfg = await getBookingConfig();
   const holdMinutes = Number(await getConfig(CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES));
   const notReplaced = replacing ? { _id: { $ne: replacing._id } } : {};
-  let usedPass = null;
 
   const created = await withTransaction(async (session) => {
     // Khóa theo tiện ích: mọi booking cùng tiện ích ghi lên cùng 1 document → giao dịch đến sau xung đột và chạy lại,
@@ -240,11 +232,10 @@ async function placeBooking(
 
     if ((await Booking.countDocuments(sameSlot).session(session)) >= amenity.capacityPerSlot) throw new ApiError('BOOKING_SLOT_CONFLICT');
 
-    // Phí snapshot: có gói tháng còn hiệu lực → 0, ngược lại phí/lượt (BR-O13). Phí > 0 phải là chủ hộ hoặc được bật quyền (BR-O26)
-    usedPass = await getActivePass(bookerId, amenityId, startAt);
+    // Phí snapshot theo phí/lượt lúc đặt (BR-O13). Phí > 0 phải là chủ hộ hoặc được bật quyền (BR-O26)
     // Đổi lịch booking đã trả tiền: giữ đúng số đã trả, không thu thêm / không hoàn chênh lệch khi tiện ích đổi giá
     const prepaid = Boolean(replacing?.paidAt);
-    const fee = prepaid ? replacing.fee : usedPass ? 0 : amenity.feePerBooking;
+    const fee = prepaid ? replacing.fee : amenity.feePerBooking;
     let chargedTo = null;
     if (fee > 0) {
       if (await canIncurCharges(bookerId, apartmentId, me.isHead)) chargedTo = bookerId;
@@ -265,7 +256,6 @@ async function placeBooking(
           bookedBy: bookerId,
           ...draft,
           fee,
-          passId: usedPass?._id ?? null,
           chargedTo,
           createdByStaff: staff?.id ?? null,
           ...(immediate && { status: BOOKING_STATUS.CHECKED_IN, checkedInAt: now, checkedInBy: staff.id }),
@@ -304,7 +294,7 @@ async function placeBooking(
   }
 
   const { booking, amenity } = created;
-  const feeText = booking.fee > 0 ? `Phí ${formatVnd(booking.fee)}` : usedPass ? 'Miễn phí theo gói tháng' : 'Miễn phí';
+  const feeText = booking.fee > 0 ? `Phí ${formatVnd(booking.fee)}` : 'Miễn phí';
   const checkedIn = booking.status === BOOKING_STATUS.CHECKED_IN;
   const held = booking.status === BOOKING_STATUS.PENDING_PAYMENT;
   const holdText = held ? ` Đang giữ chỗ đến ${fmtTimeVn(booking.holdExpiresAt)}, vui lòng thanh toán trước giờ này.` : '';

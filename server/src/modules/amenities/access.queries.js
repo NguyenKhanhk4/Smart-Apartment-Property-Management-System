@@ -1,5 +1,5 @@
 // Quyền dùng tiện ích dùng chung cho booking (UC-D06/D07), gói tháng (UC-D09), lượt vào (UC-D10).
-// Chỉ phụ thuộc model để bookings / amenityPasses / amenityVisits / memberCodes import mà không vòng.
+// Chỉ phụ thuộc model để bookings / memberCodes import mà không vòng.
 import { MemberCode } from '../../models/index.js';
 
 /** Tiện ích riêng tòa chỉ dành cho căn thuộc tòa đó; chung toàn khu thì mọi căn */

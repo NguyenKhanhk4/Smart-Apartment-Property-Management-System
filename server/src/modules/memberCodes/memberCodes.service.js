@@ -3,12 +3,10 @@
 import { Apartment, Building, MemberCode, User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { retryOnDuplicate } from '../../utils/codeGenerator.js';
-import { periodEnd, toVnYmd, vnDayStart, vnPeriod } from '../../utils/time.js';
+import { toVnYmd, vnDayStart } from '../../utils/time.js';
 import { escapeRegex } from '../../utils/pagination.js';
 import { ageAt, ageGroupOf } from '../amenities/pricing.js';
 import { getBookingConfig } from '../amenities/slot.utils.js';
-import { activePassesByUser } from '../amenityPasses/passes.queries.js';
-import { listVisitsToday } from '../amenityVisits/visits.queries.js';
 import { listApartmentBookingsToday } from '../bookings/bookings.queries.js';
 import { assertHead, getHousehold, getMyHouseholds } from '../household/household.service.js';
 
@@ -153,13 +151,6 @@ export async function getHouseholdView(userId, apartmentId) {
   await assertHead(userId, id);
   const [{ household, byUser }, cfg] = await Promise.all([activeCodesOf(id), getBookingConfig()]);
   const now = new Date();
-  // Gói tháng đang có (tháng này và tháng sau) của từng người — UC-D09
-  const current = vnPeriod(now);
-  const passes = await activePassesByUser(household.members.map((m) => m.userId), {
-    apartmentId: id,
-    fromMonth: current,
-    toMonth: vnPeriod(periodEnd(current)),
-  });
   return {
     apartment: apartmentView(household.apartment),
     ownerResiding: household.ownerResiding,
@@ -172,7 +163,6 @@ export async function getHouseholdView(userId, apartmentId) {
         seq: c?.seq ?? null,
         canIncurCharges: m.isHead || Boolean(c?.canIncurCharges),
         ...ageInfo(m.dateOfBirth, now, cfg),
-        passes: (passes.get(m.userId) ?? []).map((p) => ({ ...p, isCurrent: p.month === current })),
       };
     }),
   };
@@ -289,12 +279,8 @@ export async function lookup(q) {
     apartment: apartmentView(household.apartment),
     isHead: me.isHead,
     canIncurCharges: me.isHead || current.canIncurCharges,
-    // Trẻ dưới CHILD_ADULT_AGE phải có người lớn đi kèm (BR-O24) — UC-D10
+    // Trẻ dưới CHILD_ADULT_AGE phải có người lớn đi kèm (BR-O24)
     needsEscort: ageGroup !== 'ADULT',
-    // Lượt vào tiện ích hôm nay (giờ VN) của người này, mọi trạng thái — UC-D10
-    visitsToday: await listVisitsToday(me.userId, now),
-    // Gói tháng đang có hiệu lực (tháng hiện tại giờ VN) của người này — UC-D09
-    passes: (await activePassesByUser([me.userId], { fromMonth: vnPeriod(), toMonth: vnPeriod() })).get(me.userId) ?? [],
     // Booking hôm nay (giờ VN) của cả căn, mọi trạng thái; isMine = do chính người này đặt — UC-D07
     bookingsToday: await listApartmentBookingsToday(record.apartmentId, me.userId, cfg, now),
     household: household.members.map((m) => ({

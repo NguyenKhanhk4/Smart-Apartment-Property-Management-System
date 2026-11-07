@@ -52,8 +52,6 @@ export async function getBookingConfig() {
     K.RECEPTION_CLOSE_TIME,
     K.CHILD_FREE_AGE,
     K.CHILD_ADULT_AGE,
-    K.WALK_IN_VISIT_MINUTES,
-    K.PASS_EXPIRY_REMIND_DAYS,
   ]);
   let receptionOpen = isHHMM(c[K.RECEPTION_OPEN_TIME]) ? c[K.RECEPTION_OPEN_TIME] : DEFAULTS[K.RECEPTION_OPEN_TIME];
   let receptionClose = isHHMM(c[K.RECEPTION_CLOSE_TIME]) ? c[K.RECEPTION_CLOSE_TIME] : DEFAULTS[K.RECEPTION_CLOSE_TIME];
@@ -77,7 +75,5 @@ export async function getBookingConfig() {
     receptionClose,
     childFreeAge,
     childAdultAge,
-    walkInVisitMinutes: positiveInt(c[K.WALK_IN_VISIT_MINUTES], DEFAULTS[K.WALK_IN_VISIT_MINUTES]),
-    passExpiryRemindDays: positiveInt(c[K.PASS_EXPIRY_REMIND_DAYS], DEFAULTS[K.PASS_EXPIRY_REMIND_DAYS]),
   };
 }

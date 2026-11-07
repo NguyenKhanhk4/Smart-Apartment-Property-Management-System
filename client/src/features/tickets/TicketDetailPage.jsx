@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -30,7 +30,7 @@ import {
   TICKET_TYPES,
 } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
-import { AssignModal, ConfirmModal, ProgressModal, QuoteDecisionModal, RejectModal } from './TicketActionModals';
+import { AssignModal, ConfirmModal, MergeModal, ProgressModal, QuoteDecisionModal, ReclassifyModal, RejectModal } from './TicketActionModals';
 import { ticketActions } from './ticketActions';
 
 // Chi tiết phản ánh dùng chung cho cư dân (/r) và nội bộ (/app); nút thao tác hiện theo quyền
@@ -50,7 +50,7 @@ export default function TicketDetailPage() {
   }
   if (!t) return <Spin style={{ display: 'block', margin: 48 }} />;
 
-  const { canClaim, canAssign, canReject, canProgress, canQuote, canDecideQuote, canConfirm } = ticketActions(t, user, hasRole);
+  const { canClaim, canAssign, canReject, canProgress, canQuote, canDecideQuote, canConfirm, canReclassify, canMerge } = ticketActions(t, user, hasRole);
   const quoteList = quotes.data?.items ?? [];
   const pendingQuote = quoteList.find((q) => q.status === 'PENDING');
   const acceptedQuote = quoteList.find((q) => q.status === 'ACCEPTED');
@@ -75,6 +75,8 @@ export default function TicketDetailPage() {
               {t.assignedTo ? 'Phân công lại' : 'Phân công'}
             </Button>
           )}
+          {canReclassify && <Button onClick={() => setModal('classify')}>Đổi phân loại</Button>}
+          {canMerge && <Button onClick={() => setModal('merge')}>Gộp vào phiếu khác</Button>}
           {canReject && (
             <Button danger onClick={() => setModal('reject')}>
               Từ chối
@@ -102,6 +104,28 @@ export default function TicketDetailPage() {
           )}
         </Flex>
 
+        {t.mergedParent && (
+          <Alert
+            type="info"
+            showIcon
+            title={
+              hasRole('RESIDENT') ? (
+                `Sự cố này trùng với phiếu ${t.mergedParent.code} đang được xử lý (${TICKET_STATUS[t.mergedParent.status]?.label}). Bạn sẽ được báo khi xử lý xong.`
+              ) : (
+                <>
+                  Đã gộp vào phiếu <Link to={`/app/tickets/${t.mergedParent._id}`}>{t.mergedParent.code}</Link> — {t.mergedParent.title}
+                </>
+              )
+            }
+          />
+        )}
+        {t.mergedChildren?.length > 0 && !hasRole('RESIDENT') && (
+          <Alert
+            type="info"
+            showIcon
+            title={`Phiếu trùng đã gộp vào đây: ${t.mergedChildren.map((c) => `${c.code} (căn ${c.apartmentCode ?? '?'})`).join(', ')}`}
+          />
+        )}
         {t.isOverdue && (
           <Alert type="error" showIcon title={`Phản ánh đã quá hạn xử lý (hạn ${formatDateTime(t.dueDate)})`} />
         )}
@@ -218,6 +242,8 @@ export default function TicketDetailPage() {
 
       <AssignModal {...modalProps('assign')} />
       <RejectModal {...modalProps('reject')} />
+      <ReclassifyModal {...modalProps('classify')} />
+      <MergeModal {...modalProps('merge')} />
       <ProgressModal {...modalProps('progress')} />
       <ConfirmModal {...modalProps('confirm')} />
       <QuoteDecisionModal {...modalProps('quote')} quote={pendingQuote} />

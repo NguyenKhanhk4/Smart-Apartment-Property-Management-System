@@ -68,6 +68,7 @@ export const TICKET_STATUS = {
   WAITING_CONFIRM: { label: 'Chờ nghiệm thu', color: 'gold' },
   CLOSED: { label: 'Đã nghiệm thu', color: 'success' },
   REJECTED: { label: 'Từ chối', color: 'default' },
+  MERGED: { label: 'Đã gộp vào phiếu khác', color: 'default' },
 };
 
 // Nhóm trạng thái — giống hệt server/src/constants/enums.js (test enumParity kiểm tra). Không tự liệt kê ở từng trang.
@@ -95,6 +96,8 @@ export const TICKET_HISTORY_ACTIONS = {
   SLA_ALERTED: { label: 'Cảnh báo trễ hạn', color: 'red' },
   AUTO_CLOSED: { label: 'Hệ thống tự đóng', color: 'green' },
   REJECTED: { label: 'Từ chối', color: 'gray' },
+  RECLASSIFIED: { label: 'Đổi phân loại', color: 'purple' },
+  MERGED: { label: 'Gộp phiếu trùng', color: 'gray' },
 };
 
 // ===== Sự cố & tiện ích (Người 4) =====
@@ -291,27 +294,15 @@ export const BOOKING_STATUS = {
 export const BOOKING_ACTIVE_STATUSES = ['PENDING_PAYMENT', 'APPROVED', 'CHECKED_IN'];
 export const BOOKING_LEGACY_STATUSES = ['PENDING', 'REJECTED'];
 
-// Lượt vào tiện ích WALK_IN (UC-D10)
-export const VISIT_CHARGE_TYPES = {
-  PASS: { label: 'Gói tháng', color: 'cyan' },
-  SINGLE: { label: 'Vé lẻ', color: 'blue' },
-  FREE: { label: 'Miễn phí', color: 'green' },
-};
-export const VISIT_STATUS = {
-  VALID: { label: 'Hợp lệ', color: 'success' },
-  CANCELLED: { label: 'Đã hủy', color: 'default' },
-};
-
 // Kiểu tiện ích (accessMode). Bản ghi cũ không có accessMode coi là BOOKING
 export const AMENITY_ACCESS_MODES = {
   FREE: { label: 'Tự do', color: 'green', hint: 'Công viên, đường dạo, sân chơi ngoài trời: không đặt chỗ, không phí, chỉ hiển thị giờ và vị trí.' },
-  WALK_IN: { label: 'Vào cửa', color: 'cyan', hint: 'Gym, yoga, hồ bơi: cư dân đến thẳng, lễ tân tra mã; vào bằng gói tháng, vé lẻ hoặc miễn phí (trẻ nhỏ).' },
-  BOOKING: { label: 'Đặt chỗ', color: 'blue', hint: 'Sân tennis, cầu lông, khu BBQ: cư dân đặt slot độc quyền, lễ tân hoặc bảo vệ check-in.' },
+  BOOKING: { label: 'Đặt chỗ', color: 'blue', hint: 'Sân tennis, cầu lông, khu BBQ, gym, hồ bơi: cư dân đặt theo khung giờ (slot), lễ tân hoặc bảo vệ check-in.' },
 };
 
-// Nhóm tuổi tính giá tiện ích (BR-O24); mốc tuổi lấy từ tham số CHILD_FREE_AGE / CHILD_ADULT_AGE
+// Nhóm tuổi theo ngày sinh (hiển thị ở thẻ cư dân, gia đình, đặt hộ tại quầy); mốc tuổi lấy từ tham số CHILD_FREE_AGE / CHILD_ADULT_AGE
 export const AGE_GROUPS = {
-  CHILD_FREE: { label: 'Trẻ nhỏ (miễn phí)', color: 'green' },
+  CHILD_FREE: { label: 'Trẻ nhỏ', color: 'green' },
   CHILD: { label: 'Trẻ em', color: 'cyan' },
   ADULT: { label: 'Người lớn', color: 'default' },
 };
@@ -326,11 +317,6 @@ export const RELATION_TYPES = {
   OWNER: { label: 'Chủ sở hữu', color: 'blue' },
   TENANT: { label: 'Người thuê', color: 'geekblue' },
   FAMILY_MEMBER: { label: 'Thành viên', color: 'default' },
-};
-
-export const AMENITY_PASS_STATUS = {
-  ACTIVE: { label: 'Đang hiệu lực', color: 'green' },
-  CANCELLED: { label: 'Đã hủy', color: 'default' },
 };
 
 export const ASSET_CATEGORIES = {

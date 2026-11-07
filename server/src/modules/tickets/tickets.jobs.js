@@ -13,11 +13,12 @@ import {
 } from '../../constants/enums.js';
 import { Ticket } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
-import { notify, notifyRoles } from '../../services/notification.service.js';
+import { notify, notifyApartment, notifyRoles } from '../../services/notification.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
-import { DAY_MS, HOUR_MS, startOfVnDay } from '../../utils/time.js';
+import { DAY_MS, HOUR_MS, fmtDateTimeVn, startOfVnDay } from '../../utils/time.js';
 import { getOnDuty } from '../dutyShifts/dutyShifts.service.js';
 import { isOverdue, partsPauseExceeded, slaBreaches } from './ticket.rules.js';
+import { closeMergedChildren } from './tickets.service.js';
 
 const partsPauseMs = async () => Number(await getConfig(CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS)) * HOUR_MS;
 
@@ -93,8 +94,9 @@ export async function escalateOverdueTickets(now = new Date()) {
 }
 
 /**
- * BR-O9 — Ticket WAITING_CONFIRM quá TICKET_AUTO_CLOSE_DAYS (mặc định 7) ngày cư dân không phản hồi
- * → tự đóng CLOSED, không có rating. Cập nhật có điều kiện status để không đóng đè lên
+ * M5-1 — Ticket WAITING_CONFIRM quá TICKET_AUTO_CLOSE_DAYS (mặc định 3) ngày cư dân không phản hồi
+ * → tự chuyển Đã nghiệm thu (CLOSED, không có rating; phí sửa trong căn vẫn vào thông báo phí kỳ sau);
+ * trước hạn 1 ngày nhắc cư dân của căn (1 lần). Cập nhật có điều kiện status để không đóng đè lên
  * cư dân vừa xác nhận/không đồng ý, hoặc 2 lần chạy chồng nhau.
  */
 export async function autoCloseTickets(now = new Date()) {
@@ -103,7 +105,7 @@ export async function autoCloseTickets(now = new Date()) {
     status: TICKET_STATUS.WAITING_CONFIRM,
     resolvedAt: { $lt: new Date(now.getTime() - days * DAY_MS) },
   };
-  const tickets = await Ticket.find(filter).select('code').lean();
+  const tickets = await Ticket.find(filter).select('code title').lean();
 
   let affected = 0;
   for (const ticket of tickets) {
@@ -119,7 +121,7 @@ export async function autoCloseTickets(now = new Date()) {
             action: ACT.AUTO_CLOSED,
             fromStatus: TICKET_STATUS.WAITING_CONFIRM,
             toStatus: TICKET_STATUS.CLOSED,
-            note: `Tự đóng sau ${days} ngày cư dân không phản hồi`,
+            note: `Tự nghiệm thu sau ${days} ngày cư dân không phản hồi`,
           },
         },
       },
@@ -132,6 +134,29 @@ export async function autoCloseTickets(now = new Date()) {
       targetType: AUDIT_TARGETS.TICKET,
       targetId: ticket._id,
       metadata: { code: ticket.code, autoClosed: true },
+    });
+    await closeMergedChildren({ _id: ticket._id, code: ticket.code, title: ticket.title, status: TICKET_STATUS.CLOSED }, now);
+  }
+
+  // Nhắc trước 1 ngày: phiếu sẽ tự nghiệm thu ở lần chạy tới
+  const remind = {
+    status: TICKET_STATUS.WAITING_CONFIRM,
+    confirmRemindedAt: null,
+    resolvedAt: { $lt: new Date(now.getTime() - Math.max(days - 1, 0) * DAY_MS) },
+  };
+  const due = await Ticket.find(remind).select('code title apartmentId resolvedAt').lean();
+  for (const ticket of due) {
+    const res = await Ticket.updateOne({ _id: ticket._id, ...remind }, { $set: { confirmRemindedAt: now } });
+    if (!res.modifiedCount) continue;
+    affected += 1;
+    await notifyApartment(ticket.apartmentId, {
+      type: NOTIFICATION_TYPES.TICKET,
+      title: `Nhắc nghiệm thu ${ticket.code}`,
+      content: `"${ticket.title}" đã xử lý xong. Vui lòng nghiệm thu; nếu không phản hồi, phiếu tự chuyển Đã nghiệm thu sau ${fmtDateTimeVn(
+        new Date(new Date(ticket.resolvedAt).getTime() + days * DAY_MS),
+      )}.`,
+      refId: ticket._id,
+      link: `/r/tickets/${ticket._id}`,
     });
   }
   return affected;

@@ -18,6 +18,8 @@ export function progressOptions(ticket) {
   return STEPS[ticket.status] ?? [];
 }
 
+const NOT_STARTED = ['NEW', 'ASSIGNED'];
+
 // KTV gửi báo giá (Đã nhận), sửa bản đang chờ, hoặc báo giá lại khi đang làm phát sinh thêm (UC48)
 const QUOTABLE = ['ASSIGNED', 'WAITING_QUOTE_APPROVAL', 'IN_PROGRESS', 'WAITING_PARTS'];
 
@@ -30,11 +32,14 @@ export function ticketActions(ticket, user, hasRole) {
   const mine = hasRole('STAFF:TECHNICIAN') && ticket.assignedTo?._id === user.id;
   return {
     canClaim: hasRole('STAFF:TECHNICIAN') && isIncident && ticket.status === 'NEW' && !ticket.assignedTo,
-    canAssign: dispatcher && isIncident && !isFinal && ticket.status !== 'WAITING_CONFIRM',
+    canAssign: dispatcher && isIncident && !isFinal && !['WAITING_CONFIRM', 'MERGED'].includes(ticket.status),
     canReject: dispatcher && ['NEW', 'ASSIGNED'].includes(ticket.status),
     canProgress: mine && progressOptions(ticket).length > 0,
     canQuote: mine && isIncident && ticket.scope === 'IN_APARTMENT' && QUOTABLE.includes(ticket.status),
     canDecideQuote: resident && ticket.status === 'WAITING_QUOTE_APPROVAL',
     canConfirm: resident && ticket.status === 'WAITING_CONFIRM',
+    // M5-5: đổi loại / phạm vi khi chưa bắt đầu xử lý; M5-6: gộp sự cố khu vực chung chưa bắt đầu xử lý vào phiếu khác
+    canReclassify: (dispatcher || mine) && NOT_STARTED.includes(ticket.status),
+    canMerge: dispatcher && isIncident && ticket.scope === 'COMMON_AREA' && NOT_STARTED.includes(ticket.status),
   };
 }

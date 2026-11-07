@@ -3,7 +3,7 @@ import { ticketApi } from '../../api/moduleE.api';
 import { QuoteItems } from '../repairQuotes/QuotePanel';
 import { formatMoney } from '../../utils/format';
 import { useAction, useApi } from '../../hooks/useApi';
-import { PRIORITIES, TICKET_STATUS, enumOptions } from '../../constants/enums';
+import { PRIORITIES, TICKET_SCOPES, TICKET_STATUS, TICKET_TYPES, enumOptions } from '../../constants/enums';
 import { keysOf } from '../../utils/status';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
 import { toFiles } from '../../utils/upload';
@@ -237,3 +237,78 @@ export function QuoteDecisionModal({ ticket, quote: pending, open, onClose, onDo
     </ActionModal>
   );
 }
+
+// M5-5 — đổi loại / phạm vi phiếu chưa bắt đầu xử lý; hạn SLA tính lại từ lúc đổi
+export function ReclassifyModal({ ticket, open, onClose, onDone }) {
+  const [form] = Form.useForm();
+  const type = Form.useWatch('type', form) ?? ticket.type;
+  return (
+    <ActionModal
+      title={`Đổi phân loại ${ticket.code}`}
+      open={open}
+      onClose={onClose}
+      onDone={onDone}
+      form={form}
+      okText="Đổi phân loại"
+      success="Đã đổi phân loại phiếu"
+      initialValues={{ type: ticket.type, scope: ticket.scope }}
+      action={({ type: nextType, scope, reason }) =>
+        ticketApi.classify(ticket._id, { type: nextType, ...(nextType === 'INCIDENT' && { scope }), reason })
+      }
+    >
+      <Form.Item name="type" label="Loại phiếu" extra="Đổi sang Phản ánh thì phiếu bỏ kỹ thuật viên, chuyển cho Trưởng BQL xử lý">
+        <Radio.Group optionType="button" buttonStyle="solid" options={enumOptions(TICKET_TYPES)} />
+      </Form.Item>
+      {type === 'INCIDENT' && (
+        <Form.Item name="scope" label="Phạm vi" extra="Trong căn hộ: phải gửi báo giá cho Người nộp phí trước khi sửa">
+          <Radio.Group options={enumOptions(TICKET_SCOPES)} />
+        </Form.Item>
+      )}
+      <Form.Item name="reason" label="Lý do" rules={[{ required: true, min: 5, message: 'Nhập lý do (tối thiểu 5 ký tự)' }]}>
+        <Input.TextArea rows={3} maxLength={500} showCount />
+      </Form.Item>
+    </ActionModal>
+  );
+}
+
+// M5-6 — gộp phiếu trùng vào phiếu chính (sự cố khu vực chung đang mở cùng tòa, cùng loại sự cố)
+export function MergeModal({ ticket, open, onClose, onDone }) {
+  const { data: similar = [], loading } = useApi(
+    () =>
+      ticketApi.similar({
+        apartmentId: ticket.apartmentId?._id ?? ticket.apartmentId,
+        categoryId: ticket.category?._id ?? ticket.category,
+        excludeId: ticket._id,
+      }),
+    [ticket._id],
+    { enabled: open },
+  );
+  return (
+    <ActionModal
+      title={`Gộp ${ticket.code} vào phiếu khác`}
+      open={open}
+      onClose={onClose}
+      onDone={onDone}
+      okText="Gộp phiếu"
+      success="Đã gộp phiếu"
+      action={({ parentId, note }) => ticketApi.merge(ticket._id, { parentId, note })}
+    >
+      <Form.Item
+        name="parentId"
+        label="Phiếu chính"
+        extra="Phiếu này sẽ đóng theo phiếu chính; người báo được thông báo khi xử lý xong"
+        rules={[{ required: true, message: 'Chọn phiếu chính' }]}
+      >
+        <Select
+          loading={loading}
+          placeholder={similar.length ? 'Chọn phiếu đang xử lý cùng sự cố' : 'Không có sự cố cùng loại đang mở trong tòa'}
+          options={similar.map((s) => ({ value: s._id, label: `${s.code} · ${s.title} (${TICKET_STATUS[s.status]?.label ?? s.status})` }))}
+        />
+      </Form.Item>
+      <Form.Item name="note" label="Ghi chú">
+        <Input.TextArea rows={2} maxLength={500} />
+      </Form.Item>
+    </ActionModal>
+  );
+}
+

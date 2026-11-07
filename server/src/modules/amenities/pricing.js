@@ -1,5 +1,4 @@
-// Giá tiện ích theo nhóm tuổi (BR-O24). Hàm thuần — không đọc DB; tuổi tính theo ngày lịch giờ Việt Nam.
-// Dùng lại ở bước vé lẻ / gói tháng / billing: ageGroupOf(user.dateOfBirth, mốc phát sinh, cfg) → visitFee / passFee.
+// Kiểu tiện ích, nhóm tuổi, định dạng giá. Hàm thuần — không đọc DB; tuổi tính theo ngày lịch giờ Việt Nam.
 import { AGE_GROUPS, AMENITY_ACCESS_MODES, CONFIG_KEYS, CONFIG_DEFAULTS } from '../../constants/enums.js';
 import { VN_OFFSET_MS } from '../../utils/time.js';
 
@@ -50,50 +49,12 @@ export function ageGroupOf(dateOfBirth, at = new Date(), cfg = DEFAULT_AGE_CFG) 
   return AGE_GROUPS.ADULT;
 }
 
-/** Phí 1 lượt vào (tiện ích WALK_IN) theo nhóm tuổi; trẻ dưới mốc miễn phí luôn 0. Kiểu khác không tính theo lượt → 0. */
-export function visitFee(amenity, group) {
-  if (group === AGE_GROUPS.CHILD_FREE) return 0;
-  const fee = group === AGE_GROUPS.CHILD ? amenity?.perVisitFeeChild : amenity?.perVisitFeeAdult;
-  return fee ?? 0;
-}
-
-/** Phí gói tháng theo nhóm tuổi; null = tiện ích không bán gói (trẻ CHILD_FREE không cần gói nên 0 nếu có bán gói). */
-export function passFee(amenity, group) {
-  const adult = amenity?.monthlyPassFeeAdult ?? null;
-  const child = amenity?.monthlyPassFeeChild ?? null;
-  if (adult === null || child === null) return null;
-  if (group === AGE_GROUPS.CHILD_FREE) return 0;
-  return group === AGE_GROUPS.CHILD ? child : adult;
-}
-
 /** 1250000 → "1.250.000 đ" */
 export const formatVnd = (n) => `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')} đ`;
 const money = formatVnd;
 
-/** Dòng giá hiển thị sẵn cho FE: "Người lớn 50.000 đ · Trẻ em 30.000 đ / lượt · Gói 400.000 đ/tháng" */
+/** Dòng giá hiển thị sẵn cho FE: "100.000 đ / lượt đặt" */
 export function priceSummaryOf(amenity) {
-  const mode = accessModeOf(amenity);
-  if (mode === AMENITY_ACCESS_MODES.FREE) return 'Miễn phí';
-
-  const parts = [];
-  if (mode === AMENITY_ACCESS_MODES.WALK_IN) {
-    const adult = amenity.perVisitFeeAdult ?? 0;
-    const child = amenity.perVisitFeeChild ?? 0;
-    parts.push(
-      adult === 0 && child === 0
-        ? 'Miễn phí vé lẻ'
-        : `Người lớn ${adult ? money(adult) : 'miễn phí'} · Trẻ em ${child ? money(child) : 'miễn phí'} / lượt`,
-    );
-  } else {
-    parts.push(amenity.feePerBooking ? `${money(amenity.feePerBooking)} / lượt đặt` : 'Miễn phí đặt chỗ');
-  }
-
-  const adultPass = passFee(amenity, AGE_GROUPS.ADULT);
-  if (adultPass !== null) {
-    const childPass = passFee(amenity, AGE_GROUPS.CHILD);
-    parts.push(
-      childPass === adultPass ? `Gói ${money(adultPass)}/tháng` : `Gói ${money(adultPass)}/tháng (trẻ em ${money(childPass)})`,
-    );
-  }
-  return parts.join(' · ');
+  if (accessModeOf(amenity) === AMENITY_ACCESS_MODES.FREE) return 'Miễn phí';
+  return amenity.feePerBooking ? `${money(amenity.feePerBooking)} / lượt đặt` : 'Miễn phí đặt chỗ';
 }

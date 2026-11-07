@@ -5,7 +5,7 @@ import { useResident } from '../../hooks/useResident';
 import ResidentCard from './ResidentCard';
 
 // UC-D11 — "Mã của tôi": thẻ cư dân (ảnh + mã chữ) để đọc cho lễ tân / bảo vệ. Ở nhiều căn thì chọn căn.
-// Gói tháng nằm ở Tiện ích › Gói tháng; quản lý gia đình ở Căn hộ của tôi.
+// Quản lý gia đình ở Căn hộ của tôi.
 export default function MyCodePage() {
   const { cards, card, apartmentId, setApartmentId, loading } = useResident();
 
@@ -40,7 +40,7 @@ export default function MyCodePage() {
                 description={
                   card.canIncurCharges
                     ? 'Phí tiện ích bạn sử dụng sẽ cộng vào hóa đơn của căn hộ.'
-                    : 'Bạn vẫn dùng được tiện ích miễn phí và gói của mình. Muốn dùng tiện ích có phí, nhờ chủ hộ bật quyền trong mục Căn hộ và gia đình.'
+                    : 'Bạn vẫn dùng được tiện ích miễn phí. Muốn dùng tiện ích có phí, nhờ chủ hộ bật quyền trong mục Căn hộ và gia đình.'
                 }
               />
             )}
