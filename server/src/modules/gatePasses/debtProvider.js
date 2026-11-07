@@ -1,21 +1,18 @@
-import mongoose from 'mongoose';
-import { INVOICE_OUTSTANDING_STATUSES } from '../../constants/enums.js';
-import { Invoice } from '../../models/index.js';
+import { checkApartmentDebt } from '../debts/debts.check.js';
 
 /**
- * Công nợ hiện tại của căn hộ = tổng số còn nợ (tổng − đã trả) của thông báo phí đã phát hành chưa trả đủ
- * (Chưa thanh toán / Thanh toán một phần / Quá hạn). Dùng khi Trưởng BQL duyệt Gate Pass chuyển đồ ra (UC53).
- * @returns {Promise<{ amount: number, invoiceCount: number, available: true }>}
+ * Công nợ hiện tại của căn hộ khi Trưởng BQL duyệt Gate Pass chuyển đồ ra (UC53, M7-G1).
+ * Lấy từ UC23 của Mô đun 4 (`debts.check.js`): tổng nợ ròng các Người nộp phí (còn nợ − Số dư trả trước của từng người).
+ * Giữ nguyên dạng trả về cũ; thêm `overdueAmount`, `byPayer` để hiển thị chi tiết nếu cần.
+ * @returns {Promise<{ amount: number, invoiceCount: number, overdueAmount: number, byPayer: object[], available: true }>}
  */
 export async function getApartmentDebt(apartmentId) {
-  const [row] = await Invoice.aggregate([
-    {
-      $match: {
-        apartmentId: new mongoose.Types.ObjectId(String(apartmentId)),
-        status: { $in: [...INVOICE_OUTSTANDING_STATUSES] },
-      },
-    },
-    { $group: { _id: null, amount: { $sum: { $subtract: ['$totalAmount', '$paidAmount'] } }, invoiceCount: { $sum: 1 } } },
-  ]);
-  return { amount: row?.amount ?? 0, invoiceCount: row?.invoiceCount ?? 0, available: true };
+  const debt = await checkApartmentDebt(apartmentId);
+  return {
+    amount: debt.amount,
+    invoiceCount: debt.invoiceCount,
+    overdueAmount: debt.overdueAmount,
+    byPayer: debt.byPayer.map(({ payerId, fullName, net, overdueAmount }) => ({ payerId, fullName, amount: net, overdueAmount })),
+    available: true,
+  };
 }

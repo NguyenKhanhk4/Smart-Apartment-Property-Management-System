@@ -11,7 +11,7 @@ import { ERROR_MESSAGES } from '../../../client/src/constants/errorMessages.js';
 const SERVER_ONLY = new Set([
   'CONFIG_KEYS', 'CONFIG_SCOPES', 'CRON_STATUS', 'CRON_TRIGGERS', 'AUDIT_ACTIONS', 'AUDIT_TARGETS',
   'VERIFICATION_PURPOSES', 'VERIFICATION_CHANNELS', 'PRIORITY_ORDER', 'DEFAULT_CONFIGS', 'GENERATED_BY', 'PAYMENT_STATUS', 'ADJUSTMENT_TYPES', 'REVIEW_STATUS',
-  'DEBT_STATUS', 'CONTACT_METHODS', 'FUND_TX_TYPES', 'VOTE_DECISIONS', 'EXPENSE_CATEGORIES',
+  'EXPENSE_CATEGORIES',
 ]);
 
 const isEnumObject = (v) => v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).every((x) => typeof x === 'string');

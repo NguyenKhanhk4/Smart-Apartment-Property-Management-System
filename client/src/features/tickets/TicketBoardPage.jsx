@@ -77,6 +77,7 @@ export default function TicketBoardPage() {
                         </Typography.Text>
                         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                           {t.assignedTo?.fullName ?? 'Chưa có người nhận'} · hạn {formatDateTime(t.dueDate)}
+                          {t.slaPausedAt && ' (SLA tạm dừng)'}
                         </Typography.Text>
                         {col.status !== 'WAITING_CONFIRM' && (
                           <Button

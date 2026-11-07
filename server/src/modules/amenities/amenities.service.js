@@ -21,6 +21,7 @@ const MODE_FIELDS = [
   'slotDurationMinutes',
   'capacityPerSlot',
   'feePerBooking',
+  'changeDeadlineHours',
   'perVisitFeeAdult',
   'perVisitFeeChild',
   'maxConcurrent',
@@ -43,6 +44,10 @@ const LABELS = {
   monthlyPassFeeAdult: 'Giá gói tháng người lớn',
   monthlyPassFeeChild: 'Giá gói tháng trẻ em',
 };
+
+const DEFAULT_CHANGE_DEADLINE_HOURS = 24;
+// Lưới slot: đổi khi còn booking sắp tới thì booking cũ lệch khung giờ / vượt sức chứa thật
+const GRID_FIELDS = ['openTime', 'closeTime', 'slotDurationMinutes'];
 
 const blank = (v) => v === undefined || v === null || v === '';
 const orNull = (v) => (blank(v) ? null : v);
@@ -121,6 +126,7 @@ export async function resolveAmenityFields(raw) {
     slotDurationMinutes: mode === MODE.BOOKING ? raw.slotDurationMinutes : null,
     capacityPerSlot: mode === MODE.BOOKING ? raw.capacityPerSlot : null,
     feePerBooking: mode === MODE.BOOKING ? (orNull(raw.feePerBooking) ?? 0) : 0,
+    changeDeadlineHours: orNull(raw.changeDeadlineHours) ?? DEFAULT_CHANGE_DEADLINE_HOURS,
     perVisitFeeAdult: mode === MODE.WALK_IN ? raw.perVisitFeeAdult : 0,
     perVisitFeeChild: mode === MODE.WALK_IN ? raw.perVisitFeeChild : 0,
     maxConcurrent: mode === MODE.WALK_IN ? orNull(raw.maxConcurrent) : null,
@@ -211,6 +217,7 @@ export async function updateAmenity(user, id, body, files) {
   const modeChanged = body.accessMode !== undefined && body.accessMode !== oldMode;
   // Đổi kiểu làm các booking sắp tới mất nghĩa → chặn (BR-O19)
   if (modeChanged && (await hasUpcomingBookings(id))) throw new ApiError('AMENITY_HAS_ACTIVE_BOOKINGS');
+  await assertGridEditable(id, current, body);
 
   await normalizeBuilding(body);
   // Kiểm tra trên giá trị sau khi ghép (sửa 1 field vẫn phải hợp lệ với các field cũ). Đổi kiểu → nhóm trường riêng
@@ -226,10 +233,13 @@ export async function updateAmenity(user, id, body, files) {
   if (imageUrl) amenity.imageUrl = imageUrl;
   await amenity.save();
 
-  // Booking mới có thể chen vào giữa lúc kiểm tra và lúc ghi → kiểm tra lại, hoàn tác kiểu cũ (cùng cách với setAmenityStatus)
-  if (modeChanged && (await hasUpcomingBookings(id))) {
+  // Booking mới có thể chen vào giữa lúc kiểm tra và lúc ghi → kiểm tra lại, hoàn tác (cùng cách với setAmenityStatus)
+  try {
+    if (modeChanged && (await hasUpcomingBookings(id))) throw new ApiError('AMENITY_HAS_ACTIVE_BOOKINGS');
+    await assertGridEditable(id, current, body);
+  } catch (err) {
     await Amenity.updateOne({ _id: id }, { $set: pick(current, MODE_FIELDS) });
-    throw new ApiError('AMENITY_HAS_ACTIVE_BOOKINGS');
+    throw err;
   }
 
   const changes = {};
@@ -249,8 +259,30 @@ export async function updateAmenity(user, id, body, files) {
   return presentAmenity(amenity);
 }
 
-const hasUpcomingBookings = (amenityId) =>
-  Booking.exists({ amenityId, status: { $in: BOOKING_ACTIVE_STATUSES }, endAt: { $gt: new Date() } });
+const upcoming = (amenityId) => ({ amenityId, status: { $in: BOOKING_ACTIVE_STATUSES }, endAt: { $gt: new Date() } });
+const hasUpcomingBookings = (amenityId) => Booking.exists(upcoming(amenityId));
+
+/**
+ * Còn booking sắp tới thì không đổi giờ mở/đóng cửa, thời lượng slot, và không giảm sức chứa xuống dưới số chỗ
+ * đã đặt của slot đông nhất. Muốn đổi thì hủy / chờ hết các booking đó.
+ */
+async function assertGridEditable(id, current, body) {
+  const gridChanged = GRID_FIELDS.some((f) => body[f] !== undefined && body[f] !== current[f]);
+  if (gridChanged && (await hasUpcomingBookings(id))) {
+    throw new ApiError('AMENITY_HAS_ACTIVE_BOOKINGS', 'Còn booking sắp tới: không đổi được giờ mở cửa / thời lượng slot');
+  }
+  if (body.capacityPerSlot !== undefined && body.capacityPerSlot < (current.capacityPerSlot ?? 0)) {
+    const [top] = await Booking.aggregate([
+      { $match: upcoming(current._id) },
+      { $group: { _id: '$startAt', n: { $sum: 1 } } },
+      { $sort: { n: -1 } },
+      { $limit: 1 },
+    ]);
+    if (top && top.n > body.capacityPerSlot) {
+      throw new ApiError('AMENITY_HAS_ACTIVE_BOOKINGS', `Có khung giờ sắp tới đã đặt ${top.n} chỗ, không giảm sức chứa xuống ${body.capacityPerSlot} được`);
+    }
+  }
+}
 
 // ===== UC-D05: ngừng / kích hoạt lại (không xóa cứng — BR-O17; BR-O19) =====
 export async function setAmenityStatus(id, isActive) {

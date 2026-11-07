@@ -33,6 +33,8 @@ const amenitySchema = new Schema(
     slotDurationMinutes: { type: Number, required: isBooking, default: null, min: 15 },
     capacityPerSlot: { type: Number, required: isBooking, default: null, min: 1 },
     feePerBooking: { type: Number, required: true, default: 0, min: 0 }, // 0 = miễn phí
+    // Tiện ích có phí: được đổi lịch (1 lần) nếu còn ít nhất N giờ trước giờ bắt đầu
+    changeDeadlineHours: { type: Number, default: 24, min: 0 },
     // WALK_IN: phí 1 lượt vào theo nhóm tuổi (BR-O24); số người tối đa cùng lúc (null = không giới hạn)
     perVisitFeeAdult: { type: Number, required: isWalkIn, default: 0, min: 0 },
     perVisitFeeChild: { type: Number, required: isWalkIn, default: 0, min: 0 },

@@ -280,15 +280,29 @@ for (const period of periods) {
 await M.Invoice.insertMany(invoices);
 await M.Payment.insertMany(payments);
 
-const overdueApartments = [...new Set(invoices.filter((i) => i.status === 'OVERDUE').map((i) => String(i.apartmentId)))];
+// Hồ sơ nợ quá hạn (UC31): 1 căn đã nhắc đủ 3 lần → Nợ quá hạn dài, có lời hẹn trả; các căn còn lại cron DEBT_REMIND tự mở khi chạy
+const overdueApartments = [...new Set(invoices.filter((i) => i.status === 'OVERDUE' && i.payerId).map((i) => String(i.apartmentId)))];
 await M.DebtFollowup.insertMany(
-  overdueApartments.slice(0, 3).map((apartmentId) => ({
-    apartmentId,
-    invoiceIds: invoices.filter((i) => String(i.apartmentId) === apartmentId && i.status === 'OVERDUE').map((i) => i._id),
-    assignedTo: U.letan._id,
-    assignedBy: U.manager._id,
-    activities: [{ at: daysAgo(2), by: U.letan._id, method: 'PHONE', note: 'Đã gọi, hẹn cuối tuần thanh toán', promisedDate: daysAgo(-3) }],
-  })),
+  overdueApartments.slice(0, 1).map((apartmentId) => {
+    const inv = invoices.filter((i) => String(i.apartmentId) === apartmentId && i.status === 'OVERDUE');
+    const amount = inv.reduce((sum, i) => sum + i.totalAmount - (i.paidAmount ?? 0), 0);
+    const reminders = [12, 9, 6].map((d) => ({ at: daysAgo(d, 8), amount, invoiceCodes: inv.map((i) => i.code) }));
+    return {
+      apartmentId,
+      buildingId: inv[0].buildingId,
+      payerId: inv[0].payerId,
+      status: 'LONG_OVERDUE',
+      openedAt: daysAgo(12, 8),
+      reminderCount: 3,
+      lastRemindedAt: reminders.at(-1).at,
+      reminders,
+      longOverdueAt: daysAgo(3, 8),
+      promisedDate: startOfVnDay(daysAgo(-5)),
+      activities: [
+        { at: daysAgo(2), by: U.manager._id, method: 'PHONE', response: 'Cư dân xin lùi vì đang đi công tác', promisedDate: startOfVnDay(daysAgo(-5)) },
+      ],
+    };
+  }),
 );
 
 // ===== Quỹ bảo trì =====
@@ -299,29 +313,43 @@ const addTx = (type, amount, occurredAt, description, extra = {}) => {
   balance += type === 'INCOME' ? amount : -amount;
   fundTx.push({ fundId: fund._id, type, amount, balanceAfter: balance, occurredAt, description, createdBy: U.accountant._id, ...extra });
 };
-addTx('INCOME', 1500000000, daysAgo(270), 'Kinh phí bảo trì 2% bàn giao', { source: 'Kinh phí 2% bàn giao' });
+const fundSeq = { PTQ: 0, PCQ: 0 };
+const fundCode = (prefix, at) => `${prefix}-${vnPeriod(at).replace('-', '')}-${String((fundSeq[prefix] += 1)).padStart(5, '0')}`;
+addTx('INCOME', 1500000000, daysAgo(270), 'Kinh phí bảo trì 2% bàn giao', {
+  source: 'Kinh phí 2% bàn giao', incomeSource: 'INITIAL_HANDOVER', documentNo: 'BB-BG-001', code: fundCode('PTQ', daysAgo(270)),
+});
 const proposals = await M.FundProposal.insertMany([
   {
-    fundId: fund._id, title: 'Thay cáp thang máy Block A', description: 'Cáp tải đã mòn theo biên bản kiểm định', amount: 180000000,
-    proposedBy: U.manager._id, status: 'APPROVED', finalizedBy: U.chairman._id, finalizedAt: daysAgo(150), finalNote: 'Đồng ý',
+    code: 'DXQ-SEED-00001', fundId: fund._id, title: 'Thay cáp thang máy Block A', description: 'Cáp tải đã mòn theo biên bản kiểm định', amount: 180000000,
+    planType: 'ANNUAL_PLAN', planRef: 'Kế hoạch bảo trì năm (Hội nghị nhà chung cư)', largeRepair: true, workAcceptedBy: U.manager._id, workAcceptedAt: daysAgo(151),
+    proposedBy: U.accountant._id, status: 'PAID', paidAt: daysAgo(150), boardSize: 3, finalizedBy: U.chairman._id, finalizedAt: daysAgo(152), finalNote: '3/3 thành viên đồng ý',
     votes: [U.chairman, U.bqt1, U.bqt2].map((u) => ({ memberId: u._id, decision: 'AGREE', votedAt: daysAgo(152) })),
   },
   {
-    fundId: fund._id, title: 'Sơn lại hành lang Block B', description: 'Tường hành lang bong tróc', amount: 95000000,
-    proposedBy: U.manager._id, status: 'APPROVED', finalizedBy: U.chairman._id, finalizedAt: daysAgo(60),
+    code: 'DXQ-SEED-00002', fundId: fund._id, title: 'Sơn lại hành lang Block B', description: 'Tường hành lang bong tróc', amount: 95000000,
+    planType: 'ANNUAL_PLAN', planRef: 'Kế hoạch bảo trì năm (Hội nghị nhà chung cư)',
+    proposedBy: U.accountant._id, status: 'PAID', paidAt: daysAgo(60), boardSize: 3, finalizedBy: U.bqt1._id, finalizedAt: daysAgo(62), finalNote: '2/3 thành viên đồng ý',
     votes: [U.chairman, U.bqt1].map((u) => ({ memberId: u._id, decision: 'AGREE', votedAt: daysAgo(62) })),
   },
   {
-    fundId: fund._id, title: 'Nâng cấp hệ thống PCCC', description: 'Thay đầu báo khói tầng 1-5', amount: 120000000,
-    proposedBy: U.manager._id, status: 'PENDING', votes: [{ memberId: U.bqt1._id, decision: 'AGREE', votedAt: daysAgo(1) }],
+    code: 'DXQ-SEED-00003', fundId: fund._id, title: 'Nâng cấp hệ thống PCCC', description: 'Thay đầu báo khói tầng 1-5', amount: 120000000,
+    planType: 'UNSCHEDULED', urgentReason: 'Đầu báo khói hỏng hàng loạt sau đợt kiểm tra PCCC',
+    proposedBy: U.accountant._id, status: 'PENDING', votes: [{ memberId: U.bqt1._id, decision: 'AGREE', votedAt: daysAgo(1) }],
   },
 ]);
-addTx('INCOME', 12500000, daysAgo(180), 'Lãi tiền gửi quý 1', { source: 'Lãi tiền gửi' });
-addTx('EXPENSE', 180000000, daysAgo(150), 'Chi thay cáp thang máy Block A', { proposalId: proposals[0]._id, createdBy: U.chairman._id });
-addTx('INCOME', 13100000, daysAgo(90), 'Lãi tiền gửi quý 2', { source: 'Lãi tiền gửi' });
-addTx('EXPENSE', 95000000, daysAgo(60), 'Chi sơn hành lang Block B', { proposalId: proposals[1]._id, createdBy: U.chairman._id });
-addTx('INCOME', 13400000, daysAgo(5), 'Lãi tiền gửi quý 3', { source: 'Lãi tiền gửi' });
-await M.FundTransaction.insertMany(fundTx);
+const interest = (amount, at, quarter) =>
+  addTx('INCOME', amount, at, `Lãi tiền gửi quý ${quarter}`, { source: 'Lãi tiền gửi', incomeSource: 'INTEREST', documentNo: `SK-LAI-Q${quarter}`, code: fundCode('PTQ', at) });
+const expense = (amount, at, description, proposal, documentNo) =>
+  addTx('EXPENSE', amount, at, description, { proposalId: proposal._id, documentNo, code: fundCode('PCQ', at) });
+interest(12500000, daysAgo(180), 1);
+expense(180000000, daysAgo(150), 'Chi thay cáp thang máy Block A', proposals[0], 'HĐ-0012345');
+interest(13100000, daysAgo(90), 2);
+expense(95000000, daysAgo(60), 'Chi sơn hành lang Block B', proposals[1], 'HĐ-0067890');
+interest(13400000, daysAgo(5), 3);
+const insertedTx = await M.FundTransaction.insertMany(fundTx);
+for (const p of proposals.slice(0, 2)) {
+  await M.FundProposal.updateOne({ _id: p._id }, { $set: { expenseTxId: insertedTx.find((t) => String(t.proposalId) === String(p._id))._id } });
+}
 fund.balance = balance;
 await fund.save();
 

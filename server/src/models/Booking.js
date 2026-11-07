@@ -38,6 +38,8 @@ const bookingSchema = new Schema(
     holdExpiresAt: { type: Date, default: null },
     paidAt: { type: Date, default: null },
     paymentRef: { type: String, default: null },
+    // Đổi lịch: booking mới trỏ về booking cũ. Tiện ích có phí chỉ được đổi 1 lần
+    rescheduledFrom: { type: ObjectId, ref: 'Booking', default: null },
   },
   schemaOptions('bookings'),
 );

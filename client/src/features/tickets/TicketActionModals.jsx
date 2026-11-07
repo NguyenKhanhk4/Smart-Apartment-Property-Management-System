@@ -1,5 +1,7 @@
 import { Form, Input, Modal, Radio, Rate, Select } from 'antd';
 import { ticketApi } from '../../api/moduleE.api';
+import { QuoteItems } from '../repairQuotes/QuotePanel';
+import { formatMoney } from '../../utils/format';
 import { useAction, useApi } from '../../hooks/useApi';
 import { PRIORITIES, TICKET_STATUS, enumOptions } from '../../constants/enums';
 import { keysOf } from '../../utils/status';
@@ -10,13 +12,11 @@ import { progressOptions } from './ticketActions';
 const TS = keysOf(TICKET_STATUS);
 
 const PROGRESS_LABEL = {
-  WAITING_QUOTE_APPROVAL: 'Gửi báo giá — chờ người nộp phí đồng ý',
   IN_PROGRESS: 'Đang xử lý (cập nhật tiến độ)',
   WAITING_PARTS: 'Chờ linh kiện',
   WAITING_CONFIRM: 'Đã xử lý xong — chờ cư dân nghiệm thu',
 };
 const NOTE_LABEL = {
-  WAITING_QUOTE_APPROVAL: 'Hạng mục và chi phí dự kiến',
   WAITING_PARTS: 'Linh kiện cần chờ, dự kiến ngày có',
   WAITING_CONFIRM: 'Ghi chú kết quả',
 };
@@ -133,11 +133,7 @@ export function ProgressModal({ ticket, open, onClose, onDone }) {
       <Form.Item name="status" label="Trạng thái">
         <Radio.Group options={options} style={{ display: 'flex', flexDirection: 'column', gap: 8 }} />
       </Form.Item>
-      <Form.Item
-        name="note"
-        label={NOTE_LABEL[status] ?? 'Ghi chú tiến độ'}
-        rules={[{ required: status === TS.WAITING_QUOTE_APPROVAL, message: 'Nhập hạng mục và chi phí dự kiến' }]}
-      >
+      <Form.Item name="note" label={NOTE_LABEL[status] ?? 'Ghi chú tiến độ'}>
         <Input.TextArea rows={3} maxLength={1000} showCount />
       </Form.Item>
       {resolved && <EvidencePhotosField name="images" label="Ảnh kết quả" />}
@@ -190,8 +186,9 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
   );
 }
 
-// Sự cố trong căn hộ — Người nộp phí đồng ý (→ Đang xử lý) hoặc từ chối (→ phiếu bị từ chối) báo giá
-export function QuoteDecisionModal({ ticket, open, onClose, onDone }) {
+// Sự cố trong căn hộ — Người nộp phí đồng ý (→ Đang xử lý) hoặc từ chối (→ phiếu bị từ chối) báo giá.
+// `quote`: bản báo giá đang chờ (form báo giá của Người 3); dữ liệu cũ không có thì lấy ghi chú trong lịch sử
+export function QuoteDecisionModal({ ticket, quote: pending, open, onClose, onDone }) {
   const quote = [...(ticket.history ?? [])].reverse().find((h) => h.action === 'QUOTE_REQUESTED');
   return (
     <ActionModal
@@ -200,11 +197,28 @@ export function QuoteDecisionModal({ ticket, open, onClose, onDone }) {
       onClose={onClose}
       onDone={onDone}
       okText="Gửi quyết định"
-      success={(res) => (res.data.status === TS.IN_PROGRESS ? 'Đã đồng ý, kỹ thuật viên sẽ tiến hành' : 'Đã từ chối báo giá')}
+      success={(res) =>
+        res.data.history?.at(-1)?.action === 'QUOTE_ACCEPTED'
+          ? 'Đã đồng ý, kỹ thuật viên sẽ tiến hành'
+          : res.data.status === TS.REJECTED
+            ? 'Đã từ chối báo giá'
+            : 'Đã từ chối chi phí phát sinh, kỹ thuật viên làm tiếp theo báo giá đã đồng ý'
+      }
       initialValues={{ accepted: true }}
       action={({ accepted, note }) => ticketApi.decideQuote(ticket._id, { accepted, note })}
     >
-      {quote?.note && (
+      {pending && (
+        <Form.Item label={`Báo giá ${pending.code}: ${formatMoney(pending.totalAmount)}`}>
+          {pending.previousAmount != null && (
+            <div className="mb-2">
+              Chi phí phát sinh so với số đã đồng ý {formatMoney(pending.previousAmount)}, cần bạn duyệt lại.
+            </div>
+          )}
+          {pending.note && <div style={{ whiteSpace: 'pre-wrap', marginBottom: 8 }}>{pending.note}</div>}
+          <QuoteItems quote={pending} />
+        </Form.Item>
+      )}
+      {!pending && quote?.note && (
         <Form.Item label="Nội dung báo giá">
           <div style={{ whiteSpace: 'pre-wrap' }}>{quote.note}</div>
         </Form.Item>
@@ -212,7 +226,7 @@ export function QuoteDecisionModal({ ticket, open, onClose, onDone }) {
       <Form.Item name="accepted" label="Quyết định">
         <Radio.Group
           options={[
-            { value: true, label: 'Đồng ý chi phí, tiến hành sửa' },
+            { value: true, label: 'Đồng ý chi phí, tiến hành sửa (tính vào thông báo phí kỳ sau khi nghiệm thu)' },
             { value: false, label: 'Từ chối, không sửa' },
           ]}
         />

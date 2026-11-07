@@ -4,6 +4,7 @@ import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AuditLog, Contract, DutyShift, Notification, Ticket } from '../../src/models/index.js';
 import * as service from '../../src/modules/tickets/tickets.service.js';
+import { submitQuote } from '../../src/modules/repairQuotes/repairQuotes.service.js';
 import { alertSlaBreaches } from '../../src/modules/tickets/tickets.jobs.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import {
@@ -123,7 +124,9 @@ test('sự cố trong căn hộ: KTV gửi báo giá → Người nộp phí đ�
   const ticket = await createTicket({ apartment, createdBy: owner, scope: 'IN_APARTMENT', status: 'ASSIGNED', assignedTo: tech._id });
 
   await assert.rejects(service.updateProgress(asUser(tech), ticket._id, { status: 'IN_PROGRESS' }), { errorCode: 'VALIDATION_ERROR' });
-  await service.updateProgress(asUser(tech), ticket._id, { status: 'WAITING_QUOTE_APPROVAL', note: 'Thay van khóa nước 350.000đ' });
+  // Gửi báo giá phải qua form báo giá (Người 3), không chuyển trạng thái trực tiếp
+  await assert.rejects(service.updateProgress(asUser(tech), ticket._id, { status: 'WAITING_QUOTE_APPROVAL', note: 'x' }), { errorCode: 'VALIDATION_ERROR' });
+  await submitQuote(asUser(tech), { ticketId: ticket._id, items: [{ description: 'Thay van khóa nước', quantity: 1, unitPrice: 350_000 }] });
 
   // X1: chỉ Người nộp phí (chủ sở hữu, hợp đồng thuê không bật tenantPaysFees) được quyết định
   await assert.rejects(service.decideQuote(asUser(tenant), ticket._id, { accepted: true }), { errorCode: 'FORBIDDEN_ROLE' });
@@ -186,4 +189,45 @@ test('phản hồi phản ánh: từ chối phản ánh ghi nhận respondedAt (
   const ticket = await createTicket({ apartment, createdBy: user, type: 'COMPLAINT', responseDueAt: new Date(Date.now() + H) });
   const rejected = await service.rejectTicket(asUser(await createManager()), ticket._id, { reason: 'Không thuộc phạm vi BQL' });
   assert.ok(rejected.respondedAt);
+});
+
+test('phiếu Lễ tân tạo hộ: KTV nhận / từ chối thì báo cư dân của căn, không báo Lễ tân', async () => {
+  const { user, apartment } = await createHousehold();
+  const category = await createCategory();
+  const receptionistDoc = await createReceptionist();
+  const tech = await createTechnician();
+  const ticket = await service.createTicketByStaff(asUser(receptionistDoc), {
+    apartmentId: apartment._id, categoryId: category._id, title: 'Mất nước', description: 'Căn hộ mất nước từ sáng', type: 'INCIDENT',
+  }, []);
+  const before = { resident: await notified(user), staff: await notified(receptionistDoc) };
+  await service.claimTicket(asUser(tech), ticket._id);
+  assert.equal(await notified(user), before.resident + 1);
+  assert.equal(await notified(receptionistDoc), before.staff);
+});
+
+test('KTV xem được chi tiết sự cố đang chờ nhận, không xem được phiếu đã giao người khác', async () => {
+  const { user, apartment } = await createHousehold();
+  const [tech, other] = await Promise.all([createTechnician(), createTechnician()]);
+  const waiting = await createTicket({ apartment, createdBy: user });
+  const taken = await createTicket({ apartment, createdBy: user, status: 'ASSIGNED', assignedTo: other._id });
+  assert.equal(String((await service.getTicket(asUser(tech), waiting._id))._id), String(waiting._id));
+  await assert.rejects(service.getTicket(asUser(tech), taken._id), { errorCode: 'FORBIDDEN_ROLE' });
+});
+
+test('M5-2: chờ linh kiện quá 48 giờ → báo Trưởng BQL 1 lần; trong 48 giờ không quá hạn', async () => {
+  const { user, apartment } = await createHousehold();
+  const manager = await createManager();
+  const tech = await createTechnician();
+  const ticket = await createTicket({ apartment, createdBy: user, status: 'IN_PROGRESS', assignedTo: tech._id, dueDate: new Date(Date.now() + H) });
+  await service.updateProgress(asUser(tech), ticket._id, { status: 'WAITING_PARTS', note: 'Chờ bơm' });
+
+  const in10h = new Date(Date.now() + 10 * H);
+  assert.equal(await alertSlaBreaches(in10h), 0);
+  const in50h = new Date(Date.now() + 50 * H);
+  assert.equal(await alertSlaBreaches(in50h), 1);
+  assert.equal(await alertSlaBreaches(in50h), 0);
+  assert.ok(await Notification.exists({ userId: manager._id, title: /chờ linh kiện/ }));
+
+  const list = await service.listTickets(asUser(manager), { overdue: true, page: 1, limit: 10 });
+  assert.equal(list.items.length, 0, 'mới dừng vài giây, chưa quá hạn');
 });

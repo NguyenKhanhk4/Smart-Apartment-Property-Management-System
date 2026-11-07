@@ -3,9 +3,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BOARD_STATUSES,
+  applySlaTransition,
   computeDeadlines,
+  effectiveDueDate,
   groupBoard,
+  isOverdue,
+  partsPauseExceeded,
   progressError,
+  quoteResumeStatus,
   routeOf,
   slaBreaches,
 } from '../../src/modules/tickets/ticket.rules.js';
@@ -77,4 +82,49 @@ test('groupBoard: cột Kanban theo trạng thái đang mở + chờ nghiệm th
   assert.equal(board.find((c) => c.status === 'NEW').items.length, 2);
   assert.equal(board.find((c) => c.status === 'WAITING_PARTS').items.length, 1);
   assert.ok(!BOARD_STATUSES.includes('CLOSED'));
+});
+
+// ----- M5-2: SLA tạm dừng -----
+const MAX = 48 * H;
+
+test('SLA dừng khi chờ cư dân đồng ý phí: không quá hạn dù qua dueDate, rời trạng thái thì cộng bù đủ thời gian chờ', () => {
+  const ticket = t({ scope: 'IN_APARTMENT', status: 'ASSIGNED', dueDate: new Date(now.getTime() + 2 * H) });
+  applySlaTransition(ticket, 'WAITING_QUOTE_APPROVAL', now, MAX);
+  ticket.status = 'WAITING_QUOTE_APPROVAL';
+  assert.equal(ticket.slaPausedAt, now);
+
+  const after3Days = new Date(now.getTime() + 72 * H);
+  assert.equal(isOverdue(ticket, after3Days, MAX), false);
+  applySlaTransition(ticket, 'IN_PROGRESS', after3Days, MAX);
+  ticket.status = 'IN_PROGRESS';
+  assert.equal(ticket.slaPausedAt, null);
+  assert.equal(ticket.dueDate.getTime(), now.getTime() + 74 * H, 'còn đúng 2 giờ như lúc gửi báo giá');
+  assert.equal(isOverdue(ticket, after3Days, MAX), false);
+});
+
+test('SLA chờ linh kiện: dừng tối đa 48 giờ rồi chạy tiếp; quá 48 giờ thì cần cảnh báo 1 lần', () => {
+  const ticket = t({ status: 'WAITING_PARTS', dueDate: new Date(now.getTime() + H), slaPausedAt: now });
+  const at = (h) => new Date(now.getTime() + h * H);
+  assert.equal(effectiveDueDate(ticket, at(10), MAX).getTime(), at(11).getTime());
+  assert.equal(isOverdue(ticket, at(48), MAX), false);
+  assert.equal(isOverdue(ticket, at(50), MAX), true, 'dừng 48h + còn 1h → quá hạn từ giờ 49');
+  assert.equal(partsPauseExceeded(ticket, at(47), MAX), false);
+  assert.equal(partsPauseExceeded(ticket, at(49), MAX), true);
+  assert.equal(partsPauseExceeded({ ...ticket, partsAlertedAt: at(49) }, at(60), MAX), false);
+
+  applySlaTransition(ticket, 'IN_PROGRESS', at(100), MAX);
+  assert.equal(ticket.dueDate.getTime(), at(49).getTime(), 'chỉ được cộng bù 48 giờ');
+});
+
+test('phiếu cũ không có slaPausedAt: không cộng bù; khu vực chung đang xử lý quá hạn như cũ', () => {
+  const legacy = t({ status: 'WAITING_PARTS', dueDate: new Date(now.getTime() - H) });
+  assert.equal(isOverdue(legacy, now, MAX), true);
+  assert.equal(isOverdue(t({ status: 'IN_PROGRESS', dueDate: new Date(now.getTime() - 1) }), now, MAX), true);
+});
+
+test('quoteResumeStatus: báo giá lại từ Chờ linh kiện / Đang xử lý thì quay về đúng trạng thái đó', () => {
+  const hist = (from) => ({ history: [{ toStatus: 'IN_PROGRESS' }, { fromStatus: from, toStatus: 'WAITING_QUOTE_APPROVAL' }] });
+  assert.equal(quoteResumeStatus(hist('WAITING_PARTS')), 'WAITING_PARTS');
+  assert.equal(quoteResumeStatus(hist('IN_PROGRESS')), 'IN_PROGRESS');
+  assert.equal(quoteResumeStatus({ history: [] }), 'IN_PROGRESS');
 });
