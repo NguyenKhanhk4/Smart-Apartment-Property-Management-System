@@ -119,6 +119,9 @@ const AmenityUsagePage = lazy(() => import('../features/reports/AmenityUsagePage
 const DutyShiftsPage = lazy(() => import('../features/dutyShifts/DutyShiftsPage'));
 const TicketBoardPage = lazy(() => import('../features/tickets/TicketBoardPage'));
 
+// ===== Module C — audit (TM) =====
+const AuditLogsPage = lazy(() => import('../features/auditLogs/AuditLogsPage'));
+
 // ===== Gate Pass & Kiểm soát xe (Người 2) =====
 const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
 const ResidentGatePassesPage = lazy(() => import('../features/gatePasses/ResidentGatePassesPage'));
@@ -318,6 +321,12 @@ export const adminMenu = [
     path: 'report-amenity',
     roles: ['MANAGER', 'ACCOUNTANT'],
     component: AmenityUsagePage,
+  },
+
+  // ===== Module C — audit chỉ đọc =====
+  {
+    key: 'audit-logs', group: 'Cấu hình', label: 'Nhật ký hoạt động', icon: FileTextOutlined,
+    path: 'audit-logs', roles: ['MANAGER', 'BOARD'], component: AuditLogsPage,
   },
 
   // ===== Module B — Phí & hóa đơn (UC-B01, UC-B02) =====
