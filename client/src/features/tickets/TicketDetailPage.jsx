@@ -15,6 +15,9 @@ import {
 } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { ticketApi } from '../../api/moduleE.api';
+import { repairQuoteApi } from '../../api/moduleB.api';
+import QuoteFormModal from '../repairQuotes/QuoteFormModal';
+import QuotePanel from '../repairQuotes/QuotePanel';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
@@ -37,6 +40,9 @@ export default function TicketDetailPage() {
   const { user, hasRole } = useAuth();
   const [modal, setModal] = useState(null);
   const { data: t, loading, error, reload } = useApi(() => ticketApi.get(id), [id]);
+  // Báo giá sửa chữa (sự cố trong căn hộ) — tải lại cùng phiếu
+  const hasQuotes = t?.type === 'INCIDENT' && t?.scope === 'IN_APARTMENT';
+  const quotes = useApi(() => repairQuoteApi.byTicket(id), [id, t?.status, t?.history?.length], { enabled: Boolean(hasQuotes) });
   const [claim, claiming] = useAction(() => ticketApi.claim(id), { success: 'Đã nhận sự cố', onDone: reload });
 
   if (error && !t) {
@@ -44,7 +50,10 @@ export default function TicketDetailPage() {
   }
   if (!t) return <Spin style={{ display: 'block', margin: 48 }} />;
 
-  const { canClaim, canAssign, canReject, canProgress, canDecideQuote, canConfirm } = ticketActions(t, user, hasRole);
+  const { canClaim, canAssign, canReject, canProgress, canQuote, canDecideQuote, canConfirm } = ticketActions(t, user, hasRole);
+  const quoteList = quotes.data?.items ?? [];
+  const pendingQuote = quoteList.find((q) => q.status === 'PENDING');
+  const acceptedQuote = quoteList.find((q) => q.status === 'ACCEPTED');
   const isComplaint = t.type === 'COMPLAINT';
   const modalProps = (key) => ({ ticket: t, open: modal === key, onClose: () => setModal(null), onDone: reload });
 
@@ -74,6 +83,11 @@ export default function TicketDetailPage() {
           {canDecideQuote && (
             <Button type="primary" onClick={() => setModal('quote')}>
               Xem & quyết định báo giá
+            </Button>
+          )}
+          {canQuote && (
+            <Button type={canProgress ? 'default' : 'primary'} onClick={() => setModal('quote-form')}>
+              {acceptedQuote && t.status !== 'WAITING_QUOTE_APPROVAL' ? 'Báo giá lại' : pendingQuote ? 'Sửa báo giá' : 'Gửi báo giá'}
             </Button>
           )}
           {canProgress && (
@@ -164,6 +178,14 @@ export default function TicketDetailPage() {
           )}
         </Card>
 
+        {hasQuotes && (
+          <QuotePanel
+            quotes={quoteList}
+            loading={quotes.loading}
+            invoiceBase={hasRole('RESIDENT') ? '/r/invoices' : '/app/invoices'}
+          />
+        )}
+
         <Card size="small" title="Lịch sử xử lý">
           <Timeline
             items={[...t.history].reverse().map((h) => ({
@@ -194,7 +216,16 @@ export default function TicketDetailPage() {
       <RejectModal {...modalProps('reject')} />
       <ProgressModal {...modalProps('progress')} />
       <ConfirmModal {...modalProps('confirm')} />
-      <QuoteDecisionModal {...modalProps('quote')} />
+      <QuoteDecisionModal {...modalProps('quote')} quote={pendingQuote} />
+      <QuoteFormModal
+        ticket={t}
+        open={modal === 'quote-form'}
+        accepted={acceptedQuote}
+        pending={pendingQuote}
+        percent={quotes.data?.reapprovalPercent}
+        onClose={() => setModal(null)}
+        onDone={reload}
+      />
     </Spin>
   );
 }

@@ -44,8 +44,19 @@ test('progressOptions: khu vực chung', () => {
   assert.deepEqual(progressOptions({ ...base, status: 'WAITING_PARTS' }), ['IN_PROGRESS', 'WAITING_CONFIRM']);
 });
 
-test('progressOptions: trong căn hộ chưa đồng ý phí thì chỉ gửi báo giá', () => {
+test('progressOptions: trong căn hộ chưa đồng ý phí thì không cập nhật tiến độ, phải gửi báo giá qua form', () => {
   const inApt = { ...base, scope: 'IN_APARTMENT', status: 'ASSIGNED' };
-  assert.deepEqual(progressOptions(inApt), ['WAITING_QUOTE_APPROVAL']);
+  assert.deepEqual(progressOptions(inApt), []);
   assert.deepEqual(progressOptions({ ...inApt, quoteDecision: { accepted: true } }), ['IN_PROGRESS', 'WAITING_CONFIRM']);
+});
+
+test('KTV được giao: gửi báo giá sự cố trong căn khi Đã nhận / Chờ đồng ý / Đang xử lý / Chờ linh kiện', () => {
+  const tech = can('STAFF:TECHNICIAN');
+  const mine = { ...base, scope: 'IN_APARTMENT', assignedTo: { _id: 'u1' } };
+  for (const status of ['ASSIGNED', 'WAITING_QUOTE_APPROVAL', 'IN_PROGRESS', 'WAITING_PARTS']) {
+    assert.equal(ticketActions({ ...mine, status }, me, tech).canQuote, true, status);
+  }
+  assert.equal(ticketActions({ ...mine, status: 'WAITING_CONFIRM' }, me, tech).canQuote, false);
+  assert.equal(ticketActions({ ...mine, scope: 'COMMON_AREA', status: 'ASSIGNED' }, me, tech).canQuote, false);
+  assert.equal(ticketActions({ ...mine, status: 'ASSIGNED', assignedTo: { _id: 'other' } }, me, tech).canQuote, false);
 });

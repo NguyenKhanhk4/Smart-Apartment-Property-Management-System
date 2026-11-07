@@ -31,6 +31,7 @@ const paymentSchema = new Schema(
     orderCode: { type: Number, default: undefined }, // số nguyên gửi sang payOS
     paymentLinkId: String,
     checkoutUrl: String,
+    qrCode: String, // chuỗi VietQR để client tự vẽ mã QR
     expiredAt: Date, // hết hạn link thanh toán
     reference: String, // mã giao dịch ngân hàng payOS trả về trong webhook
     needsReconcile: { type: Boolean, default: false }, // quá 15 phút chưa rõ kết quả → danh sách Cần đối soát

@@ -22,6 +22,7 @@ import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { fmtDateTimeVn, periodLabel, toVnYmd } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { formatVnd } from '../amenities/pricing.js';
+import { closeCaseIfCleared } from '../debts/debts.cases.js';
 import { isDuplicateOn } from '../invoices/invoices.service.js';
 
 const MAX_ATTEMPTS = 3;
@@ -53,9 +54,14 @@ async function resolvePayer({ invoiceId, apartmentId, payerId }) {
   return { apartmentId: oid(apartmentId), payerId: oid(payerId) };
 }
 
-/** Các thông báo còn nợ của Người nộp phí tại căn, cũ nhất trước */
-const outstandingInvoices = (apartmentId, payerId, session) =>
-  Invoice.find({ apartmentId, payerId, status: { $in: [...INVOICE_OUTSTANDING_STATUSES] } })
+/** Các thông báo còn nợ của Người nộp phí tại căn, cũ nhất trước. `invoiceIds`: chỉ trong các thông báo đã chọn (payOS) */
+const outstandingInvoices = (apartmentId, payerId, session, invoiceIds = null) =>
+  Invoice.find({
+    apartmentId,
+    payerId,
+    status: { $in: [...INVOICE_OUTSTANDING_STATUSES] },
+    ...(invoiceIds && { _id: { $in: invoiceIds } }),
+  })
     .sort({ period: 1, createdAt: 1 })
     .select('code period totalAmount paidAmount status')
     .session(session)
@@ -83,11 +89,12 @@ const statusAfter = (inv, paidAmount) => {
 };
 
 /**
- * Lõi gạch nợ dùng chung (tiền mặt / chuyển khoản tay, sau này payOS webhook): phân bổ, cập nhật thông báo,
- * tiền thừa → Số dư trả trước, ghi sổ. Chạy trong `session` của transaction bên ngoài. Trả về { allocations, credit, balanceAfter }.
+ * Lõi gạch nợ dùng chung (tiền mặt / chuyển khoản tay, payOS webhook): phân bổ, cập nhật thông báo,
+ * tiền thừa → Số dư trả trước, ghi sổ. `invoiceIds` (payOS): chỉ phân bổ vào các thông báo cư dân đã chọn; thông báo đã
+ * được trả bằng cách khác thì phần tiền đó vào Số dư trả trước (M4-3). Chạy trong `session` của transaction bên ngoài. Trả về { allocations, credit, balanceAfter }.
  */
-export async function applyPayment({ paymentId, apartmentId, payerId, amount, paidAt, createdBy = null }, session) {
-  const invoices = await outstandingInvoices(apartmentId, payerId, session);
+export async function applyPayment({ paymentId, apartmentId, payerId, amount, paidAt, createdBy = null, invoiceIds = null }, session) {
+  const invoices = await outstandingInvoices(apartmentId, payerId, session, invoiceIds);
   const { allocations, credit } = allocate(invoices, amount);
 
   for (const { invoice: inv, amount: take } of allocations) {
@@ -125,6 +132,8 @@ export async function applyPayment({ paymentId, apartmentId, payerId, amount, pa
       { session },
     );
   }
+  // Trả hết các khoản quá hạn → đóng hồ sơ nợ ngay (không đợi cron nhắc nợ hôm sau)
+  if (allocations.length) await closeCaseIfCleared(apartmentId, payerId, { session });
   return {
     allocations: allocations.map((a) => ({ invoiceId: a.invoice._id, amount: a.amount, code: a.invoice.code, period: a.invoice.period })),
     credit,
@@ -193,7 +202,7 @@ export async function recordOfflinePayment(user, body, { now = new Date() } = {}
 }
 
 /** Biên lai điện tử cho Người nộp phí (Web + Email) */
-function sendReceipt(payment, { allocations, credit, balanceAfter }) {
+export function sendReceipt(payment, { allocations, credit, balanceAfter }) {
   const lines = [`Đã nhận ${formatVnd(payment.amount)} lúc ${fmtDateTimeVn(payment.paidAt)}. Số phiếu thu ${payment.receiptNo}.`];
   for (const a of allocations) lines.push(`• Kỳ ${periodLabel(a.period)} (${a.code}): ${formatVnd(a.amount)}`);
   if (credit > 0) lines.push(`Tiền thừa ${formatVnd(credit)} đã vào Số dư trả trước (số dư hiện tại ${formatVnd(balanceAfter)}).`);
@@ -210,8 +219,9 @@ function sendReceipt(payment, { allocations, credit, balanceAfter }) {
 // ---------------------------------------------------------------------------
 // Xem
 // ---------------------------------------------------------------------------
-export async function listPayments({ method, status, apartmentId, payerId, from, to, q, ...query }) {
+export async function listPayments({ method, status, apartmentId, payerId, from, to, q, needsReconcile, ...query }) {
   const filter = {};
+  if (needsReconcile !== undefined) filter.needsReconcile = needsReconcile;
   if (method?.length) filter.method = { $in: method };
   if (status) filter.status = status;
   if (apartmentId) filter.apartmentId = oid(apartmentId);

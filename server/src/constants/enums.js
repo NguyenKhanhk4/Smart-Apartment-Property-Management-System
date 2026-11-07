@@ -106,6 +106,16 @@ export const FEE_CATEGORIES = Object.freeze({
   AMENITY: 'AMENITY',
   ADJUSTMENT: 'ADJUSTMENT',
   OTHER: 'OTHER', // khoản thu khác Kế toán thêm tay vào thông báo Nháp (Mô đun 4)
+  REPAIR: 'REPAIR', // chi phí sửa chữa trong căn hộ đã nghiệm thu (báo giá đã đồng ý, UC48)
+});
+
+// Báo giá sửa chữa trong căn hộ (UC48, UC40). Mỗi lần gửi / báo giá lại là 1 phiên bản; báo giá có hiệu lực = bản ACCEPTED mới nhất
+export const QUOTE_STATUS = Object.freeze({
+  PENDING: 'PENDING', // chờ Người nộp phí đồng ý
+  ACCEPTED: 'ACCEPTED',
+  DECLINED: 'DECLINED',
+  EXPIRED: 'EXPIRED', // quá hạn không phản hồi → phiếu tự đóng (Từ chối)
+  SUPERSEDED: 'SUPERSEDED', // đã có bản báo giá mới thay thế
 });
 
 // Cách tính đơn giá của fee_types (BR-F4)
@@ -186,13 +196,26 @@ export const REVIEW_STATUS = Object.freeze({
   REJECTED: 'REJECTED',
 });
 
-export const DEBT_STATUS = Object.freeze({ OPEN: 'OPEN', RESOLVED: 'RESOLVED' });
+// Hồ sơ nợ quá hạn của 1 Người nộp phí tại 1 căn (UC31): đang nhắc tự động → nhắc đủ số lần mà chưa trả → Nợ quá hạn dài
+// (Trưởng BQL xử lý); trả hết nợ quá hạn → Đã xong
+export const DEBT_STATUS = Object.freeze({ REMINDING: 'REMINDING', LONG_OVERDUE: 'LONG_OVERDUE', RESOLVED: 'RESOLVED' });
+export const DEBT_OPEN_STATUSES = Object.freeze([DEBT_STATUS.REMINDING, DEBT_STATUS.LONG_OVERDUE]);
+
+// Tình trạng một dòng trong sổ công nợ (căn + Người nộp phí), lấy theo mức nặng nhất
+export const LEDGER_STATUS = Object.freeze({
+  PAID: 'PAID',
+  UNPAID: 'UNPAID',
+  PARTIALLY_PAID: 'PARTIALLY_PAID',
+  OVERDUE: 'OVERDUE',
+  LONG_OVERDUE: 'LONG_OVERDUE',
+});
 
 export const CONTACT_METHODS = Object.freeze({
   PHONE: 'PHONE',
   SMS: 'SMS',
   EMAIL: 'EMAIL',
   IN_PERSON: 'IN_PERSON',
+  LETTER: 'LETTER',
 });
 
 // ===== Quỹ bảo trì, chi phí vận hành (Module C) =====
@@ -349,6 +372,8 @@ export const TICKET_HISTORY_ACTIONS = Object.freeze({
   QUOTE_REQUESTED: 'QUOTE_REQUESTED',
   QUOTE_ACCEPTED: 'QUOTE_ACCEPTED',
   QUOTE_DECLINED: 'QUOTE_DECLINED',
+  QUOTE_REVISED: 'QUOTE_REVISED', // báo giá lại trong ngưỡng cho phép, không cần duyệt lại
+  QUOTE_EXPIRED: 'QUOTE_EXPIRED', // quá hạn không phản hồi báo giá, hệ thống đóng phiếu
   WAITING_PARTS: 'WAITING_PARTS',
   RESOLVED: 'RESOLVED',
   CONFIRMED: 'CONFIRMED',
@@ -415,6 +440,9 @@ export const CRON_JOBS = Object.freeze({
   INVOICE_GENERATE: 'INVOICE_GENERATE',
   INVOICE_OVERDUE: 'INVOICE_OVERDUE',
   BILLING_REMIND: 'BILLING_REMIND', // nhắc Kế toán đến kỳ tính phí + nhắc Trưởng BQL duyệt quá hạn (X8)
+  PAYMENT_RECONCILE: 'PAYMENT_RECONCILE',
+  QUOTE_REMIND: 'QUOTE_REMIND', // báo giá sửa chữa chờ đồng ý: nhắc sau N ngày, tự đóng sau M ngày
+  DEBT_REMIND: 'DEBT_REMIND', // nhắc nợ quá hạn N ngày/lần, tối đa M lần → Nợ quá hạn dài; quá ngày hẹn trả → báo Trưởng BQL // payOS: tra cứu giao dịch chờ kết quả, quá 15 phút → Cần đối soát
   BOOKING_COMPLETE: 'BOOKING_COMPLETE',
   WORK_ORDER_GENERATE: 'WORK_ORDER_GENERATE',
   TICKET_ESCALATE: 'TICKET_ESCALATE',
@@ -442,6 +470,9 @@ export const AUDIT_ACTIONS = Object.freeze({
   INVOICE_PUBLISHED: 'INVOICE_PUBLISHED',
   INVOICE_RETURNED: 'INVOICE_RETURNED',
   PREPAID_REFUNDED: 'PREPAID_REFUNDED',
+  DEBT_FOLLOWUP_RECORDED: 'DEBT_FOLLOWUP_RECORDED',
+  REPAIR_QUOTE_SUBMITTED: 'REPAIR_QUOTE_SUBMITTED',
+  DEBT_NOTICE_EXPORTED: 'DEBT_NOTICE_EXPORTED',
   FEE_TYPE_CHANGED: 'FEE_TYPE_CHANGED',
   FUND_INCOME_RECORDED: 'FUND_INCOME_RECORDED',
   FUND_VOTED: 'FUND_VOTED',
@@ -510,6 +541,8 @@ export const AUDIT_TARGETS = Object.freeze({
   FEE_TYPE: 'fee_types',
   INVOICE: 'invoices',
   PAYMENT: 'payments',
+  DEBT_FOLLOWUP: 'debt_followups',
+  REPAIR_QUOTE: 'repair_quotes',
   AMENITY: 'amenities',
   AMENITY_PASS: 'amenity_passes',
   AMENITY_VISIT: 'amenity_visits',
@@ -530,7 +563,11 @@ export const CONFIG_KEYS = Object.freeze({
   SLA_HOURS_LOW: 'SLA_HOURS_LOW',
   TICKET_AUTO_CLOSE_DAYS: 'TICKET_AUTO_CLOSE_DAYS',
   PAYMENT_TERM_DAYS: 'PAYMENT_TERM_DAYS',
-  DEBT_REMINDER_DAYS: 'DEBT_REMINDER_DAYS',
+  DEBT_REMINDER_INTERVAL_DAYS: 'DEBT_REMINDER_INTERVAL_DAYS',
+  DEBT_REMINDER_MAX: 'DEBT_REMINDER_MAX',
+  QUOTE_REMIND_DAYS: 'QUOTE_REMIND_DAYS',
+  QUOTE_AUTO_CLOSE_DAYS: 'QUOTE_AUTO_CLOSE_DAYS',
+  QUOTE_REAPPROVAL_PERCENT: 'QUOTE_REAPPROVAL_PERCENT',
   BILLING_REMIND_DAY: 'BILLING_REMIND_DAY',
   INVOICE_APPROVAL_REMIND_DAYS: 'INVOICE_APPROVAL_REMIND_DAYS',
   FUND_LOW_BALANCE_THRESHOLD: 'FUND_LOW_BALANCE_THRESHOLD',
@@ -562,7 +599,11 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.SLA_HOURS_LOW, value: 168, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Thấp (giờ)' },
   { key: CONFIG_KEYS.TICKET_AUTO_CLOSE_DAYS, value: 7, scope: CONFIG_SCOPES.BUSINESS, description: 'Tự đóng ticket chờ xác nhận sau N ngày — BR-O9' },
   { key: CONFIG_KEYS.PAYMENT_TERM_DAYS, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn thanh toán hóa đơn (ngày) — BR-F8' },
-  { key: CONFIG_KEYS.DEBT_REMINDER_DAYS, value: [1, 7, 15], scope: CONFIG_SCOPES.BUSINESS, description: 'Ngày quá hạn gửi nhắc nợ — BR-D4' },
+  { key: CONFIG_KEYS.DEBT_REMINDER_INTERVAL_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Nhắc nợ quá hạn N ngày/lần (lần đầu ngay ngày đầu quá hạn) — UC31, X8' },
+  { key: CONFIG_KEYS.QUOTE_REMIND_DAYS, value: 2, scope: CONFIG_SCOPES.BUSINESS, description: 'Báo giá sửa chữa chờ quá N ngày chưa phản hồi thì nhắc Người nộp phí — UC48, X8' },
+  { key: CONFIG_KEYS.QUOTE_AUTO_CLOSE_DAYS, value: 5, scope: CONFIG_SCOPES.BUSINESS, description: 'Báo giá sửa chữa quá N ngày chưa phản hồi thì tự đóng phiếu (Từ chối) — UC48, X8' },
+  { key: CONFIG_KEYS.QUOTE_REAPPROVAL_PERCENT, value: 10, scope: CONFIG_SCOPES.BUSINESS, description: 'Báo giá lại vượt quá N% số đã đồng ý thì Người nộp phí phải duyệt lại — M5-3' },
+  { key: CONFIG_KEYS.DEBT_REMINDER_MAX, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Nhắc nợ tối đa N lần; quá N lần chưa trả → Nợ quá hạn dài, báo Trưởng BQL — UC31, X8' },
   { key: CONFIG_KEYS.BILLING_REMIND_DAY, value: 1, scope: CONFIG_SCOPES.BUSINESS, description: 'Ngày trong tháng nhắc Kế toán tính phí (1–28) — Mô đun 4' },
   { key: CONFIG_KEYS.INVOICE_APPROVAL_REMIND_DAYS, value: 2, scope: CONFIG_SCOPES.BUSINESS, description: 'Thông báo phí chờ duyệt quá N ngày thì nhắc Trưởng BQL mỗi ngày — X8' },
   { key: CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, value: 50000000, scope: CONFIG_SCOPES.BUSINESS, description: 'Ngưỡng cảnh báo số dư quỹ (VNĐ) — UC-C06' },
