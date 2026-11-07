@@ -41,4 +41,5 @@ export const operatingExpenseApi = {
 // ===== UC-C08: Tra cứu nhật ký hoạt động =====
 export const auditLogApi = {
   list: (params) => http.get('/audit-logs', { params }),
+  options: () => http.get('/audit-logs/options'),
 };

@@ -559,6 +559,8 @@ export const AUDIT_ACTIONS = Object.freeze({
 
 // targetType của audit_logs = tên collection (index { targetType, targetId } tra lịch sử một bản ghi)
 export const AUDIT_TARGETS = Object.freeze({
+  MAINTENANCE_FUND: 'maintenance_fund',
+  OPERATING_EXPENSE: 'operating_expenses',
   USER: 'users',
   BUILDING: 'buildings',
   APARTMENT: 'apartments',
