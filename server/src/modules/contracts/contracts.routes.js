@@ -40,25 +40,13 @@ const personSchema = Joi.object({
 
 const createContractBody = Joi.object({
   apartmentId: objectId().required(),
-  type: Joi.string().valid(...values(CONTRACT_TYPES)).required(),
+  type: Joi.string().valid(CONTRACT_TYPES.SALE).required(),
   startDate: Joi.date().required(),
-  endDate: Joi.date().allow(null, ''),
-  tenantPaysFees: Joi.boolean().default(false),
-  owner: personSchema.when('type', {
-    is: CONTRACT_TYPES.SALE,
-    then: Joi.required(),
-    otherwise: Joi.optional(),
-  }),
-  tenant: personSchema.when('type', {
-    is: CONTRACT_TYPES.LEASE,
-    then: Joi.required(),
-    otherwise: Joi.optional(),
-  }),
+  owner: personSchema.required(),
 });
 
 const updateContractBody = Joi.object({
   endDate: Joi.date().allow(null, ''),
-  tenantPaysFees: Joi.boolean(),
 });
 
 // Middleware tiền xử lý nếu dữ liệu gửi dưới dạng multipart/form-data
@@ -70,16 +58,6 @@ const parseMultipartContract = (req, _res, next) => {
       } catch {
         // Giữ nguyên chuỗi
       }
-    }
-    if (typeof req.body.tenant === 'string') {
-      try {
-        req.body.tenant = JSON.parse(req.body.tenant);
-      } catch {
-        // Giữ nguyên chuỗi
-      }
-    }
-    if (typeof req.body.tenantPaysFees === 'string') {
-      req.body.tenantPaysFees = req.body.tenantPaysFees === 'true';
     }
   }
   next();
@@ -116,7 +94,7 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
  * /contracts:
  *   post:
  *     tags: [Hợp đồng]
- *     summary: Lễ tân tạo mới hợp đồng mua bán hoặc cho thuê — UC-A06
+ *     summary: Lễ tân tạo mới hợp đồng mua bán — UC-A06
  */
 router.post(
   '/',
@@ -141,7 +119,7 @@ router.post(
  * /contracts/{id}:
  *   patch:
  *     tags: [Hợp đồng]
- *     summary: Gia hạn hợp đồng hoặc cập nhật người chịu phí — UC-A06
+ *     summary: Cập nhật hồ sơ hợp đồng mua bán — UC-A06
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
@@ -172,7 +150,7 @@ router.patch(
  * /contracts/{id}/terminate:
  *   patch:
  *     tags: [Hợp đồng]
- *     summary: Chấm dứt sớm hợp đồng (Trưởng BQL) — UC-A06
+ *     summary: Chấm dứt hợp đồng mua bán (Trưởng BQL) — UC-A06
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */

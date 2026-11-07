@@ -3,7 +3,7 @@ import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AuditLog, Contract, Notification, Resident, User } from '../../src/models/index.js';
 import * as contracts from '../../src/modules/contracts/contracts.service.js';
-import { remindExpiringLeases } from '../../src/modules/contracts/contracts.jobs.js';
+import { JOBS } from '../../src/jobs/index.js';
 import { getPayer } from '../../src/modules/contracts/contracts.queries.js';
 import * as residents from '../../src/modules/residents/residents.service.js';
 import { periodStart } from '../../src/utils/time.js';
@@ -235,29 +235,10 @@ test('removeMember: gỡ thành viên đang ở', async () => {
   assert.ok(after.moveOutDate);
 });
 
-test('remindExpiringLeases: nhắc mọi hợp đồng hết hạn trong 15 ngày chưa nhắc (kể cả khi cron lỡ 1 ngày), đúng 1 lần', async () => {
-  const { apartment, owner } = await saleWithOwner();
-  const tenant = await createResidentUser();
-  const lease = await createContract({
-    apartment,
-    owner,
-    type: 'LEASE',
-    tenantId: tenant._id,
-    endDate: new Date(Date.now() + 10 * DAY), // cron đã lỡ mốc đúng 15 ngày
-  });
-  const far = await createContract({
-    apartment: await createApartment(),
-    owner,
-    type: 'LEASE',
-    tenantId: tenant._id,
-    endDate: new Date(Date.now() + 40 * DAY),
-  });
-
-  assert.equal(await remindExpiringLeases(), 1);
-  assert.ok((await Contract.findById(lease._id)).remindedAt);
-  assert.equal((await Contract.findById(far._id)).remindedAt, null);
-  assert.equal(await remindExpiringLeases(), 0, 'không nhắc lần 2');
-  assert.ok(await User.exists({ _id: tenant._id }));
+test('UC17: lịch vận hành không chạy các tác vụ nhắc hoặc hết hạn thuê của luồng hợp đồng cũ', () => {
+  const names = JOBS.map(({ name }) => name);
+  assert.ok(!names.includes('CONTRACT_EXPIRE'));
+  assert.ok(!names.includes('CONTRACT_EXPIRY_REMIND'));
 });
 
 test('terminateContract: hợp đồng không còn hiệu lực / còn hợp đồng thuê → 409 STATUS_CONFLICT', async () => {

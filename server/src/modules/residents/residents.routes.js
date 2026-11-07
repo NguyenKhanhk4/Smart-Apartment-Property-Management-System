@@ -7,6 +7,7 @@ import { created, ok } from '../../utils/response.js';
 import { idParams, objectId, phoneVn, ymd } from '../../utils/validators.js';
 import * as occupantReportsService from '../occupantReports/occupantReports.service.js';
 import * as service from './residents.service.js';
+import * as tenancies from './residentTenancies.js';
 
 // Module A — Vũ Việt. UC-A07, UC-A08: Quản lý cư dân & Căn hộ của tôi
 const router = Router();
@@ -39,6 +40,32 @@ const changesQuerySchema = Joi.object({
   from: Joi.date().iso().optional(),
   to: Joi.date().iso().optional(),
   format: Joi.string().valid('json', 'xlsx').optional(),
+});
+const tenancyParams = Joi.object({ apartmentId: objectId().required() });
+const startTenancyBody = Joi.object({
+  phone: phoneVn().required(),
+  userId: objectId(),
+  fullName: Joi.string().trim().min(2).max(100).when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
+  email: Joi.string().trim().email().allow('', null),
+  tenantPaysFees: Joi.boolean().default(false),
+});
+
+router.get('/me/tenancies/:apartmentId', authenticate, authorize('RESIDENT'), validate({ params: tenancyParams }),
+  async (req, res) => ok(res, await tenancies.getTenancy(req.user, req.validated.params.apartmentId)));
+
+router.get('/me/tenancies/:apartmentId/lookup', authenticate, authorize('RESIDENT'), validate({
+  params: tenancyParams, query: Joi.object({ phone: phoneVn().required() }),
+}), async (req, res) => ok(res, await tenancies.lookupTenant(req.user, req.validated.params.apartmentId, req.validated.query.phone)));
+
+router.post('/me/tenancies/:apartmentId', authenticate, authorize('RESIDENT'), validate({ params: tenancyParams, body: startTenancyBody }),
+  async (req, res) => created(res, await tenancies.startTenancy(req.user, req.validated.params.apartmentId, req.validated.body, req.ip)));
+
+router.patch('/me/tenancies/:apartmentId/:residentId/end', authenticate, authorize('RESIDENT'), validate({
+  params: tenancyParams.keys({ residentId: objectId().required() }),
+}), async (req, res) => {
+  const { apartmentId, residentId } = req.validated.params;
+  await tenancies.endTenancy(req.user, apartmentId, residentId, req.ip);
+  return ok(res, null, 'Đã kết thúc cho thuê');
 });
 
 /**

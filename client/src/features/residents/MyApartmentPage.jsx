@@ -39,6 +39,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useResident } from '../../hooks/useResident';
 import { residentsApi } from '../../api/moduleA.api';
+import ResidentTenancyCard from './ResidentTenancyCard';
 
 export default function MyApartmentPage() {
   const navigate = useNavigate();
@@ -55,7 +56,7 @@ export default function MyApartmentPage() {
   const [declaringApartment, setDeclaringApartment] = useState(null);
   const [familyForm] = Form.useForm();
   // Căn đang chọn đồng bộ với ô chọn căn trên header (useResident): mặc định theo header, đổi ở đây thì header đổi theo
-  const { apartmentId: headerAptId, setApartmentId: setHeaderAptId } = useResident();
+  const { apartmentId: headerAptId, setApartmentId: setHeaderAptId, reloadResidency } = useResident();
   const pickApartment = (id) => {
     setSelectedAptId(id);
     setHeaderAptId(id);
@@ -225,6 +226,16 @@ export default function MyApartmentPage() {
             </span>
           </div>
         </Card>
+      )}
+
+      {currentApartment?.relationType === 'OWNER' && (
+        <ResidentTenancyCard key={activeAptId} apartment={currentApartment}
+          onChanged={() => {
+            setSelectedAptId(activeAptId);
+            reloadApts();
+            reloadMembers();
+            reloadResidency();
+          }} />
       )}
 
       {/* Danh sách thành viên trong căn hộ */}

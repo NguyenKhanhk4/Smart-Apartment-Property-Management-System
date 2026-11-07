@@ -5,7 +5,6 @@ import {
   Button,
   Select,
   DatePicker,
-  Switch,
   Modal,
   Form,
   Input,
@@ -16,9 +15,7 @@ import {
   Col,
   Descriptions,
   Upload,
-  Radio,
   App,
-  Tooltip,
 } from 'antd';
 import PhoneAccountNotice from '../../components/PhoneAccountNotice';
 import { usePhoneAccount } from '../../hooks/usePhoneAccount';
@@ -27,7 +24,6 @@ import {
   PlusOutlined,
   ReloadOutlined,
   EyeOutlined,
-  CalendarOutlined,
   StopOutlined,
   UploadOutlined,
   DownloadOutlined,
@@ -106,7 +102,6 @@ export default function ContractsPage() {
     apartmentId: undefined,
     type: undefined,
     status: undefined,
-    endingWithinDays: undefined,
   });
 
   // Load buildings for filter & form
@@ -127,9 +122,6 @@ export default function ContractsPage() {
         ...(filters.apartmentId ? { apartmentId: filters.apartmentId } : {}),
         ...(filters.type ? { type: filters.type } : {}),
         ...(filters.status ? { status: filters.status } : {}),
-        ...(filters.endingWithinDays !== undefined
-          ? { endingWithinDays: filters.endingWithinDays }
-          : {}),
       }),
     [filters],
   );
@@ -137,16 +129,8 @@ export default function ContractsPage() {
   // Modal Create state
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createForm] = Form.useForm();
-  const selectedType = Form.useWatch('type', createForm);
-  const partyPrefix = selectedType === CONTRACT_TYPES.LEASE ? 'tenant' : 'owner';
-  const check = usePhoneAccount(Form.useWatch(`${partyPrefix}Phone`, createForm));
+  const check = usePhoneAccount(Form.useWatch('ownerPhone', createForm));
   const [contractFileList, setContractFileList] = useState([]);
-
-  // Modal Extend/Update state
-  const [extendModalOpen, setExtendModalOpen] = useState(false);
-  const [extendingContract, setExtendingContract] = useState(null);
-  const [extendForm] = Form.useForm();
-  const [extendFileList, setExtendFileList] = useState([]);
 
   // Modal Detail state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -172,19 +156,6 @@ export default function ContractsPage() {
     },
   );
 
-  const [updateContract, updating] = useAction(
-    async ({ id, formData }) => contractsApi.update(id, formData),
-    {
-      success: 'Cập nhật hợp đồng thành công',
-      onDone: () => {
-        setExtendModalOpen(false);
-        extendForm.resetFields();
-        setExtendFileList([]);
-        reloadContracts();
-      },
-    },
-  );
-
   const [terminateContract] = useAction(
     (id) => contractsApi.terminate(id),
     {
@@ -198,9 +169,7 @@ export default function ContractsPage() {
     createForm.resetFields();
     check.reset();
     createForm.setFieldsValue({
-      type: CONTRACT_TYPES.SALE,
       startDate: dayjs(),
-      tenantPaysFees: false,
     });
     setContractFileList([]);
     setCreateModalOpen(true);
@@ -211,27 +180,22 @@ export default function ContractsPage() {
       const values = await createForm.validateFields();
       const formData = new FormData();
       formData.append('apartmentId', values.apartmentId);
-      formData.append('type', values.type);
+      formData.append('type', CONTRACT_TYPES.SALE);
       formData.append('startDate', values.startDate.format('YYYY-MM-DD'));
-      if (values.endDate) {
-        formData.append('endDate', values.endDate.format('YYYY-MM-DD'));
-      }
-      formData.append('tenantPaysFees', String(Boolean(values.tenantPaysFees)));
-
       if (check.blockReason) return;
-      const dob = values[`${partyPrefix}Dob`];
+      const dob = values.ownerDob;
       const partyData = {
-        phone: values[`${partyPrefix}Phone`],
-        idNumber: values[`${partyPrefix}IdNumber`] || '',
+        phone: values.ownerPhone,
+        idNumber: values.ownerIdNumber || '',
         ...(check.isExisting
           ? { userId: check.userId }
           : {
-              fullName: values[`${partyPrefix}FullName`],
-              email: values[`${partyPrefix}Email`],
+              fullName: values.ownerFullName,
+              email: values.ownerEmail,
               dateOfBirth: dob ? dob.format('YYYY-MM-DD') : null,
             }),
       };
-      formData.append(partyPrefix, JSON.stringify(partyData));
+      formData.append('owner', JSON.stringify(partyData));
 
       if (contractFileList[0]?.originFileObj) {
         formData.append('file', contractFileList[0].originFileObj);
@@ -239,36 +203,6 @@ export default function ContractsPage() {
 
       // Lỗi đã được báo; kiểm tra lại vì SĐT có thể vừa có tài khoản
       await createContract(formData).catch(() => check.reload());
-    } catch {
-      // Form validation error
-    }
-  };
-
-  const handleOpenExtendModal = (record) => {
-    setExtendingContract(record);
-    extendForm.setFieldsValue({
-      endDate: record.endDate ? dayjs(record.endDate) : null,
-      tenantPaysFees: record.tenantPaysFees ?? false,
-    });
-    setExtendFileList([]);
-    setExtendModalOpen(true);
-  };
-
-  const handleSaveExtend = async () => {
-    try {
-      const values = await extendForm.validateFields();
-      const formData = new FormData();
-      if (values.endDate) {
-        formData.append('endDate', values.endDate.format('YYYY-MM-DD'));
-      }
-      if (extendingContract.type === 'LEASE') {
-        formData.append('tenantPaysFees', String(Boolean(values.tenantPaysFees)));
-      }
-      if (extendFileList[0]?.originFileObj) {
-        formData.append('file', extendFileList[0].originFileObj);
-      }
-
-      await updateContract({ id: extendingContract._id, formData });
     } catch {
       // Form validation error
     }
@@ -384,26 +318,10 @@ export default function ContractsPage() {
           >
             Xem
           </Button>
-          {isReceptionist && record.status === 'ACTIVE' && record.type === 'LEASE' && (
-            <Tooltip title="Gia hạn thời hạn hợp đồng">
-              <Button
-                size="small"
-                type="text"
-                icon={<CalendarOutlined />}
-                onClick={() => handleOpenExtendModal(record)}
-              >
-                Gia hạn
-              </Button>
-            </Tooltip>
-          )}
-          {isManager && record.status === 'ACTIVE' && (
+          {isManager && record.status === 'ACTIVE' && record.type === CONTRACT_TYPES.SALE && (
             <Popconfirm
-              title="Chấm dứt hợp đồng"
-              description={
-                record.type === 'SALE'
-                  ? 'Chấm dứt hợp đồng mua bán sẽ kết thúc cư trú của các thành viên. Căn đã bàn giao chuyển sang Đang trống trên sơ đồ. Tiếp tục?'
-                  : 'Chấm dứt hợp đồng thuê sẽ kết thúc cư trú của khách thuê. Nếu hợp đồng đã bắt đầu và căn đã bàn giao, sơ đồ chuyển sang Đang trống. Tiếp tục?'
-              }
+              title="Chấm dứt hợp đồng mua bán"
+              description="Chấm dứt hợp đồng mua bán sẽ kết thúc cư trú của các thành viên. Tiếp tục?"
               okText="Chấm dứt"
               cancelText="Hủy"
               okButtonProps={{ danger: true }}
@@ -423,7 +341,7 @@ export default function ContractsPage() {
     <div>
       <PageHeader
         title="Quản lý hợp đồng"
-        subtitle="Quản lý hợp đồng mua bán (SALE) và hợp đồng cho thuê (LEASE) của cư dân"
+        subtitle="Quản lý hợp đồng mua bán và tra cứu hồ sơ thuê cũ"
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Hợp đồng' }]}
         extra={
           <Space>
@@ -432,7 +350,7 @@ export default function ContractsPage() {
             </Button>
             {isReceptionist && (
               <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreateModal}>
-                Tạo hợp đồng
+                Tạo hợp đồng mua bán
               </Button>
             )}
           </Space>
@@ -474,7 +392,7 @@ export default function ContractsPage() {
             onChange={(val) => setFilters((prev) => ({ ...prev, page: 1, type: val }))}
           >
             <Select.Option value={CONTRACT_TYPES.SALE}>Mua bán (SALE)</Select.Option>
-            <Select.Option value={CONTRACT_TYPES.LEASE}>Cho thuê (LEASE)</Select.Option>
+            <Select.Option value={CONTRACT_TYPES.LEASE}>Cho thuê (hồ sơ cũ)</Select.Option>
           </Select>
 
           <Select
@@ -491,18 +409,6 @@ export default function ContractsPage() {
             ))}
           </Select>
 
-          <Select
-            placeholder="Hạn hợp đồng"
-            allowClear
-            style={{ width: 160 }}
-            value={filters.endingWithinDays}
-            onChange={(val) => setFilters((prev) => ({ ...prev, page: 1, endingWithinDays: val }))}
-          >
-            <Select.Option value={30}>Hết hạn trong 30 ngày</Select.Option>
-            <Select.Option value={60}>Hết hạn trong 60 ngày</Select.Option>
-            <Select.Option value={90}>Hết hạn trong 90 ngày</Select.Option>
-          </Select>
-
           <Button
             onClick={() =>
               setFilters({
@@ -512,7 +418,6 @@ export default function ContractsPage() {
                 apartmentId: undefined,
                 type: undefined,
                 status: undefined,
-                endingWithinDays: undefined,
               })
             }
           >
@@ -537,7 +442,7 @@ export default function ContractsPage() {
 
       {/* Modal Tạo Hợp đồng */}
       <Modal
-        title="Tạo mới hợp đồng"
+        title="Tạo hợp đồng mua bán"
         open={createModalOpen}
         onCancel={() => setCreateModalOpen(false)}
         onOk={handleSaveCreate}
@@ -563,21 +468,6 @@ export default function ContractsPage() {
 
             <Col span={12}>
               <Form.Item
-                name="type"
-                label="Loại hợp đồng"
-                rules={[{ required: true, message: 'Vui lòng chọn loại hợp đồng' }]}
-              >
-                <Radio.Group buttonStyle="solid">
-                  <Radio.Button value={CONTRACT_TYPES.SALE}>Mua bán (SALE)</Radio.Button>
-                  <Radio.Button value={CONTRACT_TYPES.LEASE}>Cho thuê (LEASE)</Radio.Button>
-                </Radio.Group>
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
                 name="startDate"
                 label="Ngày bắt đầu"
                 rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu' }]}
@@ -585,56 +475,17 @@ export default function ContractsPage() {
                 <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
               </Form.Item>
             </Col>
-
-            {selectedType === CONTRACT_TYPES.LEASE && (
-              <Col span={12}>
-                <Form.Item
-                  name="endDate"
-                  label="Ngày kết thúc"
-                  rules={[{ required: true, message: 'Vui lòng chọn ngày kết thúc' }]}
-                >
-                  <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-                </Form.Item>
-              </Col>
-            )}
           </Row>
 
-          {selectedType === CONTRACT_TYPES.LEASE && (
-            <Form.Item
-              name="tenantPaysFees"
-              label="Bên chịu phí dịch vụ"
-              valuePropName="checked"
-            >
-              <Switch
-                checkedChildren="Người thuê chịu phí"
-                unCheckedChildren="Chủ sở hữu chịu phí"
-              />
-            </Form.Item>
-          )}
-
-          {selectedType === CONTRACT_TYPES.SALE && (
-            <PartyFields
-              prefix="owner"
-              title="Thông tin Chủ sở hữu"
-              check={check}
-              namePlaceholder="Vd: Nguyễn Văn A"
-              emailPlaceholder="Vd: nva@gmail.com"
-              phonePlaceholder="0912345678"
-              idPlaceholder="001200000001"
-            />
-          )}
-
-          {selectedType === CONTRACT_TYPES.LEASE && (
-            <PartyFields
-              prefix="tenant"
-              title="Thông tin Người thuê"
-              check={check}
-              namePlaceholder="Vd: Trần Thị B"
-              emailPlaceholder="Vd: ttb@gmail.com"
-              phonePlaceholder="0987654321"
-              idPlaceholder="001200000002"
-            />
-          )}
+          <PartyFields
+            prefix="owner"
+            title="Thông tin Chủ sở hữu"
+            check={check}
+            namePlaceholder="Vd: Nguyễn Văn A"
+            emailPlaceholder="Vd: nva@gmail.com"
+            phonePlaceholder="0912345678"
+            idPlaceholder="001200000001"
+          />
 
           <Form.Item label="File đính kèm (hợp đồng có chữ ký / công chứng, jpg/png ≤ 5MB)">
             <Upload
@@ -645,51 +496,6 @@ export default function ContractsPage() {
               maxCount={1}
             >
               <Button icon={<UploadOutlined />}>Chọn file đính kèm</Button>
-            </Upload>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Modal Gia hạn Hợp đồng */}
-      <Modal
-        title={`Gia hạn hợp đồng ${extendingContract?.apartmentId?.code || ''}`}
-        open={extendModalOpen}
-        onCancel={() => setExtendModalOpen(false)}
-        onOk={handleSaveExtend}
-        confirmLoading={updating}
-        destroyOnClose
-      >
-        <Form form={extendForm} layout="vertical" className="mt-4">
-          <Form.Item
-            name="endDate"
-            label="Ngày kết thúc mới"
-            rules={[{ required: true, message: 'Vui lòng chọn ngày kết thúc' }]}
-          >
-            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-          </Form.Item>
-
-          {extendingContract?.type === 'LEASE' && (
-            <Form.Item
-              name="tenantPaysFees"
-              label="Bên chịu phí dịch vụ"
-              valuePropName="checked"
-            >
-              <Switch
-                checkedChildren="Người thuê chịu phí"
-                unCheckedChildren="Chủ sở hữu chịu phí"
-              />
-            </Form.Item>
-          )}
-
-          <Form.Item label="Cập nhật file đính kèm mới (nếu có, jpg/png ≤ 5MB)">
-            <Upload
-              accept="image/png,image/jpeg"
-              beforeUpload={() => false}
-              fileList={extendFileList}
-              onChange={({ fileList }) => setExtendFileList(fileList.slice(-1))}
-              maxCount={1}
-            >
-              <Button icon={<UploadOutlined />}>Chọn file mới</Button>
             </Upload>
           </Form.Item>
         </Form>

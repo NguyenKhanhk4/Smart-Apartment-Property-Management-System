@@ -127,36 +127,24 @@ const householdUsers = await M.User.insertMany([
   demoUser('con.cudan3@sapms.vn', 'Bé Cường', '0900000005'),
 ]);
 const rentedApartment = apartments[6];
-await M.Apartment.updateOne({ _id: rentedApartment._id }, { status: 'RENTED' });
+await M.Apartment.updateOne({ _id: rentedApartment._id }, {
+  status: 'RENTED', occupancyStatus: 'RENTED', handoverDate: daysAgo(900),
+});
 
-// Hợp đồng căn 7: SALE cho cusohuu7 + LEASE cho nguoithue7 (BR-A5: LEASE cần SALE ACTIVE)
-const leaseStartDate = daysAgo(120);
-const leaseEndDate = new Date(leaseStartDate.getFullYear() + 1, leaseStartDate.getMonth(), leaseStartDate.getDate(), leaseStartDate.getHours());
-const [rentedSaleContract, rentedLeaseContract] = await M.Contract.insertMany([
-  {
-    apartmentId: rentedApartment._id,
-    type: 'SALE',
-    ownerId: householdUsers[2]._id,
-    startDate: daysAgo(900),
-    createdBy: U.letan._id,
-  },
-  {
-    apartmentId: rentedApartment._id,
-    type: 'LEASE',
-    ownerId: householdUsers[2]._id,
-    tenantId: householdUsers[3]._id,
-    tenantPaysFees: true,
-    startDate: leaseStartDate,
-    endDate: leaseEndDate,
-    createdBy: U.letan._id,
-  },
-]);
+// Căn 7 có hợp đồng mua bán và lượt cư trú của khách thuê theo UC17.
+const rentedSaleContract = await M.Contract.create({
+  apartmentId: rentedApartment._id,
+  type: 'SALE',
+  ownerId: householdUsers[2]._id,
+  startDate: daysAgo(900),
+  createdBy: U.letan._id,
+});
 
 await M.Resident.insertMany([
   { userId: householdUsers[0]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[0]._id, moveInDate: daysAgo(380) },
   { userId: householdUsers[1]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[0]._id, moveInDate: daysAgo(360) },
   { userId: householdUsers[2]._id, apartmentId: rentedApartment._id, relationType: 'OWNER', contractId: rentedSaleContract._id, moveInDate: daysAgo(900) },
-  { userId: householdUsers[3]._id, apartmentId: rentedApartment._id, relationType: 'TENANT', contractId: rentedLeaseContract._id, moveInDate: daysAgo(120) },
+  { userId: householdUsers[3]._id, apartmentId: rentedApartment._id, relationType: 'TENANT', tenantPaysFees: true, moveInDate: daysAgo(120) },
   { userId: householdUsers[4]._id, apartmentId: apartments[2]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[2]._id, moveInDate: daysAgo(300) },
 ]);
 // Cư dân chờ kích hoạt để thử UC11: SĐT 0900000006, email chokichhoat@sapms.vn, mã căn lấy từ căn đầu tiên

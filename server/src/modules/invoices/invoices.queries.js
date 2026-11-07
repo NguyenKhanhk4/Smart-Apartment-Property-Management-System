@@ -8,9 +8,10 @@ import {
   INVOICE_PUBLISHED_STATUSES,
   INVOICE_STATUS,
   PAYMENT_STATUS,
+  RELATION_TYPES,
   ROLES,
 } from '../../constants/enums.js';
-import { Invoice, Payment, PrepaidBalance, PrepaidTransaction, Resident } from '../../models/index.js';
+import { Apartment, Invoice, Payment, PrepaidBalance, PrepaidTransaction, Resident } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { vnPeriod } from '../../utils/time.js';
@@ -134,6 +135,22 @@ export async function getInvoice(user, id) {
 // ---------------------------------------------------------------------------
 // Cư dân: thông báo phí của căn đang chọn
 // ---------------------------------------------------------------------------
+export async function departedTenantDebtApartments(userId) {
+  const [departed, active] = await Promise.all([
+    Resident.distinct('apartmentId', { userId, relationType: RELATION_TYPES.TENANT, isActive: false, moveOutDate: { $type: 'date' } }),
+    Resident.distinct('apartmentId', { userId, isActive: true }),
+  ]);
+  const activeIds = new Set(active.map(String));
+  const formerIds = departed.filter((id) => !activeIds.has(String(id)));
+  if (!formerIds.length) return [];
+
+  const ids = await Invoice.distinct('apartmentId', {
+    apartmentId: { $in: formerIds }, payerId: userId, status: { $in: INVOICE_OUTSTANDING_STATUSES },
+    $expr: { $gt: ['$totalAmount', '$paidAmount'] },
+  });
+  return Apartment.find({ _id: { $in: ids } }).select('code').populate('buildingId', 'name').sort({ code: 1 }).lean();
+}
+
 export async function myInvoices(user, { apartmentId, status, period, ...query }) {
   const userId = oid(user.id);
   const aptId = oid(apartmentId);

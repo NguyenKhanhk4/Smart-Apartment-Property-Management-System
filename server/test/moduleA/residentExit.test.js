@@ -1,13 +1,11 @@
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Apartment, Contract, GatePass, ParkingCard, Resident, User, Vehicle } from '../../src/models/index.js';
-import { terminateContract } from '../../src/modules/contracts/contracts.service.js';
-import { expireLeases } from '../../src/modules/contracts/contracts.jobs.js';
+import { endTenancy } from '../../src/modules/residents/residentTenancies.js';
 import { listApartmentResidents, removeMember, updateMember } from '../../src/modules/residents/residents.service.js';
 import { linkResident as linkAccount } from '../../src/modules/residents/residentAccounts.js';
 import { listResidentChanges, exportResidentChangesExcel } from '../../src/modules/occupantReports/occupantReports.service.js';
 import { getBillableVehicles } from '../../src/modules/vehicles/vehicles.queries.js';
-import { endOfVnDay, startOfVnDay } from '../../src/utils/time.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { startApp } from '../helpers/http.js';
 import { asUser, createApartment, createHousehold, createReceptionist, createResidentUser, linkResident } from '../helpers/fixtures.js';
@@ -23,7 +21,7 @@ async function leaseFixture(endDate = new Date('2099-12-31T00:00:00+07:00')) {
   const sale = await createContract({ apartment, owner });
   const tenant = await createResidentUser();
   const lease = await createContract({ apartment, owner, type: 'LEASE', tenantId: tenant._id, endDate });
-  await linkResident(tenant, apartment, { relationType: 'TENANT', contractId: lease._id });
+  const tenantResident = await linkResident(tenant, apartment, { relationType: 'TENANT', contractId: lease._id });
   const family = await createResidentUser();
   await linkResident(family, apartment, { contractId: lease._id });
   const otherApartment = await createApartment();
@@ -36,7 +34,7 @@ async function leaseFixture(endDate = new Date('2099-12-31T00:00:00+07:00')) {
     rows.push({ vehicle, card, pass });
   }
   await Apartment.updateOne({ _id: apartment._id }, { status: 'RENTED' });
-  return { owner, apartment, tenant, family, lease, sale, rows };
+  return { owner, apartment, tenant, tenantResident, family, lease, sale, rows };
 }
 
 async function assertRevoked(row, cancelled) {
@@ -46,8 +44,8 @@ async function assertRevoked(row, cancelled) {
 }
 
 test('kết thúc thuê: chỉ thu hồi xe/thẻ/đơn của khách thuê và người đi cùng tại đúng căn', async () => {
-  const { lease, apartment, tenant, rows } = await leaseFixture();
-  await terminateContract(lease.id, asUser(await createReceptionist()));
+  const { owner, apartment, tenant, tenantResident, rows } = await leaseFixture();
+  await endTenancy(asUser(owner), apartment.id, tenantResident.id);
   await assertRevoked(rows[0], false);
   await assertRevoked(rows[1], true);
   await assertRevoked(rows[2], true);
@@ -58,24 +56,25 @@ test('kết thúc thuê: chỉ thu hồi xe/thẻ/đơn của khách thuê và n
 });
 
 test('lỗi giữa chừng khi thu hồi: rollback hợp đồng, cư trú và xe cùng transaction', async (t) => {
-  const { lease, tenant, rows } = await leaseFixture();
+  const { lease, owner, apartment, tenant, tenantResident, rows } = await leaseFixture();
   t.mock.method(ParkingCard, 'updateMany', () => { throw new Error('Lỗi lưu thẻ giả lập'); });
-  await assert.rejects(terminateContract(lease.id, asUser(await createReceptionist())), /Lỗi lưu thẻ giả lập/);
+  await assert.rejects(endTenancy(asUser(owner), apartment.id, tenantResident.id), /Lỗi lưu thẻ giả lập/);
   assert.equal((await Contract.findById(lease.id)).status, 'ACTIVE');
   assert.equal((await Resident.findOne({ userId: tenant._id, contractId: lease._id })).isActive, true);
   await assertRevoked(rows[1], false);
 });
 
-test('cron hết hạn: dùng hết ngày kết thúc hợp đồng, chạy lại không thay ngày hủy', async () => {
-  const endDate = startOfVnDay(new Date(Date.now() - 5 * 86400000));
-  const { lease, tenant, rows } = await leaseFixture(endDate);
-  assert.equal(await expireLeases(), 1);
+test('chủ sở hữu kết thúc lượt thuê cũ theo ngày rời thực tế, gửi lại giữ nguyên ngày hủy', async () => {
+  const endDate = new Date(Date.now() - 5 * 86400000);
+  const { owner, apartment, tenantResident, lease, rows } = await leaseFixture(endDate);
+  await endTenancy(asUser(owner), apartment.id, tenantResident.id);
   await assertRevoked(rows[0], false);
   await assertRevoked(rows[1], true);
-  const ended = endOfVnDay(endDate).getTime();
-  assert.equal((await Resident.findOne({ userId: tenant._id, contractId: lease._id })).moveOutDate.getTime(), ended);
+  const ended = (await Contract.findById(lease.id)).terminatedAt.getTime();
+  assert.ok(ended > endDate.getTime());
+  assert.equal((await Resident.findById(tenantResident.id)).moveOutDate.getTime(), ended);
   assert.equal((await Vehicle.findById(rows[1].vehicle.id)).cancelledAt.getTime(), ended);
-  assert.equal(await expireLeases(), 0);
+  await assert.rejects(endTenancy(asUser(owner), apartment.id, tenantResident.id), { status: 409 });
   assert.equal((await Vehicle.findById(rows[1].vehicle.id)).cancelledAt.getTime(), ended);
 });
 

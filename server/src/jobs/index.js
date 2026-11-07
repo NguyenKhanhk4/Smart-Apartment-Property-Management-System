@@ -4,11 +4,9 @@ import { CRON_JOBS } from '../constants/enums.js';
 import { runTrackedJob } from './cronRunner.js';
 import { generateMaintenanceWorkOrders } from '../modules/workOrders/workOrders.jobs.js';
 import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from '../modules/tickets/tickets.jobs.js';
-import { expireLeases } from '../modules/contracts/contracts.jobs.js';
 import { billingReminders, markOverdueInvoices } from '../modules/invoices/invoices.jobs.js';
 import { completeBookings, expireBookingHolds } from '../modules/bookings/bookings.jobs.js';
 import { expireGatePasses } from '../modules/gatePasses/gatePasses.jobs.js';
-import { remindExpiringLeases } from '../modules/contracts/contracts.jobs.js';
 import { reconcilePayosPayments } from '../modules/payments/payments.payos.js';
 import { remindDebts } from '../modules/debts/debts.jobs.js';
 import { remindQuotes } from '../modules/repairQuotes/repairQuotes.service.js';
@@ -28,8 +26,6 @@ export const JOBS = [
   { name: CRON_JOBS.TICKET_AUTO_CLOSE, schedule: '0 1 * * *', handler: autoCloseTickets },
   // UC-D02 / BR-O6 — 02:00 hằng ngày tạo work order bảo trì định kỳ cho tài sản đến hạn
   { name: CRON_JOBS.WORK_ORDER_GENERATE, schedule: '0 2 * * *', handler: generateMaintenanceWorkOrders },
-  // UC-A06 / BR-O2 — 00:00 hằng ngày kiểm tra và chuyển hợp đồng thuê hết hạn
-  { name: CRON_JOBS.CONTRACT_EXPIRE, schedule: '0 0 * * *', handler: expireLeases },
   // Mô đun 4 — 08:00 hằng ngày: đến ngày cấu hình thì nhắc Kế toán tính phí; nhắc Trưởng BQL thông báo chờ duyệt quá N ngày (không tự duyệt)
   { name: CRON_JOBS.BILLING_REMIND, schedule: '0 8 * * *', handler: billingReminders },
   // BR-F8 — 00:15 hằng ngày chuyển hóa đơn quá hạn thanh toán sang OVERDUE
@@ -48,8 +44,6 @@ export const JOBS = [
   { name: CRON_JOBS.BOOKING_HOLD_EXPIRE, schedule: '* * * * *', handler: expireBookingHolds },
   // UC52 — mỗi 15 phút kiểm tra và chuyển đơn Gate Pass quá hạn sang EXPIRED
   { name: CRON_JOBS.GATE_PASS_EXPIRE, schedule: '*/15 * * * *', handler: expireGatePasses },
-  // UC19 — 00:30 hằng ngày nhắc trước 15 ngày hợp đồng thuê sắp hết hạn
-  { name: CRON_JOBS.CONTRACT_EXPIRY_REMIND, schedule: '30 0 * * *', handler: remindExpiringLeases },
 ];
 
 export function startJobs() {

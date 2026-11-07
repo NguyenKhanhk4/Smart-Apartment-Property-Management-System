@@ -31,7 +31,7 @@ const readPicked = (userId) => {
 
 export function ResidentProvider({ children }) {
   const userId = useAuth().user?.id;
-  const { data: cards = [], loading } = useApi(() => memberCodeApi.mine(), []);
+  const { data: cards = [], loading, reload: reloadResidency } = useApi(() => memberCodeApi.mine(), []);
   const [pickedId, setPickedId] = useState(() => readPicked(userId));
   const pick = useCallback(
     (id) => {
@@ -60,6 +60,7 @@ export function ResidentProvider({ children }) {
       apartment: card?.apartment ?? null,
       apartmentId,
       setApartmentId: pick,
+      reloadResidency,
       isHead: Boolean(card?.isHead),
       code: card?.code ?? null,
       memberCount: enabled ? members.data?.length : undefined,
@@ -67,7 +68,7 @@ export function ResidentProvider({ children }) {
         ? vehicles.data?.filter((v) => COUNTED_VEHICLE_STATUS.includes(v.status)).length
         : undefined,
     }),
-    [loading, cards, card, apartmentId, pick, enabled, members.data, vehicles.data],
+    [loading, cards, card, apartmentId, pick, reloadResidency, enabled, members.data, vehicles.data],
   );
 
   return <ResidentContext.Provider value={value}>{children}</ResidentContext.Provider>;
