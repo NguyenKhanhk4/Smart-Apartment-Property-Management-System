@@ -29,6 +29,8 @@ export const ERROR_MESSAGES = {
   BOOKING_SLOT_CONFLICT: 'Khung giờ đã đủ chỗ hoặc bị trùng lịch.',
   BOOKING_APARTMENT_OVERDUE: 'Căn hộ đang nợ quá hạn nên chưa thể đặt tiện ích.',
   VEHICLE_SLOT_FULL: 'Bãi xe đã hết chỗ.',
+  PARKING_TARIFF_UNDEFINED: 'Chưa có quy tắc tính phí cho lượt gửi này. Lượt gửi vẫn đang mở.',
+  PARKING_FEE_CHANGED: 'Phí đã thay đổi theo giờ ra. Hãy tính lại trước khi xác nhận thu tiền.',
   RESIDENCY_DATE_OVERLAP: 'Thời gian khai báo bị chồng lấn với khai báo khác.',
   TICKET_ALREADY_CLOSED: 'Phản ánh đã đóng, không thể cập nhật.',
   TICKET_ALREADY_CLAIMED: 'Sự cố đã có kỹ thuật viên khác nhận.',

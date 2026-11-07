@@ -443,7 +443,7 @@ export const adminMenu = [
   {
     key: 'security-gate',
     group: 'Tiện ích & khách',
-    label: 'Gate Pass & Tra biển số',
+    label: 'Quản lí bãi xe',
     icon: ScanOutlined,
     path: 'security-gate',
     roles: ['STAFF:SECURITY', 'MANAGER'],

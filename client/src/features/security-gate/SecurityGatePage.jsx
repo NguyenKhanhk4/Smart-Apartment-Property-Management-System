@@ -1,347 +1,265 @@
 import { useState } from 'react';
-import {
-  Alert,
-  Button,
-  Card,
-  Checkbox,
-  Empty,
-  Input,
-  Popconfirm,
-  Space,
-  Spin,
-  Tag,
-  App,
-} from 'antd';
-import {
-  CarOutlined,
-  CheckCircleOutlined,
-  ReloadOutlined,
-  SearchOutlined,
-} from '@ant-design/icons';
-import { gatePassesApi } from '../../api/gatePasses.api';
-import EnumTag from '../../components/EnumTag';
+import { Alert, Button, Card, DatePicker, Form, Input, Modal, Select, Table, Tabs, Tag } from 'antd';
+import { parkingGateApi } from '../../api/parkingGate.api';
 import PageHeader from '../../components/PageHeader';
-import { GATE_PASS_DIRECTIONS, GATE_PASS_STATUS, PLATE_LOOKUP_RESULTS, VEHICLE_TYPES } from '../../constants/enums';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
-import { keysOf } from '../../utils/status';
-import { formatDateTime } from '../../utils/format';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { formatMoney } from '../../utils/format';
 
-const PLATE = keysOf(PLATE_LOOKUP_RESULTS);
-const GP = keysOf(GATE_PASS_STATUS);
+const vehicleLabels = {
+  CAR: 'Ô tô',
+  MOTORBIKE: 'Xe máy',
+  ELECTRIC_BICYCLE: 'Xe đạp điện',
+  BICYCLE: 'Xe đạp',
+};
+const vehicleOptions = Object.entries(vehicleLabels).map(([value, label]) => ({ value, label }));
+const directionOptions = [{ value: 'IN', label: 'Xe vào' }, { value: 'OUT', label: 'Xe ra' }];
+const timestampFormat = new Intl.DateTimeFormat('vi-VN', {
+  timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short',
+});
+const formatTimestamp = (date) => (date ? timestampFormat.format(new Date(date)) : '—');
+const required = [{ required: true, whitespace: true, message: 'Vui lòng nhập thông tin' }];
+const platePattern = /^(?=.*\d)[A-Z0-9]+(?:[ .-]+[A-Z0-9]+)*$/i;
+const guestCardPattern = /^[A-Z0-9]+(?:[-_][A-Z0-9]+)*$/i;
+const plateRule = { pattern: platePattern, transform: (value) => value?.trim(), message: 'Nhập biển số hợp lệ, ví dụ 51A-123.45 hoặc 51A12345.' };
+const guestCardRule = { pattern: guestCardPattern, transform: (value) => value?.trim(), message: 'Mã thẻ dùng chữ, số, dấu gạch ngang hoặc gạch dưới, ví dụ KH-01.' };
 
-export default function SecurityGatePage() {
-  const { message } = App.useApp();
-  const { hasRole } = useAuth();
-  // Chỉ Bảo vệ xác nhận xe qua cổng (server: PATCH /gate-passes/:id/mark-used chỉ cho STAFF:SECURITY); Trưởng BQL chỉ xem
-  const canMarkUsed = hasRole('STAFF:SECURITY');
-  const [plateInput, setPlateInput] = useState('');
-  const [lookupResult, setLookupResult] = useState(null);
-  const [lookingUp, setLookingUp] = useState(false);
+function formatPlate(plate) {
+  const value = plate.trim().toUpperCase();
+  if (!platePattern.test(value)) return value;
+  const parts = /^(\d{2}[A-Z][A-Z0-9]?)(\d{3})(\d{2})$/.exec(value.replace(/[ .-]/g, ''));
+  return parts ? `${parts[1]}-${parts[2]}.${parts[3]}` : value;
+}
 
-  const [includeUsed, setIncludeUsed] = useState(false);
-  const [searchToday, setSearchToday] = useState('');
-  const searchTodayQuery = useDebouncedValue(searchToday.trim());
-
-  const {
-    data: todayPasses = [],
-    loading: loadingToday,
-    reload: reloadToday,
-  } = useApi(
-    () =>
-      gatePassesApi.listToday({
-        includeUsed,
-        search: searchTodayQuery || undefined,
-      }),
-    [includeUsed, searchTodayQuery],
-  );
-
-  const [runMarkUsed, markingUsed] = useAction((id) => gatePassesApi.markUsed(id), {
-    success: 'Đã đánh dấu Gate Pass qua cổng thành công',
-  });
-
-  const handleLookup = async () => {
-    const trimmed = plateInput.trim();
-    if (!trimmed) {
-      message.warning('Vui lòng nhập biển số cần tra cứu');
-      return;
-    }
-    setLookingUp(true);
-    try {
-      const res = await gatePassesApi.lookupPlate(trimmed);
-      setLookupResult(res.data || res);
-    } catch (err) {
-      message.error(err?.message || 'Không thể tra cứu biển số');
-    } finally {
-      setLookingUp(false);
-    }
-  };
-
-  const handleMarkUsed = async (id) => {
-    try {
-      await runMarkUsed(id);
-      reloadToday();
-      if (lookupResult?.gatePass?._id === id) {
-        handleLookup();
-      }
-    } catch {
-      // handled
-    }
-  };
-
-  const renderLookupCard = () => {
-    if (!lookupResult) return null;
-
-    if (lookupResult.result === PLATE.REGISTERED_VEHICLE) {
-      const v = lookupResult.vehicle;
-      const apt = lookupResult.apartment;
-      return (
-        <Alert
-          type="success"
-          showIcon
-          className="mt-3"
-          message={
-            <span className="text-base font-bold">
-              XE CƯ DÂN ĐÃ ĐĂNG KÝ ({lookupResult.plateNumber})
-            </span>
-          }
-          description={
-            <div className="space-y-1 text-sm mt-1">
-              <div>
-                Căn hộ: <b className="text-base">{apt?.code}</b> ({apt?.buildingId?.name || ''})
-              </div>
-              <div>
-                Loại xe: <EnumTag map={VEHICLE_TYPES} value={v?.type} /> · Hãng/Màu:{' '}
-                <b>{[v?.brand, v?.color].filter(Boolean).join(' - ') || '—'}</b>
-              </div>
-              <div>
-                Người đăng ký: <b>{v?.registeredBy?.fullName || '—'}</b>{' '}
-                {v?.registeredBy?.phone ? `(${v.registeredBy.phone})` : ''}
-              </div>
-            </div>
-          }
-        />
-      );
-    }
-
-    if (lookupResult.result === PLATE.MATCHES_GATE_PASS) {
-      const gp = lookupResult.gatePass;
-      const apt = lookupResult.apartment;
-      return (
-        <Alert
-          type="info"
-          showIcon
-          className="mt-3"
-          message={
-            <span className="text-base font-bold">
-              KHỚP ĐƠN GATE PASS HÔM NAY ({gp?.code})
-            </span>
-          }
-          description={
-            <div className="space-y-2 text-sm mt-1">
-              <div>
-                Căn hộ: <b className="text-base">{apt?.code}</b> ({apt?.buildingId?.name || ''}) ·{' '}
-                <EnumTag map={GATE_PASS_DIRECTIONS} value={gp?.direction} />
-              </div>
-              <div>
-                Khung giờ: <b>{gp?.timeSlot?.from} – {gp?.timeSlot?.to}</b> · Người đăng ký:{' '}
-                <b>{gp?.createdBy?.fullName || '—'}</b>
-              </div>
-              <div>
-                Đồ đạc:{' '}
-                {(gp?.items || []).map((it) => `${it.name} (x${it.quantity})`).join(', ')}
-              </div>
-              {gp?.status === GP.APPROVED && canMarkUsed && (
-                <Popconfirm
-                  title="Xác nhận xe tải & đơn chuyển đồ này đã qua cổng?"
-                  onConfirm={() => handleMarkUsed(gp._id)}
-                  okText="Xác nhận"
-                  cancelText="Hủy"
-                >
-                  <Button
-                    type="primary"
-                    size="large"
-                    block
-                    icon={<CheckCircleOutlined />}
-                    loading={markingUsed}
-                  >
-                    Đánh dấu Đã sử dụng (Used)
-                  </Button>
-                </Popconfirm>
-              )}
-            </div>
-          }
-        />
-      );
-    }
-
-    return (
-      <Alert
-        type="warning"
-        showIcon
-        className="mt-3"
-        message={
-          <span className="text-base font-bold">
-            XE LẠ / CHƯA ĐĂNG KÝ ({lookupResult.plateNumber})
-          </span>
-        }
-        description="Không tìm thấy trong danh sách xe cư dân đã duyệt hoặc Gate Pass hợp lệ trong ngày hôm nay."
-      />
-    );
-  };
-
-  const rows = Array.isArray(todayPasses) ? todayPasses : todayPasses?.items || [];
+function PlateField({ name, label, required: isRequired = false, extra }) {
+  const form = Form.useFormInstance();
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
-      <PageHeader
-        title="Kiểm soát cổng Bảo vệ"
-        subtitle="Tra cứu biển số xe ra/vào và xác nhận Gate Pass đã duyệt trong ngày"
-        extra={
-          <Button size="large" icon={<ReloadOutlined />} onClick={() => reloadToday()}>
-            Làm mới
-          </Button>
-        }
-      />
+    <Form.Item name={name} label={label} rules={[...(isRequired ? required : []), plateRule]} extra={extra} validateTrigger="onBlur">
+      <Input maxLength={30} autoComplete="off" allowClear placeholder="Ví dụ 51A-123.45 hoặc 51A12345"
+        onBlur={(event) => {
+          const value = event.target.value;
+          const formatted = formatPlate(value);
+          if (formatted !== value) form.setFieldValue(name, formatted);
+        }} />
+    </Form.Item>
+  );
+}
 
-      {/* Khu vực 1: Tra cứu biển số nhanh (UC62) — Mobile-first, nút bấm to */}
-      <Card
-        title={
-          <Space>
-            <CarOutlined className="text-blue-600" />
-            <span className="font-bold text-base">Tra cứu biển số xe (UC62)</span>
-          </Space>
-        }
-        className="shadow-sm"
-      >
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Input
-            size="large"
-            allowClear
-            placeholder="Nhập biển số (VD: 30A-123.45)"
-            value={plateInput}
-            onChange={(e) => setPlateInput(e.target.value.toUpperCase())}
-            onPressEnter={handleLookup}
-            className="text-lg font-semibold uppercase"
-          />
-          <Button
-            type="primary"
-            size="large"
-            icon={<SearchOutlined />}
-            loading={lookingUp}
-            onClick={handleLookup}
-            className="min-h-[44px] sm:w-44 font-semibold"
-          >
-            Tra biển số
+function VehicleIdentityFields({ temporary = false, issuingCard = false }) {
+  const form = Form.useFormInstance();
+
+  return (
+    <>
+      <Form.Item name="cardNumber" label={temporary ? 'Mã thẻ tạm' : 'Mã thẻ cư dân'}
+        rules={issuingCard ? [...required, guestCardRule] : required} normalize={(value) => value?.toUpperCase()} validateTrigger="onBlur">
+        <Input maxLength={50} autoComplete="off" placeholder={temporary ? 'Ví dụ KH-01' : 'Nhập mã trên thẻ'}
+          onBlur={(event) => {
+            const value = event.target.value;
+            if (value !== value.trim()) form.setFieldValue('cardNumber', value.trim());
+          }} />
+      </Form.Item>
+      <PlateField name="plateNumber" label={temporary ? 'Biển số xe' : 'Biển số'} extra="Có thể để trống nếu xe đạp không có biển." />
+    </>
+  );
+}
+
+function ResidentPassage({ onRecorded }) {
+  const [form] = Form.useForm();
+  const [record, loading] = useAction(parkingGateApi.recordResident, {
+    success: ({ data }) => (data.exitedAt ? 'Đã ghi xe ra · Mở thanh chắn mô phỏng' : 'Đã ghi xe vào · Mở thanh chắn mô phỏng'),
+    onDone: () => { form.resetFields(); onRecorded(); },
+  });
+
+  return (
+    <Card title="Mô phỏng quẹt thẻ cư dân">
+      <Form form={form} name="resident-passage" layout="vertical" initialValues={{ direction: 'IN' }} disabled={loading}
+        onFinish={(values) => record(values).catch(() => { })}>
+        <Form.Item name="direction" label="Chiều di chuyển" rules={[{ required: true }]}>
+          <Select options={directionOptions} />
+        </Form.Item>
+        <VehicleIdentityFields />
+        <Button type="primary" htmlType="submit" loading={loading}>Kiểm tra và ghi nhận</Button>
+      </Form>
+    </Card>
+  );
+}
+
+function GuestPassage({ onRecorded }) {
+  const [form] = Form.useForm();
+  const direction = Form.useWatch('direction', form) ?? 'IN';
+  const [pendingEntry, setPendingEntry] = useState(null);
+  const [vehicleType, setVehicleType] = useState(undefined);
+  const [quote, setQuote] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [admit, admitting] = useAction(parkingGateApi.admitGuest, {
+    success: 'Đã phát thẻ tạm và ghi giờ vào',
+    onDone: () => {
+      setPendingEntry(null);
+      form.resetFields(['cardNumber', 'plateNumber']);
+      onRecorded();
+    },
+  });
+  const [quoteExit, quoting] = useAction(parkingGateApi.quoteGuestExit);
+  const [closeExit, closing] = useAction(parkingGateApi.completeGuestExit, { success: 'Đã ghi thu tiền và đóng lượt gửi' });
+
+  async function handlePassage({ direction: movement, ...identity }) {
+    setQuote(null);
+    setErrorMessage('');
+    if (movement === 'IN') {
+      setVehicleType(undefined);
+      setPendingEntry(identity);
+      return;
+    }
+
+    try {
+      const { data } = await quoteExit(identity);
+      setQuote(data);
+    } catch (error) {
+      setErrorMessage(error.message);
+    }
+  }
+
+  async function confirmPayment() {
+    setErrorMessage('');
+    try {
+      await closeExit(quote._id, {
+        cardNumber: quote.cardNumber,
+        plateNumber: quote.plateNumber,
+        expectedFee: quote.feeAmount,
+      });
+      setQuote(null);
+      form.resetFields(['cardNumber', 'plateNumber']);
+      onRecorded();
+    } catch (error) {
+      setQuote(null);
+      setErrorMessage(error.message);
+    }
+  }
+
+  return (
+    <Card title="Ghi nhận xe khách ra vào">
+      <Form form={form} name="guest-passage" layout="vertical" initialValues={{ direction: 'IN' }}
+        disabled={Boolean(pendingEntry) || quoting || closing} onFinish={handlePassage}
+        onValuesChange={() => { setQuote(null); setErrorMessage(''); }}>
+        <Form.Item name="direction" label="Chiều di chuyển" rules={[{ required: true }]}>
+          <Select options={directionOptions} />
+        </Form.Item>
+        <VehicleIdentityFields temporary issuingCard={direction === 'IN'} />
+        <Button type="primary" htmlType="submit" loading={quoting}>
+          {direction === 'IN' ? 'Phát thẻ tạm' : 'Kiểm tra và tính phí'}
+        </Button>
+      </Form>
+      <Modal title="Chọn loại xe để tính phí" open={Boolean(pendingEntry)} okText="Xác nhận phát thẻ"
+        cancelText="Hủy" confirmLoading={admitting} okButtonProps={{ disabled: !vehicleType || admitting }}
+        cancelButtonProps={{ disabled: admitting }}
+        onCancel={() => { if (!admitting) setPendingEntry(null); }}
+        onOk={() => admit({ ...pendingEntry, vehicleType }).catch(() => { })}>
+        <Select aria-label="Loại xe" placeholder="Chọn loại xe" className="w-full" options={vehicleOptions}
+          value={vehicleType} onChange={setVehicleType} disabled={admitting} />
+      </Modal>
+      {errorMessage && <Alert className="mt-4" showIcon type="warning" title={errorMessage} />}
+      {quote && (
+        <div className="mt-4 space-y-3">
+          <Alert showIcon type="info" title={`Phí cần thu ${formatMoney(quote.feeAmount)}`}
+            description={`${vehicleLabels[quote.vehicleType]} · ${quote.plateNumber ? formatPlate(quote.plateNumber) : 'Xe không có biển'} · Vào lúc ${formatTimestamp(quote.enteredAt)}`} />
+          <Button type="primary" loading={closing} disabled={quoting} onClick={confirmPayment}>
+            Xác nhận đã thu tiền và nhận lại thẻ
           </Button>
         </div>
-        {renderLookupCard()}
-      </Card>
+      )}
+    </Card>
+  );
+}
 
-      {/* Khu vực 2: Danh sách Gate Pass đã duyệt trong ngày hôm nay (UC54) */}
-      <Card
-        title={
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-bold text-base">
-              Gate Pass hôm nay ({rows.length})
-            </span>
-            <Checkbox
-              checked={includeUsed}
-              onChange={(e) => setIncludeUsed(e.target.checked)}
-            >
-              Hiện cả đơn đã qua cổng
-            </Checkbox>
-          </div>
-        }
-        className="shadow-sm"
-      >
-        <div className="mb-3">
-          <Input
-            size="large"
-            allowClear
-            prefix={<SearchOutlined />}
-            placeholder="Lọc nhanh mã đơn hoặc biển số xe tải..."
-            value={searchToday}
-            onChange={(e) => setSearchToday(e.target.value)}
-          />
+function PlateLookup() {
+  const [result, setResult] = useState(null);
+  const [lookup, loading] = useAction(parkingGateApi.lookup);
+
+  async function search({ plate }) {
+    setResult(null);
+    try {
+      const { data } = await lookup(plate);
+      setResult(data);
+    } catch {
+      // useAction hiển thị lỗi tra cứu.
+    }
+  }
+
+  return (
+    <Card title="Tra cứu biển số">
+      <Form name="plate-lookup" layout="vertical" disabled={loading} onFinish={search} onValuesChange={() => setResult(null)}>
+        <PlateField name="plate" label="Biển số cần tra" required />
+        <Button htmlType="submit" type="primary" loading={loading}>Tra cứu</Button>
+      </Form>
+      {result && (
+        <div className="mt-4 space-y-2">
+          {result.residentVehicle && <Alert showIcon type="success" title={`Xe cư dân đã đăng ký · ${formatPlate(result.plateNumber)}`}
+            description={`${vehicleLabels[result.residentVehicle.type]} · Căn ${result.residentVehicle.apartmentId?.code ?? '—'}`} />}
+          {result.guestSession && <Alert showIcon type="info" title={`Xe khách đang gửi · ${formatPlate(result.plateNumber)}`}
+            description={`Thẻ ${result.guestSession.cardNumber} · Vào lúc ${formatTimestamp(result.guestSession.enteredAt)}`} />}
+          {!result.residentVehicle && !result.guestSession && <Alert showIcon type="warning"
+            title="Không tìm thấy biển số xe trong danh sách" />}
         </div>
+      )}
+    </Card>
+  );
+}
 
-        {loadingToday ? (
-          <div className="py-12 text-center">
-            <Spin size="large" />
-          </div>
-        ) : rows.length === 0 ? (
-          <Empty description="Không có đơn Gate Pass nào cần xử lý hôm nay" />
-        ) : (
-          <div className="space-y-3">
-            {rows.map((gp) => (
-              <Card
-                key={gp._id}
-                size="small"
-                className="border-l-4 border-l-blue-500 shadow-xs"
-              >
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <Space wrap>
-                      <span className="text-base font-bold text-blue-600">{gp.code}</span>
-                      <Tag color="geekblue" className="text-sm font-semibold">
-                        Căn {gp.apartmentId?.code}
-                      </Tag>
-                      <EnumTag map={GATE_PASS_DIRECTIONS} value={gp.direction} />
-                      <EnumTag map={GATE_PASS_STATUS} value={gp.status} />
-                    </Space>
-                    <Tag icon={<CarOutlined />} className="text-sm font-bold">
-                      {gp.truckPlate}
-                    </Tag>
-                  </div>
+const historyColumns = [
+  { title: 'Biển số', dataIndex: 'plateNumber', render: (plate) => (plate ? formatPlate(plate) : '—') },
+  { title: 'Nhóm xe', dataIndex: 'kind', render: (kind) => (kind === 'GUEST' ? 'Khách' : 'Cư dân') },
+  { title: 'Loại xe', dataIndex: 'vehicleType', render: (type) => vehicleLabels[type] },
+  { title: 'Mã thẻ', dataIndex: 'cardNumber' },
+  { title: 'Giờ vào', dataIndex: 'enteredAt', render: formatTimestamp },
+  { title: 'Giờ ra', dataIndex: 'exitedAt', render: formatTimestamp },
+  { title: 'Trạng thái', key: 'status', render: (_, row) => (row.exitedAt ? <Tag>Đã ra</Tag> : <Tag color="processing">Đang trong bãi</Tag>) },
+  { title: 'Đã thu', dataIndex: 'feeAmount', render: (fee) => (fee == null ? '—' : formatMoney(fee)) },
+  { title: 'Người xác nhận thu', key: 'collectedBy', render: (_, row) => (row.feeAmount == null ? '—' : row.exitedBy?.fullName ?? '—') },
+];
 
-                  <div className="text-sm">
-                    Khung giờ: <b>{gp.timeSlot?.from} – {gp.timeSlot?.to}</b> · Cư dân:{' '}
-                    <b>{gp.createdBy?.fullName || '—'}</b>{' '}
-                    {gp.createdBy?.phone ? `(${gp.createdBy.phone})` : ''}
-                  </div>
+export default function SecurityGatePage() {
+  const { hasRole } = useAuth();
+  const canOperate = hasRole('STAFF:SECURITY');
+  const [filters, setFilters] = useState({ page: 1, limit: 20 });
+  const { data, pagination, loading, reload } = useApi(() => parkingGateApi.history(filters), [filters]);
 
-                  {gp.driverPhone && (
-                    <div className="text-xs text-gray-500">SĐT tài xế: {gp.driverPhone}</div>
-                  )}
+  const history = (
+    <Card title="Lịch sử xe ra vào">
+      <Form name="parking-history" layout="vertical" onFinish={({ plate, dates }) => setFilters({
+        page: 1, limit: filters.limit,
+        plate: plate?.trim() || undefined,
+        from: dates?.[0]?.format('YYYY-MM-DD'),
+        to: dates?.[1]?.format('YYYY-MM-DD'),
+      })}>
+        <div className="flex flex-wrap items-end gap-x-3">
+          <PlateField name="plate" label="Biển số" />
+          <Form.Item name="dates" label="Khoảng ngày"><DatePicker.RangePicker format="DD/MM/YYYY" /></Form.Item>
+          <Form.Item><Button htmlType="submit" type="primary">Lọc</Button></Form.Item>
+          <Form.Item><Button onClick={reload}>Làm mới</Button></Form.Item>
+        </div>
+      </Form>
+      <Table rowKey="_id" columns={historyColumns} dataSource={data ?? []} loading={loading} scroll={{ x: 'max-content' }}
+        pagination={{
+          current: filters.page, pageSize: filters.limit, total: pagination?.total ?? 0,
+          onChange: (page, limit) => setFilters((current) => ({ ...current, page, limit })),
+        }} />
+    </Card>
+  );
 
-                  <div className="text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded">
-                    <b>Đồ đạc:</b>{' '}
-                    {(gp.items || []).map((it) => `${it.name} (x${it.quantity})`).join(', ')}
-                  </div>
+  const items = [
+    ...(canOperate ? [
+      { key: 'resident', label: 'Xe cư dân', children: <ResidentPassage onRecorded={reload} /> },
+      { key: 'guest', label: 'Xe khách', children: <GuestPassage onRecorded={reload} /> },
+    ] : []),
+    { key: 'lookup', label: 'Tra cứu biển số', children: <PlateLookup /> },
+    { key: 'history', label: 'Lịch sử ra vào', children: history },
+  ];
 
-                  {gp.status === GP.APPROVED && !canMarkUsed ? (
-                    <div className="text-xs text-ink-2 font-medium">Chờ bảo vệ xác nhận qua cổng</div>
-                  ) : gp.status === GP.APPROVED ? (
-                    <Popconfirm
-                      title={`Đánh dấu đơn ${gp.code} đã qua cổng?`}
-                      onConfirm={() => handleMarkUsed(gp._id)}
-                      okText="Xác nhận"
-                      cancelText="Hủy"
-                    >
-                      <Button
-                        type="primary"
-                        size="large"
-                        block
-                        icon={<CheckCircleOutlined />}
-                        loading={markingUsed}
-                        className="min-h-[44px] font-semibold"
-                      >
-                        Đánh dấu Đã sử dụng (Used)
-                      </Button>
-                    </Popconfirm>
-                  ) : (
-                    <div className="text-xs text-emerald-600 font-medium">
-                      Đã qua cổng lúc {formatDateTime(gp.usedAt)} ({gp.usedBy?.fullName || 'Bảo vệ'})
-                    </div>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </Card>
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Quản lí bãi xe" subtitle="Quẹt thẻ mô phỏng, thu phí xe khách và tra cứu lịch sử ra vào." />
+      <Tabs items={items} />
     </div>
   );
 }
