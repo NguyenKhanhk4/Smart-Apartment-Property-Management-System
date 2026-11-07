@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router';
 import { Badge, Button } from 'antd';
 import { BellOutlined } from '@ant-design/icons';
 import { notificationApi } from '../../api/moduleE.api';
+<<<<<<< HEAD
 import { usePolling } from '../../hooks/usePolling';
+=======
+>>>>>>> origin/minh
 
 /** Phát khi số thông báo chưa đọc thay đổi (đánh dấu đã đọc...) để chuông cập nhật ngay */
 export const NOTIFICATIONS_CHANGED = 'sapms:notifications-changed';
@@ -22,12 +25,22 @@ export default function NotificationBell({ area, variant }) {
       .catch(() => {});
   }, []);
 
+<<<<<<< HEAD
   usePolling(refresh, POLL_MS);
   useEffect(() => {
     refresh();
     window.addEventListener(NOTIFICATIONS_CHANGED, refresh);
     window.addEventListener('focus', refresh);
     return () => {
+=======
+  useEffect(() => {
+    refresh();
+    const timer = setInterval(refresh, POLL_MS);
+    window.addEventListener(NOTIFICATIONS_CHANGED, refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearInterval(timer);
+>>>>>>> origin/minh
       window.removeEventListener(NOTIFICATIONS_CHANGED, refresh);
       window.removeEventListener('focus', refresh);
     };

@@ -8,8 +8,11 @@ const residentSchema = new Schema(
     apartmentId: { type: ObjectId, ref: 'Apartment', required: true },
     relationType: { type: String, enum: values(RELATION_TYPES), required: true },
     idNumber: String, // CCCD
+<<<<<<< HEAD
     idNumberEnc: { type: String, default: null }, // CCCD mã hóa AES-256-GCM
     idNumberHash: { type: String, default: null }, // HMAC-SHA256 để tìm kiếm/chống trùng
+=======
+>>>>>>> origin/minh
     contractId: { type: ObjectId, ref: 'Contract', default: null }, // Hợp đồng SALE/LEASE tạo ra liên kết này
     isActive: { type: Boolean, default: true }, // false khi đã chuyển đi
     moveInDate: Date,
@@ -21,7 +24,10 @@ const residentSchema = new Schema(
 residentSchema.index({ userId: 1, apartmentId: 1 }, { unique: true });
 residentSchema.index({ apartmentId: 1, isActive: 1 });
 residentSchema.index({ contractId: 1 });
+<<<<<<< HEAD
 residentSchema.index({ idNumberHash: 1 });
+=======
+>>>>>>> origin/minh
 // BR-O1: mỗi căn hộ tối đa 1 chủ sở hữu chính đang hoạt động
 residentSchema.index(
   { apartmentId: 1 },

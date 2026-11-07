@@ -1,8 +1,13 @@
 // Truy vấn / trình bày booking dùng chung (UC-D07): lịch trong ngày của lễ tân – bảo vệ và khối "booking hôm nay"
 // của màn hình tra mã (/member-codes/lookup). Chỉ phụ thuộc model + slot.utils để memberCodes.service gọi được mà không import vòng.
+<<<<<<< HEAD
 import { Booking } from '../../models/index.js';
 import { DAY_MS, vnHHmm } from '../../utils/time.js';
 import { activeMemberCodes } from '../amenities/access.queries.js';
+=======
+import { Booking, MemberCode } from '../../models/index.js';
+import { DAY_MS } from '../../utils/time.js';
+>>>>>>> origin/minh
 import { addMinutes, atTime, toVnYmd, vnDayStart } from '../amenities/slot.utils.js';
 
 const DAY_POPULATE = [
@@ -43,12 +48,30 @@ export function findDayBookings(ymd, extra = {}) {
     .lean();
 }
 
+<<<<<<< HEAD
+=======
+/** Mã cư dân đang hiệu lực của các (căn, người) trong danh sách booking → Map "apartmentId:userId" → mã chữ */
+async function memberCodesOf(bookings) {
+  const apartmentIds = [...new Set(bookings.map((b) => String(b.apartmentId?._id ?? b.apartmentId)))];
+  const userIds = [...new Set(bookings.map((b) => String(b.bookedBy?._id ?? b.bookedBy)).filter((id) => id !== 'undefined'))];
+  if (!apartmentIds.length || !userIds.length) return new Map();
+  const rows = await MemberCode.find({ apartmentId: { $in: apartmentIds }, userId: { $in: userIds }, isActive: true })
+    .select('apartmentId userId code')
+    .lean();
+  return new Map(rows.map((r) => [`${r.apartmentId}:${r.userId}`, r.code]));
+}
+
+>>>>>>> origin/minh
 /**
  * Dạng trả về cho lịch trong ngày. Mỗi booking có mốc mở / đóng check-in (`checkIn.opensAt/closesAt`) để client tự gắn nhãn
  * theo `serverTime` (không dựa vào đồng hồ máy người dùng).
  */
 export async function presentDayBookings(bookings, cfg) {
+<<<<<<< HEAD
   const codes = await activeMemberCodes(bookings.map((b) => ({ apartmentId: b.apartmentId, userId: b.bookedBy })));
+=======
+  const codes = await memberCodesOf(bookings);
+>>>>>>> origin/minh
   return bookings.map((b) => {
     const booker = b.bookedBy && typeof b.bookedBy === 'object' ? b.bookedBy : null;
     const apartment = b.apartmentId && typeof b.apartmentId === 'object' ? b.apartmentId : null;
@@ -65,8 +88,11 @@ export async function presentDayBookings(bookings, cfg) {
       fee: b.fee,
       usesPass: Boolean(b.passId),
       invoiceId: b.invoiceId ?? null,
+<<<<<<< HEAD
       holdExpiresAt: b.holdExpiresAt ?? null,
       paidAt: b.paidAt ?? null,
+=======
+>>>>>>> origin/minh
       amenity: amenity && { _id: amenity._id, name: amenity.name, imageUrl: amenity.imageUrl ?? null, location: amenity.location ?? null },
       apartment: apartment && {
         _id: apartment._id,
@@ -89,7 +115,12 @@ export async function presentDayBookings(bookings, cfg) {
   });
 }
 
+<<<<<<< HEAD
 export { vnHHmm }; // giữ tên export cũ cho nơi đang import từ đây
+=======
+/** "HH:mm" giờ VN của một mốc thời gian */
+export const vnHHmm = (date) => new Date(new Date(date).getTime() + 7 * 60 * 60 * 1000).toISOString().slice(11, 16);
+>>>>>>> origin/minh
 
 /** Một booking ở dạng trả về của lịch trong ngày (dùng sau check-in / hủy để client cập nhật dòng) */
 export async function loadBookingView(id, cfg) {

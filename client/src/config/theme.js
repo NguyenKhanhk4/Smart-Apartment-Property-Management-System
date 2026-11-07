@@ -3,4 +3,8 @@
 // Sáng/Tối do ThemeModeProvider quyết định (contexts/ThemeModeProvider.jsx).
 import { getAntdTheme } from '../theme/antdTheme';
 
+<<<<<<< HEAD
+=======
+export const themeConfig = getAntdTheme(false);
+>>>>>>> origin/minh
 export { getAntdTheme };

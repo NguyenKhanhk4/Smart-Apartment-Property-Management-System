@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // Tiện ích thời gian theo giờ Việt Nam (UTC+7, không có DST). Module KHÔNG tự khai báo lại các hằng / hàm này.
 export const MINUTE_MS = 60 * 1000;
 export const HOUR_MS = 60 * MINUTE_MS;
@@ -34,6 +35,12 @@ export function fmtDateVn(date) {
 export const fmtDateTimeVn = (date) => (date ? `${fmtTimeVn(date)} ${fmtDateVn(date)}` : '—');
 /** "2026-03" → "03/2026" */
 export const periodLabel = (period) => `${period.slice(5)}/${period.slice(0, 4)}`;
+=======
+// Tiện ích thời gian theo giờ Việt Nam (UTC+7, không có DST).
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+export const HOUR_MS = 60 * 60 * 1000;
+export const DAY_MS = 24 * HOUR_MS;
+>>>>>>> origin/minh
 
 /** 00:00 giờ VN của ngày chứa `date`, trả về Date (UTC). */
 export function startOfVnDay(date = new Date()) {
@@ -64,6 +71,7 @@ export function periodEnd(period) {
   return new Date(Date.UTC(y, m, 1) - VN_OFFSET_MS);
 }
 
+<<<<<<< HEAD
 /** Cộng/trừ `n` tháng cho "YYYY-MM": shiftPeriod('2026-01', -1) → '2025-12' */
 export function shiftPeriod(period, n) {
   const [y, m] = period.split('-').map(Number);
@@ -71,6 +79,8 @@ export function shiftPeriod(period, n) {
   return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`;
 }
 
+=======
+>>>>>>> origin/minh
 /** Danh sách "YYYY-MM" từ `from` tới `to` (bao gồm) */
 export function periodRange(from, to) {
   const out = [];

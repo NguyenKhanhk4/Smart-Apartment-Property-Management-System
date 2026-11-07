@@ -5,7 +5,10 @@ export const ERROR_CODES = Object.freeze({
   FORBIDDEN_ROLE: { status: 403, message: 'Bạn không có quyền thực hiện thao tác này' },
   NOT_FOUND: { status: 404, message: 'Không tìm thấy dữ liệu' },
   AUTH_INVALID_CREDENTIALS: { status: 401, message: 'Email hoặc mật khẩu không đúng' },
+<<<<<<< HEAD
   CHAIRMAN_ALREADY_EXISTS: { status: 409, message: 'Đã có 1 Trưởng Ban quản trị đang hoạt động' },
+=======
+>>>>>>> origin/minh
   MANAGER_ALREADY_EXISTS: { status: 409, message: 'Đã có 1 tài khoản Trưởng BQL đang hoạt động' },
   INVOICE_ALREADY_EXISTS: { status: 409, message: 'Căn hộ đã có hóa đơn cho tháng này' },
   INVOICE_ALREADY_PAID: { status: 409, message: 'Hóa đơn đã được thanh toán' },
@@ -35,6 +38,7 @@ export const ERROR_CODES = Object.freeze({
   BOOKING_INVALID_STATUS: { status: 409, message: 'Trạng thái booking hiện tại không cho phép thao tác này' },
   BOOKING_CHECKIN_OUT_OF_WINDOW: { status: 409, message: 'Chưa đến hoặc đã quá thời gian check-in của booking này' },
   BOOKING_WRONG_HOUSEHOLD: { status: 409, message: 'Người đến không thuộc căn hộ đã đặt booking này' },
+<<<<<<< HEAD
   AMENITY_NOT_WALK_IN: { status: 409, message: 'Tiện ích này không áp dụng ghi lượt vào (không phải kiểu Vào cửa)' },
   AMENITY_CLOSED: { status: 409, message: 'Tiện ích đang ngoài giờ mở cửa' },
   AMENITY_FULL: { status: 409, message: 'Tiện ích đã đủ số người tối đa cùng lúc' },
@@ -42,6 +46,8 @@ export const ERROR_CODES = Object.freeze({
   VISIT_DUPLICATE: { status: 409, message: 'Người này vừa được ghi lượt vào tiện ích này, không ghi trùng' },
   VISIT_ALREADY_BILLED: { status: 409, message: 'Lượt vào đã được gộp vào hóa đơn, không thể hủy' },
   VISIT_ALREADY_CANCELLED: { status: 409, message: 'Lượt vào đã được hủy trước đó' },
+=======
+>>>>>>> origin/minh
   AMENITY_NOT_BOOKABLE: { status: 409, message: 'Tiện ích này không áp dụng đặt chỗ' },
   CHARGE_NOT_ALLOWED: {
     status: 403,
@@ -50,12 +56,15 @@ export const ERROR_CODES = Object.freeze({
   VEHICLE_SLOT_FULL: { status: 409, message: 'Bãi xe đã hết chỗ' },
   RESIDENCY_DATE_OVERLAP: { status: 409, message: 'Khai báo bị trùng thời gian với khai báo khác' },
   TICKET_ALREADY_CLOSED: { status: 409, message: 'Phản ánh đã đóng, không thể cập nhật' },
+<<<<<<< HEAD
   // Sự cố & tiện ích (Người 4)
   TICKET_ALREADY_CLAIMED: { status: 409, message: 'Sự cố đã có kỹ thuật viên khác nhận' },
   NOT_ON_DUTY: { status: 403, message: 'Bạn không trong ca trực hiện tại' },
   DUTY_SHIFT_OVERLAP: { status: 409, message: 'Nhân viên đã có ca trực trùng thời gian' },
   BOOKING_QR_INVALID: { status: 400, message: 'Mã QR không hợp lệ hoặc không phải vé đặt tiện ích' },
   BOOKING_HOLD_EXPIRED: { status: 409, message: 'Đã hết thời gian giữ chỗ chờ thanh toán' },
+=======
+>>>>>>> origin/minh
   WORKORDER_DUPLICATE: {
     status: 409,
     message: 'Tài sản đang có work order chưa hoàn thành',
@@ -83,7 +92,10 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Chủ hộ chỉ hủy được gói của tháng sau; gói của tháng này vui lòng liên hệ Trưởng BQL',
   },
+<<<<<<< HEAD
   TOO_MANY_REQUESTS: { status: 429, message: 'Bạn thao tác quá nhiều lần, vui lòng thử lại sau ít phút' },
+=======
+>>>>>>> origin/minh
   SERVER_ERROR: { status: 500, message: 'Lỗi hệ thống, vui lòng thử lại sau' },
 
   // Bổ sung ngoài SRS: lỗi trùng unique index chưa được module ánh xạ sang mã riêng
@@ -93,6 +105,7 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Dữ liệu vừa được cập nhật bởi thao tác khác, vui lòng tải lại và thử lại',
   },
+<<<<<<< HEAD
   // Module B: mức giá đã dùng lập hóa đơn thì giữ nguyên để hóa đơn cũ giải trình được (BR-F3)
   FEE_TYPE_IN_USE: {
     status: 409,
@@ -111,6 +124,9 @@ export const ERROR_CODES = Object.freeze({
   PHONE_EXISTS: { status: 409, message: 'Số điện thoại đã được sử dụng bởi tài khoản khác' },
   ACCOUNT_CONFIRM_REQUIRED: { status: 409, message: 'Số điện thoại này đã có tài khoản, vui lòng kiểm tra và xác nhận đúng người' },
   CONTRACT_ACTIVE_EXISTS: { status: 409, message: 'Căn hộ đã có hợp đồng cùng loại đang hiệu lực' },
+=======
+  // Module A (Vũ Việt): trạng thái nghiệp vụ xung đột (hợp đồng, xe...)
+>>>>>>> origin/minh
   STATUS_CONFLICT: {
     status: 409,
     message: 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại',

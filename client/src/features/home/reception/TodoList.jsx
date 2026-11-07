@@ -7,8 +7,12 @@ import { AssignModal } from '../../tickets/TicketActionModals';
 import { Block } from './Block';
 import { refreshReceptionDashboard, useReceptionDashboard } from './receptionDashboard';
 import { DIVIDER, LINK, MUTED, TEXT } from './styles';
+<<<<<<< HEAD
 import ReasonModal from '../../../components/ReasonModal';
 import ApproveVehicleModal from '../../vehicles/ApproveVehicleModal';
+=======
+import { ReasonModal } from './TodoModals';
+>>>>>>> origin/minh
 import { TODO_KINDS, buildTodos } from './todos';
 
 const COLLAPSED_ROWS = 6;
@@ -35,7 +39,11 @@ export default function TodoList() {
   const [done, setDone] = useState({}); // key → { item, index, text, tone }
   const [busy, setBusy] = useState(null);
   const [expanded, setExpanded] = useState(false);
+<<<<<<< HEAD
   const [modal, setModal] = useState(null); // { type: 'assign' | 'approve' | 'reject' | 'cancel', item }
+=======
+  const [modal, setModal] = useState(null); // { type: 'assign' | 'reject' | 'cancel', item }
+>>>>>>> origin/minh
 
   // Dòng đã xử lý giữ nguyên vị trí cho tới khi người dùng tải lại trang
   const rows = useMemo(() => {
@@ -110,7 +118,11 @@ export default function TodoList() {
             <Button size="large" onClick={() => setModal({ type: 'reject', item })}>
               Từ chối
             </Button>
+<<<<<<< HEAD
             <Button size="large" type="primary" onClick={() => setModal({ type: 'approve', item })}>
+=======
+            <Button size="large" type="primary" loading={loading} onClick={() => run(item, () => vehicleApi.approve(r._id), 'Đã duyệt')}>
+>>>>>>> origin/minh
               Duyệt
             </Button>
           </>
@@ -169,9 +181,12 @@ export default function TodoList() {
         )}
       </Block>
 
+<<<<<<< HEAD
       {modal?.type === 'approve' && (
         <ApproveVehicleModal vehicle={item.raw} open onClose={close} onDone={() => markDone(item, 'Đã duyệt')} />
       )}
+=======
+>>>>>>> origin/minh
       {modal?.type === 'assign' && (
         <AssignModal
           ticket={item.raw}

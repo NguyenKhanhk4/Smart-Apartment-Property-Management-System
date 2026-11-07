@@ -1,15 +1,21 @@
 import { Link } from 'react-router';
 import { Button, Result } from 'antd';
+<<<<<<< HEAD
 import { useAuth } from '../../hooks/useAuth';
 
 export default function ForbiddenPage() {
   const { isAuthenticated, logout } = useAuth();
 
+=======
+
+export default function ForbiddenPage() {
+>>>>>>> origin/minh
   return (
     <Result
       status="403"
       title="403"
       subTitle="Bạn không có quyền truy cập trang này."
+<<<<<<< HEAD
       extra={[
         <Link key="home" to="/">
           <Button type="primary">Về trang chủ</Button>
@@ -21,6 +27,13 @@ export default function ForbiddenPage() {
           </Button>
         ),
       ]}
+=======
+      extra={
+        <Link to="/">
+          <Button type="primary">Về trang chủ</Button>
+        </Link>
+      }
+>>>>>>> origin/minh
     />
   );
 }

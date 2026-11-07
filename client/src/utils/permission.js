@@ -1,7 +1,14 @@
 // Cùng ngữ nghĩa với middleware `authorize` của backend (srs_final.md §2.3):
+<<<<<<< HEAD
 //   'RESIDENT' | 'STAFF' | 'ACCOUNTANT' | 'MANAGER' | 'BOARD' → đúng role đó
 //   'STAFF:TECHNICIAN' → STAFF có roleTitle TECHNICIAN (RECEPTIONIST / SECURITY / TECHNICIAN)
 //   'BOARD:CHAIRMAN'   → BOARD có boardTitle CHAIRMAN (CHAIRMAN / MEMBER)
+=======
+//   'RESIDENT' | 'STAFF' | 'ACCOUNTANT' | 'MANAGER' | 'BOARD' | 'ADMIN' → đúng role đó
+//   'STAFF:TECHNICIAN' → STAFF có roleTitle TECHNICIAN (RECEPTIONIST / SECURITY / TECHNICIAN)
+//   'BOARD:CHAIRMAN'   → BOARD có boardTitle CHAIRMAN (CHAIRMAN / MEMBER)
+// ADMIN không tự có quyền nghiệp vụ của role khác (BR-R3).
+>>>>>>> origin/minh
 // Danh sách spec rỗng/không truyền = chỉ cần đăng nhập.
 
 const TITLE_FIELD = { STAFF: 'roleTitle', BOARD: 'boardTitle' };

@@ -1,5 +1,6 @@
 import {
   AUDIT_ACTIONS,
+<<<<<<< HEAD
   AUDIT_TARGETS,
   CONFIG_KEYS,
   NOTIFICATION_TYPES,
@@ -10,20 +11,34 @@ import {
   TICKET_SLA_STATUSES,
   TICKET_STATUS,
   TICKET_TYPES,
+=======
+  CONFIG_KEYS,
+  NOTIFICATION_TYPES,
+  PRIORITY_ORDER,
+  TICKET_STATUS,
+>>>>>>> origin/minh
 } from '../../constants/enums.js';
 import { Ticket } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
 import { DAY_MS, startOfVnDay } from '../../utils/time.js';
+<<<<<<< HEAD
 import { getOnDuty } from '../dutyShifts/dutyShifts.service.js';
 import { slaBreaches } from './ticket.rules.js';
+=======
+import { OPEN_STATUSES } from './tickets.service.js';
+>>>>>>> origin/minh
 
 /**
  * UC-E06 / BR-O8 — [Cron 09:00] Ticket chưa xong mà quá dueDate → nâng 1 mức ưu tiên
  * (LOW→MEDIUM→HIGH→URGENT, đã URGENT thì giữ), tối đa 1 lần/ngày, báo Trưởng BQL + KTV phụ trách.
+<<<<<<< HEAD
  * Gồm cả ticket NEW chưa ai nhận (quá hạn vẫn phải có người chịu trách nhiệm — mục tiêu G6) và ticket chờ linh kiện;
  * bỏ qua ticket chờ cư dân đồng ý phí (TICKET_SLA_STATUSES — SLA tạm dừng).
+=======
+ * Gồm cả ticket NEW chưa ai nhận (quá hạn vẫn phải có người chịu trách nhiệm — mục tiêu G6).
+>>>>>>> origin/minh
  * Trả về số ticket đã leo thang (affectedCount cho cron_runs).
  *
  * Mỗi ticket được cập nhật bằng updateOne có điều kiện (status còn mở + chưa leo thang hôm nay):
@@ -33,7 +48,11 @@ export async function escalateOverdueTickets(now = new Date()) {
   const todayStart = startOfVnDay(now);
   const notEscalatedToday = { $or: [{ escalatedAt: null }, { escalatedAt: { $lt: todayStart } }] };
   const tickets = await Ticket.find({
+<<<<<<< HEAD
     status: { $in: TICKET_SLA_STATUSES },
+=======
+    status: { $in: OPEN_STATUSES },
+>>>>>>> origin/minh
     dueDate: { $lt: now },
     ...notEscalatedToday,
   })
@@ -47,15 +66,25 @@ export async function escalateOverdueTickets(now = new Date()) {
     const to = PRIORITY_ORDER[Math.min(idx + 1, PRIORITY_ORDER.length - 1)];
 
     const res = await Ticket.updateOne(
+<<<<<<< HEAD
       { _id: ticket._id, status: { $in: TICKET_SLA_STATUSES }, priority: from, ...notEscalatedToday },
       {
         $set: { priority: to, priorityRank: PRIORITY_ORDER.indexOf(to), escalatedAt: now },
+=======
+      { _id: ticket._id, status: { $in: OPEN_STATUSES }, priority: from, ...notEscalatedToday },
+      {
+        $set: { priority: to, escalatedAt: now },
+>>>>>>> origin/minh
         $inc: { escalationCount: 1, __v: 1 },
         $push: {
           history: {
             at: now,
             by: null,
+<<<<<<< HEAD
             action: ACT.ESCALATED,
+=======
+            action: 'ESCALATED',
+>>>>>>> origin/minh
             fromStatus: ticket.status,
             toStatus: ticket.status,
             note: from === to ? `Quá hạn — giữ mức ${to}` : `Quá hạn — nâng ưu tiên ${from} → ${to}`,
@@ -69,7 +98,11 @@ export async function escalateOverdueTickets(now = new Date()) {
     await logAudit({
       action: AUDIT_ACTIONS.TICKET_ESCALATED,
       user: null,
+<<<<<<< HEAD
       targetType: AUDIT_TARGETS.TICKET,
+=======
+      targetType: 'tickets',
+>>>>>>> origin/minh
       targetId: ticket._id,
       metadata: { code: ticket.code, from, to, dueDate: ticket.dueDate },
     });
@@ -111,7 +144,11 @@ export async function autoCloseTickets(now = new Date()) {
           history: {
             at: now,
             by: null,
+<<<<<<< HEAD
             action: ACT.AUTO_CLOSED,
+=======
+            action: 'AUTO_CLOSED',
+>>>>>>> origin/minh
             fromStatus: TICKET_STATUS.WAITING_CONFIRM,
             toStatus: TICKET_STATUS.CLOSED,
             note: `Tự đóng sau ${days} ngày cư dân không phản hồi`,
@@ -124,13 +161,18 @@ export async function autoCloseTickets(now = new Date()) {
     await logAudit({
       action: AUDIT_ACTIONS.TICKET_CLOSED,
       user: null,
+<<<<<<< HEAD
       targetType: AUDIT_TARGETS.TICKET,
+=======
+      targetType: 'tickets',
+>>>>>>> origin/minh
       targetId: ticket._id,
       metadata: { code: ticket.code, autoClosed: true },
     });
   }
   return affected;
 }
+<<<<<<< HEAD
 
 // Cột đánh dấu đã cảnh báo theo loại vi phạm (chống báo lặp) + nội dung thông báo
 const SLA_ALERTS = {
@@ -193,3 +235,5 @@ export async function alertSlaBreaches(now = new Date()) {
   }
   return affected;
 }
+=======
+>>>>>>> origin/minh

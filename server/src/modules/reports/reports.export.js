@@ -2,7 +2,10 @@ import { createRequire } from 'node:module';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import * as reports from './reports.service.js';
+<<<<<<< HEAD
 import { fmtDateTimeVn, fmtDateVn } from '../../utils/time.js';
+=======
+>>>>>>> origin/minh
 
 // UC-E13 — Xuất báo cáo Excel/PDF. Mỗi loại báo cáo được chuyển về 1 "spec" chung
 // { title, filterText, summary: [[nhãn, giá trị, format]], sections: [{ title, columns, rows }] }
@@ -18,7 +21,11 @@ const LABELS = {
   PARKING: 'Phí gửi xe',
   AMENITY: 'Phí tiện ích',
   ADJUSTMENT: 'Điều chỉnh',
+<<<<<<< HEAD
   PAYOS: 'payOS (VietQR)',
+=======
+  VNPAY: 'VNPay',
+>>>>>>> origin/minh
   CASH: 'Tiền mặt',
   BANK_TRANSFER: 'Chuyển khoản',
   INCOME: 'Thu',
@@ -32,7 +39,11 @@ const label = (v) => LABELS[v] ?? v ?? '';
 
 const fmtMoney = (n) => `${Math.round(n ?? 0).toLocaleString('vi-VN')} đ`;
 const fmtPercent = (n) => `${((n ?? 0) * 100).toFixed(1)}%`;
+<<<<<<< HEAD
 const fmtDate = (d) => (d ? fmtDateVn(d) : '');
+=======
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '');
+>>>>>>> origin/minh
 const FORMATTERS = { money: fmtMoney, percent: fmtPercent, date: fmtDate };
 const formatValue = (value, format) => (FORMATTERS[format] ? FORMATTERS[format](value) : (value ?? ''));
 
@@ -290,7 +301,11 @@ function renderPdf(spec) {
 
     doc.font('bold').fontSize(16).text(spec.title, { align: 'center' });
     doc.font('regular').fontSize(10).fillColor('#555').text(spec.filterText, { align: 'center' });
+<<<<<<< HEAD
     doc.text(`Xuất lúc ${fmtDateTimeVn(new Date())}`, { align: 'center' });
+=======
+    doc.text(`Xuất lúc ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`, { align: 'center' });
+>>>>>>> origin/minh
     doc.moveDown().fillColor('#000');
 
     for (const [k, v, format] of spec.summary) {

@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 // API Module A (Vũ Việt): Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện, Dashboard hệ thống.
 // Trả về nguyên envelope { success, data, pagination? } theo quy ước axiosClient.js.
 import { apiClient, http } from './axiosClient';
+=======
+// API Module A (Vũ Việt): Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện, Dashboard Admin.
+// Trả về nguyên envelope { success, data, pagination? } theo quy ước axiosClient.js.
+import { http } from './axiosClient';
+>>>>>>> origin/minh
 
 // ===== UC-A03 & UC-A04: Người dùng & Tài khoản nội bộ =====
 export const usersApi = {
@@ -47,11 +53,15 @@ export const contractsApi = {
 // ===== UC-A07 & UC-A08: Cư dân & Căn hộ của tôi =====
 export const residentsApi = {
   listByApartment: (apartmentId) => http.get(`/apartments/${apartmentId}/residents`),
+<<<<<<< HEAD
   lookupPhone: (phone) => http.get('/residents/lookup', { params: { phone } }),
+=======
+>>>>>>> origin/minh
   addMember: (body) => http.post('/residents', body),
   updateMember: (id, body) => http.patch(`/residents/${id}`, body),
   removeMember: (id) => http.patch(`/residents/${id}/remove`),
   myApartments: () => http.get('/residents/me/apartments'),
+<<<<<<< HEAD
   revealIdNumber: (id) => http.get(`/residents/${id}/id-number`),
   listChanges: (params) => http.get('/residents/changes', { params }),
   exportChanges: async (params) => {
@@ -69,6 +79,8 @@ export const residentsApi = {
     URL.revokeObjectURL(url);
     return filename;
   },
+=======
+>>>>>>> origin/minh
 };
 
 // ===== UC-A09 & UC-A10: Phương tiện =====
@@ -77,6 +89,7 @@ export const vehicleApi = {
   register: (body) => http.post('/vehicles', body),
   requestCancel: (id) => http.patch(`/vehicles/${id}/cancel-request`),
   list: (params) => http.get('/vehicles', { params }),
+<<<<<<< HEAD
   approve: (id, body) => http.patch(`/vehicles/${id}/approve`, body),
   reject: (id, body) => http.patch(`/vehicles/${id}/reject`, body),
   confirmCancel: (id) => http.patch(`/vehicles/${id}/confirm-cancel`),
@@ -92,4 +105,13 @@ export const parkingCardsApi = {
 // ===== UC-A11: Dashboard thống kê hệ thống dành cho Trưởng BQL =====
 export const systemDashboardApi = {
   getDashboard: () => http.get('/system-dashboard'),
+=======
+  approve: (id) => http.patch(`/vehicles/${id}/approve`),
+  reject: (id, body) => http.patch(`/vehicles/${id}/reject`, body),
+  confirmCancel: (id) => http.patch(`/vehicles/${id}/confirm-cancel`),
+};
+// ===== UC-A11: Dashboard thống kê hệ thống dành cho Admin =====
+export const adminApi = {
+  getDashboard: () => http.get('/admin/dashboard'),
+>>>>>>> origin/minh
 };

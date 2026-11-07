@@ -15,6 +15,7 @@ import {
 } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { ticketApi } from '../../api/moduleE.api';
+<<<<<<< HEAD
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
@@ -29,6 +30,29 @@ import {
 import { formatDateTime } from '../../utils/format';
 import { AssignModal, ConfirmModal, ProgressModal, QuoteDecisionModal, RejectModal } from './TicketActionModals';
 import { ticketActions } from './ticketActions';
+=======
+import { useApi } from '../../hooks/useApi';
+import { useAuth } from '../../hooks/useAuth';
+import EnumTag from '../../components/EnumTag';
+import { PRIORITIES, TICKET_STATUS } from '../../constants/enums';
+import { formatDateTime } from '../../utils/format';
+import EvidencePhotos from '../../components/EvidencePhotos';
+import { AssignModal, ConfirmModal, ProgressModal, RejectModal } from './TicketActionModals';
+
+const HISTORY_LABEL = {
+  CREATED: 'Cư dân tạo phản ánh',
+  ASSIGNED: 'Phân công',
+  REASSIGNED: 'Phân công lại',
+  PROGRESS: 'Cập nhật tiến độ',
+  RESOLVED: 'Đã xử lý xong',
+  CONFIRMED: 'Cư dân xác nhận',
+  REOPENED: 'Cư dân chưa đồng ý',
+  ESCALATED: 'Hệ thống leo thang',
+  AUTO_CLOSED: 'Hệ thống tự đóng',
+  REJECTED: 'Từ chối',
+};
+const HISTORY_COLOR = { ESCALATED: 'red', REJECTED: 'gray', REOPENED: 'orange', CONFIRMED: 'green', AUTO_CLOSED: 'green' };
+>>>>>>> origin/minh
 
 // Chi tiết phản ánh dùng chung cho cư dân (/r) và nội bộ (/app); nút thao tác hiện theo quyền
 export default function TicketDetailPage() {
@@ -37,15 +61,26 @@ export default function TicketDetailPage() {
   const { user, hasRole } = useAuth();
   const [modal, setModal] = useState(null);
   const { data: t, loading, error, reload } = useApi(() => ticketApi.get(id), [id]);
+<<<<<<< HEAD
   const [claim, claiming] = useAction(() => ticketApi.claim(id), { success: 'Đã nhận sự cố', onDone: reload });
+=======
+>>>>>>> origin/minh
 
   if (error && !t) {
     return <Result status="warning" title={error.message} extra={<Button onClick={() => navigate(-1)}>Quay lại</Button>} />;
   }
   if (!t) return <Spin style={{ display: 'block', margin: 48 }} />;
 
+<<<<<<< HEAD
   const { canClaim, canAssign, canReject, canProgress, canDecideQuote, canConfirm } = ticketActions(t, user, hasRole);
   const isComplaint = t.type === 'COMPLAINT';
+=======
+  const isFinal = ['CLOSED', 'REJECTED'].includes(t.status);
+  const canDispatch = hasRole('MANAGER', 'STAFF:RECEPTIONIST') && !isFinal && t.status !== 'WAITING_CONFIRM';
+  const isMyTask = hasRole('STAFF:TECHNICIAN') && t.assignedTo?._id === user.id;
+  const canProgress = isMyTask && ['ASSIGNED', 'IN_PROGRESS'].includes(t.status);
+  const canConfirm = hasRole('RESIDENT') && t.status === 'WAITING_CONFIRM';
+>>>>>>> origin/minh
   const modalProps = (key) => ({ ticket: t, open: modal === key, onClose: () => setModal(null), onDone: reload });
 
   return (
@@ -56,6 +91,7 @@ export default function TicketDetailPage() {
           <Typography.Title level={4} style={{ margin: 0, flex: 1, minWidth: 200 }}>
             {t.title}
           </Typography.Title>
+<<<<<<< HEAD
           {canClaim && (
             <Button type="primary" loading={claiming} onClick={() => claim().catch(() => {})}>
               Nhận sự cố
@@ -75,6 +111,19 @@ export default function TicketDetailPage() {
             <Button type="primary" onClick={() => setModal('quote')}>
               Xem & quyết định báo giá
             </Button>
+=======
+          {canDispatch && (
+            <>
+              <Button type="primary" onClick={() => setModal('assign')}>
+                {t.assignedTo ? 'Phân công lại' : 'Phân công'}
+              </Button>
+              {['NEW', 'ASSIGNED'].includes(t.status) && (
+                <Button danger onClick={() => setModal('reject')}>
+                  Từ chối
+                </Button>
+              )}
+            </>
+>>>>>>> origin/minh
           )}
           {canProgress && (
             <Button type="primary" onClick={() => setModal('progress')}>
@@ -94,6 +143,7 @@ export default function TicketDetailPage() {
         {canConfirm && (
           <Alert type="info" showIcon title="Kỹ thuật viên đã xử lý xong. Vui lòng xác nhận kết quả và đánh giá." />
         )}
+<<<<<<< HEAD
         {canDecideQuote && (
           <Alert
             type="warning"
@@ -104,6 +154,8 @@ export default function TicketDetailPage() {
         {isComplaint && hasRole('MANAGER', 'STAFF:RECEPTIONIST') && (
           <Alert type="info" showIcon title="Phản ánh do Trưởng BQL tiếp nhận và phản hồi, không giao cho kỹ thuật viên." />
         )}
+=======
+>>>>>>> origin/minh
 
         <Card size="small">
           <Descriptions column={{ xs: 1, md: 2 }} size="small">
@@ -111,11 +163,15 @@ export default function TicketDetailPage() {
             <Descriptions.Item label="Trạng thái">
               <EnumTag map={TICKET_STATUS} value={t.status} />
             </Descriptions.Item>
+<<<<<<< HEAD
             <Descriptions.Item label="Phân loại">
               <EnumTag map={TICKET_TYPES} value={t.type} />
               {!isComplaint && <EnumTag map={TICKET_SCOPES} value={t.scope} />}
             </Descriptions.Item>
             <Descriptions.Item label="Danh mục">{t.category?.name}</Descriptions.Item>
+=======
+            <Descriptions.Item label="Loại">{t.category?.name}</Descriptions.Item>
+>>>>>>> origin/minh
             <Descriptions.Item label="Ưu tiên">
               <EnumTag map={PRIORITIES} value={t.priority} />
               {t.escalationCount > 0 && (
@@ -127,6 +183,7 @@ export default function TicketDetailPage() {
             </Descriptions.Item>
             <Descriptions.Item label="Người gửi">{t.createdBy?.fullName}</Descriptions.Item>
             <Descriptions.Item label="Ngày gửi">{formatDateTime(t.createdAt)}</Descriptions.Item>
+<<<<<<< HEAD
             {t.ackDueAt && !t.assignedTo && (
               <Descriptions.Item label="Hạn nhận phiếu">{formatDateTime(t.ackDueAt)}</Descriptions.Item>
             )}
@@ -144,6 +201,10 @@ export default function TicketDetailPage() {
                 {t.quoteDecision.accepted ? 'Cư dân đã đồng ý' : 'Cư dân đã từ chối'} lúc {formatDateTime(t.quoteDecision.at)}
               </Descriptions.Item>
             )}
+=======
+            <Descriptions.Item label="Hạn xử lý">{formatDateTime(t.dueDate)}</Descriptions.Item>
+            <Descriptions.Item label="Kỹ thuật viên">{t.assignedTo?.fullName ?? 'Chưa phân công'}</Descriptions.Item>
+>>>>>>> origin/minh
             {t.rating && (
               <Descriptions.Item label="Đánh giá">
                 <Rate disabled value={t.rating} style={{ fontSize: 14 }} /> {t.ratingComment}
@@ -167,11 +228,19 @@ export default function TicketDetailPage() {
         <Card size="small" title="Lịch sử xử lý">
           <Timeline
             items={[...t.history].reverse().map((h) => ({
+<<<<<<< HEAD
               color: TICKET_HISTORY_ACTIONS[h.action]?.color ?? 'blue',
               content: (
                 <Flex vertical>
                   <Typography.Text strong>
                     {TICKET_HISTORY_ACTIONS[h.action]?.label ?? h.action}
+=======
+              color: HISTORY_COLOR[h.action] ?? 'blue',
+              content: (
+                <Flex vertical>
+                  <Typography.Text strong>
+                    {HISTORY_LABEL[h.action] ?? h.action}
+>>>>>>> origin/minh
                     {h.by?.fullName ? ` — ${h.by.fullName}` : h.by ? '' : ' — Hệ thống'}
                   </Typography.Text>
                   {h.note && <Typography.Text>{h.note}</Typography.Text>}
@@ -194,7 +263,10 @@ export default function TicketDetailPage() {
       <RejectModal {...modalProps('reject')} />
       <ProgressModal {...modalProps('progress')} />
       <ConfirmModal {...modalProps('confirm')} />
+<<<<<<< HEAD
       <QuoteDecisionModal {...modalProps('quote')} />
+=======
+>>>>>>> origin/minh
     </Spin>
   );
 }

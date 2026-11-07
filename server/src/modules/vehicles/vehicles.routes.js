@@ -44,6 +44,7 @@ const mineQuerySchema = Joi.object({
   status: Joi.string().valid(...values(VEHICLE_STATUS)),
 });
 
+<<<<<<< HEAD
 const approveBodySchema = Joi.object({
   cardNumber: Joi.string()
     .trim()
@@ -56,6 +57,8 @@ const approveBodySchema = Joi.object({
     }),
 });
 
+=======
+>>>>>>> origin/minh
 const rejectBodySchema = Joi.object({
   reason: Joi.string()
     .trim()
@@ -194,9 +197,15 @@ router.patch(
   '/:id/approve',
   authenticate,
   authorize(...RECEPTIONIST_ONLY),
+<<<<<<< HEAD
   validate({ params: idParams, body: approveBodySchema }),
   async (req, res) => {
     const data = await service.approve(req.params.id, req.user, req.validated.body, req.ip);
+=======
+  validate({ params: idParams }),
+  async (req, res) => {
+    const data = await service.approve(req.params.id, req.user);
+>>>>>>> origin/minh
     ok(res, data);
   },
 );
@@ -251,7 +260,11 @@ router.patch(
   authorize(...RECEPTIONIST_ONLY),
   validate({ params: idParams }),
   async (req, res) => {
+<<<<<<< HEAD
     const data = await service.confirmCancel(req.params.id, req.user, req.ip);
+=======
+    const data = await service.confirmCancel(req.params.id, req.user);
+>>>>>>> origin/minh
     ok(res, data);
   },
 );

@@ -1,6 +1,7 @@
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { env } from '../config/env.js';
+<<<<<<< HEAD
 import { CONFIG_KEYS } from '../constants/enums.js';
 import { ApiError } from '../utils/ApiError.js';
 import { getConfig } from './systemConfig.service.js';
@@ -15,6 +16,12 @@ async function maxUploadMb() {
   const value = Number(await getConfig(CONFIG_KEYS.UPLOAD_MAX_SIZE_MB));
   return Number.isFinite(value) && value > 0 ? Math.min(value, HARD_MAX_MB) : 5;
 }
+=======
+import { ApiError } from '../utils/ApiError.js';
+
+// NFR-10: ảnh ≤ 5MB, chỉ jpg/png
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+>>>>>>> origin/minh
 const ALLOWED_TYPES = ['image/jpeg', 'image/png'];
 
 if (env.cloudinary.enabled) {
@@ -60,6 +67,7 @@ export function uploadImages(fieldName = 'images', maxCount = 5) {
         if (fake) {
           return next(ApiError.badRequest(`Ảnh "${fake.originalname}" không phải file jpg/png hợp lệ`));
         }
+<<<<<<< HEAD
         if (!req.files?.length) return next();
         return maxUploadMb()
           .then((maxMb) => {
@@ -67,11 +75,18 @@ export function uploadImages(fieldName = 'images', maxCount = 5) {
             next(big ? ApiError.badRequest(`Ảnh "${big.originalname}" vượt quá ${maxMb}MB`) : undefined);
           })
           .catch(next);
+=======
+        return next();
+>>>>>>> origin/minh
       }
       if (err instanceof multer.MulterError) {
         const message =
           err.code === 'LIMIT_FILE_SIZE'
+<<<<<<< HEAD
             ? `Ảnh vượt quá ${HARD_MAX_MB}MB`
+=======
+            ? 'Ảnh vượt quá 5MB'
+>>>>>>> origin/minh
             : err.code === 'LIMIT_UNEXPECTED_FILE'
               ? `Tối đa ${maxCount} ảnh`
               : err.message;
@@ -103,8 +118,12 @@ export async function uploadToCloudinary(files = [], folder = 'misc') {
   try {
     return await Promise.all(files.map((f) => uploadBuffer(f, folder)));
   } catch (err) {
+<<<<<<< HEAD
     // Không trả nguyên văn lỗi Cloudinary cho client (có thể lộ cấu hình); ghi log để tra cứu
     console.error('[upload] Cloudinary lỗi:', err);
     throw new ApiError('SERVER_ERROR', 'Upload ảnh thất bại, vui lòng thử lại sau');
+=======
+    throw new ApiError('SERVER_ERROR', `Upload ảnh thất bại: ${err.message}`);
+>>>>>>> origin/minh
   }
 }

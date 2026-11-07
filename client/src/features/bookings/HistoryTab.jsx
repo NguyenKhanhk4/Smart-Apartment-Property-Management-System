@@ -7,6 +7,7 @@ import StatusBadge from '../../components/resident/StatusBadge';
 import SurfaceCard from '../../components/resident/SurfaceCard';
 import { useApi } from '../../hooks/useApi';
 import { useResident } from '../../hooks/useResident';
+<<<<<<< HEAD
 import { BOOKING_STATUS } from '../../constants/enums';
 import { formatDate, formatMoney } from '../../utils/format';
 import BookingTicketModal from './BookingTicketModal';
@@ -18,6 +19,23 @@ import { holdLabel } from './bookingHelpers';
 const Badge = ({ status }) => (
   <StatusBadge tone={BOOKING_STATUS[status]?.tone}>{BOOKING_STATUS[status]?.label ?? status}</StatusBadge>
 );
+=======
+import { formatMoney } from '../../utils/format';
+
+// Nhãn + màu theo thiết kế: Đã xác nhận = ok, Chờ duyệt = warn, Đã dùng = neutral.
+// PENDING / REJECTED chỉ còn ở dữ liệu cũ (BR-O12 đã bỏ luồng duyệt).
+const STATUS = {
+  APPROVED: { label: 'Đã xác nhận', tone: 'ok' },
+  CHECKED_IN: { label: 'Đã check-in', tone: 'info' },
+  COMPLETED: { label: 'Đã dùng', tone: 'neutral' },
+  CANCELLED: { label: 'Đã hủy', tone: 'neutral' },
+  NO_SHOW: { label: 'Không đến', tone: 'warn' },
+  PENDING: { label: 'Chờ duyệt', tone: 'warn' },
+  REJECTED: { label: 'Từ chối', tone: 'neutral' },
+};
+
+const Badge = ({ status }) => <StatusBadge tone={STATUS[status]?.tone}>{STATUS[status]?.label ?? status}</StatusBadge>;
+>>>>>>> origin/minh
 const timeOf = (b) => `${b.slotStart}–${b.slotEnd}`;
 const feeOf = (b) => (b.fee > 0 ? formatMoney(b.fee) : b.passId ? 'Gói tháng' : 'Miễn phí');
 const startOf = (b) => dayjs(b.startAt ?? b.date);
@@ -27,8 +45,11 @@ export default function HistoryTab({ wide }) {
   const { message } = App.useApp();
   const { apartmentId } = useResident();
   const [page, setPage] = useState(1);
+<<<<<<< HEAD
   const [ticket, setTicket] = useState(null); // booking đang mở vé QR
   const [moving, setMoving] = useState(null); // booking đang đổi lịch
+=======
+>>>>>>> origin/minh
   const enabled = Boolean(apartmentId);
 
   const upcoming = useApi(() => bookingApi.mine({ scope: 'upcoming', limit: 50, apartmentId }), [apartmentId], { enabled });
@@ -50,6 +71,7 @@ export default function HistoryTab({ wide }) {
 
   const rebookTo = (b) => `/r/amenities/${b.amenityId}${apartmentId ? `?apartmentId=${apartmentId}` : ''}`;
 
+<<<<<<< HEAD
   const linkBtn = 'p-0 border-0 bg-transparent text-sm font-medium text-r-link cursor-pointer';
   // Vé QR (đã xác nhận) + đổi giờ + hủy cho booking sắp tới
   const actions = (b) => (
@@ -72,6 +94,8 @@ export default function HistoryTab({ wide }) {
       <span className="block text-xs text-r-warn-fg">{holdLabel(b.holdExpiresAt)} · thanh toán tại quầy lễ tân</span>
     );
 
+=======
+>>>>>>> origin/minh
   const cancelButton = (b) =>
     b.canCancel && (
       <Popconfirm
@@ -86,6 +110,7 @@ export default function HistoryTab({ wide }) {
       </Popconfirm>
     );
 
+<<<<<<< HEAD
   const modals = (
     <>
       <BookingTicketModal booking={ticket} onClose={() => setTicket(null)} />
@@ -93,6 +118,8 @@ export default function HistoryTab({ wide }) {
     </>
   );
 
+=======
+>>>>>>> origin/minh
   if ((upcoming.loading || past.loading) && !upRows.length && !pastRows.length) return <Skeleton active paragraph={{ rows: 4 }} />;
   if (!upRows.length && !pastRows.length) return <Empty description="Chưa có lượt đặt nào" />;
 
@@ -110,6 +137,7 @@ export default function HistoryTab({ wide }) {
             {b.amenity?.name ?? 'Tiện ích'}
             {!b.isMine && b.bookedBy?.fullName && <span className="block text-xs font-normal text-r-subtle">Đặt bởi {b.bookedBy.fullName}</span>}
           </td>
+<<<<<<< HEAD
           <td className={td}>{formatDate(startOf(b))}</td>
           <td className={td}>{timeOf(b)}</td>
           <td className={td}>{feeOf(b)}</td>
@@ -122,6 +150,16 @@ export default function HistoryTab({ wide }) {
             {muted && (
               <Link to={rebookTo(b)} viewTransition className="text-sm font-medium text-r-link no-underline">Đặt lại</Link>
             )}
+=======
+          <td className={td}>{startOf(b).format('DD/MM/YYYY')}</td>
+          <td className={td}>{timeOf(b)}</td>
+          <td className={td}>{feeOf(b)}</td>
+          <td className={td}><Badge status={b.status} /></td>
+          <td className={`${td} text-right`}>
+            {cancelButton(b) || (muted && (
+              <Link to={rebookTo(b)} viewTransition className="text-sm font-medium text-r-link no-underline">Đặt lại</Link>
+            ))}
+>>>>>>> origin/minh
           </td>
         </tr>
       );
@@ -147,7 +185,10 @@ export default function HistoryTab({ wide }) {
           </table>
         </SurfaceCard>
         {pager}
+<<<<<<< HEAD
         {modals}
+=======
+>>>>>>> origin/minh
       </div>
     );
   }
@@ -166,11 +207,18 @@ export default function HistoryTab({ wide }) {
             {timeOf(b)} · {feeOf(b)}
           </div>
           {!b.isMine && b.bookedBy?.fullName && <div className="text-xs text-r-subtle truncate">Đặt bởi {b.bookedBy.fullName}</div>}
+<<<<<<< HEAD
           {holdLine(b)}
         </div>
         <div className="flex flex-col items-end gap-1.5">
           {muted && b.status === 'COMPLETED' ? null : <Badge status={b.status} />}
           {!muted && actions(b)}
+=======
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          {muted && b.status === 'COMPLETED' ? null : <Badge status={b.status} />}
+          {cancelButton(b)}
+>>>>>>> origin/minh
           {muted && (
             <Link to={rebookTo(b)} viewTransition className="text-sm font-medium text-r-link no-underline py-1">Đặt lại</Link>
           )}
@@ -186,7 +234,10 @@ export default function HistoryTab({ wide }) {
       {pastRows.length > 0 && <div className={`text-[13px] font-medium text-r-muted ${upRows.length ? 'mt-2' : ''}`}>Đã qua</div>}
       {pastRows.map((b) => mobileRow(b, true))}
       {pager}
+<<<<<<< HEAD
       {modals}
+=======
+>>>>>>> origin/minh
     </div>
   );
 }

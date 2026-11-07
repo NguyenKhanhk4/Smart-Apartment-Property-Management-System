@@ -25,6 +25,7 @@ Thumbs.db
 
 # Office lock files
 ~$*
+<<<<<<< HEAD
 
 # Tài liệu cá nhân, không push
 /doc/
@@ -35,3 +36,5 @@ Thumbs.db
 # Tài liệu Markdown - không push
 *.md
 
+=======
+>>>>>>> origin/minh

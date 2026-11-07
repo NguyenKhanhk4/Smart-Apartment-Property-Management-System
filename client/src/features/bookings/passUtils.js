@@ -1,5 +1,8 @@
 import dayjs from 'dayjs';
+<<<<<<< HEAD
 import { formatDate } from '../../utils/format';
+=======
+>>>>>>> origin/minh
 
 /** "2026-10" → "10/2026" */
 export const monthLabel = (m) => `${m.slice(5)}/${m.slice(0, 4)}`;
@@ -11,7 +14,11 @@ export function passSpan(month, now = dayjs()) {
   const total = end.diff(start, 'day') + 1;
   const elapsed = Math.min(Math.max(now.startOf('day').diff(start, 'day') + 1, 0), total);
   return {
+<<<<<<< HEAD
     expiry: formatDate(end),
+=======
+    expiry: end.format('DD/MM/YYYY'),
+>>>>>>> origin/minh
     daysLeft: Math.max(end.startOf('day').diff(now.startOf('day'), 'day'), 0),
     percent: Math.round((elapsed / total) * 100),
   };

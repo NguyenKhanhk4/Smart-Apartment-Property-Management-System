@@ -4,8 +4,12 @@ import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { created, ok } from '../../utils/response.js';
+<<<<<<< HEAD
 import { idParams, objectId, phoneVn, ymd } from '../../utils/validators.js';
 import * as occupantReportsService from '../occupantReports/occupantReports.service.js';
+=======
+import { idParams, objectId } from '../../utils/validators.js';
+>>>>>>> origin/minh
 import * as service from './residents.service.js';
 
 // Module A — Vũ Việt. UC-A07, UC-A08: Quản lý cư dân & Căn hộ của tôi
@@ -13,16 +17,25 @@ const router = Router();
 
 const addMemberBody = Joi.object({
   apartmentId: objectId().required(),
+<<<<<<< HEAD
   userId: objectId(), // Tài khoản có sẵn lễ tân đã xác nhận
   email: Joi.string().trim().lowercase().email().when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
   fullName: Joi.string().trim().min(2).max(100).when('userId', { is: Joi.exist(), otherwise: Joi.required() }),
   phone: phoneVn().required(),
   idNumber: Joi.string().trim().allow('', null),
   dateOfBirth: ymd().allow('', null),
+=======
+  email: Joi.string().trim().lowercase().email().required(),
+  fullName: Joi.string().trim().min(2).max(100).required(),
+  phone: Joi.string().trim().allow('', null),
+  idNumber: Joi.string().trim().allow('', null),
+  dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
+>>>>>>> origin/minh
 });
 
 const updateMemberBody = Joi.object({
   idNumber: Joi.string().trim().allow('', null),
+<<<<<<< HEAD
   dateOfBirth: ymd().allow('', null),
 }).min(1);
 
@@ -101,6 +114,11 @@ router.get(
   },
 );
 
+=======
+  dateOfBirth: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow('', null),
+}).min(1);
+
+>>>>>>> origin/minh
 /**
  * @openapi
  * /residents/me/apartments:
@@ -113,7 +131,11 @@ router.get(
   authenticate,
   authorize('RESIDENT'),
   async (req, res) => {
+<<<<<<< HEAD
     const list = await service.myApartments(req.user.id);
+=======
+    const list = await service.myApartments(req.user.id || req.user._id);
+>>>>>>> origin/minh
     ok(res, list);
   },
 );
@@ -185,6 +207,7 @@ router.patch(
   },
 );
 
+<<<<<<< HEAD
 /**
  * GET /residents/:id/id-number — Xem đầy đủ CCCD (chỉ STAFF:RECEPTIONIST và MANAGER, ghi audit)
  */
@@ -203,4 +226,6 @@ router.get(
   },
 );
 
+=======
+>>>>>>> origin/minh
 export default router;

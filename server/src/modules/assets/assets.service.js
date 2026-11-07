@@ -1,9 +1,18 @@
+<<<<<<< HEAD
 import { WORK_ORDER_OPEN_STATUSES as OPEN_WO_STATUSES, WORK_ORDER_STATUS } from '../../constants/enums.js';
+=======
+import { WORK_ORDER_STATUS } from '../../constants/enums.js';
+>>>>>>> origin/minh
 import { Asset, Building, WorkOrder } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { DAY_MS, endOfVnDay, startOfVnDay } from '../../utils/time.js';
 
+<<<<<<< HEAD
+=======
+export const OPEN_WO_STATUSES = [WORK_ORDER_STATUS.PENDING, WORK_ORDER_STATUS.IN_PROGRESS];
+
+>>>>>>> origin/minh
 const LIST_POPULATE = [{ path: 'buildingId', select: 'code name' }];
 
 /** Work order đúng hạn = hoàn thành không muộn hơn 1 ngày sau ngày lên lịch (khớp báo cáo UC-E12) */

@@ -7,7 +7,10 @@ export const ERROR_MESSAGES = {
   FORBIDDEN_ROLE: 'Bạn không có quyền thực hiện thao tác này.',
   NOT_FOUND: 'Không tìm thấy dữ liệu.',
   AUTH_INVALID_CREDENTIALS: 'Email hoặc mật khẩu không đúng.',
+<<<<<<< HEAD
   CHAIRMAN_ALREADY_EXISTS: 'Đã có 1 Trưởng Ban quản trị đang hoạt động.',
+=======
+>>>>>>> origin/minh
   MANAGER_ALREADY_EXISTS: 'Đã có 1 tài khoản Trưởng BQL đang hoạt động.',
   INVOICE_ALREADY_EXISTS: 'Căn hộ đã có hóa đơn của tháng này.',
   INVOICE_ALREADY_PAID: 'Hóa đơn đã được thanh toán.',
@@ -15,10 +18,13 @@ export const ERROR_MESSAGES = {
   ADJUSTMENT_ALREADY_REVIEWED: 'Đề nghị điều chỉnh đã được duyệt/từ chối trước đó.',
   SELF_APPROVAL_FORBIDDEN: 'Người lập đề nghị không được tự duyệt.',
   FEE_TYPE_OVERLAP: 'Đơn giá cùng loại phí trùng khoảng hiệu lực.',
+<<<<<<< HEAD
   FEE_TYPE_IN_USE: 'Mức giá đã được dùng để lập hóa đơn, không thể sửa/xóa.',
   FEE_PERIOD_BILLED: 'Kỳ này đã lập hóa đơn với loại phí này, hãy áp dụng giá mới từ kỳ sau.',
   FEE_PRICE_MISSING: 'Chưa có đơn giá áp dụng cho kỳ này, hãy bổ sung trong Bảng phí.',
   INVOICE_NOT_DRAFT: 'Thông báo phí không còn ở trạng thái Nháp, không sửa được.',
+=======
+>>>>>>> origin/minh
   DEBT_FOLLOWUP_NOT_ASSIGNED: 'Hồ sơ đòi nợ không được giao cho bạn.',
   PROPOSAL_ALREADY_VOTED: 'Bạn đã biểu quyết đề xuất này.',
   PROPOSAL_QUORUM_NOT_MET: 'Chưa đủ tỷ lệ biểu quyết để chốt.',
@@ -31,16 +37,20 @@ export const ERROR_MESSAGES = {
   VEHICLE_SLOT_FULL: 'Bãi xe đã hết chỗ.',
   RESIDENCY_DATE_OVERLAP: 'Thời gian khai báo bị chồng lấn với khai báo khác.',
   TICKET_ALREADY_CLOSED: 'Phản ánh đã đóng, không thể cập nhật.',
+<<<<<<< HEAD
   TICKET_ALREADY_CLAIMED: 'Sự cố đã có kỹ thuật viên khác nhận.',
   NOT_ON_DUTY: 'Bạn không trong ca trực hiện tại.',
   DUTY_SHIFT_OVERLAP: 'Nhân viên đã có ca trực trùng thời gian.',
   BOOKING_QR_INVALID: 'Mã QR không hợp lệ hoặc không phải vé đặt tiện ích.',
   BOOKING_HOLD_EXPIRED: 'Đã hết thời gian giữ chỗ chờ thanh toán.',
+=======
+>>>>>>> origin/minh
   WORKORDER_DUPLICATE: 'Tài sản này đang có lệnh bảo trì chưa hoàn thành.',
   ASSET_NAME_EXISTS: 'Tên tài sản đã tồn tại trong tòa này.',
   ASSET_HAS_OPEN_WORKORDER: 'Tài sản còn work order chưa hoàn thành.',
   BOOKING_LIMIT_EXCEEDED: 'Căn hộ đã đạt số lượng booking chưa dùng tối đa.',
   BOOKING_INVALID_STATUS: 'Trạng thái booking hiện tại không cho phép thao tác này.',
+<<<<<<< HEAD
   AMENITY_NOT_WALK_IN: 'Tiện ích này không áp dụng ghi lượt vào (không phải kiểu Vào cửa).',
   AMENITY_CLOSED: 'Tiện ích đang ngoài giờ mở cửa.',
   AMENITY_FULL: 'Tiện ích đã đủ số người tối đa cùng lúc.',
@@ -48,6 +58,8 @@ export const ERROR_MESSAGES = {
   VISIT_DUPLICATE: 'Người này vừa được ghi lượt vào tiện ích này, không ghi trùng.',
   VISIT_ALREADY_BILLED: 'Lượt vào đã được gộp vào hóa đơn, không thể hủy.',
   VISIT_ALREADY_CANCELLED: 'Lượt vào đã được hủy trước đó.',
+=======
+>>>>>>> origin/minh
   BOOKING_CHECKIN_OUT_OF_WINDOW: 'Chưa đến hoặc đã quá thời gian check-in của booking này.',
   BOOKING_WRONG_HOUSEHOLD: 'Người đến không thuộc căn hộ đã đặt booking này.',
   AMENITY_NOT_BOOKABLE: 'Tiện ích này không áp dụng đặt chỗ.',
@@ -66,12 +78,15 @@ export const ERROR_MESSAGES = {
   WORKORDER_INVALID_ASSIGNEE: 'Người được giao phải là kỹ thuật viên đang hoạt động.',
   DUPLICATE_VALUE: 'Dữ liệu bị trùng.',
   CONCURRENT_UPDATE: 'Dữ liệu vừa được người khác cập nhật, vui lòng tải lại trang.',
+<<<<<<< HEAD
   EMAIL_EXISTS: 'Email đã được sử dụng bởi tài khoản khác.',
   PHONE_EXISTS: 'Số điện thoại đã được sử dụng bởi tài khoản khác.',
   ACCOUNT_CONFIRM_REQUIRED: 'Số điện thoại này đã có tài khoản, vui lòng kiểm tra và xác nhận đúng người.',
   CONTRACT_ACTIVE_EXISTS: 'Căn hộ đã có hợp đồng cùng loại đang hiệu lực.',
   STATUS_CONFLICT: 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại.',
   TOO_MANY_REQUESTS: 'Bạn thao tác quá nhiều lần, vui lòng thử lại sau ít phút.',
+=======
+>>>>>>> origin/minh
   SERVER_ERROR: 'Có lỗi xảy ra phía máy chủ, vui lòng thử lại sau.',
 };
 

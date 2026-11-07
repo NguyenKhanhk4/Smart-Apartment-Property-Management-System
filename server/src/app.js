@@ -21,7 +21,11 @@ export function createApp() {
   if (!env.isTest) app.use(morgan(env.isDev ? 'dev' : 'combined'));
 
   app.use('/api', apiRoutes);
+<<<<<<< HEAD
   if (env.swaggerEnabled) setupSwagger(app); // production tắt mặc định (ENABLE_SWAGGER)
+=======
+  setupSwagger(app);
+>>>>>>> origin/minh
 
   app.use(notFound);
   app.use(errorHandler);

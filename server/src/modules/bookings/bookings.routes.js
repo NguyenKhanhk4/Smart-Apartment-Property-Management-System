@@ -5,7 +5,12 @@ import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { MAX_LIMIT, paginationQuery } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
+<<<<<<< HEAD
 import { hhmm, idParams, objectId, ymd } from '../../utils/validators.js';
+=======
+import { idParams, objectId } from '../../utils/validators.js';
+import { HHMM } from '../amenities/slot.utils.js';
+>>>>>>> origin/minh
 import * as service from './bookings.service.js';
 
 // Module D — Thanh Bình. UC-D06: đặt tiện ích (chỉ accessMode = BOOKING, tự xác nhận), xem lịch sử, hủy.
@@ -14,22 +19,40 @@ import * as service from './bookings.service.js';
 const router = Router();
 const SCHEDULE_ROLES = ['MANAGER', 'STAFF:RECEPTIONIST', 'STAFF:SECURITY'];
 
+<<<<<<< HEAD
 const createBody = Joi.object({
   apartmentId: objectId().required(),
   amenityId: objectId().required(),
   date: ymd().required(),
   slotStart: hhmm().required(),
+=======
+const YMD = Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).messages({ 'string.pattern.base': '{{#label}} phải có dạng YYYY-MM-DD' });
+const createBody = Joi.object({
+  apartmentId: objectId().required(),
+  amenityId: objectId().required(),
+  date: YMD.required(),
+  slotStart: Joi.string().pattern(HHMM).required().messages({ 'string.pattern.base': '{{#label}} phải có dạng HH:mm' }),
+>>>>>>> origin/minh
 });
 const counterBody = Joi.object({
   memberCode: Joi.string().trim().min(1).max(300).required(), // mã cư dân của người được đặt hộ
   payerCode: Joi.string().trim().min(1).max(300), // mã của chủ hộ / thành viên có quyền phí cùng căn (khi người đặt không có quyền phí)
   amenityId: objectId().required(),
+<<<<<<< HEAD
   date: ymd().required(),
   slotStart: hhmm().required(),
   checkInNow: Joi.boolean().default(false),
 });
 const scheduleQuery = Joi.object({
   date: ymd(),
+=======
+  date: YMD.required(),
+  slotStart: Joi.string().pattern(HHMM).required().messages({ 'string.pattern.base': '{{#label}} phải có dạng HH:mm' }),
+  checkInNow: Joi.boolean().default(false),
+});
+const scheduleQuery = Joi.object({
+  date: YMD,
+>>>>>>> origin/minh
   amenityId: objectId(),
   q: Joi.string().trim().max(100).allow(''),
 });
@@ -150,6 +173,7 @@ router.patch(
   async (req, res) => ok(res, await service.cancelBooking(req.user, req.params.id, req.body), 'Đã hủy booking'),
 );
 
+<<<<<<< HEAD
 /**
  * @openapi
  * /bookings/check-in-by-qr:
@@ -201,4 +225,6 @@ router.patch(
   async (req, res) => ok(res, await service.rescheduleBooking(req.user, req.params.id, req.body), 'Đã đổi lịch'),
 );
 
+=======
+>>>>>>> origin/minh
 export default router;

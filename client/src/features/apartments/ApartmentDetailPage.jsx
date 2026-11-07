@@ -15,11 +15,19 @@ import {
   Row,
   Col,
   Statistic,
+<<<<<<< HEAD
   Tooltip,
 } from 'antd';
 import PhoneAccountNotice from '../../components/PhoneAccountNotice';
 import { usePhoneAccount } from '../../hooks/usePhoneAccount';
 import { PHONE_RULES } from '../../utils/phone';
+=======
+  Descriptions,
+  Empty,
+  Badge,
+  Tooltip,
+} from 'antd';
+>>>>>>> origin/minh
 import {
   ArrowLeftOutlined,
   TeamOutlined,
@@ -29,7 +37,11 @@ import {
   EditOutlined,
   DeleteOutlined,
   CrownOutlined,
+<<<<<<< HEAD
   EyeOutlined,
+=======
+  BankOutlined,
+>>>>>>> origin/minh
   ReloadOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -51,6 +63,7 @@ import { apartmentsApi, contractsApi, residentsApi, vehicleApi } from '../../api
 export default function ApartmentDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+<<<<<<< HEAD
   const { hasRole } = useAuth();
 
   const isReceptionist = hasRole('STAFF:RECEPTIONIST');
@@ -68,6 +81,11 @@ export default function ApartmentDetailPage() {
       // handled by axiosClient
     }
   };
+=======
+  const { user } = useAuth();
+
+  const isReceptionist = user?.role === 'STAFF' && user?.roleTitle === 'RECEPTIONIST';
+>>>>>>> origin/minh
 
   // Load apartment details
   const {
@@ -102,12 +120,16 @@ export default function ApartmentDetailPage() {
   // Modal Thêm thành viên
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addForm] = Form.useForm();
+<<<<<<< HEAD
   const check = usePhoneAccount(Form.useWatch('phone', addForm));
+=======
+>>>>>>> origin/minh
 
   const [addMemberAction, addingMember] = useAction(
     async (values) => {
       const payload = {
         apartmentId: id,
+<<<<<<< HEAD
         phone: values.phone,
         idNumber: values.idNumber || null,
         ...(check.isExisting
@@ -117,6 +139,13 @@ export default function ApartmentDetailPage() {
               fullName: values.fullName,
               dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format('YYYY-MM-DD') : null,
             }),
+=======
+        email: values.email,
+        fullName: values.fullName,
+        phone: values.phone || null,
+        idNumber: values.idNumber || null,
+        dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format('YYYY-MM-DD') : null,
+>>>>>>> origin/minh
       };
       return residentsApi.addMember(payload);
     },
@@ -130,7 +159,10 @@ export default function ApartmentDetailPage() {
       onDone: () => {
         setAddModalOpen(false);
         addForm.resetFields();
+<<<<<<< HEAD
         check.reset();
+=======
+>>>>>>> origin/minh
         reloadResidents();
         reloadApt();
       },
@@ -226,6 +258,7 @@ export default function ApartmentDetailPage() {
       title: 'Số CCCD',
       dataIndex: 'idNumber',
       key: 'idNumber',
+<<<<<<< HEAD
       width: 170,
       render: (val, r) => {
         const displayVal = revealedIds[r._id] || val;
@@ -246,6 +279,10 @@ export default function ApartmentDetailPage() {
           </Space>
         );
       },
+=======
+      width: 150,
+      render: (val) => (val ? <code className="text-xs">{val}</code> : '—'),
+>>>>>>> origin/minh
     },
     {
       title: 'Ngày dọn vào',
@@ -275,7 +312,11 @@ export default function ApartmentDetailPage() {
                   <Popconfirm
                     title="Gỡ thành viên"
                     description={`Bạn có chắc chắn muốn gỡ ${r.fullName} khỏi căn hộ?`}
+<<<<<<< HEAD
                     onConfirm={() => removeMemberAction(r._id).catch(() => {})}
+=======
+                    onConfirm={() => removeMemberAction(r._id)}
+>>>>>>> origin/minh
                     okText="Gỡ"
                     cancelText="Hủy"
                     okButtonProps={{ danger: true }}
@@ -497,10 +538,14 @@ export default function ApartmentDetailPage() {
                       <Button
                         type="primary"
                         icon={<PlusOutlined />}
+<<<<<<< HEAD
                         onClick={() => {
                           check.reset();
                           setAddModalOpen(true);
                         }}
+=======
+                        onClick={() => setAddModalOpen(true)}
+>>>>>>> origin/minh
                       >
                         Thêm thành viên
                       </Button>
@@ -567,6 +612,7 @@ export default function ApartmentDetailPage() {
         open={addModalOpen}
         onCancel={() => setAddModalOpen(false)}
         onOk={() => addForm.submit()}
+<<<<<<< HEAD
         okButtonProps={{ disabled: Boolean(check.blockReason) }}
         confirmLoading={addingMember}
         destroyOnClose
@@ -580,6 +626,34 @@ export default function ApartmentDetailPage() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
+=======
+        confirmLoading={addingMember}
+        destroyOnClose
+      >
+        <Form form={addForm} layout="vertical" onFinish={addMemberAction} className="mt-4">
+          <Form.Item
+            name="email"
+            label="Email tài khoản"
+            rules={[
+              { required: true, message: 'Vui lòng nhập email' },
+              { type: 'email', message: 'Email không đúng định dạng' },
+            ]}
+          >
+            <Input placeholder="Vd: member@gmail.com" />
+          </Form.Item>
+
+          <Form.Item
+            name="fullName"
+            label="Họ và tên"
+            rules={[{ required: true, message: 'Vui lòng nhập họ và tên' }]}
+          >
+            <Input placeholder="Vd: Nguyễn Văn Thành" />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="phone" label="Số điện thoại">
+>>>>>>> origin/minh
                 <Input placeholder="0912345678" />
               </Form.Item>
             </Col>
@@ -590,6 +664,7 @@ export default function ApartmentDetailPage() {
             </Col>
           </Row>
 
+<<<<<<< HEAD
           <PhoneAccountNotice check={check} />
 
           {/* Tài khoản có sẵn không nhận họ tên, email, ngày sinh mới (BR-X5) */}
@@ -619,6 +694,11 @@ export default function ApartmentDetailPage() {
               </Form.Item>
             </>
           )}
+=======
+          <Form.Item name="dateOfBirth" label="Ngày sinh">
+            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder="Chọn ngày sinh" />
+          </Form.Item>
+>>>>>>> origin/minh
         </Form>
       </Modal>
 
@@ -631,7 +711,11 @@ export default function ApartmentDetailPage() {
         confirmLoading={updatingMember}
         destroyOnClose
       >
+<<<<<<< HEAD
         <Form form={editForm} layout="vertical" onFinish={(v) => updateMemberAction(v).catch(() => {})} className="mt-4">
+=======
+        <Form form={editForm} layout="vertical" onFinish={updateMemberAction} className="mt-4">
+>>>>>>> origin/minh
           <Form.Item name="idNumber" label="Số CCCD">
             <Input placeholder="Nhập số CCCD mới" />
           </Form.Item>

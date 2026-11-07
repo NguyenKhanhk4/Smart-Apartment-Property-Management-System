@@ -9,7 +9,11 @@ import * as service from './buildings.service.js';
 
 // Module A — Vũ Việt. UC-A05: Quản lý tòa nhà (Block)
 const router = Router();
+<<<<<<< HEAD
 const VIEWERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
+=======
+const VIEWERS = ['ADMIN', 'MANAGER', 'STAFF:RECEPTIONIST'];
+>>>>>>> origin/minh
 
 const buildingFields = {
   code: Joi.string().trim().uppercase().max(20),
@@ -61,7 +65,11 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
  * /buildings:
  *   post:
  *     tags: [Tòa nhà & Căn hộ]
+<<<<<<< HEAD
  *     summary: Tạo mới tòa nhà (Trưởng BQL) — UC-A05
+=======
+ *     summary: Tạo mới tòa nhà (Admin) — UC-A05
+>>>>>>> origin/minh
  *     requestBody:
  *       required: true
  *       content:
@@ -78,7 +86,11 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
 router.post(
   '/',
   authenticate,
+<<<<<<< HEAD
   authorize('MANAGER'),
+=======
+  authorize('ADMIN'),
+>>>>>>> origin/minh
   validate({ body: createBuildingBody }),
   async (req, res) => {
     const building = await service.createBuilding(req.validated.body, req.user, req.ip);
@@ -91,14 +103,22 @@ router.post(
  * /buildings/{id}:
  *   put:
  *     tags: [Tòa nhà & Căn hộ]
+<<<<<<< HEAD
  *     summary: Cập nhật thông tin tòa nhà (Trưởng BQL) — UC-A05
+=======
+ *     summary: Cập nhật thông tin tòa nhà (Admin) — UC-A05
+>>>>>>> origin/minh
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
 router.put(
   '/:id',
   authenticate,
+<<<<<<< HEAD
   authorize('MANAGER'),
+=======
+  authorize('ADMIN'),
+>>>>>>> origin/minh
   validate({ params: idParams, body: updateBuildingBody }),
   async (req, res) => {
     const building = await service.updateBuilding(
@@ -116,14 +136,22 @@ router.put(
  * /buildings/{id}:
  *   delete:
  *     tags: [Tòa nhà & Căn hộ]
+<<<<<<< HEAD
  *     summary: Xóa tòa nhà chưa có căn hộ (Trưởng BQL) — UC-A05
+=======
+ *     summary: Xóa tòa nhà chưa có căn hộ (Admin) — UC-A05
+>>>>>>> origin/minh
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
 router.delete(
   '/:id',
   authenticate,
+<<<<<<< HEAD
   authorize('MANAGER'),
+=======
+  authorize('ADMIN'),
+>>>>>>> origin/minh
   validate({ params: idParams }),
   async (req, res) => {
     const result = await service.deleteBuilding(req.validated.params.id, req.user, req.ip);

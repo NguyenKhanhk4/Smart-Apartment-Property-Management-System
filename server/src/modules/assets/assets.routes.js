@@ -9,7 +9,11 @@ import { created, ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId } from '../../utils/validators.js';
 import * as service from './assets.service.js';
 
+<<<<<<< HEAD
 // Người 1 — Vũ Việt (Mô đun 10). UC-D01: Quản lý tài sản chung, chu kỳ & lịch sử bảo trì.
+=======
+// Module D — Thanh Bình. UC-D01: Quản lý tài sản chung, chu kỳ & lịch sử bảo trì.
+>>>>>>> origin/minh
 const router = Router();
 const VIEWERS = ['MANAGER', 'STAFF:TECHNICIAN'];
 

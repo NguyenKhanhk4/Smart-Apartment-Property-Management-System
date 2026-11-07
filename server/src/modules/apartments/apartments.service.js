@@ -1,8 +1,20 @@
+<<<<<<< HEAD
 import { APARTMENT_STATUS, AUDIT_ACTIONS, AUDIT_TARGETS, CONTRACT_STATUS, VEHICLE_STATUS } from '../../constants/enums.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { Apartment, Building, Contract, Resident, Vehicle } from '../../models/index.js';
+=======
+import { APARTMENT_STATUS, AUDIT_ACTIONS, CONTRACT_STATUS, VEHICLE_STATUS } from '../../constants/enums.js';
+import { Apartment } from '../../models/Apartment.js';
+import { Building } from '../../models/Building.js';
+import { Contract } from '../../models/Contract.js';
+import { Resident } from '../../models/Resident.js';
+import { Vehicle } from '../../models/Vehicle.js';
+import { logAudit } from '../../services/auditLog.service.js';
+import { ApiError } from '../../utils/ApiError.js';
+import { escapeRegex, paginate } from '../../utils/pagination.js';
+>>>>>>> origin/minh
 
 /**
  * Danh sách căn hộ phân trang, lọc theo tòa/tầng/trạng thái/mã căn (UC-A05)
@@ -59,9 +71,15 @@ export async function getApartmentById(id) {
 }
 
 /**
+<<<<<<< HEAD
  * Tạo căn hộ mới (Trưởng BQL) — BR-A4
  */
 export async function createApartment({ buildingId, code, floor, area }, managerUser, ip) {
+=======
+ * Tạo căn hộ mới (Admin) — BR-A4
+ */
+export async function createApartment({ buildingId, code, floor, area }, adminUser, ip) {
+>>>>>>> origin/minh
   const building = await Building.findById(buildingId);
   if (!building) {
     throw ApiError.notFound('Tòa nhà không tồn tại');
@@ -84,7 +102,11 @@ export async function createApartment({ buildingId, code, floor, area }, manager
   // BR-A4: Mã căn duy nhất trong tòa
   const existingApt = await Apartment.findOne({ buildingId, code: normalizedCode });
   if (existingApt) {
+<<<<<<< HEAD
     throw new ApiError('DUPLICATE_VALUE', `Mã căn hộ ${normalizedCode} đã tồn tại trong tòa nhà này`);
+=======
+    throw ApiError.badRequest(`Mã căn hộ ${normalizedCode} đã tồn tại trong tòa nhà này`);
+>>>>>>> origin/minh
   }
 
   // BR-A4: tạo với VACANT
@@ -98,8 +120,13 @@ export async function createApartment({ buildingId, code, floor, area }, manager
 
   await logAudit({
     action: AUDIT_ACTIONS.APARTMENT_CHANGED,
+<<<<<<< HEAD
     user: managerUser,
     targetType: AUDIT_TARGETS.APARTMENT,
+=======
+    user: adminUser,
+    targetType: 'Apartment',
+>>>>>>> origin/minh
     targetId: apartment._id,
     metadata: {
       action: 'CREATE',
@@ -115,9 +142,15 @@ export async function createApartment({ buildingId, code, floor, area }, manager
 }
 
 /**
+<<<<<<< HEAD
  * Cập nhật căn hộ (Trưởng BQL) — BR-A4
  */
 export async function updateApartment(id, data, managerUser, ip) {
+=======
+ * Cập nhật căn hộ (Admin) — BR-A4
+ */
+export async function updateApartment(id, data, adminUser, ip) {
+>>>>>>> origin/minh
   // BR-A4: Không cho sửa status trực tiếp
   if (data.status !== undefined) {
     throw ApiError.badRequest('Trạng thái căn hộ chỉ do hợp đồng quyết định, không thể sửa trực tiếp');
@@ -140,7 +173,11 @@ export async function updateApartment(id, data, managerUser, ip) {
         _id: { $ne: id },
       });
       if (existing) {
+<<<<<<< HEAD
         throw new ApiError('DUPLICATE_VALUE', `Mã căn hộ ${normalizedCode} đã tồn tại trong tòa nhà này`);
+=======
+        throw ApiError.badRequest(`Mã căn hộ ${normalizedCode} đã tồn tại trong tòa nhà này`);
+>>>>>>> origin/minh
       }
       changes.code = { from: apartment.code, to: normalizedCode };
       apartment.code = normalizedCode;
@@ -170,8 +207,13 @@ export async function updateApartment(id, data, managerUser, ip) {
   if (Object.keys(changes).length > 0) {
     await logAudit({
       action: AUDIT_ACTIONS.APARTMENT_CHANGED,
+<<<<<<< HEAD
       user: managerUser,
       targetType: AUDIT_TARGETS.APARTMENT,
+=======
+      user: adminUser,
+      targetType: 'Apartment',
+>>>>>>> origin/minh
       targetId: apartment._id,
       metadata: { action: 'UPDATE', changes },
       ip,
@@ -182,9 +224,15 @@ export async function updateApartment(id, data, managerUser, ip) {
 }
 
 /**
+<<<<<<< HEAD
  * Xóa căn hộ (Trưởng BQL) — BR-A4
  */
 export async function deleteApartment(id, managerUser, ip) {
+=======
+ * Xóa căn hộ (Admin) — BR-A4
+ */
+export async function deleteApartment(id, adminUser, ip) {
+>>>>>>> origin/minh
   const apartment = await Apartment.findById(id);
   if (!apartment) {
     throw ApiError.notFound('Căn hộ không tồn tại');
@@ -198,15 +246,24 @@ export async function deleteApartment(id, managerUser, ip) {
   ]);
 
   if (contractCount > 0 || residentCount > 0 || vehicleCount > 0) {
+<<<<<<< HEAD
     throw new ApiError('STATUS_CONFLICT', 'Không thể xóa căn hộ đã có hợp đồng, cư dân hoặc phương tiện liên kết');
+=======
+    throw ApiError.badRequest('Không thể xóa căn hộ đã có hợp đồng, cư dân hoặc phương tiện liên kết');
+>>>>>>> origin/minh
   }
 
   await Apartment.findByIdAndDelete(id);
 
   await logAudit({
     action: AUDIT_ACTIONS.APARTMENT_CHANGED,
+<<<<<<< HEAD
     user: managerUser,
     targetType: AUDIT_TARGETS.APARTMENT,
+=======
+    user: adminUser,
+    targetType: 'Apartment',
+>>>>>>> origin/minh
     targetId: apartment._id,
     metadata: {
       action: 'DELETE',

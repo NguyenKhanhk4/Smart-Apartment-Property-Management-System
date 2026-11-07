@@ -6,6 +6,7 @@ export const objectId = () =>
     .pattern(/^[0-9a-fA-F]{24}$/)
     .messages({ 'string.pattern.base': '{{#label}} không phải ObjectId hợp lệ' });
 
+<<<<<<< HEAD
 export const ymd = () =>
   Joi.string()
     .pattern(/^\d{4}-\d{2}-\d{2}$/)
@@ -23,6 +24,8 @@ export const phoneVn = () =>
     .pattern(/^(?:\+?84|0)(?:[35789]\d{8}|2\d{9})$/)
     .messages({ 'string.pattern.base': '{{#label}} không phải số điện thoại hợp lệ' });
 
+=======
+>>>>>>> origin/minh
 export const idParams = Joi.object({ id: objectId().required() });
 
 export const period = () =>
@@ -30,6 +33,7 @@ export const period = () =>
     .pattern(/^\d{4}-(0[1-9]|1[0-2])$/)
     .messages({ 'string.pattern.base': '{{#label}} phải có dạng YYYY-MM' });
 
+<<<<<<< HEAD
 /** Đưa SĐT về một dạng để so khớp: +84912345678, 84912345678 → 0912345678 */
 export function normalizePhone(phone) {
   if (typeof phone !== 'string') return phone;
@@ -37,6 +41,8 @@ export function normalizePhone(phone) {
   return value.startsWith('84') ? `0${value.slice(2)}` : value;
 }
 
+=======
+>>>>>>> origin/minh
 /** Query dạng ?status=A,B hoặc ?status=A&status=B → mảng */
 export const csvEnum = (allowed) =>
   Joi.alternatives().try(

@@ -9,15 +9,21 @@ export { Apartment } from './Apartment.js';
 export { Contract } from './Contract.js';
 export { Resident } from './Resident.js';
 export { Vehicle } from './Vehicle.js';
+<<<<<<< HEAD
 export { GatePass } from './GatePass.js';
 export { ParkingCard } from './ParkingCard.js';
+=======
+>>>>>>> origin/minh
 
 // Module B — Phí, hóa đơn, thanh toán, công nợ
 export { FeeType } from './FeeType.js';
 export { Invoice } from './Invoice.js';
 export { Payment } from './Payment.js';
+<<<<<<< HEAD
 export { PrepaidBalance } from './PrepaidBalance.js';
 export { PrepaidTransaction } from './PrepaidTransaction.js';
+=======
+>>>>>>> origin/minh
 export { InvoiceAdjustment } from './InvoiceAdjustment.js';
 export { DebtFollowup } from './DebtFollowup.js';
 
@@ -28,17 +34,26 @@ export { FundProposal } from './FundProposal.js';
 export { OperatingExpense } from './OperatingExpense.js';
 export { AuditLog } from './AuditLog.js';
 
+<<<<<<< HEAD
 // Người 1 — Thiết bị, bảo trì (Mô đun 10)
 export { Asset } from './Asset.js';
 export { WorkOrder } from './WorkOrder.js';
 
 // Module D — Tiện ích
+=======
+// Module D — Tài sản, bảo trì, tiện ích
+export { Asset } from './Asset.js';
+export { WorkOrder } from './WorkOrder.js';
+>>>>>>> origin/minh
 export { Amenity } from './Amenity.js';
 export { Booking } from './Booking.js';
 export { MemberCode } from './MemberCode.js';
 export { AmenityPass } from './AmenityPass.js';
+<<<<<<< HEAD
 export { AmenityVisit } from './AmenityVisit.js';
 export { DutyShift } from './DutyShift.js';
+=======
+>>>>>>> origin/minh
 
 // Module E — Ticket, sổ khách, bảng tin, thông báo, tham số hệ thống
 export { ComplaintCategory } from './ComplaintCategory.js';

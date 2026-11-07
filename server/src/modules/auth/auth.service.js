@@ -1,9 +1,15 @@
 import bcrypt from 'bcryptjs';
 import { ROLES } from '../../constants/enums.js';
+<<<<<<< HEAD
 import { ApiError } from '../../utils/ApiError.js';
 import { assertPhoneAndEmailFree, uniqueConflictError } from '../users/userLookup.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from './auth.tokens.js';
 import { User } from '../../models/index.js';
+=======
+import { User } from '../../models/index.js';
+import { ApiError } from '../../utils/ApiError.js';
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from './auth.tokens.js';
+>>>>>>> origin/minh
 
 /**
  * Chuẩn hóa đối tượng user trả về cho client (không bao giờ lộ passwordHash, tokenVersion)
@@ -31,7 +37,16 @@ export function toPublicUser(user) {
 export async function register({ fullName, email, phone, password }) {
   const normalizedEmail = email.trim().toLowerCase();
 
+<<<<<<< HEAD
   await assertPhoneAndEmailFree({ phone, email: normalizedEmail });
+=======
+  const existing = await User.findOne({ email: normalizedEmail });
+  if (existing) {
+    throw ApiError.badRequest('Email đã được sử dụng', [
+      { field: 'email', message: 'Email đã được sử dụng' },
+    ]);
+  }
+>>>>>>> origin/minh
 
   const passwordHash = await bcrypt.hash(password, 10);
 
@@ -39,15 +54,29 @@ export async function register({ fullName, email, phone, password }) {
     const user = await User.create({
       fullName: fullName.trim(),
       email: normalizedEmail,
+<<<<<<< HEAD
       phone,
       passwordHash,
       activatedAt: new Date(),
+=======
+      phone: phone?.trim() || null,
+      passwordHash,
+>>>>>>> origin/minh
       role: ROLES.RESIDENT,
     });
 
     return { user: toPublicUser(user) };
   } catch (err) {
+<<<<<<< HEAD
     throw uniqueConflictError(err) ?? err;
+=======
+    if (err.code === 11000) {
+      throw ApiError.badRequest('Email đã được sử dụng', [
+        { field: 'email', message: 'Email đã được sử dụng' },
+      ]);
+    }
+    throw err;
+>>>>>>> origin/minh
   }
 }
 
@@ -58,8 +87,12 @@ export async function login({ email, password }) {
   const normalizedEmail = email.trim().toLowerCase();
   const user = await User.findOne({ email: normalizedEmail }).select('+passwordHash +tokenVersion');
 
+<<<<<<< HEAD
   // Chưa kích hoạt thì chưa có mật khẩu (UC01 sẽ chuyển sang trang kích hoạt)
   if (!user?.passwordHash) {
+=======
+  if (!user) {
+>>>>>>> origin/minh
     throw new ApiError('AUTH_INVALID_CREDENTIALS');
   }
 
@@ -111,6 +144,7 @@ export async function refresh({ refreshToken }) {
     refreshToken: newRefreshToken,
   };
 }
+<<<<<<< HEAD
 
 /**
  * Đăng xuất: tăng tokenVersion để thu hồi mọi refresh token của tài khoản (BR-S04).
@@ -126,3 +160,5 @@ export async function logout({ refreshToken }) {
 
   await User.updateOne({ _id: user._id }, { $inc: { tokenVersion: 1 } });
 }
+=======
+>>>>>>> origin/minh

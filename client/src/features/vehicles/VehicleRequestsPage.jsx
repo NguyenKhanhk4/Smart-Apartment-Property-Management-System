@@ -3,7 +3,13 @@ import {
   Button,
   Card,
   Col,
+<<<<<<< HEAD
   Input,
+=======
+  Form,
+  Input,
+  Modal,
+>>>>>>> origin/minh
   Popconfirm,
   Row,
   Select,
@@ -11,7 +17,11 @@ import {
   Table,
   Tabs,
   Tag,
+<<<<<<< HEAD
   App,
+=======
+  message,
+>>>>>>> origin/minh
 } from 'antd';
 import {
   CarOutlined,
@@ -24,6 +34,7 @@ import {
 import { vehicleApi } from '../../api/moduleA.api';
 import EnumTag from '../../components/EnumTag';
 import { VEHICLE_STATUS, VEHICLE_TYPES, enumOptions } from '../../constants/enums';
+<<<<<<< HEAD
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate } from '../../utils/format';
@@ -34,6 +45,15 @@ export default function VehicleRequestsPage() {
   const { message } = App.useApp();
   const { hasRole } = useAuth();
   const isReceptionist = hasRole('STAFF:RECEPTIONIST');
+=======
+import { useAction, useApi } from '../../hooks/useApi';
+import { useAuth } from '../../hooks/useAuth';
+import { formatDate } from '../../utils/format';
+
+export default function VehicleRequestsPage() {
+  const { user } = useAuth();
+  const isReceptionist = user?.role === 'STAFF' && user?.roleTitle === 'RECEPTIONIST';
+>>>>>>> origin/minh
 
   const [activeTab, setActiveTab] = useState('pending');
 
@@ -102,13 +122,59 @@ export default function VehicleRequestsPage() {
     ? allData
     : allData?.items || [];
 
+<<<<<<< HEAD
   // Đang duyệt (cấp thẻ) / từ chối
   const [approvingItem, setApprovingItem] = useState(null);
   const [rejectingItem, setRejectingItem] = useState(null);
+=======
+  // Modal Từ chối
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectingItem, setRejectingItem] = useState(null);
+  const [rejectForm] = Form.useForm();
+>>>>>>> origin/minh
 
   // Đang thao tác duyệt/hủy
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
+<<<<<<< HEAD
+=======
+  // Hành động Duyệt
+  const handleApprove = async (id) => {
+    setActionLoadingId(id);
+    try {
+      await vehicleApi.approve(id);
+      message.success('Đã duyệt đăng ký xe thành công!');
+      reloadPending();
+    } catch (err) {
+      message.error(err.response?.data?.message || 'Duyệt phương tiện thất bại');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Mở modal Từ chối
+  const openRejectModal = (item) => {
+    setRejectingItem(item);
+    rejectForm.resetFields();
+    setRejectModalOpen(true);
+  };
+
+  // Action Từ chối
+  const [rejectAction, rejectSubmitting] = useAction(
+    async (values) => {
+      if (!rejectingItem) return null;
+      return vehicleApi.reject(rejectingItem._id, { reason: values.reason });
+    },
+    {
+      success: 'Đã từ chối đăng ký xe thành công',
+      onDone: () => {
+        setRejectModalOpen(false);
+        reloadPending();
+      },
+    },
+  );
+
+>>>>>>> origin/minh
   // Xác nhận Hủy
   const handleConfirmCancel = async (id) => {
     setActionLoadingId(id);
@@ -117,7 +183,11 @@ export default function VehicleRequestsPage() {
       message.success('Đã xác nhận hủy vé gửi xe thành công!');
       reloadCancel();
     } catch (err) {
+<<<<<<< HEAD
       message.error(err?.message || 'Xác nhận hủy thất bại');
+=======
+      message.error(err.response?.data?.message || 'Xác nhận hủy thất bại');
+>>>>>>> origin/minh
     } finally {
       setActionLoadingId(null);
     }
@@ -189,6 +259,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) =>
         isReceptionist ? (
           <Space>
+<<<<<<< HEAD
             <Button
               type="primary"
               size="small"
@@ -197,12 +268,30 @@ export default function VehicleRequestsPage() {
             >
               Duyệt & Cấp thẻ
             </Button>
+=======
+            <Popconfirm
+              title="Duyệt đăng ký xe"
+              description="Xác nhận duyệt phương tiện này vào bãi gửi xe?"
+              okText="Duyệt"
+              cancelText="Hủy"
+              onConfirm={() => handleApprove(r._id)}
+              okButtonProps={{ loading: actionLoadingId === r._id }}
+            >
+              <Button type="primary" size="small" icon={<CheckOutlined />}>
+                Duyệt
+              </Button>
+            </Popconfirm>
+>>>>>>> origin/minh
 
             <Button
               size="small"
               danger
               icon={<CloseOutlined />}
+<<<<<<< HEAD
               onClick={() => setRejectingItem(r)}
+=======
+              onClick={() => openRejectModal(r)}
+>>>>>>> origin/minh
             >
               Từ chối
             </Button>
@@ -525,6 +614,7 @@ export default function VehicleRequestsPage() {
         />
       </Card>
 
+<<<<<<< HEAD
       {approvingItem && (
         <ApproveVehicleModal vehicle={approvingItem} open onClose={() => setApprovingItem(null)} onDone={reloadPending} />
       )}
@@ -543,6 +633,39 @@ export default function VehicleRequestsPage() {
           reloadPending();
         }}
       />
+=======
+      {/* Modal Nhập lý do từ chối */}
+      <Modal
+        title={`Từ chối đăng ký phương tiện: ${rejectingItem?.plateNumber || rejectingItem?.type || ''}`}
+        open={rejectModalOpen}
+        onCancel={() => setRejectModalOpen(false)}
+        onOk={() => rejectForm.submit()}
+        confirmLoading={rejectSubmitting}
+        okText="Xác nhận từ chối"
+        okButtonProps={{ danger: true }}
+        cancelText="Hủy"
+        destroyOnClose
+      >
+        <Form
+          form={rejectForm}
+          layout="vertical"
+          onFinish={rejectAction}
+          className="mt-4"
+        >
+          <Form.Item
+            name="reason"
+            label="Lý do từ chối"
+            rules={[{ required: true, message: 'Vui lòng nhập lý do từ chối' }]}
+            extra="Lý do từ chối sẽ được gửi thông báo trực tiếp đến cư dân."
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="Ví dụ: Bãi xe máy tạm thời hết chỗ, hoặc thông tin giấy tờ xe chưa hợp lệ..."
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+>>>>>>> origin/minh
     </div>
   );
 }

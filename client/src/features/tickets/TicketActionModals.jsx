@@ -1,6 +1,7 @@
 import { Form, Input, Modal, Radio, Rate, Select } from 'antd';
 import { ticketApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
+<<<<<<< HEAD
 import { PRIORITIES, TICKET_STATUS, enumOptions } from '../../constants/enums';
 import { keysOf } from '../../utils/status';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
@@ -20,6 +21,11 @@ const NOTE_LABEL = {
   WAITING_PARTS: 'Linh kiện cần chờ, dự kiến ngày có',
   WAITING_CONFIRM: 'Ghi chú kết quả',
 };
+=======
+import { PRIORITIES, enumOptions } from '../../constants/enums';
+import EvidencePhotosField from '../../components/EvidencePhotosField';
+import { toFiles } from '../../utils/upload';
+>>>>>>> origin/minh
 
 // Modal dùng chung: form + submit qua useAction
 function ActionModal({ title, open, onClose, onDone, action, success, okText, children, initialValues, form: outerForm }) {
@@ -110,6 +116,7 @@ export function RejectModal({ ticket, open, onClose, onDone }) {
   );
 }
 
+<<<<<<< HEAD
 // UC-E04 — KTV cập nhật tiến độ; chỉ hiện các bước chuyển hợp lệ (sự cố trong căn hộ phải gửi báo giá trước)
 export function ProgressModal({ ticket, open, onClose, onDone }) {
   const [form] = Form.useForm();
@@ -117,6 +124,16 @@ export function ProgressModal({ ticket, open, onClose, onDone }) {
   const resolved = status === TS.WAITING_CONFIRM;
   const allowed = progressOptions(ticket);
   const options = allowed.map((value) => ({ value, label: PROGRESS_LABEL[value] }));
+=======
+// UC-E04 — KTV cập nhật tiến độ
+export function ProgressModal({ ticket, open, onClose, onDone }) {
+  const [form] = Form.useForm();
+  const resolved = Form.useWatch('status', form) === 'WAITING_CONFIRM';
+  const options = [
+    { value: 'IN_PROGRESS', label: 'Đang xử lý (cập nhật tiến độ)' },
+    { value: 'WAITING_CONFIRM', label: 'Đã xử lý xong — chờ cư dân xác nhận' },
+  ];
+>>>>>>> origin/minh
   return (
     <ActionModal
       title={`Cập nhật tiến độ ${ticket.code}`}
@@ -126,18 +143,28 @@ export function ProgressModal({ ticket, open, onClose, onDone }) {
       okText="Cập nhật"
       success="Đã cập nhật tiến độ"
       form={form}
+<<<<<<< HEAD
       initialValues={{ status: allowed[0] }}
       // "Đã xử lý xong" bắt buộc kèm ảnh kết quả làm bằng chứng cho Manager/Lễ tân
       action={({ images, ...v }) => ticketApi.progress(ticket._id, v, v.status === TS.WAITING_CONFIRM ? toFiles(images) : [])}
+=======
+      initialValues={{ status: 'IN_PROGRESS' }}
+      // "Đã xử lý xong" bắt buộc kèm ảnh kết quả làm bằng chứng cho Manager/Lễ tân
+      action={({ images, ...v }) => ticketApi.progress(ticket._id, v, v.status === 'WAITING_CONFIRM' ? toFiles(images) : [])}
+>>>>>>> origin/minh
     >
       <Form.Item name="status" label="Trạng thái">
         <Radio.Group options={options} style={{ display: 'flex', flexDirection: 'column', gap: 8 }} />
       </Form.Item>
+<<<<<<< HEAD
       <Form.Item
         name="note"
         label={NOTE_LABEL[status] ?? 'Ghi chú tiến độ'}
         rules={[{ required: status === TS.WAITING_QUOTE_APPROVAL, message: 'Nhập hạng mục và chi phí dự kiến' }]}
       >
+=======
+      <Form.Item name="note" label={resolved ? 'Ghi chú kết quả' : 'Ghi chú tiến độ'}>
+>>>>>>> origin/minh
         <Input.TextArea rows={3} maxLength={1000} showCount />
       </Form.Item>
       {resolved && <EvidencePhotosField name="images" label="Ảnh kết quả" />}
@@ -154,7 +181,11 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
       onClose={onClose}
       onDone={onDone}
       okText="Gửi"
+<<<<<<< HEAD
       success={(res) => (res.data.status === TS.CLOSED ? 'Cảm ơn bạn đã đánh giá' : 'Đã gửi lại cho kỹ thuật viên')}
+=======
+      success={(res) => (res.data.status === 'CLOSED' ? 'Cảm ơn bạn đã đánh giá' : 'Đã gửi lại cho kỹ thuật viên')}
+>>>>>>> origin/minh
       initialValues={{ accepted: true, rating: 5 }}
       action={({ accepted, rating, comment, reason }) =>
         ticketApi.confirm(ticket._id, accepted ? { accepted, rating, comment } : { accepted, reason })
@@ -189,6 +220,7 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
     </ActionModal>
   );
 }
+<<<<<<< HEAD
 
 // Sự cố trong căn hộ — Người nộp phí đồng ý (→ Đang xử lý) hoặc từ chối (→ phiếu bị từ chối) báo giá
 export function QuoteDecisionModal({ ticket, open, onClose, onDone }) {
@@ -223,3 +255,5 @@ export function QuoteDecisionModal({ ticket, open, onClose, onDone }) {
     </ActionModal>
   );
 }
+=======
+>>>>>>> origin/minh

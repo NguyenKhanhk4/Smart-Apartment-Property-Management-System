@@ -108,7 +108,11 @@ function SidebarBrand({ collapsed }) {
   );
 }
 
+<<<<<<< HEAD
 // Layout nội bộ (STAFF / ACCOUNTANT / MANAGER / BOARD) — phong cách "Midnight & Champagne".
+=======
+// Layout nội bộ (STAFF / ACCOUNTANT / MANAGER / BOARD / ADMIN) — phong cách "Midnight & Champagne".
+>>>>>>> origin/minh
 // Menu sinh từ config/menu.js (lọc theo quyền, gom theo group); đổi trang có morph (view transition).
 export default function AdminLayout() {
   const screens = Grid.useBreakpoint();

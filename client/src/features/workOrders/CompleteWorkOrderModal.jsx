@@ -1,5 +1,9 @@
 import { Form, Input, Modal, Typography } from 'antd';
+<<<<<<< HEAD
 import { workOrderApi } from '../../api/equipment.api';
+=======
+import { workOrderApi } from '../../api/moduleD.api';
+>>>>>>> origin/minh
 import { useAction } from '../../hooks/useApi';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
 import { toFiles } from '../../utils/upload';
