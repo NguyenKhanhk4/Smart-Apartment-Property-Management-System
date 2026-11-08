@@ -52,6 +52,24 @@ const ticketSchema = new Schema(
     // M5-2: SLA tạm dừng từ lúc vào Chờ cư dân đồng ý phí / Chờ linh kiện; rời trạng thái thì dueDate được cộng bù (ticket.rules)
     slaPausedAt: { type: Date, default: null },
     partsAlertedAt: { type: Date, default: null }, // đã cảnh báo Trưởng BQL chờ linh kiện quá hạn dừng
+    location: { type: String, trim: true, default: null }, // UC38: vị trí cụ thể (vd hành lang tầng 5, gần thang B)
+    // BR-X6: sự cố khẩn cấp quá hạn nhận mà chưa ai nhận → cảnh báo web + email cho Trưởng BQL và người đang trực,
+    // banner trên màn hình lễ tân / bảo vệ / kỹ thuật đang trực, lặp mỗi 15 phút đến khi có người bấm "Đã tiếp nhận"
+    // hoặc phiếu được nhận / phân công
+    emergency: {
+      startedAt: { type: Date, default: null },
+      nextNotifyAt: { type: Date, default: null },
+      notifyCount: { type: Number, default: 0 },
+      ackBy: { type: ObjectId, ref: 'User', default: null },
+      ackAt: { type: Date, default: null },
+    },
+    // Người cần liên hệ để xác minh / hẹn vào xử lý. Cư dân tự gửi: mặc định tên + SĐT tài khoản (sửa được);
+    // Lễ tân tạo hộ: tên + SĐT người báo (bắt buộc, vì createdBy lúc đó là Lễ tân)
+    contact: {
+      name: { type: String, trim: true, default: null },
+      phone: { type: String, trim: true, default: null },
+      note: { type: String, trim: true, default: null }, // vd thời gian có nhà
+    },
     // Sự cố trong căn hộ: cư dân đồng ý / từ chối báo giá (form báo giá do Người 3 làm)
     quoteDecision: {
       accepted: { type: Boolean, default: null },
@@ -64,6 +82,8 @@ const ticketSchema = new Schema(
     resolvedAt: Date, // lúc chuyển WAITING_CONFIRM
     closedAt: Date,
     autoClosed: { type: Boolean, default: false }, // BR-O9: đóng do quá hạn không phản hồi
+    confirmRemindedAt: { type: Date, default: null }, // M5-1: đã nhắc cư dân nghiệm thu trước khi tự đóng
+    mergedInto: { type: ObjectId, ref: 'Ticket', default: null }, // M5-6: phiếu chính khi phiếu này bị gộp
     rating: { type: Number, min: 1, max: 5, default: null },
     ratingComment: String,
     rejectReason: String,
@@ -86,5 +106,6 @@ ticketSchema.index({ assignedTo: 1, status: 1 });
 ticketSchema.index({ buildingId: 1, createdAt: -1 });
 ticketSchema.index({ type: 1, status: 1, assignedTo: 1 }); // hàng chờ sự cố theo ca
 ticketSchema.index({ status: 1, ackDueAt: 1 }); // cron cảnh báo SLA nhận phiếu
+ticketSchema.index({ mergedInto: 1 }, { partialFilterExpression: { mergedInto: { $type: 'objectId' } } });
 
 export const Ticket = model('Ticket', ticketSchema);

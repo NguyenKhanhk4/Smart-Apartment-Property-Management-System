@@ -32,9 +32,12 @@ const audit = (action, user, invoice, metadata, session = null) =>
     { session },
   );
 
-/** Lấy các thông báo cần xử lý theo id hoặc cả kỳ; id không đúng trạng thái → skipped */
-async function selectInvoices({ invoiceIds, period }, status) {
-  const filter = invoiceIds ? { _id: { $in: invoiceIds } } : { period, status };
+/**
+ * Lấy các thông báo cần xử lý theo id hoặc cả kỳ (tùy chọn chỉ 1 tòa: `buildingId`, khớp bộ lọc tòa trên màn hình);
+ * id không đúng trạng thái → skipped
+ */
+async function selectInvoices({ invoiceIds, period, buildingId }, status) {
+  const filter = invoiceIds ? { _id: { $in: invoiceIds } } : { period, status, ...(buildingId && { buildingId }) };
   const found = await Invoice.find(filter).sort({ code: 1 }).lean();
   if (invoiceIds && !found.length) throw ApiError.notFound('Không tìm thấy thông báo phí');
   const skipped = [];
@@ -206,7 +209,7 @@ async function publishOne(user, invoice, { now, dueDate }) {
     ).lean();
     if (!claimed) return null;
 
-    const applied = await applyPrepaid(claimed, claimed.totalAmount - claimed.paidAmount, session);
+    const applied = await applyPrepaid(claimed, claimed.totalAmount - (claimed.paidAmount ?? 0), session);
     await creditAdjustment(claimed, session);
     // Khoản điều chỉnh trong thông báo này đã được Trưởng BQL duyệt cùng → Đã áp dụng
     await InvoiceAdjustment.updateMany(
@@ -238,7 +241,7 @@ async function publishOne(user, invoice, { now, dueDate }) {
 }
 
 function notifyPayer(inv) {
-  const outstanding = inv.totalAmount - inv.paidAmount;
+  const outstanding = inv.totalAmount - (inv.paidAmount ?? 0);
   const lines = [`Thông báo phí ${inv.code}: ${formatVnd(inv.totalAmount)}.`];
   if (inv.prepaidApplied) lines.push(`Đã trừ Số dư trả trước ${formatVnd(inv.prepaidApplied)}.`);
   if (inv.adjustmentCredit) lines.push(`Khoản điều chỉnh giảm còn dư ${formatVnd(inv.adjustmentCredit)} đã cộng vào Số dư trả trước.`);

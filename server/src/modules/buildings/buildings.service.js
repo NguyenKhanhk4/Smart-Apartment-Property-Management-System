@@ -33,6 +33,56 @@ export async function getBuildingById(id) {
   return { ...building, apartmentCount };
 }
 
+export async function getFloorPlan(buildingId, { floor, blockId }) {
+  const building = await Building.findById(buildingId).select('totalFloors blocks').lean();
+  if (!building) throw ApiError.notFound('Tòa nhà không tồn tại');
+  if (floor > building.totalFloors) {
+    throw ApiError.field('floor', 'Tầng không thuộc tòa nhà');
+  }
+  if (blockId && !building.blocks?.some((block) => block._id.equals(blockId))) {
+    throw ApiError.field('blockId', 'Block không thuộc tòa nhà');
+  }
+  return Apartment.find({ buildingId, floor, ...(blockId && { blockId }) })
+    .select('code blockId occupancyStatus')
+    .sort({ code: 1 })
+    .lean();
+}
+
+export async function saveBlock(buildingId, blockId, { code, name }, managerUser, ip) {
+  const building = await Building.findById(buildingId);
+  if (!building) throw ApiError.notFound('Tòa nhà không tồn tại');
+  const existingBlock = blockId ? building.blocks?.id(blockId) : null;
+  if (blockId && !existingBlock) throw ApiError.notFound('Block không tồn tại');
+
+  const previous = existingBlock?.toObject();
+  if (!building.blocks) building.blocks = [];
+  const block = existingBlock ?? building.blocks.create({ code, name });
+  const filter = {
+    _id: buildingId,
+    blocks: { $not: { $elemMatch: { code, _id: { $ne: block._id } } } },
+  };
+  if (blockId) filter['blocks._id'] = block._id;
+  block.set({ code, name });
+  const update = blockId
+    ? { $set: { 'blocks.$[block].code': code, 'blocks.$[block].name': name } }
+    : { $push: { blocks: block.toObject() } };
+  const result = await Building.updateOne(filter, update, {
+    runValidators: true,
+    ...(blockId && { arrayFilters: [{ 'block._id': block._id }] }),
+  });
+  if (!result.matchedCount) throw new ApiError('DUPLICATE_VALUE', 'Mã block đã tồn tại trong tòa nhà');
+
+  await logAudit({
+    action: AUDIT_ACTIONS.BUILDING_CHANGED,
+    user: managerUser,
+    targetType: AUDIT_TARGETS.BUILDING,
+    targetId: buildingId,
+    metadata: { action: blockId ? 'UPDATE_BLOCK' : 'CREATE_BLOCK', from: previous, to: block.toObject() },
+    ip,
+  });
+  return block;
+}
+
 /**
  * Tạo tòa nhà mới (Trưởng BQL) — BR-A4
  */

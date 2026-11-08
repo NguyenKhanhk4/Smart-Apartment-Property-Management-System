@@ -1,4 +1,4 @@
-// Enum dùng chung toàn hệ thống — khớp srs_final.md §III.2.2 (Table Descriptions).
+// Enum dùng chung toàn hệ thống; bổ sung cron an ninh và thời hạn lưu khách Module 7, giữ quy ước các module hiện có.
 // Client có bản nhãn tiếng Việt tương ứng ở client/src/constants/enums.js.
 
 export const values = (enumObj) => Object.values(enumObj);
@@ -46,6 +46,19 @@ export const BOARD_TITLES = Object.freeze({
 });
 
 // ===== Tòa nhà, căn hộ, hợp đồng, cư dân, xe (Module A) =====
+export const APARTMENT_OCCUPANCY = Object.freeze({
+  NOT_HANDED_OVER: 'NOT_HANDED_OVER',
+  VACANT: 'VACANT',
+  OWNER_OCCUPIED: 'OWNER_OCCUPIED',
+  RENTED: 'RENTED',
+  UNDER_REPAIR: 'UNDER_REPAIR',
+});
+
+export const APARTMENT_TYPES = Object.freeze({
+  RESIDENTIAL: 'RESIDENTIAL',
+  COMMERCIAL: 'COMMERCIAL',
+});
+
 export const APARTMENT_STATUS = Object.freeze({
   VACANT: 'VACANT',
   OWNED: 'OWNED',
@@ -53,6 +66,12 @@ export const APARTMENT_STATUS = Object.freeze({
 });
 
 export const CONTRACT_TYPES = Object.freeze({ SALE: 'SALE', LEASE: 'LEASE' });
+
+export const OWNERSHIP_DOCUMENT_TYPES = Object.freeze({
+  DEVELOPER_SALE_CONTRACT: 'DEVELOPER_SALE_CONTRACT',
+  OWNERSHIP_CERTIFICATE: 'OWNERSHIP_CERTIFICATE',
+  TRANSFER_DOCUMENT: 'TRANSFER_DOCUMENT',
+});
 
 export const CONTRACT_STATUS = Object.freeze({
   ACTIVE: 'ACTIVE',
@@ -79,32 +98,9 @@ export const VEHICLE_STATUS = Object.freeze({
   CANCELLED: 'CANCELLED',
 });
 
-// ===== Gate Pass & tra biển số (Người 2 — UC52..54, UC62) =====
-export const GATE_PASS_DIRECTIONS = Object.freeze({
-  IN: 'IN',
-  OUT: 'OUT',
-});
-
-export const GATE_PASS_STATUS = Object.freeze({
-  AWAITING_OWNER: 'AWAITING_OWNER',
-  PENDING: 'PENDING',
-  APPROVED: 'APPROVED',
-  USED: 'USED',
-  REJECTED: 'REJECTED',
-  EXPIRED: 'EXPIRED',
-});
-
-export const PLATE_LOOKUP_RESULTS = Object.freeze({
-  REGISTERED_VEHICLE: 'REGISTERED_VEHICLE',
-  MATCHES_GATE_PASS: 'MATCHES_GATE_PASS',
-  UNKNOWN: 'UNKNOWN',
-});
-
 // ===== Thẻ gửi xe (Người 2 — UC66) =====
-// Biến động nhân khẩu nộp Công an phường (UC21)
-export const OCCUPANT_CHANGE_TYPES = Object.freeze({ MOVE_IN: 'MOVE_IN', MOVE_OUT: 'MOVE_OUT' });
-
 export const PARKING_CARD_STATUS = Object.freeze({
+  PENDING_HANDOVER: 'PENDING_HANDOVER',
   ACTIVE: 'ACTIVE',
   DISABLED_TO_COLLECT: 'DISABLED_TO_COLLECT',
   RETURNED: 'RETURNED',
@@ -114,6 +110,7 @@ export const PARKING_CARD_STATUS = Object.freeze({
 // ===== Phí, hóa đơn, thanh toán, công nợ (Module B) =====
 // Nhóm phí trên hóa đơn (BR-F1)
 export const FEE_CATEGORIES = Object.freeze({
+  MANAGEMENT: 'MANAGEMENT',
   CLEANING: 'CLEANING',
   PARKING: 'PARKING',
   AMENITY: 'AMENITY',
@@ -139,6 +136,7 @@ export const FEE_TYPE_STATES = Object.freeze({ ACTIVE: 'ACTIVE', UPCOMING: 'UPCO
 export const INVOICE_PREVIEW_STATUS = Object.freeze({
   NEW: 'NEW', // sẽ được lập
   EXISTS: 'EXISTS', // đã có hóa đơn chưa hủy (BR-F2)
+  NOT_HANDED_OVER: 'NOT_HANDED_OVER',
   NO_PAYER: 'NO_PAYER', // chưa có hợp đồng hiệu lực → bỏ qua
   ERROR: 'ERROR', // thiếu đơn giá...
 });
@@ -276,19 +274,60 @@ export const ASSET_CATEGORIES = Object.freeze({
   OTHER: 'OTHER',
 });
 
+// UC07, BR-E02: đơn vị chu kỳ bảo trì
+export const CYCLE_UNITS = Object.freeze({
+  DAY: 'DAY',
+  MONTH: 'MONTH',
+  QUARTER: 'QUARTER',
+});
+
 export const WORK_ORDER_TYPES = Object.freeze({
   SCHEDULED: 'SCHEDULED',
   TICKET_LINKED: 'TICKET_LINKED',
 });
 
+// BR-E05: Đến hạn → Đang kiểm tra → Hoàn thành; Có sự cố: Chờ duyệt sửa → Đang sửa → Chờ nghiệm thu → Hoàn thành (Q12)
 export const WORK_ORDER_STATUS = Object.freeze({
   PENDING: 'PENDING',
   IN_PROGRESS: 'IN_PROGRESS',
+  AWAITING_REPAIR_APPROVAL: 'AWAITING_REPAIR_APPROVAL', // UC09: KTV đã báo hư hỏng, chờ Trưởng BQL duyệt (UC10)
+  UNDER_REPAIR: 'UNDER_REPAIR', // đã duyệt, nhà thầu đang sửa
+  AWAITING_ACCEPTANCE: 'AWAITING_ACCEPTANCE', // KTV đã tải biên bản của nhà thầu, chờ Trưởng BQL nghiệm thu
+  REPAIR_POSTPONED: 'REPAIR_POSTPONED', // UC10 (Q5): Trưởng BQL tạm hoãn sửa, có ngày xem lại; kiểm tra định kỳ vẫn chạy
   DONE: 'DONE',
+  CLOSED: 'CLOSED', // UC10: thiết bị ngừng sử dụng, phiếu đóng không sửa
+});
+
+// UC10: quyết định của Trưởng BQL với báo cáo hư hỏng
+export const REPAIR_DECISIONS = Object.freeze({
+  APPROVE: 'APPROVE', // duyệt, kèm nguồn chi
+  POSTPONE: 'POSTPONE', // tạm hoãn, kèm lý do và ngày xem lại
+  RETIRE: 'RETIRE', // không sửa: ngừng sử dụng thiết bị
+});
+
+// UC10: nguồn chi phí sửa chữa (BR-E06)
+export const REPAIR_COST_SOURCES = Object.freeze({
+  OPERATING: 'OPERATING',
+  FUND: 'FUND',
+});
+
+// UC08: kết quả kiểm tra định kỳ (BR-E05)
+export const WORK_ORDER_RESULTS = Object.freeze({
+  PASSED: 'PASSED',
+  FAULTY: 'FAULTY',
 });
 
 // Work order chưa hoàn thành (BR-O6: 1 tài sản chỉ 1 work order SCHEDULED đang mở)
-export const WORK_ORDER_OPEN_STATUSES = Object.freeze([WORK_ORDER_STATUS.PENDING, WORK_ORDER_STATUS.IN_PROGRESS]);
+// Đang kiểm tra (index uniq_open_scheduled_wo chỉ áp cho nhóm này)
+export const WORK_ORDER_INSPECTING_STATUSES = Object.freeze([WORK_ORDER_STATUS.PENDING, WORK_ORDER_STATUS.IN_PROGRESS]);
+// Đang sửa chữa (UC09, UC10)
+export const WORK_ORDER_REPAIR_STATUSES = Object.freeze([
+  WORK_ORDER_STATUS.AWAITING_REPAIR_APPROVAL, WORK_ORDER_STATUS.UNDER_REPAIR, WORK_ORDER_STATUS.AWAITING_ACCEPTANCE,
+]);
+// Đang làm (kiểm tra hoặc sửa): job không tạo phiếu mới; hiện là "phiếu đang mở" của thiết bị
+export const WORK_ORDER_ACTIVE_STATUSES = Object.freeze([...WORK_ORDER_INSPECTING_STATUSES, ...WORK_ORDER_REPAIR_STATUSES]);
+// Chưa hoàn thành (thêm phiếu tạm hoãn sửa): không ngừng theo dõi thiết bị được. Phiếu hoãn không chặn job (Q8)
+export const WORK_ORDER_OPEN_STATUSES = Object.freeze([...WORK_ORDER_ACTIVE_STATUSES, WORK_ORDER_STATUS.REPAIR_POSTPONED]);
 
 // ===== Tiện ích (Module D) =====
 // BR-O12: booking tự xác nhận APPROVED khi đặt → CHECKED_IN (lễ tân) → COMPLETED (hết giờ, tính phí BR-O5);
@@ -296,6 +335,12 @@ export const WORK_ORDER_OPEN_STATUSES = Object.freeze([WORK_ORDER_STATUS.PENDING
 // PENDING, REJECTED: luồng duyệt cũ, Module D KHÔNG còn tạo mới — giữ để dữ liệu & báo cáo UC-E14 cũ không lỗi.
 // PENDING_PAYMENT (Người 4): booking có phí giữ chỗ chờ thanh toán khi BOOKING_PAYMENT_HOLD_MINUTES > 0,
 // quá hạn giữ mà chưa thanh toán thì cron chuyển CANCELLED.
+// Cách trả phí tiện ích có phí (cư dân chọn khi đặt): ONLINE = giữ chỗ và trả ngay qua payOS; INVOICE = cộng vào thông báo phí tháng
+export const BOOKING_PAYMENT_METHODS = Object.freeze({
+  ONLINE: 'ONLINE',
+  INVOICE: 'INVOICE',
+});
+
 export const BOOKING_STATUS = Object.freeze({
   PENDING_PAYMENT: 'PENDING_PAYMENT',
   APPROVED: 'APPROVED',
@@ -324,37 +369,18 @@ export const BOOKING_BILLABLE_STATUSES = Object.freeze([
 // Luồng duyệt cũ: chỉ còn trong dữ liệu cũ, không tạo mới và không đưa vào báo cáo / ô chọn
 export const BOOKING_LEGACY_STATUSES = Object.freeze([BOOKING_STATUS.PENDING, BOOKING_STATUS.REJECTED]);
 
-// Kiểu tiện ích (BR-O15, BR-O22..O24): FREE = đi vào tự do, không đặt/không phí; WALK_IN = đến thẳng, lễ tân tra mã
-// (gói tháng / vé lẻ / miễn phí trẻ nhỏ); BOOKING = đặt slot độc quyền. Bản ghi cũ không có accessMode coi là BOOKING.
+// Kiểu tiện ích: FREE = đi vào tự do, không đặt/không phí; BOOKING = đặt slot (UC44, UC45).
+// Bản ghi cũ không có accessMode coi là BOOKING.
 export const AMENITY_ACCESS_MODES = Object.freeze({
   FREE: 'FREE',
-  WALK_IN: 'WALK_IN',
   BOOKING: 'BOOKING',
 });
 
-// Nhóm tuổi tính giá (BR-O24)
+// Nhóm tuổi theo ngày sinh (hiển thị ở mã cư dân, đặt hộ tại quầy)
 export const AGE_GROUPS = Object.freeze({
   CHILD_FREE: 'CHILD_FREE',
   CHILD: 'CHILD',
   ADULT: 'ADULT',
-});
-
-// Gói tháng tiện ích (UC-D09, BR-O22): theo người, theo tháng dương lịch, hiệu lực ngay khi mua
-export const AMENITY_PASS_STATUS = Object.freeze({
-  ACTIVE: 'ACTIVE',
-  CANCELLED: 'CANCELLED',
-});
-
-// Lượt vào tiện ích WALK_IN (UC-D10, BR-O23): PASS = dùng gói tháng (0đ), SINGLE = vé lẻ (có phí), FREE = vé lẻ giá 0
-export const VISIT_CHARGE_TYPES = Object.freeze({
-  PASS: 'PASS',
-  SINGLE: 'SINGLE',
-  FREE: 'FREE',
-});
-
-export const VISIT_STATUS = Object.freeze({
-  VALID: 'VALID',
-  CANCELLED: 'CANCELLED',
 });
 
 // ===== Ticket, sổ khách, bảng tin, thông báo (Module E) =====
@@ -383,6 +409,7 @@ export const TICKET_STATUS = Object.freeze({
   WAITING_CONFIRM: 'WAITING_CONFIRM',
   CLOSED: 'CLOSED',
   REJECTED: 'REJECTED',
+  MERGED: 'MERGED', // M5-6: phiếu trùng đã gộp vào phiếu chính (mergedInto), đóng theo phiếu chính
 });
 
 // Nhóm trạng thái ticket — mọi nơi (service, cron, báo cáo, client) dùng các nhóm này, không tự liệt kê.
@@ -421,6 +448,9 @@ export const TICKET_HISTORY_ACTIONS = Object.freeze({
   SLA_ALERTED: 'SLA_ALERTED',
   AUTO_CLOSED: 'AUTO_CLOSED',
   REJECTED: 'REJECTED',
+  RECLASSIFIED: 'RECLASSIFIED', // M5-5: đổi loại / phạm vi phiếu
+  MERGED: 'MERGED', // M5-6: gộp phiếu trùng vào phiếu chính
+  EMERGENCY_ACKED: 'EMERGENCY_ACKED', // BR-X6: có người bấm "Đã tiếp nhận" cảnh báo khẩn sự cố chưa ai nhận
 });
 
 // Loại phiếu: sự cố kỹ thuật vào hàng chờ Kỹ thuật; phản ánh chuyển sang màn hình xử lý của Người 2
@@ -476,6 +506,7 @@ export const CRON_STATUS = Object.freeze({ SUCCESS: 'SUCCESS', FAILED: 'FAILED' 
 export const CRON_TRIGGERS = Object.freeze({ SCHEDULE: 'SCHEDULE', MANUAL: 'MANUAL' });
 
 export const CRON_JOBS = Object.freeze({
+  OPERATIONS_SECURITY: 'OPERATIONS_SECURITY',
   INVOICE_GENERATE: 'INVOICE_GENERATE',
   INVOICE_OVERDUE: 'INVOICE_OVERDUE',
   BILLING_REMIND: 'BILLING_REMIND', // nhắc Kế toán đến kỳ tính phí + nhắc Trưởng BQL duyệt quá hạn (X8)
@@ -485,11 +516,12 @@ export const CRON_JOBS = Object.freeze({
   DEBT_REMIND: 'DEBT_REMIND', // nhắc nợ quá hạn N ngày/lần, tối đa M lần → Nợ quá hạn dài; quá ngày hẹn trả → báo Trưởng BQL // payOS: tra cứu giao dịch chờ kết quả, quá 15 phút → Cần đối soát
   BOOKING_COMPLETE: 'BOOKING_COMPLETE',
   WORK_ORDER_GENERATE: 'WORK_ORDER_GENERATE',
+  EQUIPMENT_WARNING: 'EQUIPMENT_WARNING', // UC07, BR-E07: phiếu bảo trì quá hạn, thiết bị sắp hết bảo hành (MSG-E08)
+  REPAIR_REVIEW: 'REPAIR_REVIEW', // UC10: nhắc Trưởng BQL xem lại phiếu tạm hoãn sửa (MSG-E12)
   TICKET_ESCALATE: 'TICKET_ESCALATE',
   TICKET_AUTO_CLOSE: 'TICKET_AUTO_CLOSE',
   CONTRACT_EXPIRE: 'CONTRACT_EXPIRE',
   FUND_LOW_BALANCE: 'FUND_LOW_BALANCE',
-  GATE_PASS_EXPIRE: 'GATE_PASS_EXPIRE',
   CONTRACT_EXPIRY_REMIND: 'CONTRACT_EXPIRY_REMIND',
   // Sự cố & tiện ích (Người 4)
   TICKET_SLA_ALERT: 'TICKET_SLA_ALERT',
@@ -530,8 +562,22 @@ export const AUDIT_ACTIONS = Object.freeze({
   TICKET_CLOSED: 'TICKET_CLOSED',
   ANNOUNCEMENT_PUBLISHED: 'ANNOUNCEMENT_PUBLISHED',
   WORKORDER_ASSIGNED: 'WORKORDER_ASSIGNED',
+  ASSET_CREATED: 'ASSET_CREATED', // UC07
+  ASSET_UPDATED: 'ASSET_UPDATED',
+  WORKORDER_INSPECTED: 'WORKORDER_INSPECTED', // UC08: nộp kết quả kiểm tra
+  WORKORDER_FAULT_REPORTED: 'WORKORDER_FAULT_REPORTED', // UC09
+  WORKORDER_REPAIR_APPROVED: 'WORKORDER_REPAIR_APPROVED', // UC10
+  WORKORDER_ACCEPTANCE_UPLOADED: 'WORKORDER_ACCEPTANCE_UPLOADED', // UC09
+  WORKORDER_REPAIR_ACCEPTED: 'WORKORDER_REPAIR_ACCEPTED',
+  WORKORDER_REPAIR_RETURNED: 'WORKORDER_REPAIR_RETURNED',
+  WORKORDER_FUND_REQUESTED: 'WORKORDER_FUND_REQUESTED', // UC10: duyệt bằng Quỹ bảo trì, chờ đề xuất chi
+  WORKORDER_FUND_DECIDED: 'WORKORDER_FUND_DECIDED', // UC10: Ban quản trị duyệt / từ chối, Kế toán rút đề xuất
+  WORKORDER_REPAIR_POSTPONED: 'WORKORDER_REPAIR_POSTPONED',
+  WORKORDER_REPAIR_REQUESTED: 'WORKORDER_REPAIR_REQUESTED',
+  WORKORDER_REPAIR_RETIRED: 'WORKORDER_REPAIR_RETIRED',
+  ASSET_DEACTIVATED: 'ASSET_DEACTIVATED',
+  ASSET_REACTIVATED: 'ASSET_REACTIVATED',
   AMENITY_FEE_CHANGED: 'AMENITY_FEE_CHANGED',
-  AMENITY_PASS_CANCELLED: 'AMENITY_PASS_CANCELLED',
   BOOKING_CANCELLED_BY_STAFF: 'BOOKING_CANCELLED_BY_STAFF',
   AMENITY_VISIT_CANCELLED: 'AMENITY_VISIT_CANCELLED',
   // Module A (Vũ Việt)
@@ -544,52 +590,61 @@ export const AUDIT_ACTIONS = Object.freeze({
   RESIDENT_ASSIGNED: 'RESIDENT_ASSIGNED',
   RESIDENT_REMOVED: 'RESIDENT_REMOVED',
   RESIDENT_UPDATED: 'RESIDENT_UPDATED',
+  OWNER_ACCOUNT_ISSUED: 'OWNER_ACCOUNT_ISSUED',
+  APARTMENT_OWNER_CHANGED: 'APARTMENT_OWNER_CHANGED',
   ACCOUNT_ACTIVATED: 'ACCOUNT_ACTIVATED',
   PASSWORD_RESET: 'PASSWORD_RESET',
   ACTIVATION_CODE_ISSUED: 'ACTIVATION_CODE_ISSUED',
   PHONE_CHANGED: 'PHONE_CHANGED',
   EMAIL_CHANGED: 'EMAIL_CHANGED',
   CONSENT_CHANGED: 'CONSENT_CHANGED',
+  AUDIT_LOG_EXPORTED: 'AUDIT_LOG_EXPORTED', // UC06 bước 5 / UC65: xuất nhật ký cũng được ghi lại
+  ROLE_PERMISSIONS_CHANGED: 'ROLE_PERMISSIONS_CHANGED', // UC04: lưu ma trận phân quyền
   VEHICLE_APPROVED: 'VEHICLE_APPROVED',
   VEHICLE_REJECTED: 'VEHICLE_REJECTED',
   VEHICLE_CANCELLED: 'VEHICLE_CANCELLED',
   BUILDING_CHANGED: 'BUILDING_CHANGED',
   APARTMENT_CHANGED: 'APARTMENT_CHANGED',
-  // Gate Pass (Người 2)
-  GATEPASS_CREATED: 'GATEPASS_CREATED',
-  GATEPASS_OWNER_APPROVED: 'GATEPASS_OWNER_APPROVED',
-  GATEPASS_OWNER_REJECTED: 'GATEPASS_OWNER_REJECTED',
-  GATEPASS_APPROVED: 'GATEPASS_APPROVED',
-  GATEPASS_REJECTED: 'GATEPASS_REJECTED',
-  GATEPASS_USED: 'GATEPASS_USED',
-  GATEPASS_EXPIRED: 'GATEPASS_EXPIRED',
+  TICKET_COMPLAINT_RESPONDED: 'TICKET_COMPLAINT_RESPONDED',
   // Thẻ gửi xe (Người 2 — UC66)
   PARKING_CARD_ISSUED: 'PARKING_CARD_ISSUED',
+  PARKING_CARD_HANDED_OVER: 'PARKING_CARD_HANDED_OVER',
   PARKING_CARD_DISABLED: 'PARKING_CARD_DISABLED',
   PARKING_CARD_RETURNED: 'PARKING_CARD_RETURNED',
   PARKING_CARD_LOST: 'PARKING_CARD_LOST',
   // Biến động nhân khẩu (Người 2 — UC21)
   RESIDENT_CHANGES_EXPORTED: 'RESIDENT_CHANGES_EXPORTED',
+  RESIDENT_OCCUPANCY_EXPORTED: 'RESIDENT_OCCUPANCY_EXPORTED',
   RESIDENT_ID_VIEWED: 'RESIDENT_ID_VIEWED',
   // Sự cố & tiện ích (Người 4)
   DUTY_SHIFT_CREATED: 'DUTY_SHIFT_CREATED',
   DUTY_SHIFT_DELETED: 'DUTY_SHIFT_DELETED',
+  DUTY_SHIFT_UPDATED: 'DUTY_SHIFT_UPDATED',
   TICKET_CLAIMED: 'TICKET_CLAIMED',
   TICKET_QUOTE_DECIDED: 'TICKET_QUOTE_DECIDED',
+  TICKET_RECLASSIFIED: 'TICKET_RECLASSIFIED',
+  TICKET_MERGED: 'TICKET_MERGED',
   BOOKING_PAYMENT_CONFIRMED: 'BOOKING_PAYMENT_CONFIRMED',
+  // UC05 — Cấu hình tòa nhà & biểu phí (Vũ Việt)
+  BUILDING_PROFILE_UPDATED: 'BUILDING_PROFILE_UPDATED',
+  UTILITY_TARIFF_CREATED: 'UTILITY_TARIFF_CREATED',
+  UTILITY_TARIFF_DELETED: 'UTILITY_TARIFF_DELETED',
+  COLLECTION_SETTING_CHANGED: 'COLLECTION_SETTING_CHANGED',
 });
 
 // targetType của audit_logs = tên collection (index { targetType, targetId } tra lịch sử một bản ghi)
 export const AUDIT_TARGETS = Object.freeze({
   MAINTENANCE_FUND: 'maintenance_fund',
   OPERATING_EXPENSE: 'operating_expenses',
+  AUDIT_LOG: 'audit_logs',
+  ASSET: 'assets',
+  ROLE_PERMISSION: 'role_permissions',
   USER: 'users',
   BUILDING: 'buildings',
   APARTMENT: 'apartments',
   CONTRACT: 'contracts',
   RESIDENT: 'residents',
   VEHICLE: 'vehicles',
-  GATE_PASS: 'gate_passes',
   PARKING_CARD: 'parking_cards',
   FEE_TYPE: 'fee_types',
   INVOICE: 'invoices',
@@ -600,7 +655,6 @@ export const AUDIT_TARGETS = Object.freeze({
   FUND_PROPOSAL: 'fund_proposals',
   FUND_TRANSACTION: 'fund_transactions',
   AMENITY: 'amenities',
-  AMENITY_PASS: 'amenity_passes',
   AMENITY_VISIT: 'amenity_visits',
   BOOKING: 'bookings',
   WORK_ORDER: 'work_orders',
@@ -609,10 +663,15 @@ export const AUDIT_TARGETS = Object.freeze({
   ANNOUNCEMENT: 'announcements',
   SYSTEM_CONFIG: 'system_configs',
   DUTY_SHIFT: 'duty_shifts',
+  // UC05
+  BUILDING_PROFILE: 'building_profile',
+  UTILITY_TARIFF: 'utility_tariffs',
+  COLLECTION_SETTING: 'collection_settings',
 });
 
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
 export const CONFIG_KEYS = Object.freeze({
+  GUEST_RETENTION_MONTHS: 'GUEST_RETENTION_MONTHS',
   SLA_HOURS_URGENT: 'SLA_HOURS_URGENT',
   SLA_HOURS_HIGH: 'SLA_HOURS_HIGH',
   SLA_HOURS_MEDIUM: 'SLA_HOURS_MEDIUM',
@@ -637,29 +696,38 @@ export const CONFIG_KEYS = Object.freeze({
   RECEPTION_CLOSE_TIME: 'RECEPTION_CLOSE_TIME',
   CHILD_FREE_AGE: 'CHILD_FREE_AGE',
   CHILD_ADULT_AGE: 'CHILD_ADULT_AGE',
-  WALK_IN_VISIT_MINUTES: 'WALK_IN_VISIT_MINUTES',
-  PASS_EXPIRY_REMIND_DAYS: 'PASS_EXPIRY_REMIND_DAYS',
   PARKING_CAPACITY_MOTORBIKE: 'PARKING_CAPACITY_MOTORBIKE',
   PARKING_CAPACITY_CAR: 'PARKING_CAPACITY_CAR',
   UPLOAD_MAX_SIZE_MB: 'UPLOAD_MAX_SIZE_MB',
   // Sự cố & tiện ích (Người 4)
   TICKET_ACK_MINUTES: 'TICKET_ACK_MINUTES',
   TICKET_PARTS_PAUSE_HOURS: 'TICKET_PARTS_PAUSE_HOURS',
+  TECH_WORK_START: 'TECH_WORK_START',
+  TECH_WORK_END: 'TECH_WORK_END',
+  TECH_WORK_DAYS: 'TECH_WORK_DAYS',
   COMPLAINT_RESPONSE_HOURS: 'COMPLAINT_RESPONSE_HOURS',
   BOOKING_PAYMENT_HOLD_MINUTES: 'BOOKING_PAYMENT_HOLD_MINUTES',
   // Tài khoản nhận tiền in trên thông báo phí (Mô đun 4) — tạm đặt ở tham số hệ thống cho tới khi có trang thông tin tòa nhà
   BANK_NAME: 'BANK_NAME',
   BANK_ACCOUNT_NO: 'BANK_ACCOUNT_NO',
   BANK_ACCOUNT_NAME: 'BANK_ACCOUNT_NAME',
+  REPAIR_ACCEPTANCE_REMIND_DAYS: 'REPAIR_ACCEPTANCE_REMIND_DAYS', // UC09: chờ nghiệm thu quá N ngày thì nhắc Trưởng BQL (BR-X8)
+  REPAIR_REVIEW_REPEAT_DAYS: 'REPAIR_REVIEW_REPEAT_DAYS', // UC10: phiếu hoãn đã tới ngày xem lại thì nhắc lại mỗi N ngày
+  REPAIR_POSTPONE_MAX_DAYS: 'REPAIR_POSTPONE_MAX_DAYS', // UC10: ngày xem lại tối đa N ngày kể từ hôm hoãn
+  // UC05 — Cấu hình tòa nhà & biểu phí (BR-X8)
+  OWNER_CONFIRM_REMIND_DAYS: 'OWNER_CONFIRM_REMIND_DAYS',
+  OWNER_CONFIRM_AUTO_CANCEL_DAYS: 'OWNER_CONFIRM_AUTO_CANCEL_DAYS',
+  EMERGENCY_REPEAT_MINUTES: 'EMERGENCY_REPEAT_MINUTES',
 });
 
 export const DEFAULT_CONFIGS = Object.freeze([
+  { key: CONFIG_KEYS.GUEST_RETENTION_MONTHS, value: 12, scope: CONFIG_SCOPES.BUSINESS, description: 'Thời hạn lưu dữ liệu khách vãng lai (tháng) — Module 7' },
   // BUSINESS — Manager sửa (UC-E01)
   { key: CONFIG_KEYS.SLA_HOURS_URGENT, value: 24, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Khẩn cấp (giờ) — BR-O7' },
   { key: CONFIG_KEYS.SLA_HOURS_HIGH, value: 72, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Cao (giờ) — BR-O7' },
   { key: CONFIG_KEYS.SLA_HOURS_MEDIUM, value: 168, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Thường (giờ) — BR-O7' },
   { key: CONFIG_KEYS.SLA_HOURS_LOW, value: 168, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Thấp (giờ)' },
-  { key: CONFIG_KEYS.TICKET_AUTO_CLOSE_DAYS, value: 7, scope: CONFIG_SCOPES.BUSINESS, description: 'Tự đóng ticket chờ xác nhận sau N ngày — BR-O9' },
+  { key: CONFIG_KEYS.TICKET_AUTO_CLOSE_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Cư dân không nghiệm thu sau N ngày thì tự chuyển Đã nghiệm thu (không tính sao), nhắc trước 1 ngày — M5-1' },
   { key: CONFIG_KEYS.PAYMENT_TERM_DAYS, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn thanh toán hóa đơn (ngày) — BR-F8' },
   { key: CONFIG_KEYS.DEBT_REMINDER_INTERVAL_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Nhắc nợ quá hạn N ngày/lần (lần đầu ngay ngày đầu quá hạn) — UC31, X8' },
   { key: CONFIG_KEYS.QUOTE_REMIND_DAYS, value: 2, scope: CONFIG_SCOPES.BUSINESS, description: 'Báo giá sửa chữa chờ quá N ngày chưa phản hồi thì nhắc Người nộp phí — UC48, X8' },
@@ -679,11 +747,12 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.RECEPTION_CLOSE_TIME, value: '22:00', scope: CONFIG_SCOPES.BUSINESS, description: 'Giờ lễ tân kết thúc (HH:mm) — BR-O15' },
   { key: CONFIG_KEYS.CHILD_FREE_AGE, value: 6, scope: CONFIG_SCOPES.BUSINESS, description: 'Dưới số tuổi này được vào tiện ích miễn phí, cần người lớn đi kèm — BR-O24' },
   { key: CONFIG_KEYS.CHILD_ADULT_AGE, value: 12, scope: CONFIG_SCOPES.BUSINESS, description: 'Từ số tuổi này tính giá người lớn; từ CHILD_FREE_AGE đến dưới mốc này tính giá trẻ em — BR-O24' },
-  { key: CONFIG_KEYS.WALK_IN_VISIT_MINUTES, value: 120, scope: CONFIG_SCOPES.BUSINESS, description: 'Thời lượng 1 lượt vào tiện ích vào cửa (phút), dùng đếm số người đang ở trong — BR-O23' },
-  { key: CONFIG_KEYS.PASS_EXPIRY_REMIND_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Nhắc gia hạn gói tháng trong N ngày cuối tháng — BR-O22' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_MOTORBIKE, value: 500, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi xe máy' },
   { key: CONFIG_KEYS.PARKING_CAPACITY_CAR, value: 100, scope: CONFIG_SCOPES.BUSINESS, description: 'Sức chứa bãi ô tô' },
   { key: CONFIG_KEYS.TICKET_ACK_MINUTES, value: 30, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn kỹ thuật viên nhận sự cố kể từ lúc gửi (phút)' },
+  { key: CONFIG_KEYS.TECH_WORK_START, value: '07:00', scope: CONFIG_SCOPES.BUSINESS, description: 'Giờ hành chính kỹ thuật bắt đầu (HH:mm). Ngoài giờ chỉ sự cố Khẩn cấp / Cao báo người trực ngay' },
+  { key: CONFIG_KEYS.TECH_WORK_END, value: '17:00', scope: CONFIG_SCOPES.BUSINESS, description: 'Giờ hành chính kỹ thuật kết thúc (HH:mm)' },
+  { key: CONFIG_KEYS.TECH_WORK_DAYS, value: [1, 2, 3, 4, 5], scope: CONFIG_SCOPES.BUSINESS, description: 'Ngày làm việc hành chính kỹ thuật (1 = Thứ 2 … 7 = Chủ nhật); ngày khác là ngoài giờ' },
   { key: CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA dừng tối đa N giờ khi chờ linh kiện, quá thì cảnh báo Trưởng BQL — M5-2' },
   { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
   { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán qua payOS (phút); 0 hoặc chưa cấu hình payOS = phí gộp vào thông báo phí tháng' },
@@ -691,7 +760,14 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.BANK_ACCOUNT_NO, value: '', scope: CONFIG_SCOPES.BUSINESS, description: 'Số tài khoản nhận tiền phí dịch vụ' },
   { key: CONFIG_KEYS.BANK_ACCOUNT_NAME, value: '', scope: CONFIG_SCOPES.BUSINESS, description: 'Tên chủ tài khoản nhận tiền phí dịch vụ' },
   // TECHNICAL — tham số kỹ thuật, Trưởng BQL sửa
-  { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 5, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10' },
+  { key: CONFIG_KEYS.REPAIR_REVIEW_REPEAT_DAYS, value: 7, scope: CONFIG_SCOPES.BUSINESS, description: 'Phiếu tạm hoãn sửa đã tới ngày xem lại: nhắc Trưởng BQL lại mỗi N ngày cho tới khi xử lý (UC10, BR-X8)' },
+  { key: CONFIG_KEYS.REPAIR_POSTPONE_MAX_DAYS, value: 90, scope: CONFIG_SCOPES.BUSINESS, description: 'Tạm hoãn sửa chữa: ngày xem lại tối đa N ngày kể từ hôm hoãn (UC10)' },
+  { key: CONFIG_KEYS.REPAIR_ACCEPTANCE_REMIND_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Phiếu chờ nghiệm thu sửa chữa quá N ngày thì nhắc Trưởng BQL, không tự nghiệm thu (UC09, BR-X8)' },
+  // UC05 — Cấu hình tòa nhà & biểu phí (BR-X8)
+  { key: CONFIG_KEYS.OWNER_CONFIRM_REMIND_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Chủ nhà chưa xác nhận yêu cầu sau N ngày → nhắc lại (BR-X8)' },
+  { key: CONFIG_KEYS.OWNER_CONFIRM_AUTO_CANCEL_DAYS, value: 7, scope: CONFIG_SCOPES.BUSINESS, description: 'Chủ nhà không phản hồi sau N ngày → tự hủy yêu cầu (BR-X8)' },
+  { key: CONFIG_KEYS.EMERGENCY_REPEAT_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Khoảng thời gian lặp lại cảnh báo khẩn cấp (phút) — BR-X8' },
+  { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 10, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10. Client tự thu nhỏ ảnh trước khi gửi; mức này là lưới an toàn (Cloudinary miễn phí giới hạn ~10MB/ảnh)' },
 ]);
 
 // key → giá trị mặc định (module thuần như pricing / slot.utils đọc từ đây, không tự dựng lại map)

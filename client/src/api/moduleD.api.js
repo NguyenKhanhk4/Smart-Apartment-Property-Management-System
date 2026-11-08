@@ -45,20 +45,10 @@ export const bookingApi = {
   markPaid: (id, paymentRef) => http.patch(`/bookings/${id}/mark-paid`, paymentRef ? { paymentRef } : {}),
   /** Cư dân tạo link payOS trả phí booking đang giữ chỗ → { checkoutUrl, orderCode, expiredAt } */
   payos: (id) => http.post(`/bookings/${id}/payos`),
+  /** Booking đang giữ chỗ chờ trả online → chuyển sang cộng phí vào thông báo phí tháng */
+  payLater: (id) => http.patch(`/bookings/${id}/pay-later`),
   /** Cư dân đổi sang khung giờ khác. body: { date: 'YYYY-MM-DD', slotStart: 'HH:mm' } */
   reschedule: (id, body) => http.patch(`/bookings/${id}/reschedule`, body),
-};
-
-// ===== UC-D10: Quầy tiện ích (lượt vào tiện ích WALK_IN) =====
-export const amenityVisitApi = {
-  /** Lễ tân / Trưởng BQL. params: { date?, amenityId?, apartmentId?, chargeType?, status?, page?, limit? } */
-  list: (params) => http.get('/amenity-visits', { params }),
-  /** Số người đang trong từng tiện ích WALK_IN: { serverTime, windowMinutes, items: [{ amenityId, name, current, max }] } */
-  occupancy: () => http.get('/amenity-visits/occupancy'),
-  /** Lễ tân. body: { amenityId, code (mã cư dân), escortCode?, accompaniedChildren? } */
-  create: (body) => http.post('/amenity-visits', body),
-  /** Lễ tân / Trưởng BQL — bắt buộc lý do */
-  cancel: (id, reason) => http.patch(`/amenity-visits/${id}/cancel`, { reason }),
 };
 
 // ===== UC-D11: Thẻ cư dân (mã chữ), gia đình, tra mã =====
@@ -74,18 +64,4 @@ export const memberCodeApi = {
   lookup: (q) => http.get('/member-codes/lookup', { params: { q } }),
   /** Lễ tân sửa ngày sinh khi đối chiếu giấy tờ */
   setDateOfBirth: (userId, dateOfBirth) => http.patch(`/member-codes/${userId}/date-of-birth`, { dateOfBirth }),
-};
-
-// ===== UC-D09: Gói tháng tiện ích =====
-export const amenityPassApi = {
-  /** Cư dân: chủ hộ thấy cả hộ, thành viên thấy gói của mình. params: { apartmentId?, month?, status? } */
-  mine: (params) => http.get('/amenity-passes/mine', { params }),
-  /** Chủ hộ: tiện ích có bán gói + giá theo nhóm tuổi của từng thành viên (params: { apartmentId?, month? }) */
-  options: (params) => http.get('/amenity-passes/options', { params }),
-  /** body: { apartmentId, userId, amenityId, month: 'YYYY-MM' } */
-  purchase: (body) => http.post('/amenity-passes', body),
-  /** Chủ hộ: gói tháng sau (không cần lý do). Trưởng BQL: gói bất kỳ chưa gộp hóa đơn, bắt buộc reason */
-  cancel: (id, reason) => http.patch(`/amenity-passes/${id}/cancel`, reason ? { reason } : {}),
-  /** Trưởng BQL / Lễ tân. params: { page, limit, sort, month, amenityId, apartmentId, userId, status, invoiced } */
-  list: (params) => http.get('/amenity-passes', { params }),
 };

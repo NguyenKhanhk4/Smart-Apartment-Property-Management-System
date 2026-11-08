@@ -29,10 +29,10 @@ export default function ReceptionHomePage() {
     <div className="max-w-[1240px] mx-auto flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className={`m-0 text-[26px] font-semibold leading-tight ${TEXT}`}>
+          <h1 className={`m-0 text-xl font-semibold leading-tight ${TEXT}`}>
             {greeting(now.hour())}, {user.fullName}
           </h1>
-          <p className={`mt-1 mb-0 text-[15px] ${MUTED}`}>
+          <p className={`mt-1 mb-0 text-[14px] ${MUTED}`}>
             {WEEKDAYS[now.day()]}, {formatDate(now)}
             {waiting != null && ` · Có ${waiting} việc đang chờ bạn xử lý`}
           </p>
@@ -41,14 +41,14 @@ export default function ReceptionHomePage() {
           <button
             type="button"
             onClick={() => navigate('/app/announcements?new=1', { viewTransition: true })}
-            className="h-11 px-5 rounded-[10px] border border-r-border-control bg-white text-r-text font-medium text-sm cursor-pointer inline-flex items-center gap-2 dark:bg-[#18263D] dark:text-[#EEF1F6] dark:border-[#24344D]"
+            className="h-11 px-5 rounded-[10px] border border-r-border-control bg-white text-r-text font-medium text-sm cursor-pointer inline-flex items-center gap-2 dark:bg-[#27272A] dark:text-[#FAFAFA] dark:border-[#2E2E33]"
           >
             <SoundOutlined /> Đăng bảng tin
           </button>
           <button
             type="button"
             onClick={() => navigate('/app/guests', { viewTransition: true })}
-            className="h-11 px-5 rounded-[10px] border-0 bg-[#1A2440] text-white font-semibold text-sm cursor-pointer inline-flex items-center gap-2"
+            className="h-11 px-5 rounded-[10px] border-0 bg-navy hover:bg-navy-hover text-white font-semibold text-sm cursor-pointer inline-flex items-center gap-2"
           >
             <PlusOutlined /> Đăng ký khách
           </button>

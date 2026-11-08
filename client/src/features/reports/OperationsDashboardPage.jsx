@@ -262,7 +262,7 @@ export default function OperationsDashboardPage() {
       <ChartCard
         title="Lượt sử dụng tiện ích"
         empty={!data?.amenities?.length}
-        height={Math.max(160, (data?.amenities?.length ?? 0) * 40)}
+        height={Math.max(160, (data?.amenities?.length ?? 0) * 52)}
       >
         <ResponsiveContainer>
           <BarChart data={data?.amenities ?? []} layout="vertical" margin={{ left: 8, right: 40 }}>
@@ -271,8 +271,8 @@ export default function OperationsDashboardPage() {
             <YAxis type="category" dataKey="name" width={130} {...axis} tickLine={false} />
             <Tooltip cursor={cursor} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="bookings" name="Lượt đặt" stackId="a" fill={theme.series[0]} stroke={theme.surface} strokeWidth={2} barSize={18} {...bar} />
-            <Bar dataKey="visits" name="Lượt vào cửa" stackId="a" fill={theme.series[2]} stroke={theme.surface} strokeWidth={2} radius={[0, 4, 4, 0]} barSize={18} {...bar} />
+            <Bar dataKey="bookings" name="Lượt đặt giữ chỗ" fill={theme.series[0]} radius={[0, 4, 4, 0]} barSize={14} {...bar} />
+            <Bar dataKey="checkedIn" name="Đã check-in" fill={theme.series[2]} radius={[0, 4, 4, 0]} barSize={14} {...bar} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>

@@ -14,13 +14,15 @@ import ReceptionHomePage from './reception/ReceptionHomePage';
 // Cư dân dùng ResidentHomePage.
 // Dashboard số liệu chi tiết nằm ở mục Báo cáo (UC-E10..E14).
 function DefaultHome() {
-  const { user, hasRole } = useAuth();
+  const { user, canSee } = useAuth();
   const navigate = useNavigate();
   const shortcuts = adminMenu.filter(
-    (m) => m.key !== 'home' && !m.hideInMenu && !m.path.includes(':') && hasRole(...(m.roles ?? [])),
+    (m) => m.key !== 'home' && !m.hideInMenu && !m.path.includes(':') && canSee(m),
   );
   const role = roleLabelOf(user);
-  const { data: news = [], loading } = useApi(() => announcementApi.list({ limit: 5 }), []);
+  // UC04: Trưởng BQL tắt quyền Xem Bảng tin thì ẩn hẳn khung, không gọi API (tránh báo lỗi đỏ và khung rỗng gây hiểu nhầm)
+  const showNews = canSee({ key: 'announcements' });
+  const { data: news = [], loading } = useApi(() => announcementApi.list({ limit: 5 }), [], { enabled: showNews });
 
   return (
     <Flex vertical gap={16}>
@@ -41,13 +43,14 @@ function DefaultHome() {
               onClick={() => navigate(`/app/${m.path}`)}
               style={{ flex: '1 1 150px', maxWidth: 220, textAlign: 'center' }}
             >
-              {m.icon && <div style={{ fontSize: 24, color: '#1E3A5F' }}>{createElement(m.icon)}</div>}
+              {m.icon && <div style={{ fontSize: 24, color: '#2563EB' }}>{createElement(m.icon)}</div>}
               <Typography.Text>{m.label}</Typography.Text>
             </Card>
           ))}
         </Flex>
       )}
 
+      {showNews && (
       <Card
         title="Bảng tin mới"
         size="small"
@@ -72,6 +75,7 @@ function DefaultHome() {
           ))}
         </Flex>
       </Card>
+      )}
     </Flex>
   );
 }

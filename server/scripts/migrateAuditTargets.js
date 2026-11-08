@@ -1,5 +1,5 @@
 /**
- * audit_logs cũ ghi targetType theo tên model ('Contract', 'GatePass'...) → đổi về tên collection (AUDIT_TARGETS)
+ * audit_logs cũ ghi targetType theo tên model ('Contract', 'Vehicle'...) → đổi về tên collection (AUDIT_TARGETS)
  * để tra lịch sử theo { targetType, targetId } ra đủ bản ghi. Chạy lại không đổi gì:
  *   node scripts/migrateAuditTargets.js
  */
@@ -15,7 +15,6 @@ const LEGACY_TARGETS = {
   Contract: AUDIT_TARGETS.CONTRACT,
   Resident: AUDIT_TARGETS.RESIDENT,
   Vehicle: AUDIT_TARGETS.VEHICLE,
-  GatePass: AUDIT_TARGETS.GATE_PASS,
   ParkingCard: AUDIT_TARGETS.PARKING_CARD,
 };
 
@@ -23,7 +22,8 @@ const LEGACY_TARGETS = {
 export async function migrateAuditTargets() {
   let updated = 0;
   for (const [legacy, target] of Object.entries(LEGACY_TARGETS)) {
-    const res = await AuditLog.updateMany({ targetType: legacy }, { $set: { targetType: target } });
+    // Driver gốc: model AuditLog chặn mọi lệnh sửa (BR-S10), chỉ script chuyển dữ liệu này được phép
+    const res = await AuditLog.collection.updateMany({ targetType: legacy }, { $set: { targetType: target } });
     updated += res.modifiedCount;
   }
   return updated;

@@ -108,7 +108,7 @@ export default function IssueActivationCodePage() {
             <Descriptions column={1} size="small" bordered>
               <Descriptions.Item label="Họ tên">{account.fullName}</Descriptions.Item>
               <Descriptions.Item label="Số điện thoại">{account.phone}</Descriptions.Item>
-              <Descriptions.Item label="Vai trò">{roleLabelOf(account)}</Descriptions.Item>
+              <Descriptions.Item label="Vai trò">{roleLabelOf(account)?.label ?? account.role}</Descriptions.Item>
               <Descriptions.Item label="Trạng thái">
                 <Tag color={STATUS[account.status].color}>{STATUS[account.status].label}</Tag>
               </Descriptions.Item>
@@ -124,11 +124,11 @@ export default function IssueActivationCodePage() {
                 <Alert
                   type="info"
                   showIcon
-                  className="mt-4"
+                  style={{ marginTop: 16 }}
                   title={`Mã dùng để ${PURPOSE[account.purpose]}, có hiệu lực 48 giờ.`}
                   description="Cấp mã mới sẽ hủy mọi mã và OTP chưa dùng trước đó của tài khoản này."
                 />
-                <Checkbox className="mt-4" checked={checked} onChange={(e) => setChecked(e.target.checked)}>
+                <Checkbox style={{ marginTop: 16 }} checked={checked} onChange={(e) => setChecked(e.target.checked)}>
                   Đã đối chiếu CCCD và họ tên của người đến quầy với thông tin trên
                 </Checkbox>
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -141,7 +141,7 @@ export default function IssueActivationCodePage() {
                 </div>
               </>
             ) : (
-              <Alert type="warning" showIcon className="mt-4" title={account.blockReason} />
+              <Alert type="warning" showIcon style={{ marginTop: 16 }} title={account.blockReason} />
             )}
           </div>
         )}
@@ -163,7 +163,7 @@ export default function IssueActivationCodePage() {
         <Alert
           type="warning"
           showIcon
-          className="mb-4"
+          style={{ marginBottom: 16 }}
           title={`Đổi số cho ${account?.fullName ?? ''} (số hiện tại ${account?.phone ?? ''})`}
           description="Mọi thiết bị đang đăng nhập sẽ bị đăng xuất và các mã chưa dùng bị hủy. Người dùng nhận thông báo về việc đổi số."
         />

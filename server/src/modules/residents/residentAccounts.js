@@ -64,16 +64,16 @@ export async function findOrCreateResidentUser({ userId, email, fullName, phone,
 }
 
 /**
- * Gắn hoặc kích hoạt lại bản ghi cư dân trong căn hộ (BR-A5, BR-O1) — không tạo 2 bản ghi cho cùng (userId, apartmentId).
+ * Gắn người vào một đợt cư trú; không tái sử dụng hoặc ghi đè đợt cư trú đã kết thúc.
  * CCCD chỉ ghi đè khi được gửi.
  */
 export async function linkResident({ userId, apartmentId, relationType, contractId, moveInDate, idNumber }, session = null) {
-  const existing = await Resident.findOne({ userId, apartmentId }).session(session);
+  const existing = await Resident.findOne({ userId, apartmentId, isActive: true }).session(session);
   if (existing) {
     existing.relationType = relationType;
     existing.contractId = contractId || null;
     existing.isActive = true;
-    existing.moveInDate = moveInDate || new Date();
+    existing.moveInDate ??= moveInDate || new Date();
     existing.moveOutDate = null;
     if (idNumber) Object.assign(existing, buildIdNumberFields(idNumber));
     await existing.save({ session });
@@ -102,7 +102,10 @@ export async function linkResident({ userId, apartmentId, relationType, contract
  * @returns {boolean|null} đã gửi được email hay chưa (không có email thì false); null nếu không tạo tài khoản mới
  */
 export async function inviteNewResident({ user, created }) {
-  if (!created) return null;
+  return created ? sendActivationInvite(user) : null;
+}
+
+export async function sendActivationInvite(user) {
   if (!user.email) return false;
   const link = `${env.clientUrls[0]}/activate`;
   return sendMail({

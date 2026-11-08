@@ -1,3 +1,4 @@
+// Bộ quét QR dùng lại cho vé tiện ích và checkpoint; tùy chỉnh hướng dẫn mà không tạo component mới.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, Button, Flex, Input, Modal, Spin, Typography } from 'antd';
 import jsQR from 'jsqr';
@@ -11,7 +12,7 @@ const UNSUPPORTED = 'Trình duyệt không mở được camera (cần HTTPS ho�
 const SCAN_EVERY_MS = 250;
 
 // Thân modal — chỉ mount khi mở (destroyOnHidden) nên camera tắt ngay khi đóng
-function Scanner({ onResult, busy }) {
+function Scanner({ onResult, busy, instruction, placeholder }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const doneRef = useRef(false);
@@ -83,9 +84,9 @@ function Scanner({ onResult, busy }) {
         </Spin>
       )}
       <canvas ref={canvasRef} hidden />
-      <Typography.Text type="secondary">Đưa mã QR trên điện thoại cư dân vào khung. Không quét được thì nhập mã:</Typography.Text>
+      <Typography.Text type="secondary">{instruction}</Typography.Text>
       <Flex gap={8}>
-        <Input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="BK1...." onPressEnter={() => manual.trim() && onResult(manual.trim())} />
+        <Input value={manual} onChange={(e) => setManual(e.target.value)} placeholder={placeholder} onPressEnter={() => manual.trim() && onResult(manual.trim())} />
         <Button type="primary" disabled={!manual.trim()} loading={busy} onClick={() => onResult(manual.trim())}>
           Xác nhận
         </Button>
@@ -95,7 +96,8 @@ function Scanner({ onResult, busy }) {
 }
 
 /** Modal quét mã QR bằng camera sau của điện thoại (jsQR, chạy cả iOS Safari). `onResult(text)` có thể trả Promise */
-export default function QrScanModal({ open, title = 'Quét mã QR', onClose, onResult }) {
+export default function QrScanModal({ open, title = 'Quét mã QR', onClose, onResult,
+  instruction = 'Đưa mã QR trên điện thoại cư dân vào khung. Không quét được thì nhập mã:', placeholder = 'BK1....' }) {
   const [busy, setBusy] = useState(false);
   const handle = async (text) => {
     setBusy(true);
@@ -106,8 +108,8 @@ export default function QrScanModal({ open, title = 'Quét mã QR', onClose, onR
     }
   };
   return (
-    <Modal title={title} open={open} onCancel={onClose} footer={null} destroyOnHidden width={420}>
-      <Scanner onResult={handle} busy={busy} />
+    <Modal title={title} open={open} onCancel={onClose} footer={null} destroyOnHidden width="min(420px, 94vw)">
+      <Scanner onResult={handle} busy={busy} instruction={instruction} placeholder={placeholder} />
     </Modal>
   );
 }

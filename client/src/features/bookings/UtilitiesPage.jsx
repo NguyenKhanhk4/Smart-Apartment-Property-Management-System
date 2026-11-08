@@ -6,16 +6,14 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useResident } from '../../hooks/useResident';
 import ServicesTab from './ServicesTab';
 import HistoryTab from './HistoryTab';
-import PassesTab from './PassesTab';
 
 const TABS = [
   { value: 'book', label: 'Dịch vụ' },
-  { value: 'plan', label: 'Quản lý' },
   { value: 'history', label: 'Lịch sử đặt' },
 ];
 
-// Trang Tiện ích (UC-D05/D06/D09) gồm 3 tab: Dịch vụ · Quản lý (gói tháng của cả nhà) · Lịch sử đặt. Tab nằm trên URL (?tab=)
-// nên link cũ (/amenities/bookings, /my-code/passes) chỉ cần chuyển hướng về đây.
+// Trang Tiện ích (UC-D05/D06) gồm 2 tab: Dịch vụ · Lịch sử đặt. Tab nằm trên URL (?tab=)
+// nên link cũ (/amenities/bookings) chỉ cần chuyển hướng về đây.
 export default function UtilitiesPage() {
   const wide = useMediaQuery('(min-width: 768px)');
   const [search, setSearch] = useSearchParams();
@@ -45,8 +43,8 @@ export default function UtilitiesPage() {
       {wide ? (
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="m-0 text-[28px] font-semibold">Tiện ích</h1>
-            <p className="mt-1 mb-0 text-[15px] text-r-muted">Xem dịch vụ, quản lý gói tháng và lịch sử đặt ở một nơi</p>
+            <h1 className="m-0 text-[clamp(18px,1.6vw,21px)] font-semibold">Tiện ích</h1>
+            <p className="mt-1 mb-0 text-[14px] text-r-muted">Xem dịch vụ và lịch sử đặt ở một nơi</p>
           </div>
           {tabs}
         </div>
@@ -61,7 +59,6 @@ export default function UtilitiesPage() {
           {/* key theo căn: đổi căn thì các tab khởi tạo lại (trang, bộ lọc) */}
           {tab === 'book' && <ServicesTab key={apartmentId} />}
           {tab === 'history' && <HistoryTab key={apartmentId} wide={wide} />}
-          {tab === 'plan' && <PassesTab key={apartmentId} wide={wide} />}
         </div>
       )}
     </div>

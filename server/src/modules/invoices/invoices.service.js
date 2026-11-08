@@ -4,7 +4,6 @@
 import mongoose from 'mongoose';
 import {
   ADJUSTMENT_STATUS,
-  AMENITY_PASS_STATUS,
   AUDIT_ACTIONS,
   AUDIT_TARGETS,
   BOOKING_BILLABLE_STATUSES,
@@ -14,10 +13,9 @@ import {
   INVOICE_PREVIEW_STATUS as PREVIEW_STATUS,
   INVOICE_STATUS,
   QUOTE_STATUS,
-  VISIT_STATUS,
 } from '../../constants/enums.js';
 import { runTrackedJob } from '../../jobs/cronRunner.js';
-import { AmenityPass, AmenityVisit, Apartment, Booking, Invoice, InvoiceAdjustment, RepairQuote, User } from '../../models/index.js';
+import { Apartment, Booking, Invoice, InvoiceAdjustment, RepairQuote, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex } from '../../utils/pagination.js';
@@ -51,8 +49,6 @@ async function nextInvoiceCode(base) {
 /** Bản ghi tiện ích + báo giá sửa chữa + khoản điều chỉnh gắn vào thông báo: [Model, ids, điều kiện status còn hiệu lực] */
 export const amenityTargets = (charges) =>
   [
-    [AmenityPass, charges.passIds, AMENITY_PASS_STATUS.ACTIVE],
-    [AmenityVisit, charges.visitIds, VISIT_STATUS.VALID],
     [Booking, charges.bookingIds, { $in: BOOKING_BILLABLE_STATUSES }],
     [RepairQuote, charges.repairQuoteIds ?? [], QUOTE_STATUS.ACCEPTED],
     [InvoiceAdjustment, charges.adjustmentIds ?? [], ADJUSTMENT_STATUS.PENDING],
@@ -118,6 +114,7 @@ async function persistDraft(draft, { generatedBy }) {
 async function generateOne(apartment, period, prices, opts) {
   for (let attempt = 1; ; attempt += 1) {
     const draft = await buildInvoiceDraft(apartment, period, prices);
+    if (draft.excludedByHandover) return { status: PREVIEW_STATUS.NOT_HANDED_OVER };
     if (!draft.payer) return { status: PREVIEW_STATUS.NO_PAYER };
     try {
       return { status: PREVIEW_STATUS.NEW, invoice: await persistDraft(draft, opts) };
@@ -145,7 +142,7 @@ export async function generateForPeriod({ period = vnPeriod(), user = null } = {
     (await Invoice.find({ period, status: ACTIVE_INVOICE }).select('apartmentId').lean()).map((i) => String(i.apartmentId)),
   );
 
-  const summary = { period, totalApartments: apartments.length, created: 0, existing: 0, noPayer: 0, totalAmount: 0, failed: [] };
+  const summary = { period, totalApartments: apartments.length, created: 0, existing: 0, notHandedOver: 0, noPayer: 0, totalAmount: 0, failed: [] };
   for (const apt of apartments) {
     if (billed.has(String(apt._id))) {
       summary.existing += 1;
@@ -153,7 +150,8 @@ export async function generateForPeriod({ period = vnPeriod(), user = null } = {
     }
     try {
       const r = await generateOne(apt, period, prices, { generatedBy });
-      if (r.status === PREVIEW_STATUS.NO_PAYER) summary.noPayer += 1;
+      if (r.status === PREVIEW_STATUS.NOT_HANDED_OVER) summary.notHandedOver += 1;
+      else if (r.status === PREVIEW_STATUS.NO_PAYER) summary.noPayer += 1;
       else if (r.status === PREVIEW_STATUS.EXISTS) summary.existing += 1;
       else {
         summary.created += 1;
@@ -202,8 +200,11 @@ export async function generateForApartment(user, { period, apartmentId }, { now 
   const prices = await getPriceTable(period);
   const r = await generateOne(apt, period, prices, { generatedBy: GENERATED_BY.MANUAL });
   if (r.status === PREVIEW_STATUS.EXISTS) throw new ApiError('INVOICE_ALREADY_EXISTS');
+  if (r.status === PREVIEW_STATUS.NOT_HANDED_OVER) {
+    throw ApiError.badRequest(`Căn ${apt.code} chưa bàn giao trong kỳ ${periodLabel(period)}, không tính phí được`);
+  }
   if (r.status === PREVIEW_STATUS.NO_PAYER) {
-    throw ApiError.badRequest(`Căn ${apt.code} chưa có hợp đồng mua bán hiệu lực đầu kỳ ${periodLabel(period)}, không tính phí được`);
+    throw ApiError.badRequest(`Căn ${apt.code} chưa có hợp đồng mua bán hiệu lực tại ngày bắt đầu tính phí kỳ ${periodLabel(period)}, không tính phí được`);
   }
 
   await auditGenerated(
@@ -216,7 +217,7 @@ export async function generateForApartment(user, { period, apartmentId }, { now 
 
 /**
  * Tính thử thông báo phí kỳ `period` (không ghi gì). Có apartmentId → 1 căn; có buildingId → 1 tòa; không có → toàn bộ.
- * Mỗi dòng: trạng thái NEW / EXISTS / NO_PAYER / ERROR, các dòng phí dự kiến, người nộp phí.
+ * Mỗi dòng gồm trạng thái xem trước, các dòng phí dự kiến và người nộp phí.
  */
 export async function previewInvoices({ period, apartmentId, buildingId }) {
   const filter = {};
@@ -251,7 +252,9 @@ export async function previewInvoices({ period, apartmentId, buildingId }) {
       const d = await buildInvoiceDraft(apt, period, prices);
       rows.push({
         ...base,
-        status: d.payer ? PREVIEW_STATUS.NEW : PREVIEW_STATUS.NO_PAYER,
+        status: d.excludedByHandover
+          ? PREVIEW_STATUS.NOT_HANDED_OVER
+          : d.payer ? PREVIEW_STATUS.NEW : PREVIEW_STATUS.NO_PAYER,
         code: d.code,
         payer: d.payer && { userId: d.payer.userId, source: d.payer.source },
         items: d.items,
@@ -286,6 +289,7 @@ export async function previewInvoices({ period, apartmentId, buildingId }) {
       totalApartments: rows.length,
       new: fresh.length,
       existing: count(PREVIEW_STATUS.EXISTS),
+      notHandedOver: count(PREVIEW_STATUS.NOT_HANDED_OVER),
       noPayer: count(PREVIEW_STATUS.NO_PAYER),
       error: count(PREVIEW_STATUS.ERROR),
       totalAmount: fresh.reduce((s, r) => s + r.totalAmount, 0),

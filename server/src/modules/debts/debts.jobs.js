@@ -99,7 +99,7 @@ async function processCase(c, g, { now, today, interval, max }) {
     );
     if (res.modifiedCount) {
       acted += 1;
-      await notifyRoles(['MANAGER'], {
+      await notifyRoles(['ACCOUNTANT'], {
         type: NOTIFICATION_TYPES.DEBT_REMINDER,
         title: `Quá ngày hẹn trả nợ: căn ${aptLabel(g)}`,
         content: `${g.payerName ?? 'Người nộp phí'} hẹn trả trước ${fmtDateVn(current.promisedDate)} nhưng vẫn còn nợ quá hạn ${formatVnd(g.amount)} (kỳ ${periodsText(g)}). Vào sổ công nợ để ghi kết quả xử lý tiếp.`,
@@ -137,7 +137,8 @@ async function processCase(c, g, { now, today, interval, max }) {
   );
   if (res.modifiedCount) {
     acted += 1;
-    await notifyRoles(['MANAGER'], {
+    // Kế toán xử lý; Trưởng BQL nhận để nắm tình hình (chỉ xem)
+    await notifyRoles(['ACCOUNTANT', 'MANAGER'], {
       type: NOTIFICATION_TYPES.DEBT_REMINDER,
       title: `Nợ quá hạn dài: căn ${aptLabel(g)}`,
       content: `${g.payerName ?? 'Người nộp phí'} còn nợ quá hạn ${formatVnd(g.amount)} (kỳ ${periodsText(g)}) dù đã được nhắc ${current.reminderCount} lần. Hệ thống đã dừng nhắc tự động; vào sổ công nợ để liên hệ và ghi kết quả xử lý.`,

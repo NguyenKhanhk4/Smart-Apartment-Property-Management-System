@@ -1,3 +1,4 @@
+// Khai báo menu theo quyền hiện có; Module 7 dùng chung màn khách/vận hành, giữ các route của thành viên khác.
 import { lazy } from 'react';
 import {
   AppstoreOutlined,
@@ -19,9 +20,10 @@ import {
   HomeOutlined,
   NotificationOutlined,
   IdcardOutlined,
-  TagsOutlined,
   PieChartOutlined,
+  SafetyCertificateOutlined,
   ScheduleOutlined,
+  FileProtectOutlined,
   SettingOutlined,
   TeamOutlined,
   ToolOutlined,
@@ -88,14 +90,12 @@ const FundProposalPage = lazy(() => import('../features/fund/FundProposalPage'))
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
 const AssetDetailPage = lazy(() => import('../features/assets/AssetDetailPage'));
 const WorkOrdersPage = lazy(() => import('../features/workOrders/WorkOrdersPage'));
+const MajorRepairApprovalPage = lazy(() => import('../features/workOrders/MajorRepairApprovalPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AmenitiesPage = lazy(() => import('../features/amenities/AmenitiesPage'));
 const MyCodePage = lazy(() => import('../features/memberCodes/MyCodePage'));
 const FamilyPage = lazy(() => import('../features/memberCodes/FamilyPage'));
-const MyPassesPage = lazy(() => import('../features/amenityPasses/MyPassesPage'));
-const AmenityPassesPage = lazy(() => import('../features/amenityPasses/AmenityPassesPage'));
-const AmenityDeskPage = lazy(() => import('../features/amenityVisits/AmenityDeskPage'));
 const BookingSchedulePage = lazy(() => import('../features/bookings/BookingSchedulePage'));
 const UtilitiesPage = lazy(() => import('../features/bookings/UtilitiesPage'));
 const AmenityBookingPage = lazy(() => import('../features/bookings/AmenityBookingPage'));
@@ -123,13 +123,13 @@ const TicketBoardPage = lazy(() => import('../features/tickets/TicketBoardPage')
 
 // ===== Module C — audit (TM) =====
 const AuditLogsPage = lazy(() => import('../features/auditLogs/AuditLogsPage'));
+const PermissionMatrixPage = lazy(() => import('../features/permissions/PermissionMatrixPage'));
+const BuildingSettingsPage = lazy(() => import('../features/settings/BuildingSettingsPage'));
 
-// ===== Gate Pass & Kiểm soát xe (Người 2) =====
-const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
-const ResidentGatePassesPage = lazy(() => import('../features/gatePasses/ResidentGatePassesPage'));
+// ===== Kiểm soát xe (Người 2) =====
 const SecurityGatePage = lazy(() => import('../features/security-gate/SecurityGatePage'));
 const ParkingCardsPage = lazy(() => import('../features/vehicles/ParkingCardsPage'));
-const OccupantChangesPage = lazy(() => import('../features/residents/OccupantChangesPage'));
+const ResidentOccupancyPage = lazy(() => import('../features/residents/ResidentOccupancyPage'));
 
 // Giao diện nội bộ (/app/*) — hiện ở sidebar
 export const adminMenu = [
@@ -162,11 +162,11 @@ export const adminMenu = [
     roles: ['MANAGER'],
     component: ComplaintSettingsPage,
   },
-  // Tài sản & bảo trì (UC-D01)
+  // Thiết bị & bảo trì (UC07)
   {
     key: 'assets',
     group: 'Kỹ thuật & vận hành',
-    label: 'Tài sản',
+    label: 'Thiết bị',
     icon: ClusterOutlined,
     path: 'assets',
     roles: ['MANAGER', 'STAFF:TECHNICIAN'],
@@ -174,7 +174,7 @@ export const adminMenu = [
   },
   {
     key: 'asset-detail',
-    label: 'Chi tiết tài sản',
+    label: 'Chi tiết thiết bị',
     path: 'assets/:id',
     roles: ['MANAGER', 'STAFF:TECHNICIAN'],
     component: AssetDetailPage,
@@ -184,17 +184,27 @@ export const adminMenu = [
   {
     key: 'work-orders',
     group: 'Kỹ thuật & vận hành',
-    label: 'Work order',
+    label: 'Phiếu bảo trì',
     icon: ScheduleOutlined,
     path: 'work-orders',
     roles: ['MANAGER'],
     component: WorkOrdersPage,
   },
+  // UC10: duyệt sửa chữa lớn, phiếu tạm hoãn
+  {
+    key: 'repair-approvals',
+    group: 'Kỹ thuật & vận hành',
+    label: 'Duyệt sửa chữa',
+    icon: FileProtectOutlined,
+    path: 'repair-approvals',
+    roles: ['MANAGER'],
+    component: MajorRepairApprovalPage,
+  },
   // Work order của tôi: KTV bắt đầu / hoàn thành (UC-D04) — dùng lại WorkOrdersPage ở chế độ KTV
   {
     key: 'my-work-orders',
     group: 'Kỹ thuật & vận hành',
-    label: 'Work order của tôi',
+    label: 'Bảo trì thiết bị',
     icon: CheckSquareOutlined,
     path: 'my-work-orders',
     roles: ['STAFF:TECHNICIAN'],
@@ -230,26 +240,6 @@ export const adminMenu = [
     roles: ['MANAGER'],
     component: AmenitiesPage,
   },
-  // Gói tháng tiện ích (UC-D09): Trưởng BQL hủy được, Lễ tân chỉ xem
-  {
-    key: 'amenity-passes',
-    group: 'Tiện ích & khách',
-    label: 'Gói tháng',
-    icon: TagsOutlined,
-    path: 'amenity-passes',
-    roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
-    component: AmenityPassesPage,
-  },
-  // Quầy tiện ích (UC-D10): lễ tân tra mã, ghi lượt vào; Trưởng BQL chỉ xem. Bảo vệ dùng phần check-in ở Lịch đặt tiện ích
-  {
-    key: 'amenity-desk',
-    group: 'Tiện ích & khách',
-    label: 'Quầy tiện ích',
-    icon: ScanOutlined,
-    path: 'amenity-desk',
-    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
-    component: AmenityDeskPage,
-  },
   // Lịch đặt tiện ích trong ngày (UC-D07): lễ tân mọi thao tác, bảo vệ check-in, Trưởng BQL chỉ xem
   {
     key: 'booking-schedule',
@@ -264,7 +254,7 @@ export const adminMenu = [
   {
     key: 'guests',
     group: 'Tiện ích & khách',
-    label: 'Sổ khách',
+    label: 'Khách & vận hành an ninh',
     icon: UsergroupAddOutlined,
     path: 'guests',
     roles: ['STAFF:SECURITY', 'STAFF:RECEPTIONIST', 'MANAGER'],
@@ -339,7 +329,7 @@ export const adminMenu = [
     label: 'Thống kê tiện ích',
     icon: PieChartOutlined,
     path: 'report-amenity',
-    roles: ['MANAGER', 'ACCOUNTANT'],
+    roles: ['MANAGER'], // SRS 2.3: Dashboard & Reports chỉ Trưởng BQL
     component: AmenityUsagePage,
   },
 
@@ -441,7 +431,7 @@ export const adminMenu = [
   {
     key: 'contracts',
     group: 'Cư dân & dịch vụ',
-    label: 'Hợp đồng',
+    label: 'Hồ sơ sở hữu căn hộ',
     icon: FileTextOutlined,
     path: 'contracts',
     roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
@@ -455,6 +445,15 @@ export const adminMenu = [
     path: 'vehicle-requests',
     roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
     component: VehicleRequestsPage,
+  },
+  {
+    key: 'building-settings',
+    group: 'Cấu hình',
+    label: 'Tòa nhà & biểu phí',
+    icon: SettingOutlined,
+    path: 'building-settings',
+    roles: ['MANAGER'],
+    component: BuildingSettingsPage,
   },
   {
     key: 'buildings',
@@ -483,6 +482,16 @@ export const adminMenu = [
     roles: ['MANAGER'],
     component: InternalAccountsPage,
   },
+  // UC04: ma trận phân quyền theo vai trò
+  {
+    key: 'permissions',
+    group: 'Cấu hình',
+    label: 'Phân quyền',
+    icon: SafetyCertificateOutlined,
+    path: 'permissions',
+    roles: ['MANAGER'],
+    component: PermissionMatrixPage,
+  },
   {
     key: 'apartment-detail',
     label: 'Chi tiết căn hộ',
@@ -509,20 +518,11 @@ export const adminMenu = [
     roles: ['MANAGER'],
     component: SystemDashboardPage,
   },
-  // ===== Gate Pass & Kiểm soát xe (Người 2) =====
-  {
-    key: 'gate-passes',
-    group: 'Cư dân & dịch vụ',
-    label: 'Duyệt Gate Pass',
-    icon: FileTextOutlined,
-    path: 'gate-passes',
-    roles: ['MANAGER'],
-    component: ManagerGatePassesPage,
-  },
+  // ===== Kiểm soát xe (Người 2) =====
   {
     key: 'security-gate',
     group: 'Tiện ích & khách',
-    label: 'Gate Pass & Tra biển số',
+    label: 'Quản lí bãi xe',
     icon: ScanOutlined,
     path: 'security-gate',
     roles: ['STAFF:SECURITY', 'MANAGER'],
@@ -531,20 +531,20 @@ export const adminMenu = [
   {
     key: 'parking-cards',
     group: 'Cư dân & dịch vụ',
-    label: 'Thẻ cần thu hồi',
+    label: 'Thẻ cư dân',
     icon: IdcardOutlined,
     path: 'parking-cards',
     roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
     component: ParkingCardsPage,
   },
   {
-    key: 'resident-changes',
+    key: 'resident-occupancy',
     group: 'Cư dân & dịch vụ',
-    label: 'Biến động nhân khẩu',
+    label: 'Thông tin cư trú',
     icon: TeamOutlined,
-    path: 'resident-changes',
-    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
-    component: OccupantChangesPage,
+    path: 'resident-occupancy',
+    roles: ['MANAGER'],
+    component: ResidentOccupancyPage,
   },
 ];
 
@@ -557,19 +557,17 @@ export const receptionNav = [
     items: [
       { key: 'guests', badge: 'guestsPending', badgeTone: 'neutral' },
       { key: 'booking-schedule', badge: 'bookingsWaiting' },
-      { key: 'amenity-desk' },
       { key: 'tickets', badge: 'ticketsNew' },
       { key: 'vehicle-requests', badge: 'vehiclesPending' },
       { key: 'parking-cards' },
-      { key: 'resident-changes' },
       { key: 'contracts' },
     ],
   },
-  { group: 'Cư dân và dịch vụ', items: [{ key: 'amenity-passes' }, { key: 'announcements' }, { key: 'activation-codes' }] },
+  { group: 'Cư dân và dịch vụ', items: [{ key: 'announcements' }, { key: 'activation-codes' }] },
   { group: 'Cấu hình', items: [{ key: 'buildings' }] },
 ];
 
-// Giao diện cư dân (/r/*). Mục nào hiện ở đâu do residentBottomNav / residentWebNav bên dưới quyết định
+// Giao diện cư dân (/r/*). Mục nào hiện ở đâu do residentBottomNav / residentSideNav bên dưới quyết định
 // (theo `key`), không còn do hideInMenu. Thông báo vào qua chuông trên header.
 export const residentMenu = [
   { key: 'home', label: 'Trang chủ', icon: HomeOutlined, path: 'home', component: ResidentHomePage },
@@ -592,8 +590,6 @@ export const residentMenu = [
   // Thẻ cư dân (UC-D11): mã chữ; trang Gia đình chỉ chủ hộ, mở từ nút trong "Mã của tôi"
   { key: 'my-code', label: 'Mã của tôi', icon: IdcardOutlined, path: 'my-code', component: MyCodePage },
   { key: 'family', label: 'Gia đình', path: 'my-code/family', component: FamilyPage, hideInMenu: true },
-  // Gói tháng tiện ích (UC-D09): mở từ "Mã của tôi" / "Gia đình" (thanh dưới đã khá chật)
-  { key: 'my-passes', label: 'Gói tháng', path: 'my-code/passes', component: MyPassesPage, hideInMenu: true },
   // Đặt tiện ích (UC-D06). 'amenities/bookings' (đường dẫn tĩnh) được ưu tiên hơn 'amenities/:id'
   { key: 'amenities', label: 'Tiện ích', icon: CoffeeOutlined, path: 'amenities', component: UtilitiesPage },
   { key: 'my-bookings', label: 'Lịch sử đặt', path: 'amenities/bookings', component: MyBookingsPage, hideInMenu: true },
@@ -638,16 +634,16 @@ export const residentMenu = [
     component: ProfilePage,
     hideInMenu: true,
   },
-  {
-    key: 'gate-passes',
-    label: 'Đơn chuyển đồ',
-    icon: FileTextOutlined,
-    path: 'gate-passes',
-    component: ResidentGatePassesPage,
-  },
 ];
 
 // Thanh điều hướng dưới (mobile): 5 mục, mục giữa là nút nổi "Mã của tôi". Bảng tin vào qua "Xem tất cả" ở trang chủ.
 export const residentBottomNav = ['home', 'amenities', 'my-code', 'tickets', 'guests'];
-// Thanh điều hướng ngang (web ≥768px). "Mã của tôi" là nút riêng bên phải nên không nằm trong danh sách này.
+// Sidebar cư dân trên máy tính (≥768px), gom theo nhóm. Các trang ẩn khỏi menu (hideInMenu) vẫn hiện ở đây nếu có tên.
+export const residentSideNav = [
+  { group: 'Tổng quan', keys: ['home', 'announcements', 'notifications'] },
+  { group: 'Dịch vụ', keys: ['my-invoices', 'amenities', 'tickets', 'guests', 'gate-passes'] },
+  { group: 'Của tôi', keys: ['my-code', 'my-apartment', 'my-vehicles', 'profile'] },
+];
+
+// Thanh điều hướng ngang (web ≥768px) của khu cư dân. "Mã của tôi" là nút riêng bên phải.
 export const residentWebNav = ['home', 'my-invoices', 'amenities', 'tickets', 'guests', 'announcements'];

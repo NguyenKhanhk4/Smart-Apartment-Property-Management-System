@@ -15,13 +15,12 @@ import assetRoutes from './modules/assets/assets.routes.js';
 import workOrderRoutes from './modules/workOrders/workOrders.routes.js';
 import amenityRoutes from './modules/amenities/amenities.routes.js';
 import memberCodeRoutes from './modules/memberCodes/memberCodes.routes.js';
-import amenityPassRoutes from './modules/amenityPasses/amenityPasses.routes.js';
 import bookingRoutes from './modules/bookings/bookings.routes.js';
-import amenityVisitRoutes from './modules/amenityVisits/amenityVisits.routes.js';
 import devAuthRoutes from './modules/devAuth/devAuth.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import userRoutes from './modules/users/users.routes.js';
 import activationCodeRoutes from './modules/auth/activationCodes.routes.js';
+import permissionRoutes from './modules/permissions/permissions.routes.js';
 import buildingRoutes from './modules/buildings/buildings.routes.js';
 import apartmentRoutes from './modules/apartments/apartments.routes.js';
 import contractRoutes from './modules/contracts/contracts.routes.js';
@@ -34,9 +33,12 @@ import paymentRoutes from './modules/payments/payments.routes.js';
 import debtRoutes from './modules/debts/debts.routes.js';
 import repairQuoteRoutes from './modules/repairQuotes/repairQuotes.routes.js';
 import fundRoutes from './modules/fund/fund.routes.js';
-import gatePassRoutes, { platesRouter } from './modules/gatePasses/gatePasses.routes.js';
 import parkingCardRoutes from './modules/parkingCards/parkingCards.routes.js';
+import parkingGateRoutes from './modules/parkingGate/parkingGate.routes.js';
 import dutyShiftRoutes from './modules/dutyShifts/dutyShifts.routes.js';
+import buildingProfileRoutes from './modules/buildingSettings/buildingProfile.routes.js';
+import utilityTariffRoutes from './modules/buildingSettings/utilityTariffs.routes.js';
+import collectionSettingRoutes from './modules/buildingSettings/collectionSettings.routes.js';
 
 import auditLogRoutes from './modules/auditLogs/auditLogs.routes.js';
 
@@ -81,25 +83,26 @@ router.use('/work-orders', workOrderRoutes);
 // Module D — Thanh Bình (Tiện ích & đặt chỗ)
 router.use('/amenities', amenityRoutes);
 router.use('/member-codes', memberCodeRoutes);
-router.use('/amenity-passes', amenityPassRoutes);
 router.use('/bookings', bookingRoutes);
-router.use('/amenity-visits', amenityVisitRoutes);
 
 // Module A — Vũ Việt (Tài khoản, Tòa nhà, Căn hộ, Hợp đồng, Cư dân, Phương tiện)
 router.use('/auth', authLimiter, authRoutes);
 router.use('/users', userRoutes);
 router.use('/activation-codes', activationCodeRoutes);
+router.use('/permissions', permissionRoutes); // UC04
 router.use('/buildings', buildingRoutes);
 router.use('/apartments', apartmentRoutes);
 router.use('/contracts', contractRoutes);
 router.use('/residents', residentRoutes);
 router.use('/vehicles', vehicleRoutes);
 router.use('/system-dashboard', systemDashboardRoutes);
-router.use('/gate-passes', gatePassRoutes);
-router.use('/plates', platesRouter);
 router.use('/parking-cards', parkingCardRoutes);
+router.use('/parking-gate', parkingGateRoutes);
 
 // Module B — Phí, Hóa đơn, Thanh toán, Công nợ
+router.use('/building-profile', buildingProfileRoutes); // UC05
+router.use('/utility-tariffs', utilityTariffRoutes);     // UC05
+router.use('/collection-settings', collectionSettingRoutes); // UC05
 router.use('/fee-types', feeTypeRoutes);
 router.use('/invoices', invoiceRoutes);
 router.use('/payments', paymentRoutes);

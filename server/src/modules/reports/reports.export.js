@@ -396,7 +396,7 @@ async function buildSpec(type, q) {
           },
           {
             title: 'Tiện ích',
-            columns: [col('Tiện ích', 'name', 22), col('Lượt đặt', 'bookings', 10), col('Lượt vào cửa', 'visits', 12), col('Tổng lượt', 'total', 10)],
+            columns: [col('Tiện ích', 'name', 22), col('Lượt đặt', 'bookings', 10), col('Đã check-in', 'checkedIn', 12)],
             rows: r.amenities,
           },
         ],

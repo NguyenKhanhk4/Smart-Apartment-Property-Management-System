@@ -4,12 +4,12 @@ import assert from 'node:assert/strict';
 import nodemailer from 'nodemailer';
 import { env } from '../../src/config/env.js';
 import { requireConsent } from '../../src/middlewares/requireConsent.js';
-import { AuditLog, User, VerificationCode } from '../../src/models/index.js';
+import { Apartment, AuditLog, Contract, Resident, User, VerificationCode } from '../../src/models/index.js';
 import { confirmActivation, login, startActivation } from '../../src/modules/auth/auth.service.js';
 import { OTP_DAILY_LIMIT } from '../../src/modules/auth/verification.service.js';
 import * as contracts from '../../src/modules/contracts/contracts.service.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
-import { asUser, createApartment, createReceptionist, createUser, linkResident } from '../helpers/fixtures.js';
+import { asUser, createApartment, createManager, createReceptionist, createUser, linkResident } from '../helpers/fixtures.js';
 import { startApp } from '../helpers/http.js';
 
 const PASSWORD = 'MatKhau123';
@@ -264,28 +264,111 @@ test('API: mật khẩu yếu, không khớp, thiếu lựa chọn điều kho�
   assert.equal((await app.request('POST', '/auth/register', { body: base })).status, 404);
 });
 
-test('hợp đồng tạo cư dân mới: chờ kích hoạt, không có mật khẩu tạm, email mời không chứa mật khẩu; kích hoạt được', async () => {
+test('UC22: chỉ Ban quản lý cấp quyền theo hồ sơ mua bán; chủ sở hữu tự kích hoạt và căn vẫn trống', async () => {
   const receptionist = asUser(await createReceptionist());
-  const apartment = await createApartment(null, { code: 'C-5', status: 'VACANT' });
-
-  const result = await contracts.createContract(receptionist, {
+  const manager = asUser(await createManager());
+  const apartment = await createApartment(null, { code: 'C-5', status: 'VACANT', handoverDate: new Date('2025-01-01') });
+  const identity = { phone: '0912000090', apartmentCode: 'C-5', email: 'chumoi@example.com' };
+  const { contract } = await contracts.createContract(receptionist, {
     apartmentId: apartment._id,
     type: 'SALE',
-    startDate: new Date('2026-11-01'),
-    owner: { phone: '0912000090', email: 'chumoi@example.com', fullName: 'Chủ Mới' },
+    startDate: new Date('2025-01-01'),
+    owner: { phone: identity.phone, fullName: 'Chủ Mới', idNumber: '001200000001' },
   });
-
-  assert.equal(result.activationInviteSent, true);
-  assert.equal('temporaryPassword' in result, false);
-  const created = await User.findOne({ phone: '0912000090' }).select('+passwordHash').lean();
+  assert.equal(contract.ownerIdNumberEnc, undefined);
+  const created = await User.findById(contract.ownerId).select('+passwordHash').lean();
   assert.equal(created.activatedAt, null);
   assert.equal(created.passwordHash, undefined);
+  assert.equal(mails.length, 0);
+  assert.equal(await Resident.countDocuments({ userId: created._id }), 0);
+  await assert.rejects(startActivation(identity), { errorCode: 'ACTIVATION_DATA_MISMATCH' });
+  assert.equal((await app.request('POST', '/activation-codes', {
+    user: receptionist, body: { userId: created._id },
+  })).status, 403);
+  const moveInPath = `/apartments/${apartment.id}/confirm-move-in`;
+  assert.equal((await app.request('PATCH', moveInPath, { user: receptionist })).status, 409);
+
+  const path = `/apartments/${apartment.id}/owner-account`;
+  const issue = (user, changes = {}) => app.request('POST', path, {
+    user, body: { contractId: contract.id, phone: '+84912000090', email: identity.email, identityVerified: true, ...changes },
+  });
+  assert.equal((await issue(receptionist)).status, 403);
+  assert.equal((await issue(manager, { identityVerified: false })).status, 400);
+  assert.equal((await issue(manager, { phone: '0912000091' })).status, 400);
+
+  const results = await Promise.all([issue(manager), issue(manager)]);
+  assert.deepEqual(results.map((result) => result.status).sort(), [201, 409]);
+  assert.equal(results.find((result) => result.status === 201).body.data.activationInviteSent, true);
+  const link = await Resident.findOne({ userId: created._id, apartmentId: apartment._id, relationType: 'OWNER' });
+  assert.equal(String(link.contractId), contract.id);
+  assert.ok(link.idNumberEnc);
+  assert.equal(await AuditLog.countDocuments({ action: 'OWNER_ACCOUNT_ISSUED', performedBy: manager.id, targetId: link._id }), 1);
+  const detail = await app.request('GET', `/apartments/${apartment.id}`, { user: manager });
+  assert.ok(detail.body.data.activeContracts[0].ownerAccountIssuedAt);
+  assert.equal(detail.body.data.activeContracts[0].ownerAccountIssuedBy._id, manager.id);
+  assert.equal((await Apartment.findById(apartment._id)).occupancyStatus, 'VACANT');
+  const report = await app.request('GET', '/residents/occupancy', { user: manager });
+  assert.deepEqual(report.body.data[0].apartments[0].residents, []);
   assert.ok(mails.at(-1).text.includes('/activate'));
   assert.equal(/mật khẩu tạm/i.test(mails.at(-1).text), false);
 
-  await startActivation({ phone: '0912000090', apartmentCode: 'C-5', email: 'chumoi@example.com' });
-  await confirmActivation({ phone: '0912000090', code: lastOtp(), password: PASSWORD, consent: 'ACCEPTED' });
-  assert.ok((await login({ phone: '0912000090', password: PASSWORD })).accessToken);
+  await startActivation(identity);
+  await confirmActivation({ phone: identity.phone, code: lastOtp(), password: PASSWORD, consent: 'ACCEPTED' });
+  assert.ok((await login({ phone: identity.phone, password: PASSWORD })).accessToken);
+  assert.equal((await app.request('PATCH', moveInPath, { user: receptionist })).body.data.occupancyStatus, 'OWNER_OCCUPIED');
+});
+
+test('UC22: dùng lại tài khoản đã kích hoạt để liên kết thêm căn, chặn hồ sơ sai căn hoặc đổi chủ', async () => {
+  const manager = asUser(await createManager());
+  const receptionist = asUser(await createReceptionist());
+  const owner = await pendingUser('RESIDENT', { activatedAt: new Date(), passwordHash: 'saved-hash' });
+  const firstApartment = await createApartment();
+  await linkResident(owner, firstApartment, { relationType: 'OWNER' });
+  const newApartment = await createApartment(null, { status: 'VACANT' });
+  const { contract } = await contracts.createContract(receptionist, {
+    apartmentId: newApartment.id, type: 'SALE', startDate: new Date('2025-01-01'),
+    owner: { userId: owner.id, phone: owner.phone },
+  });
+  assert.equal(await Resident.countDocuments({ userId: owner.id }), 1);
+  const issue = (id) => app.request('POST', `/apartments/${id}/owner-account`, {
+    user: manager, body: { contractId: contract.id, phone: owner.phone, identityVerified: true },
+  });
+  assert.equal((await issue(firstApartment.id)).status, 409);
+
+  const otherOwner = await pendingUser();
+  const otherLink = await linkResident(otherOwner, newApartment, { relationType: 'OWNER' });
+  assert.equal((await issue(newApartment.id)).status, 409);
+  await Resident.deleteOne({ _id: otherLink._id });
+  const issued = await issue(newApartment.id);
+  assert.equal(issued.status, 201, JSON.stringify(issued.body));
+  assert.equal(issued.body.data.activationInviteSent, null);
+  assert.equal(await Resident.countDocuments({ userId: owner.id, relationType: 'OWNER', isActive: true }), 2);
+  assert.equal((await User.findById(owner.id).select('+passwordHash')).passwordHash, 'saved-hash');
+  assert.equal((await Contract.findById(contract.id)).ownerAccountPending, false);
+  assert.equal(mails.length, 0);
+});
+
+test('UC22: chủ sở hữu không có email kích hoạt bằng mã tại quầy sau khi được cấp', async () => {
+  const manager = asUser(await createManager());
+  const receptionist = asUser(await createReceptionist());
+  const apartment = await createApartment(null, { status: 'VACANT' });
+  const phone = '0912000092';
+  const { contract } = await contracts.createContract(receptionist, {
+    apartmentId: apartment.id, type: 'SALE', startDate: new Date('2025-01-01'),
+    owner: { phone, fullName: 'Chủ Sở Hữu' },
+  });
+  const issue = await app.request('POST', `/apartments/${apartment.id}/owner-account`, {
+    user: manager, body: { contractId: contract.id, phone, identityVerified: true },
+  });
+  assert.equal(issue.status, 201, JSON.stringify(issue.body));
+  assert.equal(issue.body.data.activationInviteSent, false);
+  assert.equal(mails.length, 0);
+  const desk = await app.request('POST', '/activation-codes', {
+    user: receptionist, body: { userId: contract.ownerId },
+  });
+  assert.equal(desk.status, 201, JSON.stringify(desk.body));
+  await confirmActivation({ phone, code: desk.body.data.code, password: PASSWORD, consent: 'ACCEPTED' });
+  assert.ok((await login({ phone, password: PASSWORD })).accessToken);
 });
 
 test('start: mỗi tài khoản tối đa OTP_DAILY_LIMIT mã trong 24 giờ; mã cũ hơn 24 giờ không tính', async () => {
@@ -327,4 +410,33 @@ test('BR-X7 qua API: cư dân từ chối thì bị khóa đăng ký xe và tả
   });
   assert.equal(passed, true);
   assert.equal((await call('PATCH', '/users/me/avatar', staff)).status, 400);
+});
+
+test('điều khoản đổi phiên bản: đồng ý bản cũ thì bị khóa và consentOutdated = true; đồng ý lại bản mới thì mở (BR-X7)', async () => {
+  const { user, request } = await readyToConfirm();
+  await confirmActivation({ ...request, consent: 'ACCEPTED' });
+  // Giả lập: cư dân đồng ý bản 0.9, sau đó điều khoản được cập nhật lên bản hiện hành
+  await User.updateOne({ _id: user._id }, { $set: { 'consents.0.policyVersion': '0.9' } });
+  const actor = asUser(await User.findById(user._id));
+
+  await assert.rejects(requireConsent({ user: actor }, {}, () => {}), { errorCode: 'CONSENT_REQUIRED' });
+  const me = await app.request('GET', '/users/me', { user: actor });
+  assert.equal(me.body.data.consentStatus, 'ACCEPTED');
+  assert.equal(me.body.data.consentOutdated, true);
+  assert.equal(me.body.data.consentPolicyVersion, '0.9');
+  assert.equal(me.body.data.currentPolicyVersion, '1.0');
+
+  const accepted = await app.request('PATCH', '/users/me/consent', { user: actor, body: { action: 'ACCEPTED' } });
+  assert.equal(accepted.status, 200);
+  assert.equal(accepted.body.data.consentOutdated, false);
+  let passed = false;
+  await requireConsent({ user: actor }, {}, () => {
+    passed = true;
+  });
+  assert.equal(passed, true);
+
+  const saved = await User.findById(user._id).lean();
+  assert.deepEqual(saved.consents.map((c) => c.policyVersion), ['0.9', '1.0']);
+  const audit = await AuditLog.findOne({ action: 'CONSENT_CHANGED', targetId: user._id }).lean();
+  assert.equal(audit.metadata.previousPolicyVersion, '0.9');
 });

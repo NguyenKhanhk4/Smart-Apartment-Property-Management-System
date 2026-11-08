@@ -5,7 +5,7 @@
 //   - Phản ánh (Người 2 xử lý): theo loại, thời gian phản hồi, phản hồi đúng hạn.
 //   - Bảo trì thiết bị (Người 1, Mô đun 10): phiếu bảo trì làm đúng hạn.
 //   - Cư dân (Người 2): tỷ lệ lấp đầy, vào ở / chuyển đi theo tháng.
-//   - Tiện ích (Người 4): lượt đặt và lượt vào theo tiện ích.
+//   - Tiện ích (Người 4): lượt đặt giữ chỗ và lượt đã check-in theo tiện ích.
 // Không có số liệu tài chính (BR-R6). Khoảng thời gian theo tháng YYYY-MM như dashboard tài chính.
 import mongoose from 'mongoose';
 import {
@@ -16,11 +16,10 @@ import {
   TICKET_SCOPES,
   TICKET_STATUS,
   TICKET_TYPES,
-  VISIT_STATUS,
   WORK_ORDER_OPEN_STATUSES,
   WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
-import { AmenityVisit, Apartment, Booking, Resident, Ticket, WorkOrder, Asset } from '../../models/index.js';
+import { Apartment, Asset, Booking, Resident, Ticket, WorkOrder } from '../../models/index.js';
 import { DAY_MS, HOUR_MS } from '../../utils/time.js';
 import { overdueFilter } from '../tickets/ticket.rules.js';
 import { partsPauseMs } from '../tickets/tickets.service.js';
@@ -287,40 +286,19 @@ async function residentStats({ start, end, periods, buildingId }) {
 }
 
 // ---------------------------------------------------------------------------
-// Tiện ích: lượt đặt (giữ chỗ thật) + lượt vào cửa theo tiện ích
+// Tiện ích: lượt đặt giữ chỗ thật (đã xác nhận / đã dùng / không đến) theo tiện ích
 // ---------------------------------------------------------------------------
 async function amenityStats({ start, end, buildingId }) {
   const apartmentIds = buildingId ? await Apartment.find({ buildingId }).distinct('_id') : null;
   const base = apartmentIds ? { apartmentId: { $in: apartmentIds } } : {};
-  const named = [
+  const rows = await Booking.aggregate([
+    { $match: { ...base, date: { $gte: start, $lt: end }, status: { $in: [...BOOKING_BILLABLE_STATUSES] } } },
+    { $group: { _id: '$amenityId', bookings: { $sum: 1 }, checkedIn: { $sum: { $cond: [{ $gt: ['$checkedInAt', null] }, 1, 0] } } } },
     { $lookup: { from: 'amenities', localField: '_id', foreignField: '_id', pipeline: [{ $project: { name: 1 } }], as: 'a' } },
-    { $addFields: { name: { $first: '$a.name' } } },
-    { $project: { a: 0 } },
-  ];
-  const [bookings, visits] = await Promise.all([
-    Booking.aggregate([
-      { $match: { ...base, date: { $gte: start, $lt: end }, status: { $in: [...BOOKING_BILLABLE_STATUSES] } } },
-      { $group: { _id: '$amenityId', n: { $sum: 1 } } },
-      ...named,
-    ]),
-    AmenityVisit.aggregate([
-      { $match: { ...base, visitedAt: { $gte: start, $lt: end }, status: VISIT_STATUS.VALID } },
-      { $group: { _id: '$amenityId', n: { $sum: 1 } } },
-      ...named,
-    ]),
+    { $project: { _id: 0, amenityId: '$_id', name: { $ifNull: [{ $first: '$a.name' }, 'Tiện ích'] }, bookings: 1, checkedIn: 1 } },
+    { $sort: { bookings: -1 } },
   ]);
-  const map = new Map();
-  for (const [rows, key] of [
-    [bookings, 'bookings'],
-    [visits, 'visits'],
-  ]) {
-    for (const r of rows) {
-      const cur = map.get(String(r._id)) ?? { amenityId: r._id, name: r.name ?? 'Tiện ích', bookings: 0, visits: 0 };
-      cur[key] = r.n;
-      map.set(String(r._id), cur);
-    }
-  }
-  return [...map.values()].map((a) => ({ ...a, total: a.bookings + a.visits })).sort((a, b) => b.total - a.total);
+  return rows;
 }
 
 /** Dashboard vận hành kỳ `from`..`to` (YYYY-MM), lọc theo tòa nếu có */

@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router';
 import { Alert, Button, Form, Input, Steps } from 'antd';
 import { ArrowRightOutlined, HomeOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons';
 import { authApi } from '../../api/auth.api';
+import { ALERT_GAP } from './authStyles';
+import { portalPath, useAuthPortal } from './authPortal';
 import { PHONE_RULES } from '../../utils/phone';
 import PersonalDataTerms from './PersonalDataTerms';
 
@@ -19,10 +21,13 @@ const PASSWORD_RULES = [
 
 // UC11: nhập thông tin → nhập mã và đặt mật khẩu → đồng ý hoặc từ chối điều khoản. Mã in tại quầy vào thẳng bước 2.
 export default function ActivationPage() {
+  const portal = useAuthPortal(); // cổng cư dân / Ban quản lý: link quay lại đúng cổng
   const navigate = useNavigate();
   const prefillPhone = useLocation().state?.phone; // từ trang đăng nhập khi tài khoản chưa kích hoạt
   const [step, setStep] = useState(0);
   const [identity, setIdentity] = useState(null); // Thông tin bước 1; null = dùng mã in tại quầy
+  const [deskPhone, setDeskPhone] = useState(null); // SĐT đã gõ ở bước 1 trước khi chuyển sang mã in tại quầy
+  const [infoForm] = Form.useForm();
   const [credentials, setCredentials] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -61,7 +66,8 @@ export default function ActivationPage() {
     if (res) {
       // Mã đặt lại mật khẩu in tại quầy cũng nhập ở đây (UC02 bước 7)
       const mode = res.data?.mode;
-      navigate('/login', { replace: true, state: mode === 'PASSWORD_RESET' ? { passwordReset: true } : { activated: true } });
+      const done = mode === 'PASSWORD_RESET' ? { passwordReset: true } : { activated: true };
+      navigate(portalPath(portal, '/login'), { replace: true, state: { ...done, phone } }); // trang đăng nhập điền sẵn SĐT
     } else {
       // Mã sai hoặc hết hạn thì phải quay lại nhập mã
       setStep(1);
@@ -70,9 +76,8 @@ export default function ActivationPage() {
 
   return (
     <>
-      <h2 className="m-0 text-2xl font-semibold tracking-tight text-ink">Kích hoạt tài khoản</h2>
-      <div className="w-8 h-0.5 bg-gold mt-2 mb-2" />
-      <p className="m-0 mb-5 text-[13px] text-ink-2">
+      <h2 className="m-0 text-lg font-semibold tracking-tight text-ink">Kích hoạt tài khoản</h2>
+      <p className="mt-1 mb-5 text-[13px] text-ink-2">
         {step === 0 && 'Nhập số điện thoại, mã căn hộ và email đã đăng ký với Ban quản lý.'}
         {step === 1 && (identity ? 'Nhập mã đã gửi tới email và tự đặt mật khẩu.' : 'Nhập mã in tại quầy lễ tân và tự đặt mật khẩu.')}
         {step === 2 && 'Đọc điều khoản dữ liệu cá nhân rồi chọn đồng ý hoặc không đồng ý.'}
@@ -88,10 +93,10 @@ export default function ActivationPage() {
         />
       </div>
 
-      {error && <Alert type="error" showIcon title={error} className="mb-4" closable onClose={() => setError(null)} />}
+      {error && <Alert type="error" showIcon title={error} style={ALERT_GAP} closable={{ onClose: () => setError(null) }} />}
 
       {step === 0 && (
-        <Form layout="vertical" requiredMark={false} onFinish={sendOtp} disabled={loading} initialValues={identity ?? (prefillPhone ? { phone: prefillPhone } : undefined)}>
+        <Form form={infoForm} layout="vertical" requiredMark={false} onFinish={sendOtp} disabled={loading} initialValues={identity ?? { phone: deskPhone ?? prefillPhone }}>
           <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
             <Input size="large" prefix={icon(PhoneOutlined)} placeholder="0912345678" autoComplete="tel" />
           </Form.Item>
@@ -118,6 +123,7 @@ export default function ActivationPage() {
             onClick={() => {
               setError(null);
               setIdentity(null);
+              setDeskPhone(infoForm.getFieldValue('phone')?.trim() || null); // không bắt gõ lại SĐT
               setStep(1);
             }}
           >
@@ -130,7 +136,7 @@ export default function ActivationPage() {
         <Form
           layout="vertical"
           requiredMark={false}
-          initialValues={{ phone: identity?.phone, ...credentials }}
+          initialValues={{ phone: identity?.phone ?? deskPhone, ...credentials }}
           onFinish={(values) => {
             setError(null);
             setCredentials(values);
@@ -138,7 +144,7 @@ export default function ActivationPage() {
           }}
         >
           {identity && (
-            <Alert type="info" showIcon className="mb-4" title="Mã xác minh đã được gửi tới email của bạn, có hiệu lực 10 phút." />
+            <Alert type="info" showIcon style={ALERT_GAP} title="Mã xác minh đã được gửi tới email của bạn, có hiệu lực 10 phút." />
           )}
           <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
             <Input size="large" prefix={icon(PhoneOutlined)} disabled={Boolean(identity)} />
@@ -198,7 +204,15 @@ export default function ActivationPage() {
           <Button type="primary" size="large" block className="mt-4" loading={loading} onClick={() => finish('ACCEPTED')}>
             Đồng ý và kích hoạt
           </Button>
-          <Button size="large" block className="mt-2" disabled={loading} onClick={() => finish('DECLINED')}>
+          {/* Chữ dài: cho xuống dòng và có khoảng đệm, không để chạm mép nút trên màn hẹp */}
+          <Button
+            size="large"
+            block
+            className="mt-2"
+            disabled={loading}
+            onClick={() => finish('DECLINED')}
+            style={{ height: 'auto', minHeight: 40, whiteSpace: 'normal', paddingInline: 16, paddingBlock: 8, lineHeight: 1.4 }}
+          >
             Không đồng ý, kích hoạt với chức năng giới hạn
           </Button>
           <Button type="link" block className="mt-2" disabled={loading} onClick={() => setStep(1)}>
@@ -209,7 +223,7 @@ export default function ActivationPage() {
 
       <div className="mt-4 text-center text-[13px] text-ink-2">
         Đã kích hoạt?{' '}
-        <Link to="/login" className="font-semibold text-navy hover:text-gold transition-colors">
+        <Link to={portalPath(portal, '/login')} className="font-medium text-navy hover:text-navy-hover">
           Đăng nhập
         </Link>
       </div>

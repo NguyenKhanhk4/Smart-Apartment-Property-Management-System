@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { Skeleton } from 'antd';
 import {
   CalendarOutlined,
+  DollarOutlined,
   PushpinOutlined,
   RightOutlined,
   ToolOutlined,
@@ -19,13 +20,37 @@ import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useResident } from '../../hooks/useResident';
-import { dayLabel, formatDate, formatMoney, givenName } from '../../utils/format';
+import { dayLabel, formatDate, formatMoney } from '../../utils/format';
 import { INVOICE_TONE, outstandingOf, periodLabel } from '../invoices/invoiceShared';
 import ResidentAside from './ResidentAside';
 
 // Phản ánh còn dang dở (cư dân đang chờ BQL hoặc cần xác nhận kết quả)
 // Phản ánh còn cần theo dõi: đang xử lý + chờ cư dân nghiệm thu
 const OPEN_TICKET_STATUS = [...TICKET_OPEN_STATUSES, 'WAITING_CONFIRM'].join(',');
+
+// Thao tác nhanh ở đầu trang chủ (máy tính)
+const QUICK_ACTIONS = [
+  { to: '/r/invoices', icon: <DollarOutlined />, title: 'Thanh toán phí', desc: 'Xem và trả phí dịch vụ' },
+  { to: '/r/amenities', icon: <CalendarOutlined />, title: 'Đặt tiện ích', desc: 'Hồ bơi, gym, BBQ…' },
+  { to: '/r/tickets', icon: <ToolOutlined />, title: 'Gửi phản ánh', desc: 'Báo sự cố, theo dõi xử lý' },
+  { to: '/r/guests', icon: <UserAddOutlined />, title: 'Đăng ký khách', desc: 'Báo trước cho bảo vệ' },
+];
+
+function QuickActions() {
+  return (
+    <section aria-label="Thao tác nhanh" className="grid gap-3 grid-cols-2 xl:grid-cols-4">
+      {QUICK_ACTIONS.map((a) => (
+        <SurfaceCard key={a.to} as={Link} to={a.to} viewTransition className="flex items-center gap-3.5 px-4 py-3.5 text-r-text! no-underline hover:border-r-navy">
+          <span className="w-11 h-11 shrink-0 rounded-xl bg-r-navy text-white flex items-center justify-center text-xl">{a.icon}</span>
+          <span className="min-w-0">
+            <span className="block text-[14.5px] font-semibold">{a.title}</span>
+            <span className="block text-[12.5px] text-r-muted truncate">{a.desc}</span>
+          </span>
+        </SurfaceCard>
+      ))}
+    </section>
+  );
+}
 
 const TONE_ICON = {
   info: 'bg-r-info-bg text-r-info-fg',
@@ -43,12 +68,12 @@ function TodoCard({ to, tone, icon, label, title, subtitle, badge, wide }) {
     return (
       <SurfaceCard as={Link} to={to} viewTransition className="flex flex-col gap-3.5 p-5 text-r-text! no-underline">
         <span className="flex justify-between items-center">
-          <span className={`${iconBox} w-11 h-11 rounded-xl text-[22px]`}>{icon}</span>
+          <span className={`${iconBox} w-11 h-11 rounded-xl text-lg`}>{icon}</span>
           {badge}
         </span>
         <span>
           <span className="block text-[13px] text-r-muted">{label}</span>
-          <span className="block text-[17px] font-semibold mt-0.5">{title}</span>
+          <span className="block text-[15px] font-semibold mt-0.5">{title}</span>
           <span className="block text-sm text-r-muted">{subtitle}</span>
         </span>
       </SurfaceCard>
@@ -58,10 +83,10 @@ function TodoCard({ to, tone, icon, label, title, subtitle, badge, wide }) {
     <SurfaceCard as={Link} to={to} viewTransition className="flex items-center gap-3.5 px-4 py-3.5 text-r-text! no-underline">
       <span className={`${iconBox} w-10 h-10 rounded-[10px] text-xl`}>{icon}</span>
       <span className="flex-1 min-w-0">
-        <span className="block text-[15px] font-medium truncate">{title}</span>
+        <span className="block text-[14px] font-medium truncate">{title}</span>
         <span className="block text-[13px] text-r-muted truncate">{subtitle}</span>
       </span>
-      {badge ?? <RightOutlined style={{ fontSize: 14, color: '#8A8F99' }} />}
+      {badge ?? <RightOutlined className="text-r-subtle" style={{ fontSize: 14 }} />}
     </SurfaceCard>
   );
 }
@@ -74,8 +99,8 @@ function NewsRow({ item, last, wide }) {
       className={`flex gap-5 text-r-text! no-underline ${wide ? 'px-6 py-[18px]' : 'px-4 py-3.5 flex-col gap-0'} ${last ? '' : 'border-b border-r-divider'}`}
     >
       <span className="flex-1 min-w-0">
-        <span className={`flex items-center gap-1.5 font-medium text-[15px]`}>
-          {item.isPinned && <PushpinOutlined style={{ color: '#B8892E', fontSize: 16 }} aria-label="Đã ghim" />}
+        <span className={`flex items-center gap-1.5 font-medium text-[14px]`}>
+          {item.isPinned && <PushpinOutlined className="text-r-navy" style={{ fontSize: 16 }} aria-label="Đã ghim" />}
           <span className="truncate">{item.title}</span>
         </span>
         <span className={`block text-r-muted truncate ${wide ? 'text-sm mt-1' : 'text-[13px] mt-0.5'}`}>{item.content}</span>
@@ -89,14 +114,15 @@ function NewsRow({ item, last, wide }) {
 // Lối tắt chức năng đã bỏ vì trùng với thanh điều hướng, menu avatar và chuông.
 export default function ResidentHomePage() {
   const wide = useMediaQuery('(min-width: 768px)');
-  const { user } = useAuth();
+  const { canSee } = useAuth();
+  const showNews = canSee({ key: 'announcements' }); // UC04: bị tắt quyền Xem Bảng tin thì ẩn khung
   const { apartment, apartmentId } = useResident();
   const enabled = Boolean(apartmentId);
 
   const booking = useApi(() => bookingApi.mine({ scope: 'upcoming', limit: 1, apartmentId }), [apartmentId], { enabled });
   const tickets = useApi(() => ticketApi.list({ status: OPEN_TICKET_STATUS, limit: 1, sort: '-createdAt' }), []);
   const guests = useApi(() => guestApi.list({ date: new Date().toISOString(), status: 'EXPECTED,CHECKED_IN', limit: 5, sort: 'expectedTime' }), []);
-  const news = useApi(() => announcementApi.list({ limit: 3 }), []);
+  const news = useApi(() => announcementApi.list({ limit: 3 }), [], { enabled: showNews });
   // Mô đun 4: thông báo phí mới nhất đã phát hành của căn đang chọn (X1: thành viên chỉ thấy kỳ mình đang ở)
   const invoices = useApi(() => invoiceApi.my({ apartmentId, limit: 1, sort: '-period' }), [apartmentId], { enabled });
 
@@ -183,15 +209,15 @@ export default function ResidentHomePage() {
     <Skeleton active paragraph={{ rows: 2 }} title={false} />
   ) : cards.length > 0 ? (
     <section className="flex flex-col gap-2.5 md:gap-3" aria-labelledby="todo-title">
-      <h2 id="todo-title" className="m-0 text-[15px] md:text-[17px] font-semibold">Việc của bạn</h2>
+      <h2 id="todo-title" className="m-0 text-[14px] md:text-[15px] font-semibold">Việc của bạn</h2>
       <div className={wide ? 'grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]' : 'flex flex-col gap-2.5'}>{cards}</div>
     </section>
   ) : null;
 
-  const newsCard = (
+  const newsCard = showNews && (
     <SurfaceCard as="section" className="overflow-hidden">
       <div className={`flex items-center justify-between border-b border-r-divider ${wide ? 'px-6 py-[18px]' : 'px-4 py-3.5'}`}>
-        <h2 className="m-0 text-[15px] md:text-[17px] font-semibold">Bảng tin mới</h2>
+        <h2 className="m-0 text-[14px] md:text-[15px] font-semibold">Bảng tin mới</h2>
         <Link to="/r/announcements" viewTransition className="text-sm font-medium text-r-link no-underline">Xem tất cả</Link>
       </div>
       {news.loading && !newsItems.length ? (
@@ -206,24 +232,26 @@ export default function ResidentHomePage() {
 
   return (
     <div className="flex flex-col gap-6 md:gap-7">
-      {wide && (
-        <div>
-          <h1 className="m-0 text-[28px] font-semibold">Chào {givenName(user.fullName)}</h1>
-          <p className="mt-1 mb-0 text-[15px] text-r-muted">
-            {apartment ? `Căn ${apartment.code}${apartment.building?.name ? ` · ${apartment.building.name}` : ''} · ` : ''}
-            {dayjs().format('dddd, DD/MM/YYYY').replace(/^./, (c) => c.toUpperCase())}
-          </p>
-        </div>
-      )}
-
+      {/* Máy tính: lời chào nằm ở thanh trên; trang chủ = thao tác nhanh + 2 cột (việc cần làm, bảng tin | thẻ cư dân, căn hộ) */}
       {wide ? (
-        <div className="flex flex-wrap gap-6 items-start">
-          <div className="flex-[999_1_560px] min-w-0 flex flex-col gap-6">
-            {todo}
-            {newsCard}
+        <>
+          <div>
+            <h1 className="m-0 text-[clamp(17px,1.4vw,19px)] font-semibold">Tổng quan</h1>
+            <p className="mt-0.5 mb-0 text-[13px] text-r-muted">
+              {apartment ? `Căn ${apartment.code}${apartment.building?.name ? ` · ${apartment.building.name}` : ''}` : 'Chưa có căn hộ'}
+            </p>
           </div>
-          <ResidentAside />
-        </div>
+          <QuickActions />
+          <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
+            <div className="min-w-0 flex flex-col gap-6">
+              {todo}
+              {newsCard}
+            </div>
+            <div className="lg:sticky lg:top-[84px] flex flex-col">
+              <ResidentAside />
+            </div>
+          </div>
+        </>
       ) : (
         <>
           {todo}

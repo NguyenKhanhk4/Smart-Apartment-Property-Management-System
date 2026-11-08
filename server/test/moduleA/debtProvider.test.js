@@ -1,9 +1,9 @@
-// Công nợ căn hộ hiển thị khi duyệt Gate Pass chuyển đồ ra: tổng hóa đơn chưa thanh toán / quá hạn.
+// Công nợ căn hộ: tổng hóa đơn chưa thanh toán hoặc quá hạn.
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
 import { Invoice } from '../../src/models/index.js';
-import { getApartmentDebt } from '../../src/modules/gatePasses/debtProvider.js';
+import { checkApartmentDebt } from '../../src/modules/debts/debts.check.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { createApartment } from '../helpers/fixtures.js';
 
@@ -24,7 +24,7 @@ const invoice = (apartment, period, totalAmount, status) =>
     dueDate: new Date(),
   });
 
-test('getApartmentDebt: cộng UNPAID + OVERDUE, bỏ PAID / CANCELLED và căn khác', async () => {
+test('checkApartmentDebt: cộng UNPAID + OVERDUE, bỏ PAID / CANCELLED và căn khác', async () => {
   const apartment = await createApartment();
   const other = await createApartment();
   await invoice(apartment, '2026-08', 300_000, 'OVERDUE');
@@ -33,13 +33,13 @@ test('getApartmentDebt: cộng UNPAID + OVERDUE, bỏ PAID / CANCELLED và căn 
   await invoice(apartment, '2026-06', 888_000, 'CANCELLED');
   await invoice(other, '2026-09', 777_000, 'UNPAID');
 
-  const debt = await getApartmentDebt(apartment._id);
+  const debt = await checkApartmentDebt(apartment._id);
   assert.equal(debt.amount, 500_000);
   assert.equal(debt.invoiceCount, 2);
   assert.equal(debt.available, true);
 });
 
-test('getApartmentDebt: không nợ → 0', async () => {
+test('checkApartmentDebt: không nợ → 0', async () => {
   const apartment = await createApartment();
-  assert.equal((await getApartmentDebt(apartment._id)).amount, 0);
+  assert.equal((await checkApartmentDebt(apartment._id)).amount, 0);
 });

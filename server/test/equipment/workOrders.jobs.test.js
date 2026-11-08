@@ -1,10 +1,10 @@
-// Người 1 (Mô đun 10) — UC-D02: Tự động tạo work order khi tài sản đến hạn bảo trì
+// Người 1 (Mô đun 10) — BR-E03, BR-E07: tạo phiếu bảo trì khi thiết bị đến hạn (kèm bản sao checklist), báo khi không có ca, cảnh báo quá hạn / bảo hành
 import { after, afterEach, before, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { JOBS } from '../../src/jobs/index.js';
-import { Asset, CronRun, Notification, WorkOrder } from '../../src/models/index.js';
+import { Asset, CronRun, DutyShift, Notification, WorkOrder } from '../../src/models/index.js';
 import * as assetsService from '../../src/modules/assets/assets.service.js';
-import { generateMaintenanceWorkOrders } from '../../src/modules/workOrders/workOrders.jobs.js';
+import { generateMaintenanceWorkOrders, warnEquipment } from '../../src/modules/workOrders/workOrders.jobs.js';
 import { DAY_MS, endOfVnDay, startOfVnDay } from '../../src/utils/time.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { assertMatch, startApi } from '../helpers/equipment.js';
@@ -21,7 +21,9 @@ const makeAsset = (extra = {}) => {
     buildingId: building._id,
     name: `Tài sản ${seq}`,
     category: 'ELEVATOR',
-    maintenanceCycleDays: 30,
+    code: `TB-${seq}`,
+    cycleValue: 30,
+    cycleUnit: 'DAY',
     nextMaintenanceDate: startOfVnDay(),
     ...extra,
   });
@@ -44,9 +46,15 @@ describe('workOrders.jobs (UC-D02)', () => {
     await clearTestDB();
   });
 
-  const setup = async () => {
+  // Mặc định có 1 ca kỹ thuật phủ hôm nay (để không phát sinh MSG-E09); noShift: true để thử trường hợp không có ca
+  const setup = async ({ noShift = false } = {}) => {
     building = await createBuilding();
-    return createManager();
+    const manager = await createManager();
+    if (!noShift) {
+      const tech = await createTechnician();
+      await DutyShift.create({ roleTitle: 'TECHNICIAN', userId: tech._id, startAt: new Date(startOfVnDay().getTime() + 8 * 3600e3), endAt: new Date(startOfVnDay().getTime() + 17 * 3600e3) });
+    }
+    return manager;
   };
 
   it('tạo work order PENDING cho tài sản đến hạn (đúng hôm nay, cuối ngày, quá hạn) với tiêu đề và ngày lên lịch đúng', async () => {
@@ -216,9 +224,55 @@ describe('workOrders.jobs (UC-D02)', () => {
     assert.equal(await generateMaintenanceWorkOrders(now), 2);
   });
 
-  it('job được đăng ký lúc 02:00 hằng ngày với tên WORK_ORDER_GENERATE', () => {
-    const job = JOBS.find((j) => j.name === 'WORK_ORDER_GENERATE');
-    assertMatch(job, { schedule: '0 2 * * *', handler: generateMaintenanceWorkOrders });
+  it('job tạo phiếu chạy 01:00, job cảnh báo chạy 07:00 hằng ngày', () => {
+    assertMatch(JOBS.find((j) => j.name === 'WORK_ORDER_GENERATE'), { schedule: '0 1 * * *', handler: generateMaintenanceWorkOrders });
+    assertMatch(JOBS.find((j) => j.name === 'EQUIPMENT_WARNING'), { schedule: '0 7 * * *', handler: warnEquipment });
+  });
+
+  it('UC07: phiếu lưu bản sao checklist lúc tạo; sửa mẫu sau đó không làm đổi phiếu', async () => {
+    await setup();
+    const checklist = [{ label: 'Áp lực', unit: 'bar', minValue: 2, maxValue: 6, required: true }, { label: 'Rò rỉ', unit: null, minValue: null, maxValue: null, required: false }];
+    const asset = await makeAsset({ checklist });
+    await generateMaintenanceWorkOrders();
+    await Asset.updateOne({ _id: asset._id }, { checklist: [{ label: 'Mục mới' }] });
+    const [wo] = await scheduledWos({ assetId: asset._id });
+    assert.deepEqual(wo.checklist, checklist);
+  });
+
+  it('BR-E03, MSG-E09: cả ngày không có ca kỹ thuật → báo Trưởng BQL xếp ca (liệt kê mã thiết bị); có ca thì không báo', async () => {
+    await setup({ noShift: true });
+    await makeAsset({ code: 'TM-X' });
+    await generateMaintenanceWorkOrders();
+    const alert = await Notification.findOne({ title: 'Phiếu bảo trì chưa có ca kỹ thuật' }).lean();
+    assert.ok(alert);
+    assert.match(alert.content, /TM-X/);
+    assert.equal(alert.link, '/app/duty-shifts');
+
+    await clearTestDB();
+    await setup(); // có ca
+    await makeAsset();
+    await generateMaintenanceWorkOrders();
+    assert.equal(await Notification.countDocuments({ title: 'Phiếu bảo trì chưa có ca kỹ thuật' }), 0);
+  });
+
+  it('BR-E07, MSG-E08: cảnh báo phiếu quá hạn và thiết bị đang theo dõi hết bảo hành trong 30 ngày; không có gì thì không gửi', async () => {
+    await setup();
+    assert.equal(await warnEquipment(), 0);
+    assert.equal(await Notification.countDocuments({ title: 'Cảnh báo bảo trì thiết bị' }), 0);
+
+    const late = await makeAsset({ nextMaintenanceDate: new Date(Date.now() + 90 * DAY_MS) });
+    await WorkOrder.create({ assetId: late._id, type: 'SCHEDULED', status: 'PENDING', scheduledDate: new Date(startOfVnDay().getTime() - 2 * DAY_MS) });
+    await WorkOrder.create({ assetId: late._id, type: 'SCHEDULED', status: 'DONE', scheduledDate: new Date(startOfVnDay().getTime() - 40 * DAY_MS), completedAt: new Date() });
+    const soon = (days, extra = {}) => makeAsset({ nextMaintenanceDate: new Date(Date.now() + 90 * DAY_MS), warrantyEnd: new Date(startOfVnDay().getTime() + days * DAY_MS), ...extra });
+    await soon(10);
+    await soon(30);
+    await soon(31); // ngoài 30 ngày
+    await soon(-1); // đã hết bảo hành
+    await soon(5, { isActive: false }); // đã ngừng theo dõi
+
+    assert.equal(await warnEquipment(), 3);
+    const note = await Notification.findOne({ title: 'Cảnh báo bảo trì thiết bị' }).lean();
+    assert.equal(note.content, '1 phiếu bảo trì quá hạn; 2 thiết bị hết bảo hành trong 30 ngày tới.');
   });
 
   describe('POST /api/work-orders/jobs/generate/run — chạy thủ công', () => {

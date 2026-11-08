@@ -5,7 +5,6 @@ import {
   Button,
   Select,
   DatePicker,
-  Switch,
   Modal,
   Form,
   Input,
@@ -16,18 +15,17 @@ import {
   Col,
   Descriptions,
   Upload,
-  Radio,
   App,
-  Tooltip,
 } from 'antd';
 import PhoneAccountNotice from '../../components/PhoneAccountNotice';
 import { usePhoneAccount } from '../../hooks/usePhoneAccount';
 import { PHONE_RULES } from '../../utils/phone';
+import { useImageCheck } from '../../hooks/useImageCheck';
+import { IMAGE_ACCEPT, IMAGE_HINT } from '../../utils/imageUpload';
 import {
   PlusOutlined,
   ReloadOutlined,
   EyeOutlined,
-  CalendarOutlined,
   StopOutlined,
   UploadOutlined,
   DownloadOutlined,
@@ -35,8 +33,8 @@ import {
 import dayjs from 'dayjs';
 import PageHeader from '../../components/PageHeader';
 import EnumTag from '../../components/EnumTag';
-import { CONTRACT_TYPES, CONTRACT_STATUS } from '../../constants/enums';
-import { formatDate } from '../../utils/format';
+import { CONTRACT_STATUS, OWNERSHIP_DOCUMENT_TYPES } from '../../constants/enums';
+import { formatDate, formatDateTime } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi, useAction } from '../../hooks/useApi';
 import { contractsApi, buildingsApi } from '../../api/moduleA.api';
@@ -45,7 +43,7 @@ import ApartmentSelect from '../../components/ApartmentSelect';
 // SĐT nhập trước để biết có tài khoản chưa; tài khoản có sẵn không nhận họ tên, email, ngày sinh mới (BR-X5)
 function PartyFields({ prefix, title, check, namePlaceholder, emailPlaceholder, phonePlaceholder, idPlaceholder }) {
   return (
-    <Card size="small" title={title} className="mb-4 bg-gray-50/50 dark:bg-gray-800">
+    <Card size="small" title={title} className="mb-4 bg-surface-alt border-line-strong dark:bg-[#27272A]">
       <Row gutter={16}>
         <Col span={12}>
           <Form.Item name={`${prefix}Phone`} label="Số điện thoại" rules={PHONE_RULES}>
@@ -95,7 +93,7 @@ function PartyFields({ prefix, title, check, namePlaceholder, emailPlaceholder, 
 export default function ContractsPage() {
   const { hasRole } = useAuth();
   const { message } = App.useApp();
-  const isReceptionist = hasRole('STAFF:RECEPTIONIST');
+  const checkPhoto = useImageCheck();
   const isManager = hasRole('MANAGER');
 
   // Filters state
@@ -103,14 +101,20 @@ export default function ContractsPage() {
     page: 1,
     limit: 10,
     buildingId: undefined,
-    apartmentId: undefined,
-    type: undefined,
+    floor: undefined,
+    type: 'SALE',
     status: undefined,
-    endingWithinDays: undefined,
   });
 
   // Load buildings for filter & form
   const { data: buildings = [] } = useApi(buildingsApi.list, []);
+  const selectedBuilding = buildings.find((building) => building._id === filters.buildingId);
+  const floorCount = selectedBuilding?.totalFloors ?? Math.max(0, ...buildings.map((building) => building.totalFloors ?? 0));
+  const floorOptions = Array.from({ length: floorCount }, (_, index) => ({
+    value: index + 1, label: `Tầng ${index + 1}`,
+  }));
+  const showingLegacy = filters.type === 'LEASE';
+  const pageTitle = showingLegacy ? 'Hồ sơ thuê cũ' : 'Hồ sơ sở hữu căn hộ';
 
   // Load contracts list
   const {
@@ -124,12 +128,9 @@ export default function ContractsPage() {
         page: filters.page,
         limit: filters.limit,
         ...(filters.buildingId ? { buildingId: filters.buildingId } : {}),
-        ...(filters.apartmentId ? { apartmentId: filters.apartmentId } : {}),
-        ...(filters.type ? { type: filters.type } : {}),
+        floor: filters.floor,
+        type: filters.type,
         ...(filters.status ? { status: filters.status } : {}),
-        ...(filters.endingWithinDays !== undefined
-          ? { endingWithinDays: filters.endingWithinDays }
-          : {}),
       }),
     [filters],
   );
@@ -137,16 +138,8 @@ export default function ContractsPage() {
   // Modal Create state
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createForm] = Form.useForm();
-  const selectedType = Form.useWatch('type', createForm);
-  const partyPrefix = selectedType === CONTRACT_TYPES.LEASE ? 'tenant' : 'owner';
-  const check = usePhoneAccount(Form.useWatch(`${partyPrefix}Phone`, createForm));
+  const check = usePhoneAccount(Form.useWatch('ownerPhone', createForm));
   const [contractFileList, setContractFileList] = useState([]);
-
-  // Modal Extend/Update state
-  const [extendModalOpen, setExtendModalOpen] = useState(false);
-  const [extendingContract, setExtendingContract] = useState(null);
-  const [extendForm] = Form.useForm();
-  const [extendFileList, setExtendFileList] = useState([]);
 
   // Modal Detail state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -157,29 +150,12 @@ export default function ContractsPage() {
   const [createContract, creating] = useAction(
     async (formData) => contractsApi.create(formData),
     {
-      success: (res) => {
-        return res?.data?.activationInviteSent === false
-          ? 'Đã tạo hợp đồng. Chưa gửi được email mời (hoặc cư dân không có email): cấp mã tại menu Cấp mã kích hoạt để cư dân kích hoạt.'
-          : 'Tạo hợp đồng thành công';
-      },
+      success: 'Đã ghi nhận chủ sở hữu. Bạn có thể cấp tài khoản tại Chi tiết căn hộ.',
       onDone: () => {
         setCreateModalOpen(false);
         createForm.resetFields();
         check.reset();
         setContractFileList([]);
-        reloadContracts();
-      },
-    },
-  );
-
-  const [updateContract, updating] = useAction(
-    async ({ id, formData }) => contractsApi.update(id, formData),
-    {
-      success: 'Cập nhật hợp đồng thành công',
-      onDone: () => {
-        setExtendModalOpen(false);
-        extendForm.resetFields();
-        setExtendFileList([]);
         reloadContracts();
       },
     },
@@ -198,9 +174,7 @@ export default function ContractsPage() {
     createForm.resetFields();
     check.reset();
     createForm.setFieldsValue({
-      type: CONTRACT_TYPES.SALE,
       startDate: dayjs(),
-      tenantPaysFees: false,
     });
     setContractFileList([]);
     setCreateModalOpen(true);
@@ -211,27 +185,24 @@ export default function ContractsPage() {
       const values = await createForm.validateFields();
       const formData = new FormData();
       formData.append('apartmentId', values.apartmentId);
-      formData.append('type', values.type);
+      formData.append('type', 'SALE');
       formData.append('startDate', values.startDate.format('YYYY-MM-DD'));
-      if (values.endDate) {
-        formData.append('endDate', values.endDate.format('YYYY-MM-DD'));
-      }
-      formData.append('tenantPaysFees', String(Boolean(values.tenantPaysFees)));
-
+      formData.append('ownershipDocumentType', values.ownershipDocumentType);
+      formData.append('ownershipDocumentNumber', values.ownershipDocumentNumber);
       if (check.blockReason) return;
-      const dob = values[`${partyPrefix}Dob`];
+      const dob = values.ownerDob;
       const partyData = {
-        phone: values[`${partyPrefix}Phone`],
-        idNumber: values[`${partyPrefix}IdNumber`] || '',
+        phone: values.ownerPhone,
+        idNumber: values.ownerIdNumber || '',
         ...(check.isExisting
           ? { userId: check.userId }
           : {
-              fullName: values[`${partyPrefix}FullName`],
-              email: values[`${partyPrefix}Email`],
-              dateOfBirth: dob ? dob.format('YYYY-MM-DD') : null,
-            }),
+            fullName: values.ownerFullName,
+            email: values.ownerEmail,
+            dateOfBirth: dob ? dob.format('YYYY-MM-DD') : null,
+          }),
       };
-      formData.append(partyPrefix, JSON.stringify(partyData));
+      formData.append('owner', JSON.stringify(partyData));
 
       if (contractFileList[0]?.originFileObj) {
         formData.append('file', contractFileList[0].originFileObj);
@@ -244,38 +215,9 @@ export default function ContractsPage() {
     }
   };
 
-  const handleOpenExtendModal = (record) => {
-    setExtendingContract(record);
-    extendForm.setFieldsValue({
-      endDate: record.endDate ? dayjs(record.endDate) : null,
-      tenantPaysFees: record.tenantPaysFees ?? false,
-    });
-    setExtendFileList([]);
-    setExtendModalOpen(true);
-  };
-
-  const handleSaveExtend = async () => {
-    try {
-      const values = await extendForm.validateFields();
-      const formData = new FormData();
-      if (values.endDate) {
-        formData.append('endDate', values.endDate.format('YYYY-MM-DD'));
-      }
-      if (extendingContract.type === 'LEASE') {
-        formData.append('tenantPaysFees', String(Boolean(values.tenantPaysFees)));
-      }
-      if (extendFileList[0]?.originFileObj) {
-        formData.append('file', extendFileList[0].originFileObj);
-      }
-
-      await updateContract({ id: extendingContract._id, formData });
-    } catch {
-      // Form validation error
-    }
-  };
-
   const handleViewDetail = async (id) => {
     setLoadingDetail(true);
+    setSelectedContract(null);
     setDetailModalOpen(true);
     try {
       const res = await contractsApi.getById(id);
@@ -297,19 +239,18 @@ export default function ContractsPage() {
       width: 140,
       render: (apt) => (
         <div>
-          <span className="font-semibold text-blue-600 dark:text-blue-400">
+          <span className="font-semibold text-navy dark:text-blue-400">
             {apt?.code || '—'}
           </span>
-          <div className="text-xs text-gray-400">{apt?.buildingId?.name || ''}</div>
+          <div className="text-xs text-ink-3">{apt?.buildingId?.name || ''}</div>
         </div>
       ),
     },
     {
-      title: 'Loại',
-      dataIndex: 'type',
-      key: 'type',
-      width: 110,
-      render: (type) => <EnumTag map={CONTRACT_TYPES} value={type} />,
+      title: 'Tầng',
+      key: 'floor',
+      width: 80,
+      render: (_, record) => record.apartmentId?.floor ?? '—',
     },
     {
       title: 'Trạng thái',
@@ -326,13 +267,13 @@ export default function ContractsPage() {
         owner ? (
           <div>
             <div className="font-medium text-ink dark:text-gray-200">{owner.fullName}</div>
-            <div className="text-xs text-gray-400">{owner.email}</div>
+            <div className="text-xs text-ink-3">{owner.email}</div>
           </div>
         ) : (
           '—'
         ),
     },
-    {
+    ...(showingLegacy ? [{
       title: 'Người thuê',
       dataIndex: 'tenantId',
       key: 'tenantId',
@@ -340,13 +281,12 @@ export default function ContractsPage() {
         tenant ? (
           <div>
             <div className="font-medium text-ink dark:text-gray-200">{tenant.fullName}</div>
-            <div className="text-xs text-gray-400">{tenant.email}</div>
+            <div className="text-xs text-ink-3">{tenant.email}</div>
           </div>
         ) : (
-          <span className="text-gray-400 italic">Không có</span>
+          <span className="text-ink-3 italic">Không có</span>
         ),
-    },
-    {
+    }, {
       title: 'Thời hạn',
       key: 'period',
       width: 190,
@@ -356,20 +296,32 @@ export default function ContractsPage() {
           <div>Đến: {record.endDate ? formatDate(record.endDate) : 'Vô thời hạn'}</div>
         </div>
       ),
-    },
-    {
+    }, {
       title: 'Người trả phí',
       key: 'payer',
       width: 130,
       render: (_, record) =>
-        record.type === 'SALE' ? (
-          <Tag color="blue">Chủ sở hữu</Tag>
-        ) : record.tenantPaysFees ? (
+        record.tenantPaysFees ? (
           <Tag color="orange">Người thuê</Tag>
         ) : (
           <Tag color="blue">Chủ sở hữu</Tag>
         ),
-    },
+    }] : [{
+      title: 'Giấy tờ đối chiếu',
+      key: 'ownershipDocument',
+      render: (_, record) => (
+        <div>
+          <div>{OWNERSHIP_DOCUMENT_TYPES[record.ownershipDocumentType]?.label || 'Chưa ghi nhận'}</div>
+          {record.ownershipDocumentNumber && <div className="text-xs text-ink-3">{record.ownershipDocumentNumber}</div>}
+        </div>
+      ),
+    }, {
+      title: 'Ngày hiệu lực',
+      dataIndex: 'startDate',
+      key: 'startDate',
+      width: 145,
+      render: formatDate,
+    }]),
     {
       title: 'Thao tác',
       key: 'action',
@@ -384,30 +336,14 @@ export default function ContractsPage() {
           >
             Xem
           </Button>
-          {isReceptionist && record.status === 'ACTIVE' && record.type === 'LEASE' && (
-            <Tooltip title="Gia hạn thời hạn hợp đồng">
-              <Button
-                size="small"
-                type="text"
-                icon={<CalendarOutlined />}
-                onClick={() => handleOpenExtendModal(record)}
-              >
-                Gia hạn
-              </Button>
-            </Tooltip>
-          )}
-          {isManager && record.status === 'ACTIVE' && (
+          {isManager && record.status === 'ACTIVE' && record.type === 'SALE' && (
             <Popconfirm
-              title="Chấm dứt hợp đồng"
-              description={
-                record.type === 'SALE'
-                  ? 'Chấm dứt hợp đồng mua bán sẽ gỡ toàn bộ cư dân và đưa căn hộ về trạng thái Trống. Tiếp tục?'
-                  : 'Chấm dứt hợp đồng thuê sẽ gỡ người thuê và đưa căn hộ về trạng thái Đã sở hữu. Tiếp tục?'
-              }
+              title="Chấm dứt hợp đồng mua bán"
+              description="Chấm dứt hợp đồng mua bán sẽ kết thúc cư trú của các thành viên. Tiếp tục?"
               okText="Chấm dứt"
               cancelText="Hủy"
               okButtonProps={{ danger: true }}
-              onConfirm={() => terminateContract(record._id).catch(() => {})}
+              onConfirm={() => terminateContract(record._id).catch(() => { })}
             >
               <Button size="small" type="text" danger icon={<StopOutlined />}>
                 Chấm dứt
@@ -422,17 +358,22 @@ export default function ContractsPage() {
   return (
     <div>
       <PageHeader
-        title="Quản lý hợp đồng"
-        subtitle="Quản lý hợp đồng mua bán (SALE) và hợp đồng cho thuê (LEASE) của cư dân"
-        breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Hợp đồng' }]}
+        title={pageTitle}
+        subtitle={showingLegacy ? 'Tra cứu hồ sơ thuê đã ghi nhận trước đây' : 'Ghi nhận và tra cứu thông tin người đứng tên căn hộ'}
+        breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: pageTitle }]}
         extra={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={reloadContracts}>
               Làm mới
             </Button>
-            {isReceptionist && (
+            <Button onClick={() => setFilters((previous) => ({
+              ...previous, page: 1, type: showingLegacy ? 'SALE' : 'LEASE',
+            }))}>
+              {showingLegacy ? 'Về hồ sơ sở hữu' : 'Tra cứu hồ sơ thuê cũ'}
+            </Button>
+            {isManager && !showingLegacy && (
               <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreateModal}>
-                Tạo hợp đồng
+                Ghi nhận chủ sở hữu
               </Button>
             )}
           </Space>
@@ -441,14 +382,14 @@ export default function ContractsPage() {
 
       <Card bordered={false} className="shadow-sm">
         {/* Bộ lọc */}
-        <div className="flex flex-wrap gap-3 items-center mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+        <div className="flex flex-wrap gap-3 items-center mb-4 p-3 bg-surface-alt border border-line rounded-lg dark:bg-[#27272A] dark:border-[#2E2E33]">
           <Select
             placeholder="Tòa nhà"
             allowClear
             style={{ width: 160 }}
             value={filters.buildingId}
             onChange={(val) =>
-              setFilters((prev) => ({ ...prev, page: 1, buildingId: val, apartmentId: undefined }))
+              setFilters((prev) => ({ ...prev, page: 1, buildingId: val, floor: undefined }))
             }
           >
             {buildings.map((b) => (
@@ -458,24 +399,15 @@ export default function ContractsPage() {
             ))}
           </Select>
 
-          <ApartmentSelect
-            placeholder="Căn hộ"
+          <Select
+            aria-label="Lọc theo tầng"
+            placeholder="Tất cả tầng"
             allowClear
             style={{ width: 160 }}
-            value={filters.apartmentId}
-            onChange={(val) => setFilters((prev) => ({ ...prev, page: 1, apartmentId: val }))}
+            options={floorOptions}
+            value={filters.floor}
+            onChange={(floor) => setFilters((previous) => ({ ...previous, page: 1, floor }))}
           />
-
-          <Select
-            placeholder="Loại hợp đồng"
-            allowClear
-            style={{ width: 150 }}
-            value={filters.type}
-            onChange={(val) => setFilters((prev) => ({ ...prev, page: 1, type: val }))}
-          >
-            <Select.Option value={CONTRACT_TYPES.SALE}>Mua bán (SALE)</Select.Option>
-            <Select.Option value={CONTRACT_TYPES.LEASE}>Cho thuê (LEASE)</Select.Option>
-          </Select>
 
           <Select
             placeholder="Trạng thái"
@@ -491,28 +423,15 @@ export default function ContractsPage() {
             ))}
           </Select>
 
-          <Select
-            placeholder="Hạn hợp đồng"
-            allowClear
-            style={{ width: 160 }}
-            value={filters.endingWithinDays}
-            onChange={(val) => setFilters((prev) => ({ ...prev, page: 1, endingWithinDays: val }))}
-          >
-            <Select.Option value={30}>Hết hạn trong 30 ngày</Select.Option>
-            <Select.Option value={60}>Hết hạn trong 60 ngày</Select.Option>
-            <Select.Option value={90}>Hết hạn trong 90 ngày</Select.Option>
-          </Select>
-
           <Button
             onClick={() =>
               setFilters({
                 page: 1,
                 limit: 10,
                 buildingId: undefined,
-                apartmentId: undefined,
-                type: undefined,
+                floor: undefined,
+                type: filters.type,
                 status: undefined,
-                endingWithinDays: undefined,
               })
             }
           >
@@ -529,21 +448,20 @@ export default function ContractsPage() {
             current: pagination?.page || 1,
             pageSize: pagination?.limit || 10,
             total: pagination?.total || 0,
-            showTotal: (total) => `Tổng cộng ${total} hợp đồng`,
+            showTotal: (total) => `Tổng cộng ${total} hồ sơ`,
             onChange: (page, limit) => setFilters((prev) => ({ ...prev, page, limit })),
           }}
         />
       </Card>
 
-      {/* Modal Tạo Hợp đồng */}
       <Modal
-        title="Tạo mới hợp đồng"
+        title="Ghi nhận chủ sở hữu"
         open={createModalOpen}
         onCancel={() => setCreateModalOpen(false)}
         onOk={handleSaveCreate}
         okButtonProps={{ disabled: Boolean(check.blockReason) }}
         confirmLoading={creating}
-        width={680}
+        width="min(680px, 94vw)"
         destroyOnClose
       >
         <Form form={createForm} layout="vertical" className="mt-4">
@@ -563,83 +481,50 @@ export default function ContractsPage() {
 
             <Col span={12}>
               <Form.Item
-                name="type"
-                label="Loại hợp đồng"
-                rules={[{ required: true, message: 'Vui lòng chọn loại hợp đồng' }]}
-              >
-                <Radio.Group buttonStyle="solid">
-                  <Radio.Button value={CONTRACT_TYPES.SALE}>Mua bán (SALE)</Radio.Button>
-                  <Radio.Button value={CONTRACT_TYPES.LEASE}>Cho thuê (LEASE)</Radio.Button>
-                </Radio.Group>
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
                 name="startDate"
-                label="Ngày bắt đầu"
-                rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu' }]}
+                label="Ngày hiệu lực"
+                rules={[{ required: true, message: 'Vui lòng chọn ngày hiệu lực' }]}
               >
                 <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
               </Form.Item>
             </Col>
-
-            {selectedType === CONTRACT_TYPES.LEASE && (
-              <Col span={12}>
-                <Form.Item
-                  name="endDate"
-                  label="Ngày kết thúc"
-                  rules={[{ required: true, message: 'Vui lòng chọn ngày kết thúc' }]}
-                >
-                  <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-                </Form.Item>
-              </Col>
-            )}
           </Row>
 
-          {selectedType === CONTRACT_TYPES.LEASE && (
-            <Form.Item
-              name="tenantPaysFees"
-              label="Bên chịu phí dịch vụ"
-              valuePropName="checked"
-            >
-              <Switch
-                checkedChildren="Người thuê chịu phí"
-                unCheckedChildren="Chủ sở hữu chịu phí"
-              />
-            </Form.Item>
-          )}
+          <PartyFields
+            prefix="owner"
+            title="Thông tin Chủ sở hữu"
+            check={check}
+            namePlaceholder="Vd: Nguyễn Văn A"
+            emailPlaceholder="Vd: nva@gmail.com"
+            phonePlaceholder="0912345678"
+            idPlaceholder="001200000001"
+          />
 
-          {selectedType === CONTRACT_TYPES.SALE && (
-            <PartyFields
-              prefix="owner"
-              title="Thông tin Chủ sở hữu"
-              check={check}
-              namePlaceholder="Vd: Nguyễn Văn A"
-              emailPlaceholder="Vd: nva@gmail.com"
-              phonePlaceholder="0912345678"
-              idPlaceholder="001200000001"
-            />
-          )}
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="ownershipDocumentType"
+                label="Giấy tờ đối chiếu"
+                rules={[{ required: true, message: 'Vui lòng chọn giấy tờ đã đối chiếu' }]}
+              >
+                <Select options={Object.entries(OWNERSHIP_DOCUMENT_TYPES).map(([value, item]) => ({ value, label: item.label }))} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="ownershipDocumentNumber"
+                label="Số tham chiếu giấy tờ"
+                rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập số tham chiếu' }]}
+              >
+                <Input maxLength={100} />
+              </Form.Item>
+            </Col>
+          </Row>
 
-          {selectedType === CONTRACT_TYPES.LEASE && (
-            <PartyFields
-              prefix="tenant"
-              title="Thông tin Người thuê"
-              check={check}
-              namePlaceholder="Vd: Trần Thị B"
-              emailPlaceholder="Vd: ttb@gmail.com"
-              phonePlaceholder="0987654321"
-              idPlaceholder="001200000002"
-            />
-          )}
-
-          <Form.Item label="File đính kèm (hợp đồng có chữ ký / công chứng, jpg/png ≤ 5MB)">
+          <Form.Item label="Ảnh giấy tờ đính kèm (không bắt buộc)" extra={IMAGE_HINT}>
             <Upload
-              accept="image/png,image/jpeg"
-              beforeUpload={() => false}
+              accept={IMAGE_ACCEPT}
+              beforeUpload={checkPhoto}
               fileList={contractFileList}
               onChange={({ fileList }) => setContractFileList(fileList.slice(-1))}
               maxCount={1}
@@ -650,54 +535,8 @@ export default function ContractsPage() {
         </Form>
       </Modal>
 
-      {/* Modal Gia hạn Hợp đồng */}
       <Modal
-        title={`Gia hạn hợp đồng ${extendingContract?.apartmentId?.code || ''}`}
-        open={extendModalOpen}
-        onCancel={() => setExtendModalOpen(false)}
-        onOk={handleSaveExtend}
-        confirmLoading={updating}
-        destroyOnClose
-      >
-        <Form form={extendForm} layout="vertical" className="mt-4">
-          <Form.Item
-            name="endDate"
-            label="Ngày kết thúc mới"
-            rules={[{ required: true, message: 'Vui lòng chọn ngày kết thúc' }]}
-          >
-            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-          </Form.Item>
-
-          {extendingContract?.type === 'LEASE' && (
-            <Form.Item
-              name="tenantPaysFees"
-              label="Bên chịu phí dịch vụ"
-              valuePropName="checked"
-            >
-              <Switch
-                checkedChildren="Người thuê chịu phí"
-                unCheckedChildren="Chủ sở hữu chịu phí"
-              />
-            </Form.Item>
-          )}
-
-          <Form.Item label="Cập nhật file đính kèm mới (nếu có, jpg/png ≤ 5MB)">
-            <Upload
-              accept="image/png,image/jpeg"
-              beforeUpload={() => false}
-              fileList={extendFileList}
-              onChange={({ fileList }) => setExtendFileList(fileList.slice(-1))}
-              maxCount={1}
-            >
-              <Button icon={<UploadOutlined />}>Chọn file mới</Button>
-            </Upload>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Modal Chi tiết Hợp đồng */}
-      <Modal
-        title="Chi tiết hợp đồng"
+        title={selectedContract?.type === 'LEASE' ? 'Chi tiết hồ sơ thuê cũ' : 'Chi tiết hồ sơ sở hữu căn hộ'}
         open={detailModalOpen}
         onCancel={() => setDetailModalOpen(false)}
         footer={[
@@ -705,31 +544,48 @@ export default function ContractsPage() {
             Đóng
           </Button>,
         ]}
-        width={680}
+        width="min(680px, 94vw)"
       >
         {selectedContract ? (
           <div>
             <Descriptions bordered column={2} size="small" className="mb-4">
               <Descriptions.Item label="Mã căn hộ">
-                <span className="font-bold text-blue-600">
+                <span className="font-semibold text-navy">
                   {selectedContract.apartmentId?.code}
                 </span>
               </Descriptions.Item>
               <Descriptions.Item label="Tòa nhà">
                 {selectedContract.apartmentId?.buildingId?.name || '—'}
               </Descriptions.Item>
-              <Descriptions.Item label="Loại hợp đồng">
-                <EnumTag map={CONTRACT_TYPES} value={selectedContract.type} />
+              <Descriptions.Item label="Tầng">
+                {selectedContract.apartmentId?.floor ?? '—'}
               </Descriptions.Item>
               <Descriptions.Item label="Trạng thái">
                 <EnumTag map={CONTRACT_STATUS} value={selectedContract.status} />
               </Descriptions.Item>
-              <Descriptions.Item label="Ngày bắt đầu">
+              <Descriptions.Item label={selectedContract.type === 'LEASE' ? 'Ngày bắt đầu' : 'Ngày hiệu lực'}>
                 {formatDate(selectedContract.startDate)}
               </Descriptions.Item>
-              <Descriptions.Item label="Ngày kết thúc">
-                {selectedContract.endDate ? formatDate(selectedContract.endDate) : 'Vô thời hạn'}
-              </Descriptions.Item>
+              {selectedContract.type === 'LEASE' ? (
+                <Descriptions.Item label="Ngày kết thúc">
+                  {selectedContract.endDate ? formatDate(selectedContract.endDate) : 'Vô thời hạn'}
+                </Descriptions.Item>
+              ) : (
+                <>
+                  <Descriptions.Item label="Giấy tờ đối chiếu">
+                    {OWNERSHIP_DOCUMENT_TYPES[selectedContract.ownershipDocumentType]?.label || 'Chưa ghi nhận'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Số tham chiếu giấy tờ">
+                    {selectedContract.ownershipDocumentNumber || '—'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Người ghi nhận">
+                    {selectedContract.createdBy?.fullName || '—'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Thời điểm ghi nhận">
+                    {formatDateTime(selectedContract.createdAt)}
+                  </Descriptions.Item>
+                </>
+              )}
               {selectedContract.terminatedAt && (
                 <Descriptions.Item label="Ngày chấm dứt" span={2}>
                   <Tag color="red">{formatDate(selectedContract.terminatedAt)}</Tag>
@@ -747,26 +603,26 @@ export default function ContractsPage() {
             </Descriptions>
 
             <Row gutter={16} className="mb-4">
-              <Col span={12}>
-                <Card size="small" title="Chủ sở hữu" className="bg-gray-50 dark:bg-gray-800">
+              <Col span={selectedContract.type === 'LEASE' ? 12 : 24}>
+                <Card size="small" title="Chủ sở hữu" className="bg-surface-alt border-line-strong dark:bg-[#27272A]">
                   <div className="font-medium">{selectedContract.ownerId?.fullName}</div>
-                  <div className="text-xs text-gray-500">Email: {selectedContract.ownerId?.email}</div>
-                  <div className="text-xs text-gray-500">SĐT: {selectedContract.ownerId?.phone || '—'}</div>
+                  <div className="text-xs text-ink-3">Email: {selectedContract.ownerId?.email}</div>
+                  <div className="text-xs text-ink-3">SĐT: {selectedContract.ownerId?.phone || '—'}</div>
                 </Card>
               </Col>
-              <Col span={12}>
-                <Card size="small" title="Người thuê" className="bg-gray-50 dark:bg-gray-800">
+              {selectedContract.type === 'LEASE' && <Col span={12}>
+                <Card size="small" title="Người thuê" className="bg-surface-alt border-line-strong dark:bg-[#27272A]">
                   {selectedContract.tenantId ? (
                     <div>
                       <div className="font-medium">{selectedContract.tenantId?.fullName}</div>
-                      <div className="text-xs text-gray-500">Email: {selectedContract.tenantId?.email}</div>
-                      <div className="text-xs text-gray-500">SĐT: {selectedContract.tenantId?.phone || '—'}</div>
+                      <div className="text-xs text-ink-3">Email: {selectedContract.tenantId?.email}</div>
+                      <div className="text-xs text-ink-3">SĐT: {selectedContract.tenantId?.phone || '—'}</div>
                     </div>
                   ) : (
-                    <span className="text-gray-400 italic">Không có người thuê</span>
+                    <span className="text-ink-3 italic">Không có người thuê</span>
                   )}
                 </Card>
-              </Col>
+              </Col>}
             </Row>
 
             {selectedContract.fileUrl && (

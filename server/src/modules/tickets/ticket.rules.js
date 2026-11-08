@@ -2,6 +2,7 @@
 // Máy trạng thái sự cố: Mới → Đã nhận → (Chờ cư dân đồng ý phí) → Đang xử lý ⇄ Chờ linh kiện → Đã xong (chờ nghiệm thu)
 // → Đã nghiệm thu. Phản ánh không vào hàng chờ Kỹ thuật mà chuyển sang màn hình xử lý của Trưởng BQL.
 import {
+  PRIORITIES,
   TICKET_FINAL_STATUSES,
   TICKET_OPEN_STATUSES,
   TICKET_SCOPES,
@@ -9,7 +10,7 @@ import {
   TICKET_STATUS,
   TICKET_TYPES,
 } from '../../constants/enums.js';
-import { HOUR_MS, MINUTE_MS } from '../../utils/time.js';
+import { DAY_MS, HOUR_MS, MINUTE_MS, VN_OFFSET_MS } from '../../utils/time.js';
 
 const { NEW, ASSIGNED, WAITING_QUOTE_APPROVAL, IN_PROGRESS, WAITING_PARTS, WAITING_CONFIRM } = TICKET_STATUS;
 
@@ -18,18 +19,63 @@ export const ROUTES = Object.freeze({ TECH_QUEUE: 'TECH_QUEUE', COMPLAINT_DESK: 
 export const routeOf = (type) => (type === TICKET_TYPES.COMPLAINT ? ROUTES.COMPLAINT_DESK : ROUTES.TECH_QUEUE);
 
 /**
- * Hạn SLA lúc tạo phiếu. Sự cố: hạn nhận phiếu (ackDueAt) + hạn hoàn thành; phản ánh: hạn phản hồi (responseDueAt)
- * + hạn hoàn thành. Hạn hoàn thành lấy slaHours của loại phản ánh (xem quy tắc SLA ở tickets.service).
+ * Hạn SLA lúc tạo phiếu. Sự cố: hạn nhận phiếu (ackDueAt, tính từ `ackFrom` — xem ackStartAt) + hạn hoàn thành;
+ * phản ánh: hạn phản hồi (responseDueAt) + hạn hoàn thành. Hạn hoàn thành lấy slaHours của loại phản ánh.
  */
-export function computeDeadlines({ type, slaHours, ackMinutes, responseHours, now = new Date() }) {
+export function computeDeadlines({ type, slaHours, ackMinutes, responseHours, now = new Date(), ackFrom = now }) {
   const at = (ms) => new Date(now.getTime() + ms);
   const incident = type !== TICKET_TYPES.COMPLAINT;
   return {
     dueDate: at(slaHours * HOUR_MS),
-    ackDueAt: incident ? at(ackMinutes * MINUTE_MS) : null,
+    ackDueAt: incident ? new Date(ackFrom.getTime() + ackMinutes * MINUTE_MS) : null,
     responseDueAt: incident ? null : at(responseHours * HOUR_MS),
   };
 }
+
+// Giờ hành chính kỹ thuật (TECH_WORK_START / END / DAYS). Ngoài giờ (đêm, ngày nghỉ) chỉ sự cố Khẩn cấp / Cao báo
+// người trực ngay; sự cố thường chờ đầu giờ làm việc tiếp theo, hạn nhận phiếu tính từ lúc đó.
+export const URGENT_PRIORITIES = Object.freeze([PRIORITIES.URGENT, PRIORITIES.HIGH]);
+export const DEFAULT_WORK_HOURS = Object.freeze({ start: '07:00', end: '17:00', days: [1, 2, 3, 4, 5] });
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const minutesOf = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
+
+/** Tham số giờ hành chính bị sửa sai (giờ không phải HH:mm, bắt đầu ≥ kết thúc, ngày ngoài 1–7) → dùng mặc định */
+export function normalizeWorkHours({ start, end, days } = {}) {
+  const okTime = HHMM.test(start ?? '') && HHMM.test(end ?? '') && minutesOf(start) < minutesOf(end);
+  const okDays = Array.isArray(days) && days.length > 0 && days.every((d) => Number.isInteger(d) && d >= 1 && d <= 7);
+  return {
+    start: okTime ? start : DEFAULT_WORK_HOURS.start,
+    end: okTime ? end : DEFAULT_WORK_HOURS.end,
+    days: okDays ? days : DEFAULT_WORK_HOURS.days,
+  };
+}
+
+/** 00:00 giờ VN của ngày chứa `at` (dạng Date UTC) và thứ trong tuần (1 = Thứ 2 … 7 = Chủ nhật) */
+function vnDay(at) {
+  const shifted = new Date(new Date(at).getTime() + VN_OFFSET_MS);
+  const midnight = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()) - VN_OFFSET_MS;
+  return { midnight, weekday: shifted.getUTCDay() || 7, minutes: shifted.getUTCHours() * 60 + shifted.getUTCMinutes() };
+}
+
+/** Đang trong giờ hành chính kỹ thuật? Khung giờ nửa mở [start, end) theo giờ VN */
+export function isWorkingTime(at, wh = DEFAULT_WORK_HOURS) {
+  const { weekday, minutes } = vnDay(at);
+  return wh.days.includes(weekday) && minutes >= minutesOf(wh.start) && minutes < minutesOf(wh.end);
+}
+
+/** Thời điểm bắt đầu giờ làm việc gần nhất từ `at` trở đi (đang trong giờ thì chính `at`) */
+export function nextWorkingStart(at, wh = DEFAULT_WORK_HOURS) {
+  if (isWorkingTime(at, wh)) return new Date(at);
+  const { midnight } = vnDay(at);
+  for (let k = 0; k <= 7; k += 1) {
+    const candidate = midnight + k * DAY_MS + minutesOf(wh.start) * MINUTE_MS;
+    if (candidate > new Date(at).getTime() && wh.days.includes(vnDay(candidate).weekday)) return new Date(candidate);
+  }
+  return new Date(at);
+}
+
+/** Mốc bắt đầu tính hạn nhận phiếu: sự cố Khẩn cấp / Cao hoặc trong giờ → ngay; còn lại → đầu giờ làm việc tiếp theo */
+export const ackStartAt = (priority, now, wh) => (URGENT_PRIORITIES.includes(priority) ? new Date(now) : nextWorkingStart(now, wh));
 
 // M5-2 — SLA tạm dừng: Chờ cư dân đồng ý phí dừng không giới hạn; Chờ linh kiện dừng tối đa `partsMaxMs`
 // (TICKET_PARTS_PAUSE_HOURS) rồi chạy tiếp. Vào trạng thái dừng ghi slaPausedAt; rời đi thì dueDate cộng bù phần đã dừng.
@@ -121,6 +167,15 @@ export function progressError(ticket, to) {
   if (to === WAITING_QUOTE_APPROVAL && !inApartment) return 'Chỉ sự cố trong căn hộ mới cần báo giá cho cư dân';
   if (inApartment && to !== WAITING_QUOTE_APPROVAL && !quoteAccepted(ticket)) {
     return 'Sự cố trong căn hộ: cần gửi báo giá và chờ cư dân đồng ý phí trước khi xử lý';
+  }
+  return null;
+}
+
+/** Phản ánh do Trưởng BQL xử lý và đóng trực tiếp; không đi qua nghiệm thu kỹ thuật. */
+export function complaintResponseError(ticket, to) {
+  if (ticket.type !== TICKET_TYPES.COMPLAINT) return 'Chỉ dùng thao tác này cho phản ánh, khiếu nại';
+  if (![NEW, IN_PROGRESS].includes(ticket.status) || ![IN_PROGRESS, TICKET_STATUS.CLOSED].includes(to)) {
+    return `Không thể chuyển phản ánh từ ${ticket.status} sang ${to}`;
   }
   return null;
 }

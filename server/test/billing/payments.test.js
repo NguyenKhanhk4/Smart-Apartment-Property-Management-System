@@ -3,7 +3,7 @@ import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Invoice, Notification, PrepaidBalance, PrepaidTransaction } from '../../src/models/index.js';
 import { hasOverdueInvoice } from '../../src/modules/amenities/overdue.js';
-import { getApartmentDebt } from '../../src/modules/gatePasses/debtProvider.js';
+import { checkApartmentDebt } from '../../src/modules/debts/debts.check.js';
 import { publishInvoices, submitInvoices } from '../../src/modules/invoices/invoices.approval.js';
 import { markOverdueInvoices } from '../../src/modules/invoices/invoices.jobs.js';
 import { getReceipt, listPayments, recordOfflinePayment } from '../../src/modules/payments/payments.service.js';
@@ -139,7 +139,7 @@ test('biên lai: phân bổ, còn nợ, số dư; cư dân khác không xem đư
   assert.equal(list.totals.amount, 400_000);
 });
 
-test('trả một phần: cron quá hạn, chặn tiện ích, công nợ Gate Pass, báo cáo đều tính số còn nợ', async () => {
+test('trả một phần: cron quá hạn, chặn tiện ích, công nợ căn hộ, báo cáo đều tính số còn nợ', async () => {
   const { accountant, apartment, mk } = await setup();
   const inv = await mk('HD-10', '2026-10', 1_000_000);
   await pay(accountant, { invoiceId: inv._id, amount: 400_000 });
@@ -149,7 +149,7 @@ test('trả một phần: cron quá hạn, chặn tiện ích, công nợ Gate P
   assert.equal(await markOverdueInvoices(afterDue), 1);
   assert.equal((await Invoice.findById(inv._id).lean()).status, 'OVERDUE');
 
-  assert.equal((await getApartmentDebt(apartment._id)).amount, 600_000);
+  assert.equal((await checkApartmentDebt(apartment._id)).amount, 600_000);
 
   const rep = await billingSummary({ from: '2026-10', to: '2026-10' });
   assert.equal(rep.overview.billed, 1_000_000);

@@ -7,7 +7,7 @@ import { connectDB, disconnectDB } from '../src/config/db.js';
 import { env } from '../src/config/env.js';
 import * as M from '../src/models/index.js';
 import { ensureDefaultConfigs } from '../src/services/systemConfig.service.js';
-import { DAY_MS, HOUR_MS, periodEnd, periodRange, startOfVnDay, vnPeriod } from '../src/utils/time.js';
+import { DAY_MS, HOUR_MS, periodRange, startOfVnDay, vnPeriod } from '../src/utils/time.js';
 
 const RESET = process.argv.includes('--reset');
 const PASSWORD = 'Sapms@123';
@@ -127,36 +127,24 @@ const householdUsers = await M.User.insertMany([
   demoUser('con.cudan3@sapms.vn', 'Bé Cường', '0900000005'),
 ]);
 const rentedApartment = apartments[6];
-await M.Apartment.updateOne({ _id: rentedApartment._id }, { status: 'RENTED' });
+await M.Apartment.updateOne({ _id: rentedApartment._id }, {
+  status: 'RENTED', occupancyStatus: 'RENTED', handoverDate: daysAgo(900),
+});
 
-// Hợp đồng căn 7: SALE cho cusohuu7 + LEASE cho nguoithue7 (BR-A5: LEASE cần SALE ACTIVE)
-const leaseStartDate = daysAgo(120);
-const leaseEndDate = new Date(leaseStartDate.getFullYear() + 1, leaseStartDate.getMonth(), leaseStartDate.getDate(), leaseStartDate.getHours());
-const [rentedSaleContract, rentedLeaseContract] = await M.Contract.insertMany([
-  {
-    apartmentId: rentedApartment._id,
-    type: 'SALE',
-    ownerId: householdUsers[2]._id,
-    startDate: daysAgo(900),
-    createdBy: U.letan._id,
-  },
-  {
-    apartmentId: rentedApartment._id,
-    type: 'LEASE',
-    ownerId: householdUsers[2]._id,
-    tenantId: householdUsers[3]._id,
-    tenantPaysFees: true,
-    startDate: leaseStartDate,
-    endDate: leaseEndDate,
-    createdBy: U.letan._id,
-  },
-]);
+// Căn 7 có hợp đồng mua bán và lượt cư trú của khách thuê theo UC17.
+const rentedSaleContract = await M.Contract.create({
+  apartmentId: rentedApartment._id,
+  type: 'SALE',
+  ownerId: householdUsers[2]._id,
+  startDate: daysAgo(900),
+  createdBy: U.letan._id,
+});
 
 await M.Resident.insertMany([
   { userId: householdUsers[0]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[0]._id, moveInDate: daysAgo(380) },
   { userId: householdUsers[1]._id, apartmentId: apartments[0]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[0]._id, moveInDate: daysAgo(360) },
   { userId: householdUsers[2]._id, apartmentId: rentedApartment._id, relationType: 'OWNER', contractId: rentedSaleContract._id, moveInDate: daysAgo(900) },
-  { userId: householdUsers[3]._id, apartmentId: rentedApartment._id, relationType: 'TENANT', contractId: rentedLeaseContract._id, moveInDate: daysAgo(120) },
+  { userId: householdUsers[3]._id, apartmentId: rentedApartment._id, relationType: 'TENANT', tenantPaysFees: true, moveInDate: daysAgo(120) },
   { userId: householdUsers[4]._id, apartmentId: apartments[2]._id, relationType: 'FAMILY_MEMBER', contractId: contracts[2]._id, moveInDate: daysAgo(300) },
 ]);
 // Cư dân chờ kích hoạt để thử UC11: SĐT 0900000006, email chokichhoat@sapms.vn, mã căn lấy từ căn đầu tiên
@@ -361,19 +349,40 @@ await M.OperatingExpense.insertMany(
   ]),
 );
 
-// ===== Tài sản & work order =====
-const assets = await M.Asset.insertMany(
-  buildings.flatMap((b) => [
-    { buildingId: b._id, name: `Thang máy số 1 ${b.name}`, category: 'ELEVATOR', location: 'Sảnh chính', maintenanceCycleDays: 30, lastMaintenanceDate: daysAgo(26), nextMaintenanceDate: daysAgo(-4) },
-    { buildingId: b._id, name: `Thang máy số 2 ${b.name}`, category: 'ELEVATOR', location: 'Sảnh phụ', maintenanceCycleDays: 30, lastMaintenanceDate: daysAgo(31), nextMaintenanceDate: daysAgo(1) },
-    { buildingId: b._id, name: `Máy bơm nước ${b.name}`, category: 'PUMP', location: 'Tầng hầm', maintenanceCycleDays: 90, lastMaintenanceDate: daysAgo(40), nextMaintenanceDate: daysAgo(-50) },
-    { buildingId: b._id, name: `Hệ thống PCCC ${b.name}`, category: 'FIRE_SYSTEM', location: 'Toàn tòa', maintenanceCycleDays: 180, lastMaintenanceDate: daysAgo(175), nextMaintenanceDate: daysAgo(-5) },
-  ]),
-);
+// ===== Thiết bị & work order (UC07: mã, chu kỳ ngày / tháng / quý, mẫu checklist) =====
+const CHECKLISTS = {
+  ELEVATOR: [
+    { label: 'Phanh và cáp tải', required: true },
+    { label: 'Điện áp tủ điều khiển', unit: 'V', minValue: 370, maxValue: 400, required: true },
+    { label: 'Đèn và nút gọi trong cabin', required: false },
+  ],
+  PUMP: [
+    { label: 'Áp lực đầu đẩy', unit: 'bar', minValue: 2, maxValue: 6, required: true },
+    { label: 'Nhiệt độ động cơ', unit: '°C', minValue: 20, maxValue: 75, required: true },
+    { label: 'Rò rỉ phớt bơm', required: true },
+  ],
+  FIRE_SYSTEM: [
+    { label: 'Áp lực bình chữa cháy', unit: 'bar', minValue: 12, maxValue: 16, required: true },
+    { label: 'Đầu báo khói phản hồi', required: true },
+  ],
+};
+const assetSeeds = buildings.flatMap((b) => [
+  { code: `TM1-${b.code}`, name: `Thang máy số 1 ${b.name}`, category: 'ELEVATOR', location: 'Sảnh chính', cycleValue: 1, cycleUnit: 'MONTH', last: 26, next: -4, manufacturer: 'Mitsubishi', warrantyDays: 20 },
+  { code: `TM2-${b.code}`, name: `Thang máy số 2 ${b.name}`, category: 'ELEVATOR', location: 'Sảnh phụ', cycleValue: 1, cycleUnit: 'MONTH', last: 31, next: 1, manufacturer: 'Mitsubishi', warrantyDays: 400 },
+  { code: `BOM-${b.code}`, name: `Máy bơm nước ${b.name}`, category: 'PUMP', location: 'Tầng hầm', cycleValue: 1, cycleUnit: 'QUARTER', last: 40, next: -50, manufacturer: 'Ebara', warrantyDays: 200 },
+  { code: `PCCC-${b.code}`, name: `Hệ thống PCCC ${b.name}`, category: 'FIRE_SYSTEM', location: 'Toàn tòa', cycleValue: 180, cycleUnit: 'DAY', last: 175, next: -5, manufacturer: null, warrantyDays: null },
+].map((a) => ({
+  buildingId: b._id, code: a.code, name: a.name, category: a.category, location: a.location, cycleValue: a.cycleValue, cycleUnit: a.cycleUnit,
+  checklist: CHECKLISTS[a.category], manufacturer: a.manufacturer, installDate: daysAgo(900),
+  warrantyEnd: a.warrantyDays == null ? null : daysAgo(-a.warrantyDays), vendorName: 'Công ty Kỹ thuật Toàn Phát', vendorPhone: '0283 999 1234',
+  lastMaintenanceDate: daysAgo(a.last), nextMaintenanceDate: daysAgo(a.next),
+})));
+const assets = await M.Asset.insertMany(assetSeeds);
+const CYCLE_DAYS = { DAY: 1, MONTH: 30, QUARTER: 91 };
 const workOrders = [];
 for (const a of assets) {
   for (let k = 1; k <= 3; k += 1) {
-    const scheduledDate = daysAgo(a.maintenanceCycleDays * k);
+    const scheduledDate = daysAgo(a.cycleValue * CYCLE_DAYS[a.cycleUnit] * k);
     if (scheduledDate < yearStart) continue;
     const late = rand() < 0.2;
     workOrders.push({
@@ -382,7 +391,7 @@ for (const a of assets) {
     });
   }
 }
-workOrders.push({ assetId: assets[1]._id, type: 'SCHEDULED', title: `Bảo trì định kỳ ${assets[1].name}`, status: 'PENDING', scheduledDate: daysAgo(1), createdAt: daysAgo(1) });
+workOrders.push({ assetId: assets[1]._id, type: 'SCHEDULED', title: `Bảo trì định kỳ ${assets[1].name}`, status: 'PENDING', scheduledDate: daysAgo(1), createdAt: daysAgo(1), checklist: assets[1].checklist.map((i) => i.toObject()) });
 await M.WorkOrder.insertMany(workOrders);
 
 // ===== Danh mục phản ánh & ticket =====
@@ -461,16 +470,15 @@ for (const status of scenarios) {
 await M.Ticket.insertMany(tickets);
 
 // ===== Tiện ích & booking =====
-// 3 kiểu: FREE (chỉ hiển thị) · WALK_IN (gói tháng / vé lẻ, lễ tân tra mã) · BOOKING (đặt slot).
-// WALK_IN và BOOKING có giờ mở cửa nằm trong giờ lễ tân 05:00–22:00 (BR-O15). Giá theo nhóm tuổi: người lớn / trẻ em (BR-O24).
+// 2 kiểu: FREE (chỉ hiển thị) · BOOKING (đặt slot, giờ mở cửa nằm trong giờ lễ tân 05:00–22:00, BR-O15).
 const amenities = await M.Amenity.insertMany([
   { name: 'Công viên nội khu', accessMode: 'FREE', location: 'Trung tâm khu căn hộ', openTime: '05:00', closeTime: '22:00', description: 'Thảm cỏ, ghế đá và khu vui chơi ngoài trời cho cư dân.' },
   { name: 'Đường dạo bộ', accessMode: 'FREE', location: 'Vòng quanh khu căn hộ' },
-  { name: 'Phòng gym', accessMode: 'WALK_IN', location: 'Tầng 3 khối đế', openTime: '05:00', closeTime: '22:00', perVisitFeeAdult: 50000, perVisitFeeChild: 30000, monthlyPassFeeAdult: 400000, monthlyPassFeeChild: 250000 },
-  { name: 'Phòng yoga', accessMode: 'WALK_IN', location: 'Tầng 3 khối đế', openTime: '06:00', closeTime: '21:00', perVisitFeeAdult: 60000, perVisitFeeChild: 40000, monthlyPassFeeAdult: 500000, monthlyPassFeeChild: 300000 },
-  { name: 'Hồ bơi', accessMode: 'WALK_IN', location: 'Tầng 5 khối đế', openTime: '05:00', closeTime: '21:00', perVisitFeeAdult: 40000, perVisitFeeChild: 25000, maxConcurrent: 40, monthlyPassFeeAdult: 450000, monthlyPassFeeChild: 280000 },
-  { name: 'Sân tennis', accessMode: 'BOOKING', location: 'Sân sau', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 100000, monthlyPassFeeAdult: 600000, monthlyPassFeeChild: 350000 },
-  { name: 'Sân cầu lông', accessMode: 'BOOKING', location: 'Tầng 2 khối đế', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 60000, monthlyPassFeeAdult: 350000, monthlyPassFeeChild: 200000 },
+  { name: 'Phòng gym', accessMode: 'BOOKING', location: 'Tầng 3 khối đế', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 15, feePerBooking: 50000 },
+  { name: 'Phòng yoga', accessMode: 'BOOKING', location: 'Tầng 3 khối đế', openTime: '06:00', closeTime: '21:00', slotDurationMinutes: 60, capacityPerSlot: 10, feePerBooking: 60000 },
+  { name: 'Hồ bơi', accessMode: 'BOOKING', location: 'Tầng 5 khối đế', openTime: '05:00', closeTime: '21:00', slotDurationMinutes: 60, capacityPerSlot: 40, feePerBooking: 40000 },
+  { name: 'Sân tennis', accessMode: 'BOOKING', location: 'Sân sau', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 100000 },
+  { name: 'Sân cầu lông', accessMode: 'BOOKING', location: 'Tầng 2 khối đế', openTime: '05:00', closeTime: '22:00', slotDurationMinutes: 60, capacityPerSlot: 1, feePerBooking: 60000 },
   { name: 'Khu BBQ Block A', accessMode: 'BOOKING', location: 'Sân thượng Block A', buildingId: buildings[0]._id, openTime: '10:00', closeTime: '22:00', slotDurationMinutes: 180, capacityPerSlot: 1, feePerBooking: 150000 },
 ]);
 const bookable = amenities.filter((a) => a.accessMode === 'BOOKING'); // chỉ tiện ích BOOKING mới có booking
@@ -509,25 +517,6 @@ for (let i = 0; i < 160; i += 1) {
   });
 }
 await M.Booking.insertMany(bookings);
-
-// ===== Gói tháng tiện ích demo (UC-D09): chủ hộ cudan1 có gói gym tháng này, vợ có gói tháng sau, cudan2 có gói sân tennis =====
-const amenityByName = Object.fromEntries(amenities.map((a) => [a.name, a]));
-const thisMonth = vnPeriod(now);
-const nextMonth = vnPeriod(periodEnd(thisMonth));
-const mkPass = (user, apartment, amenity, month, purchasedBy = user) => ({
-  userId: user._id,
-  apartmentId: apartment._id,
-  amenityId: amenity._id,
-  month,
-  ageGroup: 'ADULT',
-  fee: amenity.monthlyPassFeeAdult,
-  purchasedBy: purchasedBy._id,
-});
-await M.AmenityPass.insertMany([
-  mkPass(residentUsers[0], apartments[0], amenityByName['Phòng gym'], thisMonth),
-  mkPass(householdUsers[0], apartments[0], amenityByName['Phòng gym'], nextMonth, residentUsers[0]),
-  mkPass(residentUsers[1], apartments[1], amenityByName['Sân tennis'], thisMonth),
-]);
 
 // ===== Sổ khách, bảng tin, thông báo =====
 await M.GuestLog.insertMany([

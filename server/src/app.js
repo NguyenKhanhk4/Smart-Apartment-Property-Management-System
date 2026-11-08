@@ -6,6 +6,7 @@ import { env } from './config/env.js';
 import { setupSwagger } from './config/swagger.js';
 import { notFound } from './middlewares/notFound.js';
 import { errorHandler } from './middlewares/errorHandler.js';
+import { requestContext } from './middlewares/requestContext.js';
 import apiRoutes from './routes.js';
 
 export function createApp() {
@@ -20,7 +21,7 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true }));
   if (!env.isTest) app.use(morgan(env.isDev ? 'dev' : 'combined'));
 
-  app.use('/api', apiRoutes);
+  app.use('/api', requestContext, apiRoutes);
   if (env.swaggerEnabled) setupSwagger(app); // production tắt mặc định (ENABLE_SWAGGER)
 
   app.use(notFound);

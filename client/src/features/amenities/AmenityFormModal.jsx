@@ -6,17 +6,15 @@ import { amenityApi } from '../../api/moduleD.api';
 import { AMENITY_ACCESS_MODES, enumOptions } from '../../constants/enums';
 import { useAction } from '../../hooks/useApi';
 import { formatMoney, moneyInputProps } from '../../utils/format';
+import { IMAGE_ACCEPT, IMAGE_HINT, checkImageFile } from '../../utils/imageUpload';
 
-const MAX_SIZE = 5 * 1024 * 1024;
 const toDayjs = (hhmm) => (hhmm ? dayjs().hour(Number(hhmm.slice(0, 2))).minute(Number(hhmm.slice(3))).second(0) : null);
 const toMinutes = (d) => d.hour() * 60 + d.minute();
-const blank = (v) => v === undefined || v === null || v === '';
 
 // Nhóm trường gửi lên theo kiểu; trường tùy chọn để trống gửi '' để server xóa giá trị (null)
 const MODE_BODY = {
   FREE: [],
-  WALK_IN: ['perVisitFeeAdult', 'perVisitFeeChild', 'maxConcurrent', 'monthlyPassFeeAdult', 'monthlyPassFeeChild'],
-  BOOKING: ['slotDurationMinutes', 'capacityPerSlot', 'feePerBooking', 'changeDeadlineHours', 'monthlyPassFeeAdult', 'monthlyPassFeeChild'],
+  BOOKING: ['slotDurationMinutes', 'capacityPerSlot', 'feePerBooking', 'changeDeadlineHours'],
 };
 
 function MoneyInput(props) {
@@ -34,14 +32,13 @@ function MoneyInput(props) {
   );
 }
 
-// UC-D05 — Thêm / sửa tiện ích theo kiểu. reception = { open, close } giờ lễ tân (BR-O15) để báo lỗi sớm;
-// childFreeAge / childAdultAge để ghi chú nhóm tuổi; server vẫn kiểm tra lại.
-export default function AmenityFormModal({ amenity, buildings, reception, ages, open, onClose, onDone }) {
+// UC-D05 — Thêm / sửa tiện ích theo kiểu. reception = { open, close } giờ lễ tân (BR-O15) để báo lỗi sớm; server vẫn kiểm tra lại.
+export default function AmenityFormModal({ amenity, buildings, reception, open, onClose, onDone }) {
   const { message } = App.useApp();
   const [form] = Form.useForm();
   const [image, setImage] = useState(null); // { file, preview } ảnh mới chọn
   const isEdit = Boolean(amenity?._id);
-  const initialMode = amenity?.accessMode ?? 'BOOKING';
+  const initialMode = AMENITY_ACCESS_MODES[amenity?.accessMode] ? amenity.accessMode : 'BOOKING';
   const mode = Form.useWatch('accessMode', form) ?? initialMode;
   const isFree = mode === 'FREE';
 
@@ -79,8 +76,9 @@ export default function AmenityFormModal({ amenity, buildings, reception, ages, 
     });
 
   const beforeUpload = (file) => {
-    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > MAX_SIZE) {
-      message.error('Chỉ nhận ảnh jpg/png tối đa 5MB.');
+    const error = checkImageFile(file); // UC63: mọi định dạng ảnh, tự chuyển JPEG và thu nhỏ khi gửi
+    if (error) {
+      message.error(error);
       return Upload.LIST_IGNORE;
     }
     setImage({ file, preview: URL.createObjectURL(file) });
@@ -89,7 +87,7 @@ export default function AmenityFormModal({ amenity, buildings, reception, ages, 
 
   // Giờ mở cửa:
   //   FREE — tùy chọn: để trống cả hai = không có giờ; nhập một phải nhập cả cặp
-  //   WALK_IN/BOOKING — bắt buộc + nằm trong giờ lễ tân (BR-O15)
+  //   BOOKING — bắt buộc + nằm trong giờ lễ tân (BR-O15)
   const openRules = [
     ({ getFieldValue }) => ({
       validator: (_, v) => {
@@ -131,24 +129,13 @@ export default function AmenityFormModal({ amenity, buildings, reception, ages, 
     }),
   ];
 
-  // Gói tháng: nhập đủ cả hai giá hoặc để trống cả hai (trống = không bán gói)
-  const passRule = (other, label) => ({ getFieldValue }) => ({
-    validator: (_, v) =>
-      blank(v) !== blank(getFieldValue(other)) && blank(v) ? Promise.reject(new Error(`Nhập thêm ${label} hoặc để trống cả hai`)) : Promise.resolve(),
-  });
-
-  const money = (name, label, extra, rules = [], dependencies) => (
-    <Form.Item name={name} label={label} style={{ flex: 1, minWidth: 180 }} extra={extra} rules={rules} dependencies={dependencies}>
+  const money = (name, label, extra, rules = []) => (
+    <Form.Item name={name} label={label} style={{ flex: 1, minWidth: 180 }} extra={extra} rules={rules}>
       <MoneyInput />
     </Form.Item>
   );
 
-  // Tiện ích không phải WALK_IN: bỏ giá vé mặc định 0 để lúc đổi sang Vào cửa buộc nhập giá vé
   const stored = Object.fromEntries(Object.entries(amenity ?? {}).filter(([, v]) => v !== null));
-  if (initialMode !== 'WALK_IN') {
-    delete stored.perVisitFeeAdult;
-    delete stored.perVisitFeeChild;
-  }
   const initialValues = isEdit
     ? {
         ...stored,
@@ -176,7 +163,7 @@ export default function AmenityFormModal({ amenity, buildings, reception, ages, 
       okText={isEdit ? 'Lưu' : 'Thêm'}
       cancelText="Hủy"
       confirmLoading={saving}
-      width={680}
+      width="min(680px, 94vw)"
       destroyOnHidden
     >
       {isEdit && (
@@ -184,7 +171,7 @@ export default function AmenityFormModal({ amenity, buildings, reception, ages, 
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="Thay đổi chỉ áp dụng cho lượt đặt / vé mới. Lượt đã đặt giữ nguyên khung giờ và phí lúc đặt."
+          message="Thay đổi chỉ áp dụng cho lượt đặt mới. Lượt đã đặt giữ nguyên khung giờ và phí lúc đặt."
         />
       )}
       <Form form={form} layout="vertical" preserve={false} initialValues={initialValues} onFinish={submit}>
@@ -247,33 +234,6 @@ export default function AmenityFormModal({ amenity, buildings, reception, ages, 
           </Typography.Paragraph>
         )}
 
-        {mode === 'WALK_IN' && (
-          <>
-            <Flex gap={12} wrap>
-              {money(
-                'perVisitFeeAdult',
-                'Vé lẻ người lớn (đ / lượt)',
-                `Từ ${ages.childAdultAge} tuổi. Nhập 0 nếu miễn phí.`,
-                [{ required: true, message: 'Nhập giá vé người lớn (0 = miễn phí)' }],
-              )}
-              {money(
-                'perVisitFeeChild',
-                'Vé lẻ trẻ em (đ / lượt)',
-                `Từ ${ages.childFreeAge} đến dưới ${ages.childAdultAge} tuổi. Trẻ dưới ${ages.childFreeAge} tuổi miễn phí.`,
-                [{ required: true, message: 'Nhập giá vé trẻ em (0 = miễn phí)' }],
-              )}
-            </Flex>
-            <Form.Item
-              name="maxConcurrent"
-              label="Số người tối đa cùng lúc"
-              style={{ maxWidth: 240 }}
-              extra="Để trống = không giới hạn"
-            >
-              <InputNumber min={1} max={10000} precision={0} style={{ width: '100%' }} />
-            </Form.Item>
-          </>
-        )}
-
         {mode === 'BOOKING' && (
           <Flex gap={12} wrap>
             <Form.Item
@@ -297,25 +257,10 @@ export default function AmenityFormModal({ amenity, buildings, reception, ages, 
           </Flex>
         )}
 
-        {!isFree && (
-          <>
-            <Flex gap={12} wrap>
-              {money(
-                'monthlyPassFeeAdult',
-                'Gói tháng người lớn (đ)',
-                'Để trống cả hai giá = không bán gói tháng',
-                [passRule('monthlyPassFeeChild', 'giá gói trẻ em')],
-                ['monthlyPassFeeChild'],
-              )}
-              {money('monthlyPassFeeChild', 'Gói tháng trẻ em (đ)', null, [passRule('monthlyPassFeeAdult', 'giá gói người lớn')], ['monthlyPassFeeAdult'])}
-            </Flex>
-          </>
-        )}
-
         <Form.Item name="description" label="Mô tả">
           <Input.TextArea rows={2} maxLength={1000} showCount />
         </Form.Item>
-        <Form.Item label="Ảnh" extra="jpg/png, tối đa 5MB">
+        <Form.Item label="Ảnh" extra={IMAGE_HINT}>
           <Flex gap={12} align="center">
             {(image || amenity?.imageUrl) && (
               <Image
@@ -325,7 +270,7 @@ export default function AmenityFormModal({ amenity, buildings, reception, ages, 
                 style={{ objectFit: 'cover', borderRadius: 8 }}
               />
             )}
-            <Upload accept="image/jpeg,image/png" maxCount={1} showUploadList={false} beforeUpload={beforeUpload}>
+            <Upload accept={IMAGE_ACCEPT} maxCount={1} showUploadList={false} beforeUpload={beforeUpload}>
               <Button icon={<UploadOutlined />}>{image || amenity?.imageUrl ? 'Đổi ảnh' : 'Chọn ảnh'}</Button>
             </Upload>
           </Flex>

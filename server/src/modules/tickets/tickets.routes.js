@@ -8,12 +8,14 @@ import { validate } from '../../middlewares/validate.js';
 import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
-import { csvEnum, idParams, objectId } from '../../utils/validators.js';
+import { csvEnum, idParams, objectId, phoneVn } from '../../utils/validators.js';
 import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from './tickets.jobs.js';
 import * as service from './tickets.service.js';
 
 const router = Router();
-const DISPATCHERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
+// Xem toàn bộ phiếu: Trưởng BQL + Lễ tân (lễ tân tạo phiếu hộ, trả lời cư dân tại quầy).
+// Điều phối (phân công, từ chối, gộp phiếu, danh sách KTV) chỉ Trưởng BQL — SRS 2.3: Defect Kanban / UC41–42 chỉ Building Admin.
+const DESK = ['MANAGER', 'STAFF:RECEPTIONIST'];
 
 const listQuery = Joi.object({
   ...paginationQuery,
@@ -36,9 +38,20 @@ const ticketFields = {
   description: Joi.string().trim().min(10).max(2000).required(),
   type: Joi.string().valid(...values(TICKET_TYPES)).default(TICKET_TYPES.INCIDENT),
   scope: Joi.string().valid(...values(TICKET_SCOPES)).default(TICKET_SCOPES.COMMON_AREA),
+  location: Joi.string().trim().max(150).allow(''), // UC38: vị trí cụ thể
+  // Thông tin liên hệ để xác minh / hẹn giờ xử lý
+  contactName: Joi.string().trim().max(100).allow(''),
+  contactPhone: phoneVn().allow(''),
+  contactNote: Joi.string().trim().max(200).allow(''),
 };
 const createBody = Joi.object({ ...ticketFields, apartmentId: objectId() });
-const staffCreateBody = Joi.object({ ...ticketFields, apartmentId: objectId().required() });
+// Lễ tân tạo hộ: bắt buộc tên + SĐT người báo (người gửi trên phiếu lúc này là Lễ tân)
+const staffCreateBody = Joi.object({
+  ...ticketFields,
+  apartmentId: objectId().required(),
+  contactName: Joi.string().trim().min(2).max(100).required(),
+  contactPhone: phoneVn().required(),
+});
 
 // Chạy lại thủ công các cron của ticket (ghi cron_runs)
 const MANUAL_JOBS = {
@@ -52,7 +65,7 @@ const MANUAL_JOBS = {
  * /tickets:
  *   get:
  *     tags: [Ticket]
- *     summary: Danh sách phản ánh theo quyền (cư dân → căn mình; KTV → được giao; Manager/Lễ tân → tất cả)
+ *     summary: Danh sách phản ánh theo quyền (cư dân → căn mình; KTV → được giao; Trưởng BQL / Lễ tân → tất cả, lễ tân chỉ xem)
  *     parameters:
  *       - $ref: '#/components/parameters/page'
  *       - $ref: '#/components/parameters/limit'
@@ -81,7 +94,7 @@ const MANUAL_JOBS = {
 router.get(
   '/',
   authenticate,
-  authorize('RESIDENT', 'STAFF:TECHNICIAN', ...DISPATCHERS),
+  authorize('RESIDENT', 'STAFF:TECHNICIAN', ...DESK),
   validate({ query: listQuery }),
   async (req, res) => {
     const { items, pagination } = await service.listTickets(req.user, req.validated.query);
@@ -129,6 +142,25 @@ router.get('/queue', authenticate, authorize('STAFF:TECHNICIAN'), async (req, re
 
 /**
  * @openapi
+ * /tickets/similar:
+ *   get:
+ *     tags: [Ticket]
+ *     summary: 'M5-6 - Sự cố khu vực chung đang mở cùng tòa, cùng loại sự cố (gợi ý khi tạo phiếu, chọn phiếu chính khi gộp)'
+ *     parameters:
+ *       - { in: query, name: apartmentId, required: true, schema: { type: string } }
+ *       - { in: query, name: categoryId, required: true, schema: { type: string } }
+ *       - { in: query, name: excludeId, schema: { type: string } }
+ */
+router.get(
+  '/similar',
+  authenticate,
+  authorize('RESIDENT', ...DESK),
+  validate({ query: Joi.object({ apartmentId: objectId(), categoryId: objectId().required(), excludeId: objectId() }) }), // cư dân 1 căn bỏ trống apartmentId
+  async (req, res) => ok(res, await service.findSimilarTickets(req.user, req.query)),
+);
+
+/**
+ * @openapi
  * /tickets/board:
  *   get:
  *     tags: [Ticket]
@@ -139,8 +171,22 @@ router.get(
   '/board',
   authenticate,
   authorize('MANAGER'),
-  validate({ query: Joi.object({ buildingId: objectId() }) }),
+  validate({ query: Joi.object({ buildingId: objectId(), categoryId: objectId(), assignedTo: objectId() }) }),
   async (req, res) => ok(res, await service.getBoard(req.user, req.validated.query)),
+);
+
+/**
+ * @openapi
+ * /tickets/emergency-alerts:
+ *   get:
+ *     tags: [Phản ánh]
+ *     summary: 'BR-X6 - Sự cố khẩn cấp quá hạn nhận mà chưa ai nhận (banner). Trưởng BQL, Lễ tân luôn thấy; KTV / Bảo vệ chỉ khi đang trực'
+ */
+router.get(
+  '/emergency-alerts',
+  authenticate,
+  authorize('MANAGER', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN', 'STAFF:SECURITY'),
+  async (req, res) => ok(res, await service.emergencyAlerts(req.user)),
 );
 
 /**
@@ -150,7 +196,7 @@ router.get(
  *     tags: [Ticket]
  *     summary: Kỹ thuật viên đang hoạt động + số ticket đang mở (để phân công)
  */
-router.get('/assignees', authenticate, authorize(...DISPATCHERS), async (_req, res) =>
+router.get('/assignees', authenticate, authorize('MANAGER'), async (_req, res) =>
   ok(res, await service.listAssignees()),
 );
 
@@ -184,7 +230,7 @@ router.post(
 router.get(
   '/:id',
   authenticate,
-  authorize('RESIDENT', 'STAFF:TECHNICIAN', ...DISPATCHERS),
+  authorize('RESIDENT', 'STAFF:TECHNICIAN', ...DESK),
   validate({ params: idParams }),
   async (req, res) => ok(res, await service.getTicket(req.user, req.params.id)),
 );
@@ -210,7 +256,7 @@ router.get(
 router.patch(
   '/:id/assign',
   authenticate,
-  authorize(...DISPATCHERS),
+  authorize('MANAGER'),
   validate({
     params: idParams,
     body: Joi.object({
@@ -228,13 +274,13 @@ router.patch(
  * /tickets/{id}/reject:
  *   patch:
  *     tags: [Ticket]
- *     summary: Từ chối phản ánh không hợp lệ (Manager/Lễ tân)
+ *     summary: Từ chối phản ánh không hợp lệ (chỉ Trưởng BQL)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
 router.patch(
   '/:id/reject',
   authenticate,
-  authorize(...DISPATCHERS),
+  authorize('MANAGER'),
   validate({
     params: idParams,
     body: Joi.object({ reason: Joi.string().trim().min(5).max(500).required() }),
@@ -245,12 +291,64 @@ router.patch(
 
 /**
  * @openapi
+ * /tickets/{id}/classify:
+ *   patch:
+ *     tags: [Ticket]
+ *     summary: 'M5-5 - Đổi loại / phạm vi phiếu chưa bắt đầu xử lý, kèm lý do; SLA tính lại (Trưởng BQL, Lễ tân, KTV được giao)'
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.patch(
+  '/:id/classify',
+  authenticate,
+  authorize(...DESK, 'STAFF:TECHNICIAN'),
+  validate({
+    params: idParams,
+    body: Joi.object({
+      type: Joi.string().valid(...values(TICKET_TYPES)),
+      scope: Joi.string().valid(...values(TICKET_SCOPES)),
+      reason: Joi.string().trim().min(5).max(500).required(),
+    }).or('type', 'scope'),
+  }),
+  async (req, res) => ok(res, await service.reclassifyTicket(req.user, req.params.id, req.body), 'Đã đổi phân loại phiếu'),
+);
+
+/**
+ * @openapi
+ * /tickets/{id}/merge:
+ *   patch:
+ *     tags: [Ticket]
+ *     summary: 'M5-6 - Gộp phiếu trùng vào phiếu chính; phiếu con đóng theo phiếu chính (chỉ Trưởng BQL)'
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.patch(
+  '/:id/merge',
+  authenticate,
+  authorize('MANAGER'),
+  validate({ params: idParams, body: Joi.object({ parentId: objectId().required(), note: Joi.string().trim().max(500).allow('') }) }),
+  async (req, res) => ok(res, await service.mergeTicket(req.user, req.params.id, req.body), 'Đã gộp phiếu'),
+);
+
+/**
+ * @openapi
  * /tickets/{id}/progress:
  *   patch:
  *     tags: [Ticket]
  *     summary: KTV cập nhật tiến độ IN_PROGRESS / WAITING_CONFIRM (UC-E04). WAITING_CONFIRM bắt buộc kèm ≥ 1 ảnh kết quả (field images, multipart)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
+/** UC42: phản hồi và đóng phản ánh, không yêu cầu ảnh như nghiệm thu kỹ thuật. */
+router.patch(
+  '/:id/respond-complaint',
+  authenticate,
+  authorize('MANAGER'),
+  uploadImages('images', 5),
+  validate({ params: idParams, body: Joi.object({
+    status: Joi.string().valid(TICKET_STATUS.IN_PROGRESS, TICKET_STATUS.CLOSED).required(),
+    note: Joi.string().trim().min(5).max(2000).required(),
+  }) }),
+  async (req, res) => ok(res, await service.respondComplaint(req.user, req.params.id, req.body, req.files), 'Đã lưu phản hồi'),
+);
+
 router.patch(
   '/:id/progress',
   authenticate,
@@ -296,6 +394,7 @@ router.patch(
   '/:id/confirm',
   authenticate,
   authorize('RESIDENT'),
+  uploadImages('images', 3), // UC49: ảnh kèm khi chưa đồng ý kết quả (tùy chọn)
   validate({
     params: idParams,
     body: Joi.object({
@@ -314,7 +413,7 @@ router.patch(
     }),
   }),
   async (req, res) =>
-    ok(res, await service.confirmTicket(req.user, req.params.id, req.body), 'Đã ghi nhận'),
+    ok(res, await service.confirmTicket(req.user, req.params.id, req.body, req.files ?? []), 'Đã ghi nhận'),
 );
 
 /**
@@ -325,6 +424,21 @@ router.patch(
  *     summary: KTV nhận sự cố trong hàng chờ — chỉ 1 người nhận được (TICKET_ALREADY_CLAIMED); có lịch trực thì phải trong ca (NOT_ON_DUTY)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
+/**
+ * @openapi
+ * /tickets/{id}/emergency-ack:
+ *   patch:
+ *     tags: [Phản ánh]
+ *     summary: 'BR-X6 - Bấm "Đã tiếp nhận" cảnh báo khẩn: dừng lặp cảnh báo (Trưởng BQL hoặc KTV / Bảo vệ đang trực)'
+ */
+router.patch(
+  '/:id/emergency-ack',
+  authenticate,
+  authorize('MANAGER', 'STAFF:TECHNICIAN', 'STAFF:SECURITY'),
+  validate({ params: idParams }),
+  async (req, res) => ok(res, await service.acknowledgeEmergency(req.user, req.params.id), 'Đã tiếp nhận cảnh báo'),
+);
+
 router.patch('/:id/claim', authenticate, authorize('STAFF:TECHNICIAN'), validate({ params: idParams }), async (req, res) =>
   ok(res, await service.claimTicket(req.user, req.params.id), 'Đã nhận sự cố'),
 );

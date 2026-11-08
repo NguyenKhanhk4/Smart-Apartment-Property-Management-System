@@ -24,8 +24,8 @@ const RECEPTION_NAVY = '#1A2440';
 
 /** Gom mục menu được phép xem theo nhóm, giữ thứ tự MENU_GROUPS */
 function useGroupedMenu() {
-  const { hasRole } = useAuth();
-  const visible = adminMenu.filter((item) => !item.hideInMenu && hasRole(...(item.roles ?? [])));
+  const { canSee } = useAuth();
+  const visible = adminMenu.filter((item) => !item.hideInMenu && canSee(item));
   return MENU_GROUPS.map((group) => ({
     group,
     items: visible.filter((item) => (item.group ?? MENU_GROUPS[0]) === group),
@@ -239,7 +239,7 @@ export default function AdminLayout() {
 
         <main className="flex-1 p-4 md:p-8 w-full max-w-[1400px] mx-auto">
           <Suspense fallback={<PageLoader />}>
-            <PageTransition key={pathname}>
+            <PageTransition key={pathname} className="page-stack">
               <Outlet />
             </PageTransition>
           </Suspense>

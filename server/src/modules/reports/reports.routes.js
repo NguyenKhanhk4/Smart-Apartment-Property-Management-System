@@ -129,7 +129,7 @@ router.get(
  * /reports/amenity-usage:
  *   get:
  *     tags: [Báo cáo]
- *     summary: Thống kê sử dụng tiện ích (UC-E14) — Manager, Accountant
+ *     summary: Thống kê sử dụng tiện ích (UC-E14) — chỉ Trưởng BQL (SRS 2.3 Dashboard & Reports, UC60)
  *     parameters:
  *       - { in: query, name: from, schema: { type: string, format: date } }
  *       - { in: query, name: to, schema: { type: string, format: date } }
@@ -137,7 +137,7 @@ router.get(
  */
 router.get(
   '/amenity-usage',
-  authorize('MANAGER', 'ACCOUNTANT'),
+  authorize('MANAGER'),
   validate({ query: Joi.object({ from: dateQuery.from, to: dateQuery.to, amenityId: objectId() }) }),
   async (req, res) => ok(res, await reports.amenityUsage(q(req))),
 );

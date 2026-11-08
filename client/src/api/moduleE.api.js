@@ -1,4 +1,4 @@
-// API Module E (Phạm Lượng): Ticket, Sổ khách, Bảng tin & Thông báo, Báo cáo, Danh mục & tham số.
+// API dùng chung Module 7/8: vận hành an ninh, bảng tin, bình luận và khảo sát theo căn hộ.
 // Theo quy ước axiosClient.js: trả nguyên envelope { success, data, pagination? }.
 import { apiClient, http } from './axiosClient';
 
@@ -41,17 +41,45 @@ export const ticketApi = {
   assignees: () => http.get('/tickets/assignees'),
   assign: (id, body) => http.patch(`/tickets/${id}/assign`, body),
   reject: (id, reason) => http.patch(`/tickets/${id}/reject`, { reason }),
+  respondComplaint: (id, body, files = []) =>
+    http.patch(`/tickets/${id}/respond-complaint`, files.length ? toForm(body, files) : body),
   /** files: ảnh kết quả, bắt buộc khi status = WAITING_CONFIRM (gửi multipart) */
   progress: (id, body, files = []) => {
     if (!files.length) return http.patch(`/tickets/${id}/progress`, body);
     return http.patch(`/tickets/${id}/progress`, toForm(body, files));
   },
-  confirm: (id, body) => http.patch(`/tickets/${id}/confirm`, body),
+  /** UC49: chưa đồng ý kết quả có thể kèm ảnh (tối đa 3) */
+  confirm: (id, body, files = []) => http.patch(`/tickets/${id}/confirm`, files.length ? toForm(body, files) : body),
+  /** BR-X6: sự cố khẩn cấp chưa ai nhận (banner) và bấm "Đã tiếp nhận" */
+  emergencyAlerts: () => http.get('/tickets/emergency-alerts'),
+  emergencyAck: (id) => http.patch(`/tickets/${id}/emergency-ack`),
   runJob: (job) => http.post(`/tickets/jobs/${job}/run`),
+  /** M5-6: sự cố khu vực chung đang mở cùng tòa, cùng loại. params: { apartmentId?, categoryId, excludeId? } */
+  similar: (params) => http.get('/tickets/similar', { params }),
+  /** M5-5: body { type?, scope?, reason } */
+  classify: (id, body) => http.patch(`/tickets/${id}/classify`, body),
+  /** M5-6: body { parentId, note? } */
+  merge: (id, body) => http.patch(`/tickets/${id}/merge`, body),
 };
 
 // ===== UC-E07, E08: Sổ khách =====
 export const guestApi = {
+  operations: (kind, params) => http.get(`/guests/operations/${kind}`, { params }),
+  alerts: () => http.get('/guests/alerts'),
+  summary: (params) => http.get('/guests/operations/summary', { params }),
+  confirm: (id, confirmed) => http.patch(`/guests/${id}/confirm`, { confirmed }),
+  receiveParcel: (body, files) => http.post('/guests/parcels', toForm(body, files)),
+  recipients: (id) => http.get(`/guests/parcels/${id}/recipients`),
+  receipt: (id) => http.get(`/guests/parcels/${id}/receipt`),
+  handover: (id, body) => http.patch(`/guests/parcels/${id}/handover`, body),
+  checkpoint: (body) => http.post('/guests/checkpoints', body),
+  updateCheckpoint: (id, active) => http.patch(`/guests/checkpoints/${id}`, { active }),
+  tour: (body) => http.post('/guests/tours', body),
+  scan: (id, body) => http.patch(`/guests/tours/${id}/scan`, body),
+  incident: (body, files = []) => http.post('/guests/incidents', toForm(body, files)),
+  acknowledge: (id) => http.patch(`/guests/incidents/${id}/acknowledge`),
+  broadcast: (id) => http.patch(`/guests/incidents/${id}/broadcast`),
+  endBroadcast: (id) => http.patch(`/guests/incidents/${id}/end-broadcast`),
   list: (params) => http.get('/guests', { params }),
   register: (body) => http.post('/guests', body),
   cancel: (id) => http.delete(`/guests/${id}`),
@@ -62,6 +90,12 @@ export const guestApi = {
 
 // ===== UC-E09: Bảng tin & thông báo =====
 export const announcementApi = {
+  comments: (id, params) => http.get(`/announcements/${id}/comments`, { params }),
+  comment: (id, content) => http.post(`/announcements/${id}/comments`, { content }),
+  hideComment: (id, commentId) => http.patch(`/announcements/${id}/comments/${commentId}/hide`),
+  poll: (id, apartmentId) => http.get(`/announcements/${id}/poll`, { params: { apartmentId } }),
+  vote: (id, body) => http.put(`/announcements/${id}/poll/vote`, body),
+  closePoll: (id) => http.patch(`/announcements/${id}/poll/close`),
   list: (params) => http.get('/announcements', { params }),
   get: (id) => http.get(`/announcements/${id}`),
   create: (body) => http.post('/announcements', body),
@@ -120,7 +154,11 @@ export const dutyShiftApi = {
   list: (params) => http.get('/duty-shifts', { params }),
   onDuty: (roleTitle) => http.get('/duty-shifts/on-duty', { params: { roleTitle } }),
   staff: (roleTitle) => http.get('/duty-shifts/staff', { params: { roleTitle } }),
-  /** body: { roleTitle, userId, startAt, endAt, isBackup?, repeatDays?, note? } */
+  /** body: { roleTitle, userIds: [], startAt, endAt, repeatDays?, note? } — 1 ca có thể nhiều người trực */
   create: (body) => http.post('/duty-shifts', body),
+  /** body: { userId?, startAt?, endAt?, note? } — sửa ca chưa kết thúc / kéo thả sang ngày khác */
+  update: (id, body) => http.patch(`/duty-shifts/${id}`, body),
+  /** UC37: sao chép ca tuần trước sang tuần bắt đầu `weekStart` → { created, skipped } */
+  copyWeek: (body) => http.post('/duty-shifts/copy-week', body),
   remove: (id) => http.delete(`/duty-shifts/${id}`),
 };

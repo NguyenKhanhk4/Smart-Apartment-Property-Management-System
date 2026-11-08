@@ -13,7 +13,7 @@ import * as service from './feeTypes.service.js';
 const router = Router();
 
 // Phí tiện ích do Module D định giá trên amenities, không khai ở đây
-const FEE_TYPE_CATEGORIES = [FEE_CATEGORIES.CLEANING, FEE_CATEGORIES.PARKING];
+const FEE_TYPE_CATEGORIES = [FEE_CATEGORIES.MANAGEMENT, FEE_CATEGORIES.CLEANING, FEE_CATEGORIES.PARKING];
 
 const code = Joi.string()
   .trim()
@@ -50,7 +50,7 @@ const endBody = Joi.object({ effectiveTo: period().required() }); // kỳ bắt 
  *     summary: Danh sách mức giá theo thời gian (mới nhất trước trong từng mã phí). Mỗi bản ghi kèm fromPeriod, endPeriod (kỳ cuối, null = chưa kết thúc), state (ACTIVE / UPCOMING / ENDED) và inUse (đã dùng lập hóa đơn → khóa sửa giá/xóa)
  *     parameters:
  *       - { in: query, name: code, schema: { type: string }, example: PARKING_MOTORBIKE }
- *       - { in: query, name: feeCategory, schema: { type: string, enum: [CLEANING, PARKING] } }
+ *       - { in: query, name: feeCategory, schema: { type: string, enum: [MANAGEMENT, CLEANING, PARKING] } }
  *       - { in: query, name: state, schema: { type: string, enum: [ACTIVE, UPCOMING, ENDED] } }
  */
 router.get('/', authenticate, authorize('MANAGER', 'ACCOUNTANT'), validate({ query: listQuery }), async (req, res) =>
@@ -81,15 +81,16 @@ router.get('/current', authenticate, async (_req, res) => ok(res, await service.
  *             properties:
  *               code: { type: string, example: PARKING_MOTORBIKE }
  *               name: { type: string, example: Vé xe máy }
- *               feeCategory: { type: string, enum: [CLEANING, PARKING] }
+ *               feeCategory: { type: string, enum: [MANAGEMENT, CLEANING, PARKING] }
  *               calcMethod: { type: string, enum: [PER_M2, PER_APARTMENT, PER_VEHICLE] }
  *               vehicleType: { type: string, enum: [BICYCLE, MOTORBIKE, CAR] }
  *               unitPrice: { type: integer, example: 150000 }
  *               effectiveFrom: { type: string, example: '2026-11' }
  */
-router.post('/', authenticate, authorize('MANAGER'), validate({ body: createBody }), async (req, res) =>
-  created(res, await service.createFeeType(req.user, req.body), 'Đã lưu mức giá'),
-);
+router.post('/', authenticate, authorize('MANAGER'), validate({ body: createBody }), async (req, res) => {
+  const result = await service.createFeeType(req.user, req.body);
+  created(res, result, result.message || 'Đã lưu mức giá');
+});
 
 /**
  * @openapi

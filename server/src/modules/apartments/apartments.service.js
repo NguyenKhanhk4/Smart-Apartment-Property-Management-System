@@ -1,8 +1,28 @@
-import { APARTMENT_STATUS, AUDIT_ACTIONS, AUDIT_TARGETS, CONTRACT_STATUS, VEHICLE_STATUS } from '../../constants/enums.js';
+import { APARTMENT_OCCUPANCY, APARTMENT_STATUS, AUDIT_ACTIONS, AUDIT_TARGETS, CONTRACT_STATUS, CONTRACT_TYPES, RELATION_TYPES, VEHICLE_STATUS } from '../../constants/enums.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
+import { startOfVnDay, toVnYmd, vnDayStart } from '../../utils/time.js';
+import { withTransaction } from '../../utils/transaction.js';
 import { Apartment, Building, Contract, Resident, Vehicle } from '../../models/index.js';
+
+function validateProperties(building, { blockId, grossArea, netArea }) {
+  if (blockId && !building?.blocks?.id(blockId)) {
+    throw ApiError.field('blockId', 'Block phải thuộc tòa nhà của căn hộ');
+  }
+  if (grossArea != null && netArea != null && netArea > grossArea) {
+    throw ApiError.field('netArea', 'Diện tích thông thủy không được lớn hơn diện tích tim tường');
+  }
+}
+
+function parseHandoverDate(value) {
+  if (!value) return null;
+  const date = vnDayStart(value);
+  if (toVnYmd(date) !== value || value > toVnYmd(new Date())) {
+    throw ApiError.field('handoverDate', 'Ngày bàn giao phải là ngày hợp lệ và không được ở tương lai');
+  }
+  return date;
+}
 
 /**
  * Danh sách căn hộ phân trang, lọc theo tòa/tầng/trạng thái/mã căn (UC-A05)
@@ -19,12 +39,15 @@ export async function listApartments(query = {}) {
   if (query.status) {
     filter.status = query.status;
   }
+  if (query.occupancyStatus) {
+    filter.occupancyStatus = query.occupancyStatus;
+  }
   if (query.q) {
     filter.code = new RegExp(escapeRegex(query.q.trim()), 'i');
   }
 
   return paginate(Apartment, filter, query, {
-    populate: { path: 'buildingId', select: 'code name totalFloors' },
+    populate: { path: 'buildingId', select: 'code name totalFloors blocks' },
   });
 }
 
@@ -33,7 +56,7 @@ export async function listApartments(query = {}) {
  */
 export async function getApartmentById(id) {
   const apartment = await Apartment.findById(id)
-    .populate('buildingId', 'code name address totalFloors')
+    .populate('buildingId', 'code name address totalFloors blocks')
     .lean();
 
   if (!apartment) {
@@ -42,7 +65,8 @@ export async function getApartmentById(id) {
 
   const [activeContracts, activeResidentsCount, approvedVehiclesCount] = await Promise.all([
     Contract.find({ apartmentId: id, status: CONTRACT_STATUS.ACTIVE })
-      .populate('ownerId', 'fullName email phone')
+      .populate('ownerId', 'fullName email phone activatedAt isActive')
+      .populate('ownerAccountIssuedBy', 'fullName')
       .populate('tenantId', 'fullName email phone')
       .lean(),
     Resident.countDocuments({ apartmentId: id, isActive: true }),
@@ -61,12 +85,16 @@ export async function getApartmentById(id) {
 /**
  * Tạo căn hộ mới (Trưởng BQL) — BR-A4
  */
-export async function createApartment({ buildingId, code, floor, area }, managerUser, ip) {
+export async function createApartment(data, managerUser, ip) {
+  const { buildingId, code, floor, blockId, type, grossArea, netArea, technicalShaft } = data;
+  const area = data.area ?? netArea;
+  const handoverDate = parseHandoverDate(data.handoverDate);
   const building = await Building.findById(buildingId);
   if (!building) {
     throw ApiError.notFound('Tòa nhà không tồn tại');
   }
 
+  validateProperties(building, data);
   const normalizedCode = code.trim().toUpperCase();
 
   // BR-A4: 1 <= floor <= totalFloors
@@ -77,8 +105,8 @@ export async function createApartment({ buildingId, code, floor, area }, manager
   }
 
   // BR-A4: area > 0
-  if (area <= 0) {
-    throw ApiError.badRequest('Diện tích căn hộ phải lớn hơn 0');
+  if (!Number.isFinite(area) || area < 1) {
+    throw ApiError.badRequest('Diện tích dùng để tính phí phải từ 1 m² trở lên');
   }
 
   // BR-A4: Mã căn duy nhất trong tòa
@@ -87,12 +115,19 @@ export async function createApartment({ buildingId, code, floor, area }, manager
     throw new ApiError('DUPLICATE_VALUE', `Mã căn hộ ${normalizedCode} đã tồn tại trong tòa nhà này`);
   }
 
-  // BR-A4: tạo với VACANT
+  // Giữ trạng thái hợp đồng độc lập với trạng thái vận hành trên sơ đồ.
   const apartment = await Apartment.create({
     buildingId,
     code: normalizedCode,
     floor,
     area,
+    blockId,
+    type,
+    grossArea,
+    netArea,
+    technicalShaft,
+    handoverDate,
+    occupancyStatus: handoverDate ? APARTMENT_OCCUPANCY.VACANT : APARTMENT_OCCUPANCY.NOT_HANDED_OVER,
     status: APARTMENT_STATUS.VACANT,
   });
 
@@ -107,6 +142,9 @@ export async function createApartment({ buildingId, code, floor, area }, manager
       buildingId,
       floor,
       area,
+      blockId,
+      handoverDate,
+      occupancyStatus: apartment.occupancyStatus,
     },
     ip,
   });
@@ -130,6 +168,11 @@ export async function updateApartment(id, data, managerUser, ip) {
 
   const building = await Building.findById(apartment.buildingId);
   const changes = {};
+  validateProperties(building, {
+    blockId: data.blockId === undefined ? apartment.blockId : data.blockId,
+    grossArea: data.grossArea ?? apartment.grossArea,
+    netArea: data.netArea ?? apartment.netArea,
+  });
 
   if (data.code !== undefined) {
     const normalizedCode = data.code.trim().toUpperCase();
@@ -158,11 +201,39 @@ export async function updateApartment(id, data, managerUser, ip) {
   }
 
   if (data.area !== undefined && data.area !== apartment.area) {
-    if (data.area <= 0) {
-      throw ApiError.badRequest('Diện tích căn hộ phải lớn hơn 0');
+    if (data.area < 1) {
+      throw ApiError.badRequest('Diện tích dùng để tính phí phải từ 1 m² trở lên');
     }
     changes.area = { from: apartment.area, to: data.area };
     apartment.area = data.area;
+  }
+
+  for (const field of ['blockId', 'type', 'grossArea', 'netArea', 'technicalShaft']) {
+    if (data[field] === undefined || String(data[field]) === String(apartment[field])) continue;
+    changes[field] = { from: apartment[field], to: data[field] };
+    apartment[field] = data[field];
+  }
+
+  if (data.handoverDate !== undefined) {
+    const date = parseHandoverDate(data.handoverDate);
+    if (!date && apartment.handoverDate) {
+      throw ApiError.field('handoverDate', 'Không thể xóa ngày bàn giao đã ghi nhận');
+    }
+    if (date && date.getTime() !== apartment.handoverDate?.getTime()) {
+      changes.handoverDate = { from: apartment.handoverDate, to: date };
+      if (!apartment.handoverDate) {
+        const activeLease = await Contract.exists({
+          apartmentId: id,
+          type: CONTRACT_TYPES.LEASE,
+          status: CONTRACT_STATUS.ACTIVE,
+          startDate: { $lte: new Date() },
+        });
+        const status = activeLease ? APARTMENT_OCCUPANCY.RENTED : APARTMENT_OCCUPANCY.VACANT;
+        changes.occupancyStatus = { from: apartment.occupancyStatus, to: status };
+        apartment.occupancyStatus = status;
+      }
+      apartment.handoverDate = date;
+    }
   }
 
   await apartment.save();
@@ -179,6 +250,64 @@ export async function updateApartment(id, data, managerUser, ip) {
   }
 
   return apartment;
+}
+
+async function changeOccupancy(id, resolveChange, actor, ip) {
+  return withTransaction(async (session) => {
+    const apartment = await Apartment.findById(id).session(session);
+    if (!apartment) throw ApiError.notFound('Căn hộ không tồn tại');
+    if (!apartment.handoverDate) {
+      throw new ApiError('STATUS_CONFLICT', 'Cần xác nhận ngày bàn giao trước khi cập nhật cư trú');
+    }
+    const { status, ...metadata } = await resolveChange(session);
+    const previousStatus = apartment.occupancyStatus;
+    if (previousStatus === status) return apartment;
+
+    apartment.occupancyStatus = status;
+    await apartment.save({ session });
+    await logAudit({
+      action: AUDIT_ACTIONS.APARTMENT_CHANGED,
+      user: actor,
+      targetType: AUDIT_TARGETS.APARTMENT,
+      targetId: apartment._id,
+      metadata: { ...metadata, changes: { occupancyStatus: { from: previousStatus, to: status } } },
+      ip,
+    }, { session });
+    return apartment;
+  });
+}
+
+export function setOccupancyStatus(id, { status, reason }, managerUser, ip) {
+  return changeOccupancy(id, () => ({ status, reason, action: 'SET_OCCUPANCY_STATUS' }), managerUser, ip);
+}
+
+export function confirmMoveIn(id, receptionist, ip) {
+  return changeOccupancy(id, async (session) => {
+    const today = startOfVnDay();
+    const contracts = await Contract.find({
+      apartmentId: id,
+      status: CONTRACT_STATUS.ACTIVE,
+      $or: [
+        { type: CONTRACT_TYPES.SALE, startDate: { $lte: new Date() } },
+        { type: CONTRACT_TYPES.LEASE, startDate: { $lte: today } },
+      ],
+    }).select('type ownerAccountPending').session(session).lean();
+    const owner = contracts.find((contract) => contract.type === CONTRACT_TYPES.SALE);
+    if (!owner) {
+      throw new ApiError('STATUS_CONFLICT', 'Cần hợp đồng mua bán đang hiệu lực để xác nhận vào ở');
+    }
+    if (owner.ownerAccountPending) {
+      throw new ApiError('STATUS_CONFLICT', 'Ban quản lý cần cấp tài khoản chủ sở hữu trước khi xác nhận vào ở');
+    }
+    const lease = contracts.find((contract) => contract.type === CONTRACT_TYPES.LEASE);
+    const currentTenant = await Resident.exists({ apartmentId: id, relationType: RELATION_TYPES.TENANT,
+      isActive: true, contractId: null, tenantPaysFees: { $type: 'bool' } }).session(session);
+    return {
+      action: 'CONFIRM_MOVE_IN',
+      status: lease || currentTenant ? APARTMENT_OCCUPANCY.RENTED : APARTMENT_OCCUPANCY.OWNER_OCCUPIED,
+      contractId: (lease ?? owner)._id,
+    };
+  }, receptionist, ip);
 }
 
 /**

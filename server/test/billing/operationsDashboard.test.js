@@ -2,7 +2,7 @@
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
-import { AmenityVisit, Resident, WorkOrder } from '../../src/models/index.js';
+import { Resident, WorkOrder } from '../../src/models/index.js';
 import { operationsDashboard } from '../../src/modules/reports/operations.service.js';
 import { exportReport } from '../../src/modules/reports/reports.export.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
@@ -58,12 +58,11 @@ async function seed() {
   const { user: leaver } = await createHousehold();
   await Resident.updateOne({ userId: leaver._id }, { $set: { moveInDate: d('2025-01-01'), moveOutDate: d('2026-11-02'), isActive: false } });
 
-  // Tiện ích: 2 lượt đặt + 1 lượt vào cửa
+  // Tiện ích: 2 lượt đặt giữ chỗ (1 đã check-in) + 1 lượt đã hủy
   const gym = await createAmenity({ name: 'Phòng gym' });
-  await createBooking({ amenity: gym, apartment, startAt: d('2026-10-20') });
+  await createBooking({ amenity: gym, apartment, startAt: d('2026-10-20'), checkedInAt: d('2026-10-20') });
   await createBooking({ amenity: gym, apartment, startAt: d('2026-10-21') });
   await createBooking({ amenity: gym, apartment, startAt: d('2026-10-22'), status: 'CANCELLED' });
-  await AmenityVisit.create({ amenityId: gym._id, apartmentId: apartment._id, userId: user._id, visitedAt: d('2026-10-23'), ageGroup: 'ADULT', billingMonth: '2026-10', fee: 0, chargeType: 'FREE', recordedBy: techA._id });
   return { techA, techB };
 }
 
@@ -111,7 +110,7 @@ test('phản ánh, bảo trì, cư dân, tiện ích', async () => {
 
   const gym = r.amenities.find((a) => a.name === 'Phòng gym');
   assert.equal(gym.bookings, 2, 'booking đã hủy không tính');
-  assert.equal(gym.visits, 1);
+  assert.equal(gym.checkedIn, 1);
   assert.equal(JSON.stringify(r).includes('totalAmount'), false, 'không có số liệu tài chính');
 });
 

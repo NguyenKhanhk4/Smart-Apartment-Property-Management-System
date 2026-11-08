@@ -1,3 +1,4 @@
+// Module 7: cư dân theo dõi/xác nhận khách và xem bưu kiện của căn đang chọn, giữ nguyên form đăng ký có sẵn.
 import { useState } from 'react';
 import {
   Button,
@@ -13,6 +14,7 @@ import {
   Select,
   Spin,
   Typography,
+  Alert, Image, Pagination, Tabs, Tag,
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -21,33 +23,50 @@ import { useAction, useApi } from '../../hooks/useApi';
 import EnumTag from '../../components/EnumTag';
 import { GUEST_STATUS } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
+import { useResident } from '../../hooks/useResident';
+import ResidentPageTitle from '../../components/resident/ResidentPageTitle';
 
 // UC-E07 — Cư dân đăng ký khách trước để bảo vệ đối chiếu
 export default function ResidentGuestsPage() {
+  const { apartmentId } = useResident();
+  const [tab, setTab] = useState('guests');
+  const [page, setPage] = useState(1);
   const [form] = Form.useForm();
   const [open, setOpen] = useState(false);
-  const { data = [], loading, reload } = useApi(() => guestApi.list({ limit: 50 }), []);
+  const { data = [], pagination, loading, reload, error } = useApi(() => tab === 'guests'
+    ? guestApi.list({ limit: 20, page, apartmentId }) : guestApi.operations('parcels', { limit: 20, page, apartmentId }),
+    [tab, page, apartmentId], { enabled: Boolean(apartmentId) });
+  const [confirm, confirming] = useAction((id, decision) => guestApi.confirm(id, decision), { success: 'Đã gửi phản hồi cho Bảo vệ', onDone: reload });
   const { data: apartments = [] } = useApi(() => lookupApi.apartments(), []);
   const [register, registering] = useAction(
-    (v) => guestApi.register({ ...v, expectedTime: v.expectedTime.toISOString() }),
+    (v) => guestApi.register({ ...v, apartmentId: v.apartmentId || apartmentId, expectedTime: v.expectedTime.toISOString() }),
     { success: 'Đã đăng ký khách', onDone: () => (setOpen(false), reload()) },
   );
   const [cancel] = useAction((id) => guestApi.cancel(id), { success: 'Đã hủy đăng ký', onDone: reload });
 
   return (
     <Flex vertical gap={12}>
-      <Flex justify="space-between" align="center">
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          Khách đến thăm
-        </Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-          Đăng ký khách
-        </Button>
-      </Flex>
+      <ResidentPageTitle
+        title="Khách & bưu kiện"
+        subtitle="Đăng ký trước khách đến thăm để bảo vệ đón tiếp; theo dõi bưu kiện đang giữ tại quầy lễ tân."
+        extra={tab === 'guests' && (
+          <Button disabled={!apartmentId} type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+            Đăng ký khách
+          </Button>
+        )}
+      />
+      <Tabs className="-mt-3" activeKey={tab} onChange={(v) => { setTab(v); setPage(1); }} items={[{ key: 'guests', label: 'Khách đến thăm' }, { key: 'parcels', label: 'Bưu kiện của căn' }]} />
+      {error && <Alert type="error" title={error.message} />}
       <Spin spinning={loading}>
         <Flex vertical gap={8}>
-          {!loading && !data.length && <Empty description="Chưa có khách nào" />}
-          {data.map((g) => (
+          {!loading && !data.length && <Empty description={tab === 'guests' ? 'Chưa có khách nào' : 'Chưa có bưu kiện'} />}
+          {tab === 'parcels' && data.map((p) => <Card key={p._id} size="small" title={`${p.trackingCode} · ${p.carrier}`}>
+            <Tag>{{ STORED: 'Đang lưu quầy', AWAITING_RETURN: 'Chờ trả vận chuyển', COLLECTED: 'Đã bàn giao', RETURNED: 'Đã trả vận chuyển' }[p.status]}</Tag>
+            <p>Nhận tại quầy: {formatDateTime(p.createdAt)}</p>
+            {p.recipientName && <p>Người ký: {p.recipientName} · {formatDateTime(p.handedOverAt)}</p>}
+            <Image.PreviewGroup>{p.imageUrls?.map((url) => <Image key={url} src={url} width={80} />)}</Image.PreviewGroup>
+          </Card>)}
+          {tab === 'guests' && data.map((g) => (
             <Card key={g._id} size="small">
               <Flex justify="space-between" align="center" gap={8}>
                 <Flex vertical gap={2}>
@@ -67,7 +86,14 @@ export default function ResidentGuestsPage() {
                 </Flex>
                 <Flex vertical align="end" gap={4}>
                   <EnumTag map={GUEST_STATUS} value={g.status} />
-                  {g.status === 'EXPECTED' && (
+                  {g.isWalkIn && g.residentConfirmation !== 'PENDING' && <Typography.Text type="secondary">
+                    {g.residentConfirmation === 'CONFIRMED' ? 'Bạn cùng căn đã xác nhận' : 'Căn hộ đã từ chối'}
+                  </Typography.Text>}
+                  {g.isWalkIn && g.status !== 'CHECKED_OUT' && g.residentConfirmation === 'PENDING' && <Flex gap={4} wrap>
+                    <Button size="small" loading={confirming} onClick={() => confirm(g._id, true).catch(() => {})}>Xác nhận có khách</Button>
+                    <Button size="small" danger loading={confirming} onClick={() => confirm(g._id, false).catch(() => {})}>Không xác nhận</Button>
+                  </Flex>}
+                  {g.status === 'EXPECTED' && !g.isWalkIn && (
                     <Popconfirm title="Hủy đăng ký khách này?" onConfirm={() => cancel(g._id).catch(() => {})}>
                       <Button size="small" type="link" danger>
                         Hủy
@@ -80,6 +106,7 @@ export default function ResidentGuestsPage() {
           ))}
         </Flex>
       </Spin>
+      <Pagination current={page} pageSize={20} total={pagination?.total || 0} onChange={setPage} showSizeChanger={false} hideOnSinglePage />
 
       <Modal
         title="Đăng ký khách"

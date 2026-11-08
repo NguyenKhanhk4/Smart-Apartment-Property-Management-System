@@ -1,3 +1,4 @@
+// Upload dùng chung; chỉ bảng tin cho phép thêm PDF, các luồng ảnh giữ nguyên kiểm tra định dạng.
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { env } from '../config/env.js';
@@ -5,15 +6,17 @@ import { CONFIG_KEYS } from '../constants/enums.js';
 import { ApiError } from '../utils/ApiError.js';
 import { getConfig } from './systemConfig.service.js';
 
-// NFR-10: chỉ jpg/png; dung lượng tối đa theo tham số UPLOAD_MAX_SIZE_MB (Trưởng BQL sửa, mặc định 5MB).
+// NFR-10: chỉ jpg/png; dung lượng tối đa theo tham số UPLOAD_MAX_SIZE_MB (Trưởng BQL sửa, mặc định 10MB).
+// Client đã tự chuyển ảnh sang JPEG và thu nhỏ trước khi gửi (client/src/utils/imageUpload.js); đây là lớp kiểm tra cuối.
 // Multer chặn cứng ở HARD_MAX_MB để không đọc file quá lớn vào RAM; giới hạn theo cấu hình kiểm tra ngay sau đó.
 const MB = 1024 * 1024;
 const HARD_MAX_MB = 20;
 const MAX_FILE_SIZE = HARD_MAX_MB * MB;
+const DEFAULT_MAX_MB = 10;
 
 async function maxUploadMb() {
   const value = Number(await getConfig(CONFIG_KEYS.UPLOAD_MAX_SIZE_MB));
-  return Number.isFinite(value) && value > 0 ? Math.min(value, HARD_MAX_MB) : 5;
+  return Number.isFinite(value) && value > 0 ? Math.min(value, HARD_MAX_MB) : DEFAULT_MAX_MB;
 }
 const ALLOWED_TYPES = ['image/jpeg', 'image/png'];
 
@@ -51,12 +54,16 @@ export function isImageBuffer(buffer) {
  * Middleware nhận nhiều ảnh multipart ở field `fieldName` (giữ trong RAM, upload lên Cloudinary ở service).
  * @example router.post('/', authenticate, uploadImages('images', 5), controller.create)
  */
-export function uploadImages(fieldName = 'images', maxCount = 5) {
-  const handler = multerInstance.array(fieldName, maxCount);
+export function uploadImages(fieldName = 'images', maxCount = 5, allowPdf = false) {
+  const handler = (allowPdf ? multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_SIZE },
+    fileFilter: (_req, file, cb) => [...ALLOWED_TYPES, 'application/pdf'].includes(file.mimetype)
+      ? cb(null, true) : cb(ApiError.badRequest('Chỉ nhận PDF, JPG hoặc PNG')),
+  }) : multerInstance).array(fieldName, maxCount);
   return (req, res, next) =>
     handler(req, res, (err) => {
       if (!err) {
-        const fake = (req.files ?? []).find((f) => !isImageBuffer(f.buffer));
+        const fake = (req.files ?? []).find((f) => !(isImageBuffer(f.buffer) && ALLOWED_TYPES.includes(f.mimetype)) &&
+          !(allowPdf && f.mimetype === 'application/pdf' && f.buffer.subarray(0, 5).toString() === '%PDF-'));
         if (fake) {
           return next(ApiError.badRequest(`Ảnh "${fake.originalname}" không phải file jpg/png hợp lệ`));
         }
@@ -84,7 +91,7 @@ export function uploadImages(fieldName = 'images', maxCount = 5) {
 function uploadBuffer(file, folder) {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder: `sapms/${folder}`, resource_type: 'image' },
+      { folder: `sapms/${folder}`, resource_type: file.mimetype === 'application/pdf' ? 'raw' : 'image' },
       (err, result) => (err ? reject(err) : resolve(result.secure_url)),
     );
     stream.end(file.buffer);
@@ -95,10 +102,9 @@ function uploadBuffer(file, folder) {
 export async function uploadToCloudinary(files = [], folder = 'misc') {
   if (!files.length) return [];
   if (!env.cloudinary.enabled) {
-    throw new ApiError(
-      'SERVER_ERROR',
-      'Chưa cấu hình Cloudinary (CLOUDINARY_* trong server/.env) nên chưa upload được ảnh',
-    );
+    // Chi tiết cấu hình chỉ ghi log; người dùng nhận thông báo chung (MSG-G07), không lộ tên biến môi trường
+    console.error('[upload] Chưa cấu hình Cloudinary (CLOUDINARY_* trong server/.env)');
+    throw new ApiError('SERVER_ERROR', 'Upload ảnh thất bại, vui lòng thử lại sau');
   }
   try {
     return await Promise.all(files.map((f) => uploadBuffer(f, folder)));

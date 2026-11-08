@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import {
+  Alert,
   Card,
   Tabs,
+  Segmented,
   Table,
   Button,
   Modal,
@@ -16,8 +18,10 @@ import {
   Col,
   Statistic,
   Tooltip,
+  Checkbox,
 } from 'antd';
 import PhoneAccountNotice from '../../components/PhoneAccountNotice';
+import TransferOwnerModal from './TransferOwnerModal';
 import { usePhoneAccount } from '../../hooks/usePhoneAccount';
 import { PHONE_RULES } from '../../utils/phone';
 import {
@@ -35,15 +39,15 @@ import {
 import dayjs from 'dayjs';
 import PageHeader from '../../components/PageHeader';
 import EnumTag from '../../components/EnumTag';
+import ApartmentOccupancyTag from '../buildings/ApartmentOccupancyTag';
 import {
-  APARTMENT_STATUS,
   CONTRACT_TYPES,
   CONTRACT_STATUS,
   RELATION_TYPES,
   VEHICLE_STATUS,
   VEHICLE_TYPES,
 } from '../../constants/enums';
-import { formatDate } from '../../utils/format';
+import { formatDate, formatDateTime } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi, useAction } from '../../hooks/useApi';
 import { apartmentsApi, contractsApi, residentsApi, vehicleApi } from '../../api/moduleA.api';
@@ -54,8 +58,10 @@ export default function ApartmentDetailPage() {
   const { hasRole } = useAuth();
 
   const isReceptionist = hasRole('STAFF:RECEPTIONIST');
+  const isManager = hasRole('MANAGER');
   const canRevealIdNumber = hasRole('STAFF:RECEPTIONIST', 'MANAGER');
   const [revealedIds, setRevealedIds] = useState({});
+  const [residentView, setResidentView] = useState('occupants');
 
   const handleRevealIdNumber = async (residentId) => {
     try {
@@ -82,6 +88,38 @@ export default function ApartmentDetailPage() {
     loading: loadingResidents,
     reload: reloadResidents,
   } = useApi(() => residentsApi.listByApartment(id), [id]);
+  const occupants = residents.filter((resident) => resident.occupancyRole)
+    .sort((a, b) => Number(b.occupancyRole === 'HEAD') - Number(a.occupancyRole === 'HEAD'));
+  const showOccupants = residentView === 'occupants';
+
+  const [confirmMoveIn, confirmingMoveIn] = useAction(() => apartmentsApi.confirmMoveIn(id), {
+    success: 'Đã xác nhận cư dân vào ở',
+    onDone: () => {
+      reloadApt();
+      reloadResidents();
+    },
+  });
+  const activeSale = apartment?.activeContracts?.find((contract) => contract.type === 'SALE');
+  const owner = activeSale?.ownerId;
+  const ownerResidence = residents.find((resident) => resident.relationType === 'OWNER');
+  const ownerLinked = owner && ownerResidence?.userId === owner._id;
+  const canConfirmMoveIn = isReceptionist && apartment?.handoverDate && activeSale && !activeSale.ownerAccountPending;
+  const canIssueOwner = isManager && owner?.isActive && !loadingApt && !loadingResidents && !ownerResidence;
+  const [ownerModalOpen, setOwnerModalOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [ownerForm] = Form.useForm();
+  const [issueOwner, issuingOwner] = useAction(
+    (values) => apartmentsApi.issueOwnerAccount(id, { contractId: activeSale._id, ...values }),
+    {
+      success: (response) => response.data.activationInviteSent === false
+        ? 'Đã cấp quyền. Hướng dẫn chủ sở hữu kích hoạt qua email đã đăng ký hoặc nhận mã tại quầy.'
+        : 'Đã cấp tài khoản chủ sở hữu cho căn hộ',
+      onDone: async () => {
+        setOwnerModalOpen(false);
+        await Promise.all([reloadApt(), reloadResidents()]);
+      },
+    },
+  );
 
   // Load contracts list
   const {
@@ -102,11 +140,17 @@ export default function ApartmentDetailPage() {
   // Modal Thêm thành viên
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addForm] = Form.useForm();
-  const check = usePhoneAccount(Form.useWatch('phone', addForm));
+  const hasAccount = Form.useWatch('hasAccount', addForm) !== false;
+  const memberPhone = Form.useWatch('phone', addForm);
+  const check = usePhoneAccount(hasAccount ? memberPhone : null);
 
   const [addMemberAction, addingMember] = useAction(
     async (values) => {
-      const payload = {
+      const payload = values.hasAccount === false ? {
+        apartmentId: id, hasAccount: false, fullName: values.fullName,
+        dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format('YYYY-MM-DD') : null,
+        idNumber: values.idNumber || null,
+      } : {
         apartmentId: id,
         phone: values.phone,
         idNumber: values.idNumber || null,
@@ -130,6 +174,7 @@ export default function ApartmentDetailPage() {
         setAddModalOpen(false);
         addForm.resetFields();
         check.reset();
+        setResidentView('records');
         reloadResidents();
         reloadApt();
       },
@@ -189,14 +234,14 @@ export default function ApartmentDetailPage() {
       render: (_, r) => (
         <div>
           <Space>
-            <span className="font-semibold text-gray-800 dark:text-gray-100">{r.fullName}</span>
-            {r.isHead && (
+            <span className="font-semibold text-ink dark:text-gray-100">{r.fullName}</span>
+            {(showOccupants ? r.occupancyRole === 'HEAD' : r.isHead) && (
               <Tag color="gold" icon={<CrownOutlined />}>
                 Chủ hộ
               </Tag>
             )}
           </Space>
-          <div className="text-xs text-gray-400">{r.email}</div>
+          <div className="text-xs text-ink-3">{r.email}</div>
         </div>
       ),
     },
@@ -317,17 +362,17 @@ export default function ApartmentDetailPage() {
       render: (_, c) =>
         c.type === 'SALE' ? (
           <div>
-            <span className="font-medium text-gray-800 dark:text-gray-100">
+            <span className="font-medium text-ink dark:text-gray-100">
               {c.ownerId?.fullName || '—'}
             </span>
-            <div className="text-xs text-gray-400">Chủ sở hữu • {c.ownerId?.email}</div>
+            <div className="text-xs text-ink-3">Chủ sở hữu • {c.ownerId?.email}</div>
           </div>
         ) : (
           <div>
-            <span className="font-medium text-gray-800 dark:text-gray-100">
+            <span className="font-medium text-ink dark:text-gray-100">
               {c.tenantId?.fullName || '—'}
             </span>
-            <div className="text-xs text-gray-400">
+            <div className="text-xs text-ink-3">
               Người thuê • {c.tenantId?.email}
               {c.tenantPaysFees && (
                 <Tag color="orange" className="ml-1 text-[10px]">
@@ -364,8 +409,8 @@ export default function ApartmentDetailPage() {
       key: 'plateNumber',
       width: 150,
       render: (val, r) => (
-        <span className="font-semibold text-gray-800 dark:text-gray-100">
-          {val || (r.type === 'BICYCLE' ? <i className="text-gray-400 font-normal">Không biển số</i> : '—')}
+        <span className="font-semibold text-ink dark:text-gray-100">
+          {val || (r.type === 'BICYCLE' ? <i className="text-ink-3 font-normal">Không biển số</i> : '—')}
         </span>
       ),
     },
@@ -408,9 +453,28 @@ export default function ApartmentDetailPage() {
         </Button>
         <PageHeader
           title={`Chi tiết căn hộ ${apartment?.code || ''}`}
-          subtitle={`${apartment?.building?.name || ''} • Tầng ${apartment?.floor || ''} • ${apartment?.area || 0} m²`}
+          subtitle={`${apartment?.building?.name || ''} • Tầng ${apartment?.floor || ''}`}
           extra={
-            <Space>
+            <Space wrap>
+              {canIssueOwner && (
+                <Button type="primary" icon={<CrownOutlined />} onClick={() => setOwnerModalOpen(true)}>
+                  Cấp tài khoản chủ sở hữu
+                </Button>
+              )}
+              {isManager && owner && (
+                <Button onClick={() => setTransferOpen(true)}>Cập nhật chủ sở hữu</Button>
+              )}
+              {canConfirmMoveIn && (
+                <Popconfirm
+                  title="Xác nhận cư dân đã vào ở?"
+                  description="Đối chiếu hồ sơ và xác nhận cư dân đã vào ở. Hệ thống dùng hợp đồng đang có hiệu lực để xác định chủ nhà hoặc khách thuê."
+                  okText="Xác nhận"
+                  cancelText="Hủy"
+                  onConfirm={() => confirmMoveIn().catch(() => {})}
+                >
+                  <Button type="primary" loading={confirmingMoveIn}>Xác nhận vào ở</Button>
+                </Popconfirm>
+              )}
               <Button
                 icon={<ReloadOutlined />}
                 onClick={() => {
@@ -427,15 +491,92 @@ export default function ApartmentDetailPage() {
         />
       </div>
 
+      {isManager && apartment && (
+        <Card title="Tài khoản chủ sở hữu" size="small" className="mb-6">
+          {owner ? (
+            <Space direction="vertical" size={6}>
+              <Space wrap>
+                <strong>{owner.fullName}</strong>
+                <span>{owner.phone}</span>
+                {ownerLinked && <Tag color={owner.activatedAt ? 'green' : 'gold'}>
+                  {owner.isActive === false ? 'Tài khoản bị khóa' : owner.activatedAt ? 'Đã kích hoạt' : 'Chờ kích hoạt'}
+                </Tag>}
+                {!ownerResidence && (owner.isActive
+                  ? <Tag color="blue">Chờ Ban quản lý cấp quyền</Tag>
+                  : <Tag color="red">Tài khoản bị khóa</Tag>)}
+              </Space>
+              {ownerResidence && !ownerLinked && (
+                <Alert type="warning" showIcon title="Căn đang có chủ sở hữu khác. Xử lý qua Chuyển nhượng căn hộ." />
+              )}
+              {ownerLinked && activeSale.ownerAccountIssuedAt && (
+                <span>Đã cấp lúc {formatDateTime(activeSale.ownerAccountIssuedAt)}
+                  {activeSale.ownerAccountIssuedBy?.fullName && ` bởi ${activeSale.ownerAccountIssuedBy.fullName}`}
+                </span>
+              )}
+              {ownerLinked && !activeSale.ownerAccountIssuedAt && <span>Đã liên kết từ hồ sơ trước đây</span>}
+            </Space>
+          ) : (
+            <span>Cần ghi nhận hồ sơ mua bán trước khi cấp tài khoản chủ sở hữu.</span>
+          )}
+        </Card>
+      )}
+
+      <Modal
+        title="Cấp tài khoản chủ sở hữu"
+        open={ownerModalOpen}
+        onCancel={() => setOwnerModalOpen(false)}
+        onOk={() => ownerForm.submit()}
+        okText="Cấp tài khoản"
+        cancelText="Hủy"
+        confirmLoading={issuingOwner}
+        destroyOnHidden
+      >
+        <Alert className="mb-4" type="info" showIcon
+          title={`${apartment?.building?.name} · Căn ${apartment?.code}`}
+          description={`Người đứng tên theo hồ sơ mua bán là ${owner?.fullName ?? '—'}.`}
+        />
+        <Form
+          form={ownerForm}
+          layout="vertical"
+          initialValues={{ phone: owner?.phone, email: owner?.email }}
+          preserve={false}
+          onFinish={(values) => issueOwner(values).catch(() => {})}
+        >
+          <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="email" label="Email" rules={[{ type: 'email', message: 'Email không hợp lệ' }]}>
+            <Input disabled={Boolean(owner?.email || owner?.activatedAt)} autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="identityVerified" valuePropName="checked" rules={[{
+            validator: (_, verified) => verified
+              ? Promise.resolve()
+              : Promise.reject(new Error('Cần đối chiếu người đứng tên trước khi cấp')),
+          }]}>
+            <Checkbox>Đã đối chiếu hồ sơ mua bán và giấy tờ định danh của người đứng tên.</Checkbox>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {transferOpen && activeSale && (
+        <TransferOwnerModal
+          apartment={apartment}
+          sale={activeSale}
+          onClose={() => setTransferOpen(false)}
+          reloadApartment={reloadApt}
+          onTransferred={() => Promise.all([reloadApt(), reloadResidents(), reloadContracts(), reloadVehicles()])}
+        />
+      )}
+
       {/* Thông tin tổng quan căn hộ */}
-      <Card loading={loadingApt} className="mb-6 shadow-sm border border-gray-100 dark:border-gray-800">
+      <Card loading={loadingApt} className="mb-6 shadow-sm border border-line dark:border-gray-800">
         <Row gutter={[24, 16]} align="middle">
           <Col xs={24} sm={12} md={5}>
             <Statistic
               title="Trạng thái căn"
               valueRender={() => (
                 <div className="mt-1">
-                  <EnumTag map={APARTMENT_STATUS} value={apartment?.status} />
+                  <ApartmentOccupancyTag status={apartment?.occupancyStatus} />
                 </div>
               )}
             />
@@ -443,7 +584,7 @@ export default function ApartmentDetailPage() {
           <Col xs={12} sm={6} md={5}>
             <Statistic
               title="Cư dân đang ở"
-              value={residents.length}
+              value={occupants.length}
               prefix={<TeamOutlined className="text-blue-500 mr-1" />}
               suffix="người"
             />
@@ -466,16 +607,16 @@ export default function ApartmentDetailPage() {
           </Col>
           <Col xs={12} sm={6} md={4}>
             <Statistic
-              title="Diện tích"
-              value={apartment?.area || 0}
-              suffix="m²"
+              title="Diện tích tính phí quản lý"
+              value={apartment?.netArea ?? '—'}
+              suffix={apartment?.netArea != null ? 'm²' : undefined}
             />
           </Col>
         </Row>
       </Card>
 
       {/* Tabs Thành viên / Hợp đồng / Phương tiện */}
-      <Card className="shadow-sm border border-gray-100 dark:border-gray-800">
+      <Card className="shadow-sm border border-line dark:border-gray-800">
         <Tabs
           defaultActiveKey="residents"
           items={[
@@ -483,15 +624,21 @@ export default function ApartmentDetailPage() {
               key: 'residents',
               label: (
                 <span>
-                  <TeamOutlined /> Thành viên ({residents.length})
+                  <TeamOutlined /> Cư dân ({occupants.length} đang ở)
                 </span>
               ),
               children: (
                 <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="text-sm text-gray-500">
-                      Danh sách nhân khẩu đang sinh sống thực tế tại căn hộ
-                    </div>
+                  <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
+                    <Segmented
+                      aria-label="Danh sách cư dân"
+                      options={[
+                        { label: 'Người đang ở', value: 'occupants' },
+                        { label: 'Hồ sơ đang hoạt động', value: 'records' },
+                      ]}
+                      value={residentView}
+                      onChange={setResidentView}
+                    />
                     {isReceptionist && apartment?.status !== 'VACANT' && (
                       <Button
                         type="primary"
@@ -507,11 +654,11 @@ export default function ApartmentDetailPage() {
                   </div>
                   <Table
                     columns={residentColumns}
-                    dataSource={residents}
+                    dataSource={showOccupants ? occupants : residents}
                     rowKey="_id"
                     loading={loadingResidents}
                     pagination={false}
-                    locale={{ emptyText: 'Chưa có thành viên nào trong căn hộ' }}
+                    locale={{ emptyText: showOccupants ? 'Chưa có người đang ở' : 'Chưa có hồ sơ đang hoạt động' }}
                   />
                 </div>
               ),
@@ -566,19 +713,23 @@ export default function ApartmentDetailPage() {
         open={addModalOpen}
         onCancel={() => setAddModalOpen(false)}
         onOk={() => addForm.submit()}
-        okButtonProps={{ disabled: Boolean(check.blockReason) }}
+        okButtonProps={{ disabled: hasAccount && Boolean(check.blockReason) }}
         confirmLoading={addingMember}
         destroyOnClose
       >
         <Form
           form={addForm}
           layout="vertical"
-          onFinish={(v) => !check.blockReason && addMemberAction(v).catch(() => check.reload())}
+          initialValues={{ hasAccount: true }}
+          onFinish={(v) => (!hasAccount || !check.blockReason) && addMemberAction(v).catch(() => hasAccount && check.reload())}
           className="mt-4"
         >
+          <Form.Item name="hasAccount" valuePropName="checked">
+            <Checkbox>Có số điện thoại và tài khoản đăng nhập</Checkbox>
+          </Form.Item>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
+              <Form.Item name="phone" label="Số điện thoại" rules={hasAccount ? PHONE_RULES : []} hidden={!hasAccount}>
                 <Input placeholder="0912345678" />
               </Form.Item>
             </Col>
@@ -589,19 +740,21 @@ export default function ApartmentDetailPage() {
             </Col>
           </Row>
 
-          <PhoneAccountNotice check={check} />
+          {hasAccount && <PhoneAccountNotice check={check} />}
 
           {/* Tài khoản có sẵn không nhận họ tên, email, ngày sinh mới (BR-X5) */}
-          {!check.isExisting && (
+          {(!hasAccount || !check.isExisting) && (
             <>
-              <Form.Item
-                name="email"
-                label="Email (không bắt buộc)"
-                extra="Không có email thì cấp mã kích hoạt tại quầy sau khi thêm."
-                rules={[{ type: 'email', message: 'Email không đúng định dạng' }]}
-              >
-                <Input placeholder="Vd: member@gmail.com" />
-              </Form.Item>
+              {hasAccount && (
+                <Form.Item
+                  name="email"
+                  label="Email (không bắt buộc)"
+                  extra="Không có email thì cấp mã kích hoạt tại quầy sau khi thêm."
+                  rules={[{ type: 'email', message: 'Email không đúng định dạng' }]}
+                >
+                  <Input placeholder="Vd: member@gmail.com" />
+                </Form.Item>
+              )}
 
               <Form.Item
                 name="fullName"

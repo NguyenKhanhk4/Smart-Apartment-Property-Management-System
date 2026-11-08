@@ -4,10 +4,10 @@ import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { created, ok } from '../../utils/response.js';
-import { idParams } from '../../utils/validators.js';
+import { idParams, objectId } from '../../utils/validators.js';
 import * as service from './buildings.service.js';
 
-// Module A — Vũ Việt. UC-A05: Quản lý tòa nhà (Block)
+// Module A — UC13: Quản lý tòa nhà, block và sơ đồ tầng
 const router = Router();
 const VIEWERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
 
@@ -128,6 +128,45 @@ router.delete(
   async (req, res) => {
     const result = await service.deleteBuilding(req.validated.params.id, req.user, req.ip);
     ok(res, result);
+  },
+);
+
+const blockBody = Joi.object({
+  code: Joi.string().trim().uppercase().pattern(/^[A-Z0-9_-]+$/).max(20).required(),
+  name: Joi.string().trim().max(100).required(),
+});
+
+router.get(
+  '/:id/floor-plan',
+  authenticate,
+  authorize(...VIEWERS),
+  validate({
+    params: idParams,
+    query: Joi.object({ floor: Joi.number().integer().min(1).required(), blockId: objectId() }),
+  }),
+  async (req, res) => {
+    ok(res, await service.getFloorPlan(req.validated.params.id, req.validated.query));
+  },
+);
+
+router.post(
+  '/:id/blocks',
+  authenticate,
+  authorize('MANAGER'),
+  validate({ params: idParams, body: blockBody }),
+  async (req, res) => {
+    created(res, await service.saveBlock(req.validated.params.id, null, req.validated.body, req.user, req.ip));
+  },
+);
+
+router.put(
+  '/:id/blocks/:blockId',
+  authenticate,
+  authorize('MANAGER'),
+  validate({ params: Joi.object({ id: objectId().required(), blockId: objectId().required() }), body: blockBody }),
+  async (req, res) => {
+    const { id, blockId } = req.validated.params;
+    ok(res, await service.saveBlock(id, blockId, req.validated.body, req.user, req.ip));
   },
 );
 

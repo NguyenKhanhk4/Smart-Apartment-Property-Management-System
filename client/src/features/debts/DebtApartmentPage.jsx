@@ -3,10 +3,11 @@ import { useNavigate, useParams } from 'react-router';
 import { Alert, App, Button, Card, Descriptions, Empty, Flex, Skeleton, Statistic, Table, Tag, Timeline, Typography } from 'antd';
 import { EditOutlined, FilePdfOutlined } from '@ant-design/icons';
 import { debtApi } from '../../api/moduleB.api';
+import { contractsApi } from '../../api/moduleA.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
 import { CONTACT_METHODS, DEBT_STATUS, INVOICE_STATUS, PREPAID_TX_TYPES } from '../../constants/enums';
-import { useApi } from '../../hooks/useApi';
+import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format';
 import { periodLabel } from '../invoices/invoiceShared';
@@ -20,10 +21,17 @@ export default function DebtApartmentPage() {
   const navigate = useNavigate();
   const { message } = App.useApp();
   const { hasRole } = useAuth();
-  const isManager = hasRole('MANAGER');
+  const isAccountant = hasRole('ACCOUNTANT');
   const [recording, setRecording] = useState(null); // { caseId, payerName }
   const [downloading, setDownloading] = useState(null);
   const { data, loading, reload } = useApi(() => debtApi.apartment(id), [id]);
+  const { data: transferReview, reload: reloadTransferReview } = useApi(
+    () => contractsApi.transferDebtReview(id), [id],
+  );
+  const [acknowledgeTransfer, acknowledging] = useAction(
+    () => contractsApi.acknowledgeTransferDebt(id, transferReview._id),
+    { success: 'Đã ghi nhận công nợ đổi chủ', onDone: reloadTransferReview },
+  );
 
   if (loading && !data) return <Skeleton active />;
   if (!data) return <Empty description="Không tải được sổ công nợ" />;
@@ -71,6 +79,21 @@ export default function DebtApartmentPage() {
         ]}
       />
       <Flex vertical gap={16}>
+        {transferReview && (
+          <Alert
+            type={transferReview.transferDebtAcknowledgedAt ? 'success' : 'warning'}
+            showIcon
+            title={transferReview.transferDebtAcknowledgedAt
+              ? 'Đã ghi nhận công nợ đổi chủ'
+              : 'Chờ ghi nhận công nợ đổi chủ'}
+            description={`Yêu cầu từ ${formatDateTime(transferReview.transferDebtRequestedAt)}`}
+            action={isAccountant && !transferReview.transferDebtAcknowledgedAt && (
+              <Button loading={acknowledging} onClick={() => acknowledgeTransfer().catch(() => {})}>
+                Đã ghi nhận công nợ
+              </Button>
+            )}
+          />
+        )}
         <Card>
           <Flex gap={32} wrap>
             <Statistic title="Tổng nợ (đã trừ số dư)" value={formatMoney(debt.amount)} />
@@ -114,7 +137,7 @@ export default function DebtApartmentPage() {
               extra={
                 openCase && (
                   <Flex gap={8} wrap>
-                    {isManager && (
+                    {isAccountant && (
                       <Button icon={<EditOutlined />} onClick={() => setRecording({ caseId: openCase._id, payerName: p.fullName })}>
                         Ghi kết quả xử lý
                       </Button>

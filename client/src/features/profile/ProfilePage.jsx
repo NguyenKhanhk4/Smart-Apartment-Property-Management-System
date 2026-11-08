@@ -16,8 +16,10 @@ import { usersApi } from '../../api/moduleA.api';
 import { useAuth } from '../../hooks/useAuth';
 import { roleLabelOf } from '../../constants/enums';
 import PageHeader from '../../components/PageHeader';
-import ConsentTab from './ConsentTab';
+import ConsentSection from './ConsentSection';
 import { roleHome } from '../../routes/roleHome';
+import { useImageCheck } from '../../hooks/useImageCheck';
+import { IMAGE_ACCEPT } from '../../utils/imageUpload';
 
 // UC-A03: Trang hồ sơ cá nhân và đổi mật khẩu (/app/profile và /r/profile)
 export default function ProfilePage() {
@@ -25,6 +27,7 @@ export default function ProfilePage() {
   const [searchParams] = useSearchParams();
   const avatarLocked = isConsentLocked(user); // BR-X7: cư dân chưa đồng ý thì không tải ảnh được
   const { message } = App.useApp();
+  const checkPhoto = useImageCheck(); // UC63
 
   const [profileForm] = Form.useForm();
   // Đổi email phải nhập lại mật khẩu (email là kênh khôi phục mật khẩu)
@@ -122,9 +125,9 @@ export default function ProfilePage() {
               <Upload
                 showUploadList={false}
                 disabled={avatarLocked}
-                beforeUpload={() => false}
+                beforeUpload={checkPhoto}
                 onChange={handleAvatarUpload}
-                accept="image/png,image/jpeg"
+                accept={IMAGE_ACCEPT}
               >
                 <button
                   type="button"
@@ -137,7 +140,7 @@ export default function ProfilePage() {
               </Upload>
             </div>
             <div>
-              <h3 className="m-0 text-base font-semibold text-ink dark:text-[#EEF1F6]">
+              <h3 className="m-0 text-base font-semibold text-ink dark:text-[#FAFAFA]">
                 {user?.fullName}
               </h3>
               <div className="mt-1 flex items-center gap-2">
@@ -149,10 +152,13 @@ export default function ProfilePage() {
                 <span className="text-xs text-ink-3 dark:text-[#94A3B8]">{user?.email || user?.phone}</span>
               </div>
               <p className="mt-2 mb-0 text-xs text-ink-3">
-                Định dạng JPG, PNG. Dung lượng tối đa 5MB.
+                Ảnh chụp hoặc ảnh có sẵn, tự thu nhỏ trước khi tải lên.
               </p>
             </div>
           </div>
+
+          {/* BR-X7: trạng thái đồng ý điều khoản, xem lại và rút đồng ý (chỉ cư dân) */}
+          {user?.role === 'RESIDENT' && <ConsentSection />}
 
           <Form
             form={profileForm}
@@ -318,8 +324,6 @@ export default function ProfilePage() {
         </div>
       ),
     },
-    // Màn hình 5 của SRS: chỉ cư dân có mục đồng ý điều khoản
-    ...(user?.role === 'RESIDENT' ? [{ key: 'consent', label: 'Dữ liệu cá nhân', children: <ConsentTab /> }] : []),
   ];
 
   return (

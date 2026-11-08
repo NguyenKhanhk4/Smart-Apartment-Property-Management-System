@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 // kèm badge số việc chờ. Badge vàng = việc cần duyệt / xử lý, xám = thông tin (số khách chưa đến). Ẩn khi bằng 0.
 export default function ReceptionSidebarNav({ collapsed, onNavigate }) {
   const { pathname } = useLocation();
-  const { hasRole } = useAuth();
+  const { canSee } = useAuth();
   const counts = selectCounts(useReceptionDashboard());
   const activeKey = pathname.split('/')[2];
   const byKey = Object.fromEntries(adminMenu.map((m) => [m.key, m]));
@@ -17,7 +17,7 @@ export default function ReceptionSidebarNav({ collapsed, onNavigate }) {
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="Menu chính">
       {receptionNav.map(({ group, items }, gi) => {
-        const visible = items.map((i) => ({ ...i, menu: byKey[i.key] })).filter((i) => i.menu && hasRole(...(i.menu.roles ?? [])));
+        const visible = items.map((i) => ({ ...i, menu: byKey[i.key] })).filter((i) => i.menu && canSee(i.menu));
         if (!visible.length) return null;
         return (
           <div key={group ?? gi} className="space-y-1">

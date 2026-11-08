@@ -3,7 +3,7 @@ import { ticketApi } from '../../api/moduleE.api';
 import { QuoteItems } from '../repairQuotes/QuotePanel';
 import { formatMoney } from '../../utils/format';
 import { useAction, useApi } from '../../hooks/useApi';
-import { PRIORITIES, TICKET_STATUS, enumOptions } from '../../constants/enums';
+import { PRIORITIES, TICKET_SCOPES, TICKET_STATUS, TICKET_TYPES, enumOptions } from '../../constants/enums';
 import { keysOf } from '../../utils/status';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
 import { toFiles } from '../../utils/upload';
@@ -141,22 +141,44 @@ export function ProgressModal({ ticket, open, onClose, onDone }) {
   );
 }
 
+export function ComplaintResponseModal({ ticket, open, onClose, onDone }) {
+  return (
+    <ActionModal title={`Xử lý phản ánh ${ticket.code}`} open={open} onClose={onClose} onDone={onDone}
+      okText="Lưu phản hồi" success="Đã lưu kết quả xử lý phản ánh"
+      initialValues={{ status: TS.IN_PROGRESS }}
+      action={({ images, ...body }) => ticketApi.respondComplaint(ticket._id, body, toFiles(images))}>
+      <Form.Item name="status" label="Tiến độ" rules={[{ required: true }]}>
+        <Radio.Group options={[
+          { value: TS.IN_PROGRESS, label: 'Đang xử lý — gửi phản hồi' },
+          { value: TS.CLOSED, label: 'Đã xử lý — đóng phiếu' },
+        ]} />
+      </Form.Item>
+      <Form.Item name="note" label="Nội dung phản hồi / Kết quả xử lý"
+        rules={[{ required: true, whitespace: true, min: 5, message: 'Nhập ít nhất 5 ký tự' }]}>
+        <Input.TextArea rows={4} maxLength={2000} showCount />
+      </Form.Item>
+      <EvidencePhotosField name="images" label="Ảnh minh chứng (nếu có)" required={false} />
+    </ActionModal>
+  );
+}
+
 // UC-E05 — Cư dân xác nhận + đánh giá sao, hoặc báo chưa đạt
 export function ConfirmModal({ ticket, open, onClose, onDone }) {
+  const ratingOnly = ticket.type === 'COMPLAINT' && ticket.status === TS.CLOSED;
   return (
     <ActionModal
-      title={`Xác nhận kết quả ${ticket.code}`}
+      title={`${ratingOnly ? 'Đánh giá phản ánh' : 'Xác nhận kết quả'} ${ticket.code}`}
       open={open}
       onClose={onClose}
       onDone={onDone}
       okText="Gửi"
       success={(res) => (res.data.status === TS.CLOSED ? 'Cảm ơn bạn đã đánh giá' : 'Đã gửi lại cho kỹ thuật viên')}
       initialValues={{ accepted: true, rating: 5 }}
-      action={({ accepted, rating, comment, reason }) =>
-        ticketApi.confirm(ticket._id, accepted ? { accepted, rating, comment } : { accepted, reason })
+      action={({ accepted, rating, comment, reason, images }) =>
+        ticketApi.confirm(ticket._id, accepted ? { accepted, rating, comment } : { accepted, reason }, accepted ? [] : toFiles(images))
       }
     >
-      <Form.Item name="accepted" label="Kết quả xử lý">
+      <Form.Item name="accepted" label="Kết quả xử lý" hidden={ratingOnly}>
         <Radio.Group
           options={[
             { value: true, label: 'Đã giải quyết' },
@@ -168,7 +190,7 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
         {({ getFieldValue }) =>
           getFieldValue('accepted') !== false ? (
             <>
-              <Form.Item name="rating" label="Đánh giá kỹ thuật viên" rules={[{ required: true, message: 'Chọn số sao' }]}>
+              <Form.Item name="rating" label={ticket.type === 'COMPLAINT' ? 'Đánh giá kết quả xử lý' : 'Đánh giá kỹ thuật viên'} rules={[{ required: true, message: 'Chọn số sao' }]}>
                 <Rate />
               </Form.Item>
               <Form.Item name="comment" label="Nhận xét">
@@ -176,9 +198,13 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
               </Form.Item>
             </>
           ) : (
-            <Form.Item name="reason" label="Lý do chưa đạt" rules={[{ required: true, min: 5, message: 'Nhập lý do (tối thiểu 5 ký tự)' }]}>
-              <Input.TextArea rows={3} maxLength={500} />
-            </Form.Item>
+            <>
+              <Form.Item name="reason" label="Lý do chưa đạt" rules={[{ required: true, min: 5, message: 'Nhập lý do (tối thiểu 5 ký tự)' }]}>
+                <Input.TextArea rows={3} maxLength={500} />
+              </Form.Item>
+              {/* UC49: ảnh minh chứng kết quả chưa đạt (tùy chọn) */}
+              <EvidencePhotosField name="images" label="Ảnh minh chứng (nếu có)" required={false} />
+            </>
           )
         }
       </Form.Item>
@@ -237,3 +263,78 @@ export function QuoteDecisionModal({ ticket, quote: pending, open, onClose, onDo
     </ActionModal>
   );
 }
+
+// M5-5 — đổi loại / phạm vi phiếu chưa bắt đầu xử lý; hạn SLA tính lại từ lúc đổi
+export function ReclassifyModal({ ticket, open, onClose, onDone }) {
+  const [form] = Form.useForm();
+  const type = Form.useWatch('type', form) ?? ticket.type;
+  return (
+    <ActionModal
+      title={`Đổi phân loại ${ticket.code}`}
+      open={open}
+      onClose={onClose}
+      onDone={onDone}
+      form={form}
+      okText="Đổi phân loại"
+      success="Đã đổi phân loại phiếu"
+      initialValues={{ type: ticket.type, scope: ticket.scope }}
+      action={({ type: nextType, scope, reason }) =>
+        ticketApi.classify(ticket._id, { type: nextType, ...(nextType === 'INCIDENT' && { scope }), reason })
+      }
+    >
+      <Form.Item name="type" label="Loại phiếu" extra="Đổi sang Phản ánh thì phiếu bỏ kỹ thuật viên, chuyển cho Trưởng BQL xử lý">
+        <Radio.Group optionType="button" buttonStyle="solid" options={enumOptions(TICKET_TYPES)} />
+      </Form.Item>
+      {type === 'INCIDENT' && (
+        <Form.Item name="scope" label="Phạm vi" extra="Trong căn hộ: phải gửi báo giá cho Người nộp phí trước khi sửa">
+          <Radio.Group options={enumOptions(TICKET_SCOPES)} />
+        </Form.Item>
+      )}
+      <Form.Item name="reason" label="Lý do" rules={[{ required: true, min: 5, message: 'Nhập lý do (tối thiểu 5 ký tự)' }]}>
+        <Input.TextArea rows={3} maxLength={500} showCount />
+      </Form.Item>
+    </ActionModal>
+  );
+}
+
+// M5-6 — gộp phiếu trùng vào phiếu chính (sự cố khu vực chung đang mở cùng tòa, cùng loại sự cố)
+export function MergeModal({ ticket, open, onClose, onDone }) {
+  const { data: similar = [], loading } = useApi(
+    () =>
+      ticketApi.similar({
+        apartmentId: ticket.apartmentId?._id ?? ticket.apartmentId,
+        categoryId: ticket.category?._id ?? ticket.category,
+        excludeId: ticket._id,
+      }),
+    [ticket._id],
+    { enabled: open },
+  );
+  return (
+    <ActionModal
+      title={`Gộp ${ticket.code} vào phiếu khác`}
+      open={open}
+      onClose={onClose}
+      onDone={onDone}
+      okText="Gộp phiếu"
+      success="Đã gộp phiếu"
+      action={({ parentId, note }) => ticketApi.merge(ticket._id, { parentId, note })}
+    >
+      <Form.Item
+        name="parentId"
+        label="Phiếu chính"
+        extra="Phiếu này sẽ đóng theo phiếu chính; người báo được thông báo khi xử lý xong"
+        rules={[{ required: true, message: 'Chọn phiếu chính' }]}
+      >
+        <Select
+          loading={loading}
+          placeholder={similar.length ? 'Chọn phiếu đang xử lý cùng sự cố' : 'Không có sự cố cùng loại đang mở trong tòa'}
+          options={similar.map((s) => ({ value: s._id, label: `${s.code} · ${s.title} (${TICKET_STATUS[s.status]?.label ?? s.status})` }))}
+        />
+      </Form.Item>
+      <Form.Item name="note" label="Ghi chú">
+        <Input.TextArea rows={2} maxLength={500} />
+      </Form.Item>
+    </ActionModal>
+  );
+}
+

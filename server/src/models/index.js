@@ -5,13 +5,14 @@
 // Module A — Tài khoản, tòa nhà, căn hộ, cư dân, hợp đồng, xe
 export { User } from './User.js';
 export { VerificationCode } from './VerificationCode.js';
+export { RolePermission } from './RolePermission.js';
 export { Building } from './Building.js';
 export { Apartment } from './Apartment.js';
 export { Contract } from './Contract.js';
 export { Resident } from './Resident.js';
 export { Vehicle } from './Vehicle.js';
-export { GatePass } from './GatePass.js';
 export { ParkingCard } from './ParkingCard.js';
+export { ParkingSession } from './ParkingSession.js';
 
 // Module B — Phí, hóa đơn, thanh toán, công nợ
 export { FeeType } from './FeeType.js';
@@ -38,8 +39,6 @@ export { WorkOrder } from './WorkOrder.js';
 export { Amenity } from './Amenity.js';
 export { Booking } from './Booking.js';
 export { MemberCode } from './MemberCode.js';
-export { AmenityPass } from './AmenityPass.js';
-export { AmenityVisit } from './AmenityVisit.js';
 export { DutyShift } from './DutyShift.js';
 
 // Module E — Ticket, sổ khách, bảng tin, thông báo, tham số hệ thống
@@ -52,3 +51,8 @@ export { SystemConfig } from './SystemConfig.js';
 
 // Hệ thống
 export { CronRun } from './CronRun.js';
+
+// UC05 — Cấu hình tòa nhà & biểu phí (Vũ Việt)
+export { BuildingProfile } from './BuildingProfile.js';
+export { UtilityTariff } from './UtilityTariff.js';
+export { CollectionSetting } from './CollectionSetting.js';

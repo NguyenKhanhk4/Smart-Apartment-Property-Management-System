@@ -18,8 +18,8 @@ import {
   Col,
   Statistic,
   Descriptions,
-  Alert,
   App,
+  Tooltip,
 } from 'antd';
 import {
   BankOutlined,
@@ -36,10 +36,15 @@ import {
 } from '@ant-design/icons';
 import PageHeader from '../../components/PageHeader';
 import EnumTag from '../../components/EnumTag';
-import { APARTMENT_STATUS, CONTRACT_TYPES, CONTRACT_STATUS } from '../../constants/enums';
+import { APARTMENT_OCCUPANCY, CONTRACT_TYPES, CONTRACT_STATUS } from '../../constants/enums';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi, useAction } from '../../hooks/useApi';
 import { buildingsApi, apartmentsApi } from '../../api/moduleA.api';
+import ApartmentOccupancyTag from './ApartmentOccupancyTag';
+import FloorPlan from './FloorPlan';
+import { handoverDay } from './apartmentOccupancy';
+
+const occupancyOptions = Object.entries(APARTMENT_OCCUPANCY).map(([value, { label }]) => ({ value, label }));
 
 export default function BuildingsPage() {
   const navigate = useNavigate();
@@ -51,6 +56,9 @@ export default function BuildingsPage() {
 
   // Active tab: 'buildings' | 'apartments'
   const [activeTab, setActiveTab] = useState('buildings');
+  const [planSelection, setPlanSelection] = useState({ floor: 1 });
+  const [occupancyApartment, setOccupancyApartment] = useState(null);
+  const [occupancyForm] = Form.useForm();
 
   // Buildings state & APIs
   const [buildingModalOpen, setBuildingModalOpen] = useState(false);
@@ -62,6 +70,16 @@ export default function BuildingsPage() {
     loading: loadingBuildings,
     reload: reloadBuildings,
   } = useApi(buildingsApi.list, []);
+
+  const planBuilding = buildings.find((building) => building._id === planSelection.buildingId) ?? buildings[0];
+  const planFloor = Math.min(planSelection.floor, planBuilding?.totalFloors ?? 1);
+  const {
+    data: planApartments = [], loading: loadingPlan, error: planError, reload: reloadFloorPlan,
+  } = useApi(
+    () => buildingsApi.floorPlan(planBuilding._id, { floor: planFloor }),
+    [planBuilding?._id, planFloor],
+    { enabled: activeTab === 'floorPlan' && Boolean(planBuilding) },
+  );
 
   // Apartments filter & state
   const [apartmentFilter, setApartmentFilter] = useState({
@@ -76,7 +94,14 @@ export default function BuildingsPage() {
 
   const [apartmentModalOpen, setApartmentModalOpen] = useState(false);
   const [editingApartment, setEditingApartment] = useState(null);
+  const [latestHandoverDay, setLatestHandoverDay] = useState('');
   const [apartmentForm] = Form.useForm();
+  const formBuildingId = Form.useWatch('buildingId', apartmentForm);
+  const formHandoverDate = Form.useWatch('handoverDate', apartmentForm);
+  const formBuilding = buildings.find((building) => building._id === formBuildingId);
+  const newApartmentStatus = formHandoverDate && formHandoverDate <= latestHandoverDay
+    ? 'VACANT'
+    : 'NOT_HANDED_OVER';
 
   // Apartment Detail state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -96,7 +121,7 @@ export default function BuildingsPage() {
         limit: apartmentFilter.limit,
         ...(apartmentFilter.buildingId ? { buildingId: apartmentFilter.buildingId } : {}),
         ...(apartmentFilter.floor ? { floor: apartmentFilter.floor } : {}),
-        ...(apartmentFilter.status ? { status: apartmentFilter.status } : {}),
+        ...(apartmentFilter.status ? { occupancyStatus: apartmentFilter.status } : {}),
         ...(apartmentFilter.q ? { q: apartmentFilter.q.trim() } : {}),
       }),
     [apartmentFilter],
@@ -156,26 +181,57 @@ export default function BuildingsPage() {
     }
   };
 
+  const reloadApartmentViews = () => {
+    if (activeTab === 'apartments') reloadApartments();
+    if (activeTab === 'floorPlan' && planBuilding) reloadFloorPlan();
+  };
+
+  const openOccupancyModal = (apartment) => {
+    occupancyForm.setFieldsValue({ status: apartment.occupancyStatus, reason: '' });
+    setOccupancyApartment(apartment);
+  };
+
+  const [saveOccupancy, submittingOccupancy] = useAction(
+    (values) => apartmentsApi.setOccupancy(occupancyApartment._id, values),
+    {
+      success: 'Đã cập nhật trạng thái căn hộ',
+      onDone: ({ data }) => {
+        const updateStatus = (apartment) => apartment?._id === data._id
+          ? { ...apartment, occupancyStatus: data.occupancyStatus }
+          : apartment;
+        setSelectedApartment(updateStatus);
+        setEditingApartment(updateStatus);
+        setOccupancyApartment(null);
+        reloadApartmentViews();
+      },
+    },
+  );
+
   // Actions for Apartment
   const [saveApartment, submittingApartment] = useAction(
     async (values) => {
+      const { buildingId, ...properties } = values;
+      const body = {
+        ...properties,
+        handoverDate: properties.handoverDate || null,
+        netArea: properties.netArea ?? undefined,
+      };
       if (editingApartment) {
-        return apartmentsApi.update(editingApartment._id, {
-          code: values.code,
-          floor: values.floor,
-          area: values.area,
-        });
+        if (!editingApartment.type && body.netArea !== undefined && body.netArea !== editingApartment.netArea) {
+          body.type = 'RESIDENTIAL';
+        }
+        return apartmentsApi.update(editingApartment._id, body);
       }
-      return apartmentsApi.create(values);
+      return apartmentsApi.create({ buildingId, ...body, type: 'RESIDENTIAL' });
     },
     {
       success: () =>
         editingApartment
           ? 'Cập nhật căn hộ thành công'
-          : 'Tạo mới căn hộ thành công (trạng thái: Trống)',
+          : 'Tạo mới căn hộ thành công',
       onDone: () => {
         setApartmentModalOpen(false);
-        reloadApartments();
+        reloadApartmentViews();
         reloadBuildings();
       },
     },
@@ -184,25 +240,28 @@ export default function BuildingsPage() {
   const [deleteApartment] = useAction((id) => apartmentsApi.delete(id), {
     success: 'Đã xóa căn hộ thành công',
     onDone: () => {
-      reloadApartments();
+      reloadApartmentViews();
       reloadBuildings();
     },
   });
 
   const handleOpenApartmentModal = (apt = null) => {
     setEditingApartment(apt);
+    setLatestHandoverDay(handoverDay(Date.now()));
+    apartmentForm.resetFields();
     if (apt) {
       apartmentForm.setFieldsValue({
         buildingId: apt.buildingId?._id || apt.buildingId,
         code: apt.code,
         floor: apt.floor,
-        area: apt.area,
+        netArea: apt.netArea,
+        technicalShaft: apt.technicalShaft,
+        handoverDate: handoverDay(apt.handoverDate),
       });
-    } else {
-      apartmentForm.resetFields();
-      if (apartmentFilter.buildingId) {
-        apartmentForm.setFieldValue('buildingId', apartmentFilter.buildingId);
-      }
+    } else if (activeTab === 'floorPlan') {
+      apartmentForm.setFieldsValue({ buildingId: planBuilding?._id, floor: planFloor });
+    } else if (apartmentFilter.buildingId) {
+      apartmentForm.setFieldValue('buildingId', apartmentFilter.buildingId);
     }
     setApartmentModalOpen(true);
   };
@@ -217,6 +276,7 @@ export default function BuildingsPage() {
   };
 
   const handleViewApartmentDetail = async (id) => {
+    setSelectedApartment(null);
     setLoadingDetail(true);
     setDetailModalOpen(true);
     try {
@@ -249,7 +309,7 @@ export default function BuildingsPage() {
       title: 'Địa chỉ',
       dataIndex: 'address',
       key: 'address',
-      render: (addr) => addr || <span className="text-gray-400 italic">Chưa có</span>,
+      render: (addr) => addr || <span className="text-ink-3 italic">Chưa có</span>,
     },
     {
       title: 'Tổng số tầng',
@@ -281,22 +341,27 @@ export default function BuildingsPage() {
                 >
                   Sửa
                 </Button>
-                <Popconfirm
-                  title="Xóa tòa nhà"
-                  description={
-                    record.apartmentCount > 0
-                      ? 'Tòa nhà đã có căn hộ, không thể xóa!'
-                      : `Bạn có chắc chắn muốn xóa tòa ${record.name}?`
-                  }
-                  okText="Xóa"
-                  cancelText="Hủy"
-                  okButtonProps={{ danger: true, disabled: record.apartmentCount > 0 }}
-                  onConfirm={() => deleteBuilding(record._id).catch(() => {})}
-                >
-                  <Button size="small" type="text" danger icon={<DeleteOutlined />}>
-                    Xóa
-                  </Button>
-                </Popconfirm>
+                <Tooltip title={record.apartmentCount > 0 ? 'Tòa nhà đã có căn hộ, không thể xóa' : undefined}>
+                  <Popconfirm
+                    title="Xóa tòa nhà"
+                    description={`Bạn có chắc chắn muốn xóa tòa ${record.name}?`}
+                    okText="Xóa"
+                    cancelText="Hủy"
+                    okButtonProps={{ danger: true }}
+                    disabled={record.apartmentCount > 0}
+                    onConfirm={() => deleteBuilding(record._id).catch(() => {})}
+                  >
+                    <Button
+                      size="small"
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      disabled={record.apartmentCount > 0}
+                    >
+                      Xóa
+                    </Button>
+                  </Popconfirm>
+                </Tooltip>
               </Space>
             ),
           },
@@ -339,18 +404,18 @@ export default function BuildingsPage() {
       render: (floor) => `Tầng ${floor}`,
     },
     {
-      title: 'Diện tích',
-      dataIndex: 'area',
-      key: 'area',
-      width: 120,
-      render: (area) => `${area} m²`,
+      title: 'Diện tích tính phí quản lý',
+      dataIndex: 'netArea',
+      key: 'netArea',
+      width: 160,
+      render: (area) => (area != null ? `${area} m²` : '—'),
     },
     {
-      title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
-      width: 140,
-      render: (status) => <EnumTag map={APARTMENT_STATUS} value={status} />,
+      title: 'Trạng thái căn hộ',
+      dataIndex: 'occupancyStatus',
+      key: 'occupancyStatus',
+      width: 180,
+      render: (status) => <ApartmentOccupancyTag status={status} />,
     },
     {
       title: 'Thao tác',
@@ -399,7 +464,7 @@ export default function BuildingsPage() {
     <div>
       <PageHeader
         title="Tòa nhà & Căn hộ"
-        subtitle="Quản lý danh sách các tòa chung cư (Block) và căn hộ trực thuộc hệ thống"
+        subtitle="Quản lý tòa nhà, tầng và căn hộ"
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Tòa nhà & Căn hộ' }]}
         extra={
           <Space>
@@ -407,7 +472,7 @@ export default function BuildingsPage() {
               icon={<ReloadOutlined />}
               onClick={() => {
                 reloadBuildings();
-                if (activeTab === 'apartments') reloadApartments();
+                reloadApartmentViews();
               }}
             >
               Làm mới
@@ -421,7 +486,7 @@ export default function BuildingsPage() {
                 Thêm tòa nhà
               </Button>
             )}
-            {isManager && activeTab === 'apartments' && (
+            {isManager && activeTab !== 'buildings' && (
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -481,6 +546,22 @@ export default function BuildingsPage() {
               ),
             },
             {
+              key: 'floorPlan',
+              label: 'Sơ đồ tòa nhà',
+              children: (
+                <FloorPlan
+                  buildings={buildings}
+                  building={planBuilding}
+                  selection={{ buildingId: planBuilding?._id, floor: planFloor }}
+                  onSelect={setPlanSelection}
+                  apartments={planApartments}
+                  loading={loadingPlan}
+                  error={planError}
+                  onOpen={handleViewApartmentDetail}
+                />
+              ),
+            },
+            {
               key: 'apartments',
               label: (
                 <span>
@@ -491,7 +572,7 @@ export default function BuildingsPage() {
               children: (
                 <div>
                   {/* Filters Bar */}
-                  <div className="flex flex-wrap gap-3 items-center mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                  <div className="flex flex-wrap gap-3 items-center mb-4 p-3 bg-surface-alt border border-line rounded-lg dark:bg-[#27272A] dark:border-[#2E2E33]">
                     <Select
                       placeholder="Lọc theo tòa"
                       allowClear
@@ -509,7 +590,7 @@ export default function BuildingsPage() {
                     </Select>
 
                     <Select
-                      placeholder="Trạng thái"
+                      placeholder="Trạng thái căn hộ"
                       allowClear
                       style={{ width: 150 }}
                       value={apartmentFilter.status}
@@ -517,10 +598,8 @@ export default function BuildingsPage() {
                         setApartmentFilter((prev) => ({ ...prev, page: 1, status: val }))
                       }
                     >
-                      {Object.entries(APARTMENT_STATUS).map(([key, item]) => (
-                        <Select.Option key={key} value={key}>
-                          {item.label}
-                        </Select.Option>
+                      {occupancyOptions.map(({ value, label }) => (
+                        <Select.Option key={value} value={value}>{label}</Select.Option>
                       ))}
                     </Select>
 
@@ -656,21 +735,30 @@ export default function BuildingsPage() {
         confirmLoading={submittingApartment}
         destroyOnClose
       >
-        <Alert
-          message="Quy tắc trạng thái"
-          description="Căn hộ mới tạo luôn có trạng thái mặc định là 'Trống' (VACANT). Trạng thái căn hộ chỉ được tự động cập nhật khi có Hợp đồng mua bán hoặc cho thuê."
-          type="info"
-          showIcon
-          className="mb-4"
-        />
-
         <Form form={apartmentForm} layout="vertical">
+          <Form.Item label={editingApartment ? 'Trạng thái căn hộ hiện tại' : 'Trạng thái khi lưu'}>
+            <Space wrap>
+              <ApartmentOccupancyTag
+                status={editingApartment ? editingApartment.occupancyStatus : newApartmentStatus}
+              />
+              {editingApartment?.handoverDate && (
+                <Button size="small" onClick={() => openOccupancyModal(editingApartment)}>
+                  Đổi trạng thái
+                </Button>
+              )}
+            </Space>
+          </Form.Item>
+
           <Form.Item
             name="buildingId"
             label="Tòa nhà"
             rules={[{ required: true, message: 'Vui lòng chọn tòa nhà' }]}
           >
-            <Select placeholder="Chọn tòa nhà" disabled={Boolean(editingApartment)}>
+            <Select
+              placeholder="Chọn tòa nhà"
+              disabled={Boolean(editingApartment)}
+              onChange={() => apartmentForm.setFieldValue('floor', undefined)}
+            >
               {buildings.map((b) => (
                 <Select.Option key={b._id} value={b._id}>
                   {b.name} ({b.code}) — {b.totalFloors} tầng
@@ -696,18 +784,54 @@ export default function BuildingsPage() {
               { type: 'number', min: 1, message: 'Tầng tối thiểu là 1' },
             ]}
           >
-            <InputNumber min={1} style={{ width: '100%' }} placeholder="Vd: 10" />
+            <InputNumber min={1} max={formBuilding?.totalFloors} precision={0} style={{ width: '100%' }} />
           </Form.Item>
 
           <Form.Item
-            name="area"
-            label="Diện tích (m²)"
+            name="netArea"
+            label="Diện tích tính phí quản lý (m²)"
             rules={[
-              { required: true, message: 'Vui lòng nhập diện tích' },
-              { type: 'number', min: 1, message: 'Diện tích phải lớn hơn 0' },
+              {
+                required: !editingApartment || editingApartment.netArea != null,
+                message: 'Vui lòng nhập diện tích tính phí quản lý',
+              },
+              { type: 'number', min: 1, message: 'Diện tích phải từ 1 m² trở lên' },
+              ...(editingApartment?.grossArea != null ? [{
+                type: 'number',
+                max: editingApartment.grossArea,
+                message: `Diện tích tính phí quản lý không được vượt quá ${editingApartment.grossArea} m²`,
+              }] : []),
             ]}
           >
-            <InputNumber min={1} step={0.1} style={{ width: '100%' }} placeholder="Vd: 75.5" />
+            <InputNumber min={1} step={0.1} className="!w-full" />
+          </Form.Item>
+          <Form.Item name="technicalShaft" label="Vị trí hộp kỹ thuật điện/nước">
+            <Input maxLength={200} />
+          </Form.Item>
+          <Form.Item name="handoverDate" label="Ngày bàn giao thực tế"
+            extra="Để trống nếu căn mới chưa bàn giao."
+            rules={[{ required: Boolean(editingApartment?.handoverDate), message: 'Vui lòng giữ ngày bàn giao đã ghi nhận' }]}
+          >
+            <Input type="date" max={latestHandoverDay} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`Đổi trạng thái căn ${occupancyApartment?.code ?? ''}`}
+        open={Boolean(occupancyApartment)}
+        onCancel={() => setOccupancyApartment(null)}
+        onOk={() => occupancyForm.submit()}
+        confirmLoading={submittingOccupancy}
+      >
+        <Form form={occupancyForm} layout="vertical" onFinish={(values) => saveOccupancy(values).catch(() => {})}>
+          <Form.Item name="status" label="Trạng thái mới" rules={[{ required: true }]}>
+            <Select options={occupancyOptions.filter(({ value }) => value !== 'NOT_HANDED_OVER')} />
+          </Form.Item>
+          <Form.Item name="reason" label="Lý do điều chỉnh" rules={[
+            { required: true, whitespace: true, message: 'Vui lòng nhập lý do điều chỉnh' },
+          ]}>
+            <Input.TextArea maxLength={500} rows={3} />
           </Form.Item>
         </Form>
       </Modal>
@@ -718,7 +842,20 @@ export default function BuildingsPage() {
         open={detailModalOpen}
         onCancel={() => setDetailModalOpen(false)}
         footer={[
-          canOpenApartment && (
+          isManager && selectedApartment && (
+            <Button key="edit" onClick={() => {
+              setDetailModalOpen(false);
+              handleOpenApartmentModal(selectedApartment);
+            }}>
+              Sửa thông tin
+            </Button>
+          ),
+          isManager && selectedApartment?.handoverDate && (
+            <Button key="status" onClick={() => openOccupancyModal(selectedApartment)}>
+              Đổi trạng thái
+            </Button>
+          ),
+          canOpenApartment && selectedApartment && (
             <Button
               key="manage"
               type="primary"
@@ -735,22 +872,28 @@ export default function BuildingsPage() {
             Đóng
           </Button>,
         ]}
-        width={680}
+        width="min(680px, 94vw)"
       >
         {selectedApartment ? (
           <div>
             <Descriptions bordered column={2} size="small" className="mb-4">
               <Descriptions.Item label="Mã căn">
-                <span className="font-bold text-blue-600">{selectedApartment.code}</span>
+                <span className="font-semibold text-navy">{selectedApartment.code}</span>
               </Descriptions.Item>
-              <Descriptions.Item label="Trạng thái">
-                <EnumTag map={APARTMENT_STATUS} value={selectedApartment.status} />
+              <Descriptions.Item label="Trạng thái căn hộ">
+                <ApartmentOccupancyTag status={selectedApartment.occupancyStatus} />
               </Descriptions.Item>
               <Descriptions.Item label="Tòa nhà">
                 {selectedApartment.building?.name || selectedApartment.building?.code}
               </Descriptions.Item>
               <Descriptions.Item label="Tầng">{`Tầng ${selectedApartment.floor}`}</Descriptions.Item>
-              <Descriptions.Item label="Diện tích">{`${selectedApartment.area} m²`}</Descriptions.Item>
+              <Descriptions.Item label="Diện tích tính phí quản lý">
+                {selectedApartment.netArea != null ? `${selectedApartment.netArea} m²` : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Ngày bàn giao">
+                {handoverDay(selectedApartment.handoverDate).split('-').reverse().join('/') || '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Hộp kỹ thuật">{selectedApartment.technicalShaft || '—'}</Descriptions.Item>
               <Descriptions.Item label="Địa chỉ tòa">
                 {selectedApartment.building?.address || '—'}
               </Descriptions.Item>
@@ -786,7 +929,7 @@ export default function BuildingsPage() {
             {selectedApartment.activeContracts && selectedApartment.activeContracts.length > 0 ? (
               <div className="space-y-2">
                 {selectedApartment.activeContracts.map((c) => (
-                  <Card key={c._id} size="small" className="border-gray-200 dark:border-gray-700">
+                  <Card key={c._id} size="small" className="border-line dark:border-gray-700">
                     <div className="flex justify-between items-center mb-1">
                       <Space>
                         <EnumTag map={CONTRACT_TYPES} value={c.type} />
@@ -807,7 +950,7 @@ export default function BuildingsPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-gray-400 italic">Chưa có hợp đồng nào đang hiệu lực</p>
+              <p className="text-xs text-ink-3 italic">Chưa có hợp đồng nào đang hiệu lực</p>
             )}
           </div>
         ) : (

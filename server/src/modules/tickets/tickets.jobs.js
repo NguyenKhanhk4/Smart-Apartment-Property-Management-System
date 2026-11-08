@@ -5,7 +5,6 @@ import {
   NOTIFICATION_TYPES,
   PRIORITY_ORDER,
   TICKET_HISTORY_ACTIONS as ACT,
-  ROLE_TITLES,
   TICKET_FINAL_STATUSES,
   TICKET_SLA_STATUSES,
   TICKET_STATUS,
@@ -13,11 +12,11 @@ import {
 } from '../../constants/enums.js';
 import { Ticket } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
-import { notify, notifyRoles } from '../../services/notification.service.js';
+import { notify, notifyApartment, notifyRoles } from '../../services/notification.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
-import { DAY_MS, HOUR_MS, startOfVnDay } from '../../utils/time.js';
-import { getOnDuty } from '../dutyShifts/dutyShifts.service.js';
+import { DAY_MS, HOUR_MS, fmtDateTimeVn, startOfVnDay } from '../../utils/time.js';
 import { isOverdue, partsPauseExceeded, slaBreaches } from './ticket.rules.js';
+import { closeMergedChildren, dispatchEmergencies } from './tickets.service.js';
 
 const partsPauseMs = async () => Number(await getConfig(CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS)) * HOUR_MS;
 
@@ -93,8 +92,9 @@ export async function escalateOverdueTickets(now = new Date()) {
 }
 
 /**
- * BR-O9 — Ticket WAITING_CONFIRM quá TICKET_AUTO_CLOSE_DAYS (mặc định 7) ngày cư dân không phản hồi
- * → tự đóng CLOSED, không có rating. Cập nhật có điều kiện status để không đóng đè lên
+ * M5-1 — Ticket WAITING_CONFIRM quá TICKET_AUTO_CLOSE_DAYS (mặc định 3) ngày cư dân không phản hồi
+ * → tự chuyển Đã nghiệm thu (CLOSED, không có rating; phí sửa trong căn vẫn vào thông báo phí kỳ sau);
+ * trước hạn 1 ngày nhắc cư dân của căn (1 lần). Cập nhật có điều kiện status để không đóng đè lên
  * cư dân vừa xác nhận/không đồng ý, hoặc 2 lần chạy chồng nhau.
  */
 export async function autoCloseTickets(now = new Date()) {
@@ -103,7 +103,7 @@ export async function autoCloseTickets(now = new Date()) {
     status: TICKET_STATUS.WAITING_CONFIRM,
     resolvedAt: { $lt: new Date(now.getTime() - days * DAY_MS) },
   };
-  const tickets = await Ticket.find(filter).select('code').lean();
+  const tickets = await Ticket.find(filter).select('code title').lean();
 
   let affected = 0;
   for (const ticket of tickets) {
@@ -119,7 +119,7 @@ export async function autoCloseTickets(now = new Date()) {
             action: ACT.AUTO_CLOSED,
             fromStatus: TICKET_STATUS.WAITING_CONFIRM,
             toStatus: TICKET_STATUS.CLOSED,
-            note: `Tự đóng sau ${days} ngày cư dân không phản hồi`,
+            note: `Tự nghiệm thu sau ${days} ngày cư dân không phản hồi`,
           },
         },
       },
@@ -133,6 +133,29 @@ export async function autoCloseTickets(now = new Date()) {
       targetId: ticket._id,
       metadata: { code: ticket.code, autoClosed: true },
     });
+    await closeMergedChildren({ _id: ticket._id, code: ticket.code, title: ticket.title, status: TICKET_STATUS.CLOSED }, now);
+  }
+
+  // Nhắc trước 1 ngày: phiếu sẽ tự nghiệm thu ở lần chạy tới
+  const remind = {
+    status: TICKET_STATUS.WAITING_CONFIRM,
+    confirmRemindedAt: null,
+    resolvedAt: { $lt: new Date(now.getTime() - Math.max(days - 1, 0) * DAY_MS) },
+  };
+  const due = await Ticket.find(remind).select('code title apartmentId resolvedAt').lean();
+  for (const ticket of due) {
+    const res = await Ticket.updateOne({ _id: ticket._id, ...remind }, { $set: { confirmRemindedAt: now } });
+    if (!res.modifiedCount) continue;
+    affected += 1;
+    await notifyApartment(ticket.apartmentId, {
+      type: NOTIFICATION_TYPES.TICKET,
+      title: `Nhắc nghiệm thu ${ticket.code}`,
+      content: `"${ticket.title}" đã xử lý xong. Vui lòng nghiệm thu; nếu không phản hồi, phiếu tự chuyển Đã nghiệm thu sau ${fmtDateTimeVn(
+        new Date(new Date(ticket.resolvedAt).getTime() + days * DAY_MS),
+      )}.`,
+      refId: ticket._id,
+      link: `/r/tickets/${ticket._id}`,
+    });
   }
   return affected;
 }
@@ -145,8 +168,9 @@ const SLA_ALERTS = {
 };
 
 /**
- * [Cron 5 phút] Cảnh báo SLA: sự cố chưa ai nhận quá hạn nhận phiếu (TICKET_ACK_MINUTES) → báo Trưởng BQL
- * kèm email + KTV trực dự phòng; phản ánh chưa phản hồi quá hạn (COMPLAINT_RESPONSE_HOURS) → báo Trưởng BQL.
+ * [Cron 5 phút] Cảnh báo SLA: sự cố chưa ai nhận quá hạn nhận phiếu (TICKET_ACK_MINUTES, ngoài giờ hành chính thì
+ * tính từ đầu giờ làm việc tiếp theo với sự cố mức thường) → báo Trưởng BQL kèm email; phản ánh chưa phản hồi quá hạn
+ * (COMPLAINT_RESPONSE_HOURS) → báo Trưởng BQL.
  * Chờ linh kiện quá TICKET_PARTS_PAUSE_HOURS → báo Trưởng BQL (M5-2), SLA chạy tiếp.
  * Mỗi vi phạm chỉ báo 1 lần (updateOne có điều kiện trên cột *AlertedAt). Trả về số cảnh báo đã gửi.
  */
@@ -173,7 +197,6 @@ export async function alertSlaBreaches(now = new Date()) {
     .lean();
 
   let affected = 0;
-  let backups = null; // KTV trực dự phòng — chỉ đọc khi có sự cố quá hạn nhận
   for (const ticket of tickets) {
     const kinds = [...slaBreaches(ticket, now), ...(partsPauseExceeded(ticket, now, partsMs) ? ['PARTS'] : [])];
     for (const kind of kinds) {
@@ -201,11 +224,9 @@ export async function alertSlaBreaches(now = new Date()) {
         link: `/app/tickets/${ticket._id}`,
       };
       await notifyRoles(['MANAGER'], { ...payload, email: true });
-      if (kind === 'ACK') {
-        backups ??= (await getOnDuty(ROLE_TITLES.TECHNICIAN, now)).backup.map((p) => p._id);
-        await notify(backups, payload);
-      }
     }
   }
+  // BR-X6: sự cố khẩn cấp chưa ai nhận → cảnh báo khẩn lặp mỗi 15 phút
+  affected += await dispatchEmergencies(now);
   return affected;
 }

@@ -61,6 +61,7 @@ const navItems = residentWebNav.map((key) => residentMenu.find((m) => m.key === 
 export function WebHeader() {
   const { pathname } = useLocation();
   const { code } = useResident();
+  const { canSee } = useAuth();
   const activeKey = pathname.split('/')[2];
 
   return (
@@ -72,7 +73,7 @@ export function WebHeader() {
         </Link>
 
         <nav aria-label="Điều hướng chính" className="flex flex-wrap gap-1 flex-1">
-          {navItems.map(({ key, path, label }) => {
+          {navItems.filter(canSee).map(({ key, path, label }) => {
             const active = activeKey === path.split('/')[0];
             return (
               <NavLink
@@ -94,14 +95,16 @@ export function WebHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link
-            to="/r/my-code"
-            viewTransition
-            className="h-10 px-3.5 flex items-center gap-2 rounded-[10px] border border-r-border-control text-sm font-medium text-r-text! no-underline hover:bg-r-bg"
-          >
-            {createElement(IdcardOutlined, { style: { fontSize: 18 } })}
-            Mã của tôi{code ? ` · ${code}` : ''}
-          </Link>
+          {canSee({ key: 'my-code' }) && (
+            <Link
+              to="/r/my-code"
+              viewTransition
+              className="h-10 px-3.5 flex items-center gap-2 rounded-[10px] border border-r-border-control text-sm font-medium text-r-text! no-underline hover:bg-r-bg"
+            >
+              {createElement(IdcardOutlined, { style: { fontSize: 18 } })}
+              Mã của tôi{code ? ` · ${code}` : ''}
+            </Link>
+          )}
           <NotificationBell area="r" variant="resident" />
           <AvatarMenu withCaret />
         </div>

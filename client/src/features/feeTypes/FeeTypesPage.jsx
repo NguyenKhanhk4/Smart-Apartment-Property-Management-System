@@ -23,15 +23,21 @@ import PageHeader from '../../components/PageHeader';
 import EnumTag from '../../components/EnumTag';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
-import { FEE_CALC_METHODS, FEE_CATEGORIES, FEE_TYPE_STATES, VEHICLE_TYPES, enumOptions } from '../../constants/enums';
+import { APARTMENT_TYPES, FEE_CALC_METHODS, FEE_CATEGORIES, FEE_TYPE_STATES, VEHICLE_TYPES, enumOptions } from '../../constants/enums';
 import { formatMoney, moneyInputProps } from '../../utils/format';
 
-// Phí tiện ích do Module D định giá trên từng tiện ích → chỉ cấu hình vệ sinh & gửi xe ở đây
-const CATEGORY_OPTIONS = ['CLEANING', 'PARKING'].map((v) => ({ value: v, label: FEE_CATEGORIES[v].label }));
+// Phí tiện ích do Module D định giá trên từng tiện ích.
+const CATEGORY_OPTIONS = ['MANAGEMENT', 'CLEANING', 'PARKING'].map((v) => ({ value: v, label: FEE_CATEGORIES[v].label }));
 const CALC_OPTIONS_BY_CATEGORY = {
+  MANAGEMENT: ['PER_M2'],
   CLEANING: ['PER_M2', 'PER_APARTMENT'],
   PARKING: ['PER_VEHICLE'],
 };
+
+const MANAGEMENT_CODE_OPTIONS = Object.entries(APARTMENT_TYPES).map(([type, { label }]) => ({
+  value: `MANAGEMENT_${type}`,
+  label,
+}));
 
 const periodLabel = (p) => (p ? `${p.slice(5)}/${p.slice(0, 4)}` : '');
 const rangeLabel = (v) => `${periodLabel(v.fromPeriod)} → ${v.endPeriod ? periodLabel(v.endPeriod) : 'nay'}`;
@@ -71,21 +77,33 @@ function NewFeeTypeModal({ onClose, onDone }) {
         initialValues={{ feeCategory: 'CLEANING', calcMethod: 'PER_M2', effectiveFrom: dayjs().add(1, 'month') }}
         onValuesChange={(changed) => {
           if (changed.feeCategory) {
-            form.setFieldsValue({ calcMethod: CALC_OPTIONS_BY_CATEGORY[changed.feeCategory][0], vehicleType: undefined });
+            form.setFieldsValue({
+              code: undefined,
+              calcMethod: CALC_OPTIONS_BY_CATEGORY[changed.feeCategory][0],
+              vehicleType: undefined,
+            });
           }
         }}
         onFinish={(v) => save({ ...v, effectiveFrom: toPeriod(v.effectiveFrom) }).catch(() => {})}
       >
         <Flex gap={12}>
-          <Form.Item
-            name="code"
-            label="Mã phí"
-            style={{ flex: 1 }}
-            normalize={(v) => v?.toUpperCase().replace(/[^A-Z0-9_]/g, '')}
-            rules={[{ required: true, min: 2, message: 'Mã gồm chữ in hoa, số, dấu _ (≥ 2 ký tự)' }]}
-          >
-            <Input placeholder="vd PARKING_MOTORBIKE" maxLength={40} />
-          </Form.Item>
+          {category === 'MANAGEMENT' ? (
+            <Form.Item name="code" label="Loại căn hộ" style={{ flex: 1 }}
+              rules={[{ required: true, message: 'Chọn loại căn hộ' }]}
+            >
+              <Select options={MANAGEMENT_CODE_OPTIONS} />
+            </Form.Item>
+          ) : (
+            <Form.Item
+              name="code"
+              label="Mã phí"
+              style={{ flex: 1 }}
+              normalize={(v) => v?.toUpperCase().replace(/[^A-Z0-9_]/g, '')}
+              rules={[{ required: true, min: 2, message: 'Mã gồm chữ in hoa, số, dấu _ (≥ 2 ký tự)' }]}
+            >
+              <Input placeholder="vd PARKING_MOTORBIKE" maxLength={40} />
+            </Form.Item>
+          )}
           <Form.Item name="name" label="Tên hiển thị" style={{ flex: 1 }} rules={[{ required: true, message: 'Nhập tên' }]}>
             <Input placeholder="vd Vé xe máy" maxLength={100} />
           </Form.Item>
@@ -192,7 +210,7 @@ function EndModal({ version, onClose, onDone }) {
 }
 
 // UC-B01 — Danh mục phí & đơn giá theo thời gian. Trưởng BQL cấu hình, Kế toán chỉ xem. Mọi thay đổi ghi audit log.
-export default function FeeTypesPage() {
+export default function FeeTypesPage({ embedded = false } = {}) {
   const { hasRole } = useAuth();
   const canEdit = hasRole('MANAGER');
   const [modal, setModal] = useState(null); // { type: 'new' | 'price' | 'edit' | 'end', target }
@@ -265,10 +283,11 @@ export default function FeeTypesPage() {
     {
       title: 'Loại phí',
       dataIndex: 'name',
+      width: 240,
       render: (name, g) => (
-        <Flex vertical>
+        <Flex vertical style={{ whiteSpace: 'nowrap' }}>
           <b>{name}</b>
-          <Typography.Text type="secondary" code>
+          <Typography.Text type="secondary" code style={{ whiteSpace: 'nowrap' }}>
             {g.code}
           </Typography.Text>
         </Flex>
@@ -325,19 +344,30 @@ export default function FeeTypesPage() {
 
   return (
     <>
-      <PageHeader
-        title="Bảng phí & đơn giá"
-        subtitle="Phí vệ sinh và phí gửi xe hằng tháng. Đổi giá tạo mức giá mới từ một kỳ; hóa đơn đã lập giữ nguyên giá lúc lập. Phí tiện ích cấu hình ở trang Tiện ích."
-        breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Bảng phí' }]}
+      {!embedded && (
+        <PageHeader
+          title="Bảng phí & đơn giá"
+          subtitle="Cấu hình phí quản lý theo loại căn, phí vệ sinh và phí gửi xe. Mức giá mới áp dụng từ kỳ được chọn."
+          breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Bảng phí' }]}
+          extra={
+            canEdit && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setModal({ type: 'new' })}>
+                Thêm loại phí
+              </Button>
+            )
+          }
+        />
+      )}
+      <Card
+        title={embedded ? 'Phí quản lý, vệ sinh & gửi xe' : undefined}
         extra={
-          canEdit && (
+          embedded && canEdit ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModal({ type: 'new' })}>
               Thêm loại phí
             </Button>
-          )
+          ) : undefined
         }
-      />
-      <Card>
+      >
         <Table
           rowKey="code"
           loading={list.loading}

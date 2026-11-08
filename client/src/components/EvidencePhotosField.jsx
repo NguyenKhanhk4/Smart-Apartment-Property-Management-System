@@ -2,8 +2,8 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { App, Button, Flex, Form, Upload } from 'antd';
 import { CameraOutlined, UploadOutlined } from '@ant-design/icons';
 import CameraCaptureModal from './CameraCaptureModal';
+import { IMAGE_ACCEPT, IMAGE_HINT, checkImageFile } from '../utils/imageUpload';
 
-const MAX_SIZE = 5 * 1024 * 1024;
 const MAX_COUNT = 5;
 
 let seq = 0;
@@ -36,8 +36,10 @@ function PhotoPicker({ value = [], onChange }) {
   };
 
   const beforeUpload = (file) => {
-    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > MAX_SIZE) {
-      message.error(`"${file.name}" không hợp lệ — chỉ nhận ảnh jpg/png tối đa 5MB.`);
+    // UC63: nhận mọi ảnh trình duyệt đọc được; gửi đi sẽ tự chuyển JPEG và thu nhỏ (utils/imageUpload.js)
+    const error = checkImageFile(file);
+    if (error) {
+      message.error(error);
     } else {
       add(file);
     }
@@ -59,7 +61,7 @@ function PhotoPicker({ value = [], onChange }) {
         <Button icon={<CameraOutlined />} disabled={remaining <= 0} onClick={() => setCameraOpen(true)}>
           Chụp ảnh
         </Button>
-        <Upload accept="image/jpeg,image/png" multiple showUploadList={false} beforeUpload={beforeUpload} disabled={remaining <= 0}>
+        <Upload accept={IMAGE_ACCEPT} multiple showUploadList={false} beforeUpload={beforeUpload} disabled={remaining <= 0}>
           <Button icon={<UploadOutlined />} disabled={remaining <= 0}>
             Tải ảnh từ máy
           </Button>
@@ -71,17 +73,17 @@ function PhotoPicker({ value = [], onChange }) {
 }
 
 /**
- * Ô "Ảnh kết quả" trong Form: chụp bằng camera hoặc tải ảnh có sẵn, jpg/png ≤ 5MB, tối đa 5 ảnh.
+ * Ô "Ảnh kết quả" trong Form: chụp bằng camera hoặc tải ảnh có sẵn (mọi định dạng ảnh, tự thu nhỏ khi gửi), tối đa 5 ảnh.
  * Giá trị field là fileList của antd; gửi lên server bằng toFiles(values.images) ở utils/upload.js.
  * @example <EvidencePhotosField name="images" label="Ảnh kết quả" />
  */
-export default function EvidencePhotosField({ name = 'images', label = 'Ảnh kết quả', required = true, extra }) {
+export default function EvidencePhotosField({ name = 'images', label = 'Ảnh kết quả', required = true, extra, message }) {
   return (
     <Form.Item
       name={name}
       label={label}
-      rules={required ? [{ required: true, type: 'array', min: 1, message: 'Chụp hoặc tải lên ít nhất 1 ảnh kết quả' }] : []}
-      extra={extra ?? `jpg/png, tối đa 5MB mỗi ảnh, tối đa ${MAX_COUNT} ảnh.`}
+      rules={required ? [{ required: true, type: 'array', min: 1, message: message ?? `Chụp hoặc tải lên ít nhất 1 ${label.charAt(0).toLowerCase()}${label.slice(1)}` }] : []}
+      extra={extra ?? `${IMAGE_HINT}. Tối đa ${MAX_COUNT} ảnh.`}
     >
       <PhotoPicker />
     </Form.Item>

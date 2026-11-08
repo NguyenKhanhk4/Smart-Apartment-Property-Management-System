@@ -1,6 +1,6 @@
 // API Module C (Minh): Quỹ bảo trì, đề xuất chi quỹ, chi phí vận hành & nhật ký hoạt động.
 // Theo quy ước axiosClient.js: trả nguyên envelope { success, data, pagination? }.
-import { http } from './axiosClient';
+import { apiClient, http } from './axiosClient';
 
 // Ảnh chứng từ gửi multipart qua field "images" như Module D/E; không có ảnh thì gửi JSON.
 const withImages = (body, files = []) => {
@@ -42,4 +42,17 @@ export const operatingExpenseApi = {
 export const auditLogApi = {
   list: (params) => http.get('/audit-logs', { params }),
   options: () => http.get('/audit-logs/options'),
+  // UC06 bước 5: tải file Excel / PDF theo bộ lọc đang xem; trả tên file để báo MSG-G06
+  async download(params) {
+    const res = await apiClient.get('/audit-logs/export', { params, responseType: 'blob' });
+    const match = /filename="?([^"]+)"?/.exec(res.headers['content-disposition'] ?? '');
+    const filename = match?.[1] ?? `nhat-ky-hoat-dong.${params.format}`;
+    const url = URL.createObjectURL(res.data);
+    const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return filename;
+  },
 };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -13,7 +13,7 @@ import {
   Timeline,
   Typography,
 } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, PhoneOutlined } from '@ant-design/icons';
 import { ticketApi } from '../../api/moduleE.api';
 import { repairQuoteApi } from '../../api/moduleB.api';
 import QuoteFormModal from '../repairQuotes/QuoteFormModal';
@@ -30,7 +30,10 @@ import {
   TICKET_TYPES,
 } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
-import { AssignModal, ConfirmModal, ProgressModal, QuoteDecisionModal, RejectModal } from './TicketActionModals';
+import {
+  AssignModal, ComplaintResponseModal, ConfirmModal, MergeModal, ProgressModal,
+  QuoteDecisionModal, ReclassifyModal, RejectModal,
+} from './TicketActionModals';
 import { ticketActions } from './ticketActions';
 
 // Chi tiết phản ánh dùng chung cho cư dân (/r) và nội bộ (/app); nút thao tác hiện theo quyền
@@ -50,7 +53,10 @@ export default function TicketDetailPage() {
   }
   if (!t) return <Spin style={{ display: 'block', margin: 48 }} />;
 
-  const { canClaim, canAssign, canReject, canProgress, canQuote, canDecideQuote, canConfirm } = ticketActions(t, user, hasRole);
+  const {
+    canClaim, canAssign, canReject, canProgress, canRespondComplaint, canQuote,
+    canDecideQuote, canConfirm, canReclassify, canMerge,
+  } = ticketActions(t, user, hasRole);
   const quoteList = quotes.data?.items ?? [];
   const pendingQuote = quoteList.find((q) => q.status === 'PENDING');
   const acceptedQuote = quoteList.find((q) => q.status === 'ACCEPTED');
@@ -62,7 +68,7 @@ export default function TicketDetailPage() {
       <Flex vertical gap={12}>
         <Flex align="center" gap={8} wrap>
           <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} />
-          <Typography.Title level={4} style={{ margin: 0, flex: 1, minWidth: 200 }}>
+          <Typography.Title level={3} style={{ margin: 0, flex: 1, minWidth: 200 }}>
             {t.title}
           </Typography.Title>
           {canClaim && (
@@ -75,6 +81,8 @@ export default function TicketDetailPage() {
               {t.assignedTo ? 'Phân công lại' : 'Phân công'}
             </Button>
           )}
+          {canReclassify && <Button onClick={() => setModal('classify')}>Đổi phân loại</Button>}
+          {canMerge && <Button onClick={() => setModal('merge')}>Gộp vào phiếu khác</Button>}
           {canReject && (
             <Button danger onClick={() => setModal('reject')}>
               Từ chối
@@ -95,18 +103,45 @@ export default function TicketDetailPage() {
               Cập nhật tiến độ
             </Button>
           )}
+          {canRespondComplaint && (
+            <Button type="primary" onClick={() => setModal('complaint')}>Xử lý phản ánh</Button>
+          )}
           {canConfirm && (
             <Button type="primary" onClick={() => setModal('confirm')}>
-              Xác nhận & đánh giá
+              {isComplaint && t.status === 'CLOSED' ? 'Đánh giá kết quả' : 'Xác nhận & đánh giá'}
             </Button>
           )}
         </Flex>
 
+        {t.mergedParent && (
+          <Alert
+            type="info"
+            showIcon
+            title={
+              hasRole('RESIDENT') ? (
+                `Sự cố này trùng với phiếu ${t.mergedParent.code} đang được xử lý (${TICKET_STATUS[t.mergedParent.status]?.label}). Bạn sẽ được báo khi xử lý xong.`
+              ) : (
+                <>
+                  Đã gộp vào phiếu <Link to={`/app/tickets/${t.mergedParent._id}`}>{t.mergedParent.code}</Link> — {t.mergedParent.title}
+                </>
+              )
+            }
+          />
+        )}
+        {t.mergedChildren?.length > 0 && !hasRole('RESIDENT') && (
+          <Alert
+            type="info"
+            showIcon
+            title={`Phiếu trùng đã gộp vào đây: ${t.mergedChildren.map((c) => `${c.code} (căn ${c.apartmentCode ?? '?'})`).join(', ')}`}
+          />
+        )}
         {t.isOverdue && (
           <Alert type="error" showIcon title={`Phản ánh đã quá hạn xử lý (hạn ${formatDateTime(t.dueDate)})`} />
         )}
         {canConfirm && (
-          <Alert type="info" showIcon title="Kỹ thuật viên đã xử lý xong. Vui lòng xác nhận kết quả và đánh giá." />
+          <Alert type="info" showIcon title={isComplaint
+            ? 'Ban quản lý đã xử lý phản ánh. Bạn có thể đánh giá kết quả.'
+            : 'Kỹ thuật viên đã xử lý xong. Vui lòng xác nhận kết quả và đánh giá.'} />
         )}
         {canDecideQuote && (
           <Alert
@@ -141,6 +176,7 @@ export default function TicketDetailPage() {
             </Descriptions.Item>
             <Descriptions.Item label="Người gửi">{t.createdBy?.fullName}</Descriptions.Item>
             <Descriptions.Item label="Ngày gửi">{formatDateTime(t.createdAt)}</Descriptions.Item>
+            {t.location && <Descriptions.Item label="Vị trí">{t.location}</Descriptions.Item>}
             {t.ackDueAt && !t.assignedTo && (
               <Descriptions.Item label="Hạn nhận phiếu">{formatDateTime(t.ackDueAt)}</Descriptions.Item>
             )}
@@ -182,6 +218,40 @@ export default function TicketDetailPage() {
           )}
         </Card>
 
+        {/* Liên hệ người gửi để xác minh / hẹn giờ vào xử lý — chỉ nhân viên thấy */}
+        {hasRole('MANAGER', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN') && (
+          <Card size="small" title="Người gửi & liên hệ">
+            <Descriptions column={{ xs: 1, md: 2 }} size="small">
+              <Descriptions.Item label="Người cần liên hệ">{t.contact?.name ?? t.createdBy?.fullName ?? '—'}</Descriptions.Item>
+              <Descriptions.Item label="SĐT liên hệ">
+                {(t.contact?.phone ?? (!t.createdByStaff && t.createdBy?.phone)) ? (
+                  <Typography.Link href={`tel:${t.contact?.phone ?? t.createdBy?.phone}`} copyable={{ text: t.contact?.phone ?? t.createdBy?.phone }}>
+                    <PhoneOutlined /> {t.contact?.phone ?? t.createdBy?.phone}
+                  </Typography.Link>
+                ) : (
+                  <Typography.Text type="secondary">Chưa có</Typography.Text>
+                )}
+              </Descriptions.Item>
+              {t.contact?.note && <Descriptions.Item label="Ghi chú liên hệ">{t.contact.note}</Descriptions.Item>}
+              <Descriptions.Item label="Kênh gửi">
+                {t.createdByStaff ? `Lễ tân ${t.createdBy?.fullName ?? ''} tạo hộ tại quầy / qua điện thoại` : 'Cư dân tự gửi trên web'}
+              </Descriptions.Item>
+              {!t.createdByStaff && t.createdBy && (
+                <Descriptions.Item label="Tài khoản gửi">
+                  {t.createdBy.fullName}
+                  {t.createdBy.phone && ` · ${t.createdBy.phone}`}
+                  {t.createdBy.email && ` · ${t.createdBy.email}`}
+                </Descriptions.Item>
+              )}
+              <Descriptions.Item label="Căn hộ">
+                {t.apartmentId?.code}
+                {t.apartmentId?.floor != null && ` · Tầng ${t.apartmentId.floor}`}
+                {t.apartmentId?.buildingId?.name && ` · ${t.apartmentId.buildingId.name}`}
+              </Descriptions.Item>
+            </Descriptions>
+          </Card>
+        )}
+
         {hasQuotes && (
           <QuotePanel
             quotes={quoteList}
@@ -218,7 +288,10 @@ export default function TicketDetailPage() {
 
       <AssignModal {...modalProps('assign')} />
       <RejectModal {...modalProps('reject')} />
+      <ReclassifyModal {...modalProps('classify')} />
+      <MergeModal {...modalProps('merge')} />
       <ProgressModal {...modalProps('progress')} />
+      <ComplaintResponseModal {...modalProps('complaint')} />
       <ConfirmModal {...modalProps('confirm')} />
       <QuoteDecisionModal {...modalProps('quote')} quote={pendingQuote} />
       <QuoteFormModal

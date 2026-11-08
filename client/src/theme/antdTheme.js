@@ -6,6 +6,20 @@
 import { theme as antdThemeAlgorithm } from 'antd';
 import { colors, radius, typography } from './tokens.js';
 
+// Cỡ chữ gọn: chữ thường 13px, tiêu đề tối đa 20px, đậm tối đa 600, dòng 1.55 (đủ cho dấu tiếng Việt)
+const COMPACT_TYPE = {
+  fontSize: 13,
+  fontSizeSM: 12,
+  fontSizeLG: 14,
+  fontSizeHeading1: 20,
+  fontSizeHeading2: 18,
+  fontSizeHeading3: 16,
+  fontSizeHeading4: 15,
+  fontSizeHeading5: 14,
+  fontWeightStrong: 600,
+  lineHeight: 1.55,
+};
+
 export const getAntdTheme = (isDark = false) => {
   if (isDark) {
     return {
@@ -25,8 +39,7 @@ export const getAntdTheme = (isDark = false) => {
         colorTextSecondary: colors.dark.inkSecondary,
         colorBorder: colors.dark.border,
         borderRadius: radius.sm,
-        fontSize: 14,
-        lineHeight: 1.5,
+        ...COMPACT_TYPE,
       },
       components: {
         Card: {
@@ -36,7 +49,7 @@ export const getAntdTheme = (isDark = false) => {
         },
         Button: {
           borderRadius: radius.sm,
-          controlHeight: 36,
+          controlHeight: 32,
           fontWeight: 500,
         },
         Table: {
@@ -83,8 +96,7 @@ export const getAntdTheme = (isDark = false) => {
       colorBorder: colors.border,
       colorBorderSecondary: colors.borderStrong,
       borderRadius: radius.sm,
-      fontSize: 14,
-      lineHeight: 1.5,
+      ...COMPACT_TYPE,
     },
     components: {
       Card: {
@@ -94,20 +106,20 @@ export const getAntdTheme = (isDark = false) => {
       },
       Button: {
         borderRadius: radius.sm,
-        controlHeight: 36,
+        controlHeight: 32,
         fontWeight: 500,
         primaryShadow: '0 1px 2px rgba(30,58,95,0.2)',
       },
       Input: {
         borderRadius: radius.sm,
-        controlHeight: 36,
+        controlHeight: 32,
         colorBorder: colors.border,
         hoverBorderColor: colors.primary,
         activeBorderColor: colors.primary,
       },
       Select: {
         borderRadius: radius.sm,
-        controlHeight: 36,
+        controlHeight: 32,
       },
       Table: {
         headerBg: colors.surfaceAlt,

@@ -73,6 +73,10 @@ router.get('/my', authenticate, authorize('RESIDENT'), validate({ query: myQuery
   return paginated(res, items, pagination, { summary });
 });
 
+router.get('/my/departed-tenancies', authenticate, authorize('RESIDENT'), async (req, res) =>
+  ok(res, await queries.departedTenantDebtApartments(req.user.id)),
+);
+
 /**
  * @openapi
  * /invoices/preview:
@@ -255,10 +259,11 @@ router.get('/:id/pdf', authenticate, authorize(...queries.STAFF_VIEW_ROLES, 'RES
   sendFile(res, await pdf.buildInvoicePdf(req.user, req.params.id)),
 );
 
-// ---- Trình duyệt / Duyệt & Phát hành / Trả lại: chọn theo danh sách id HOẶC cả kỳ ----
+// ---- Trình duyệt / Duyệt & Phát hành / Trả lại: chọn theo danh sách id HOẶC cả kỳ (buildingId: chỉ 1 tòa của kỳ) ----
 const selectorKeys = {
   invoiceIds: Joi.array().items(objectId()).min(1).max(2000).unique(),
   period: period(),
+  buildingId: objectId().when('period', { is: Joi.exist(), otherwise: Joi.forbidden() }),
 };
 const selectorBody = Joi.object(selectorKeys).xor('invoiceIds', 'period');
 const returnBody = Joi.object({ ...selectorKeys, reason: Joi.string().trim().min(5).max(500).required() }).xor(
@@ -281,6 +286,7 @@ const skippedNote = (r) => (r.skipped.length ? `, bỏ qua ${r.skipped.length} t
  *             properties:
  *               invoiceIds: { type: array, items: { type: string } }
  *               period: { type: string, example: '2026-10' }
+ *               buildingId: { type: string, description: 'Chỉ khi gửi period: chỉ xử lý thông báo của tòa này' }
  */
 router.post('/submit', authenticate, authorize('ACCOUNTANT'), validate({ body: selectorBody }), async (req, res) => {
   const r = await approval.submitInvoices(req.user, req.body);
@@ -301,6 +307,7 @@ router.post('/submit', authenticate, authorize('ACCOUNTANT'), validate({ body: s
  *             properties:
  *               invoiceIds: { type: array, items: { type: string } }
  *               period: { type: string, example: '2026-10' }
+ *               buildingId: { type: string, description: 'Chỉ khi gửi period: chỉ xử lý thông báo của tòa này' }
  */
 router.post('/publish', authenticate, authorize('MANAGER'), validate({ body: selectorBody }), async (req, res) => {
   const r = await approval.publishInvoices(req.user, req.body);
@@ -323,6 +330,7 @@ router.post('/publish', authenticate, authorize('MANAGER'), validate({ body: sel
  *             properties:
  *               invoiceIds: { type: array, items: { type: string } }
  *               period: { type: string, example: '2026-10' }
+ *               buildingId: { type: string, description: 'Chỉ khi gửi period: chỉ xử lý thông báo của tòa này' }
  *               reason: { type: string, example: 'Sai số xe căn A1205' }
  */
 router.post('/return', authenticate, authorize('MANAGER'), validate({ body: returnBody }), async (req, res) => {

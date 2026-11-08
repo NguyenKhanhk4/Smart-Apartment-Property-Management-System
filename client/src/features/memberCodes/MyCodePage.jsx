@@ -5,13 +5,13 @@ import { useResident } from '../../hooks/useResident';
 import ResidentCard from './ResidentCard';
 
 // UC-D11 — "Mã của tôi": thẻ cư dân (ảnh + mã chữ) để đọc cho lễ tân / bảo vệ. Ở nhiều căn thì chọn căn.
-// Gói tháng nằm ở Tiện ích › Gói tháng; quản lý gia đình ở Căn hộ của tôi.
+// Quản lý gia đình ở Căn hộ của tôi.
 export default function MyCodePage() {
   const { cards, card, apartmentId, setApartmentId, loading } = useResident();
 
   return (
     <div className="max-w-[440px] mx-auto flex flex-col gap-4">
-      <h1 className="hidden md:block m-0 text-[28px] font-semibold">Mã của tôi</h1>
+      <h1 className="hidden md:block m-0 text-[clamp(18px,1.6vw,21px)] font-semibold">Mã của tôi</h1>
 
       {cards.length > 1 && (
         <Segmented
@@ -40,7 +40,7 @@ export default function MyCodePage() {
                 description={
                   card.canIncurCharges
                     ? 'Phí tiện ích bạn sử dụng sẽ cộng vào hóa đơn của căn hộ.'
-                    : 'Bạn vẫn dùng được tiện ích miễn phí và gói của mình. Muốn dùng tiện ích có phí, nhờ chủ hộ bật quyền trong mục Căn hộ và gia đình.'
+                    : 'Bạn vẫn dùng được tiện ích miễn phí. Muốn dùng tiện ích có phí, nhờ chủ hộ bật quyền trong mục Căn hộ và gia đình.'
                 }
               />
             )}
@@ -48,10 +48,10 @@ export default function MyCodePage() {
             <Link
               to="/r/profile"
               viewTransition
-              className="flex items-center justify-between px-4 py-3.5 bg-white border border-r-border rounded-[14px] text-r-text! text-[15px] no-underline"
+              className="flex items-center justify-between px-4 py-3.5 bg-white border border-r-border rounded-[14px] text-r-text! text-[14px] no-underline"
             >
               <span>Cập nhật ảnh đại diện</span>
-              <RightOutlined style={{ fontSize: 14, color: '#8A8F99' }} />
+              <RightOutlined className="text-r-subtle" style={{ fontSize: 14 }} />
             </Link>
           </div>
         ) : (

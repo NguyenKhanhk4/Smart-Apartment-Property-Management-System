@@ -87,8 +87,10 @@ export const colors = {
 };
 
 export const typography = {
-  fontSans: "'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-  fontSerif: "'Playfair Display', Georgia, 'Times New Roman', serif",
+  // Font: Inter (khu quản lý, trang đăng nhập), Mulish (khu cư dân); không dùng serif trang trí
+  fontSans: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  fontResident: "'Mulish', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  fontSerif: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   fontSizes: {
     xs: '11px',
     sm: '12px',

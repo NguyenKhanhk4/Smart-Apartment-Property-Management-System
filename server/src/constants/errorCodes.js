@@ -4,6 +4,11 @@ export const ERROR_CODES = Object.freeze({
   UNAUTHORIZED: { status: 401, message: 'Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn' },
   FORBIDDEN_ROLE: { status: 403, message: 'Bạn không có quyền thực hiện thao tác này' },
   NOT_FOUND: { status: 404, message: 'Không tìm thấy dữ liệu' },
+  NO_DATA: { status: 404, message: 'Không có dữ liệu cho bộ lọc đã chọn' }, // MSG-D01
+  // UC04 phân quyền
+  PERMISSION_REVOKED: { status: 403, message: 'Trưởng BQL đã tắt quyền này của vai trò bạn' },
+  ROLE_READ_ONLY: { status: 403, message: 'Quyền của vai trò Trưởng BQL cố định, không chỉnh sửa được' }, // BR-X2
+  CORE_PERMISSION: { status: 400, message: 'Đây là quyền lõi của vai trò, không thể bỏ' }, // MSG-S14, BR-X3
   AUTH_INVALID_CREDENTIALS: { status: 401, message: 'Số điện thoại hoặc mật khẩu không đúng' },
   ACCOUNT_LOCKED_TEMP: { status: 423, message: 'Tài khoản bị tạm khóa 15 phút do nhập sai mật khẩu 5 lần liên tiếp' },
   ACCOUNT_NOT_ACTIVATED: { status: 403, message: 'Tài khoản chưa được kích hoạt. Vui lòng kích hoạt tài khoản trước khi đăng nhập' },
@@ -40,19 +45,14 @@ export const ERROR_CODES = Object.freeze({
   BOOKING_INVALID_STATUS: { status: 409, message: 'Trạng thái booking hiện tại không cho phép thao tác này' },
   BOOKING_CHECKIN_OUT_OF_WINDOW: { status: 409, message: 'Chưa đến hoặc đã quá thời gian check-in của booking này' },
   BOOKING_WRONG_HOUSEHOLD: { status: 409, message: 'Người đến không thuộc căn hộ đã đặt booking này' },
-  AMENITY_NOT_WALK_IN: { status: 409, message: 'Tiện ích này không áp dụng ghi lượt vào (không phải kiểu Vào cửa)' },
-  AMENITY_CLOSED: { status: 409, message: 'Tiện ích đang ngoài giờ mở cửa' },
-  AMENITY_FULL: { status: 409, message: 'Tiện ích đã đủ số người tối đa cùng lúc' },
-  ESCORT_REQUIRED: { status: 409, message: 'Cần người lớn đi kèm' },
-  VISIT_DUPLICATE: { status: 409, message: 'Người này vừa được ghi lượt vào tiện ích này, không ghi trùng' },
-  VISIT_ALREADY_BILLED: { status: 409, message: 'Lượt vào đã được gộp vào hóa đơn, không thể hủy' },
-  VISIT_ALREADY_CANCELLED: { status: 409, message: 'Lượt vào đã được hủy trước đó' },
   AMENITY_NOT_BOOKABLE: { status: 409, message: 'Tiện ích này không áp dụng đặt chỗ' },
   CHARGE_NOT_ALLOWED: {
     status: 403,
     message: 'Bạn chưa được chủ hộ cho phép phát sinh phí tiện ích. Hãy nhờ chủ hộ bật quyền hoặc chọn khung giờ miễn phí',
   },
   VEHICLE_SLOT_FULL: { status: 409, message: 'Bãi xe đã hết chỗ' },
+  PARKING_TARIFF_UNDEFINED: { status: 422, message: 'Chưa có quy tắc tính phí cho lượt gửi này. Lượt gửi vẫn đang mở.' },
+  PARKING_FEE_CHANGED: { status: 409, message: 'Phí đã thay đổi theo giờ ra. Hãy tính lại trước khi xác nhận thu tiền.' },
   RESIDENCY_DATE_OVERLAP: { status: 409, message: 'Khai báo bị trùng thời gian với khai báo khác' },
   TICKET_ALREADY_CLOSED: { status: 409, message: 'Phản ánh đã đóng, không thể cập nhật' },
   // Sự cố & tiện ích (Người 4)
@@ -63,10 +63,20 @@ export const ERROR_CODES = Object.freeze({
   BOOKING_HOLD_EXPIRED: { status: 409, message: 'Đã hết thời gian giữ chỗ chờ thanh toán' },
   WORKORDER_DUPLICATE: {
     status: 409,
-    message: 'Tài sản đang có work order chưa hoàn thành',
+    message: 'Thiết bị đang có phiếu bảo trì chưa hoàn thành',
   },
-  ASSET_NAME_EXISTS: { status: 409, message: 'Tên tài sản đã tồn tại trong tòa này' },
-  ASSET_HAS_OPEN_WORKORDER: { status: 409, message: 'Tài sản còn work order chưa hoàn thành' },
+  ASSET_CODE_EXISTS: { status: 409, message: 'Mã thiết bị đã tồn tại' }, // MSG-E01
+  // UC08 kiểm tra định kỳ
+  WORKORDER_WRONG_ASSET: { status: 409, message: 'Mã QR này không thuộc thiết bị của phiếu bảo trì' }, // MSG-E03
+  WORKORDER_NOT_ON_DUTY: { status: 403, message: 'Bạn không trong ca trực kỹ thuật lúc này nên không nhận được phiếu' },
+  WORKORDER_TAKEN: { status: 409, message: 'Phiếu bảo trì đã có kỹ thuật viên khác nhận' },
+  WORKORDER_NOT_SCANNED: { status: 409, message: 'Cần quét mã QR trên thiết bị trước khi nộp kết quả kiểm tra' },
+  // UC10 duyệt sửa chữa lớn
+  WORKORDER_FUND_PENDING: { status: 409, message: 'Phiếu đang chờ Ban quản trị duyệt đề xuất chi quỹ, chưa quyết định lại được' },
+  WORKORDER_NOT_AWAITING_FUND: { status: 409, message: 'Phiếu bảo trì không chờ đề xuất chi quỹ' },
+  WORKORDER_NOT_POSTPONED: { status: 409, message: 'Phiếu bảo trì không ở trạng thái tạm hoãn sửa' },
+  WORKORDER_RESULT_CONFLICT: { status: 400, message: 'Có mục không đạt, kết quả phải là Có sự cố' },
+  ASSET_HAS_OPEN_WORKORDER: { status: 409, message: 'Thiết bị còn phiếu bảo trì đang mở, không thể ngừng theo dõi' }, // MSG-E10
   WORKORDER_INVALID_STATUS: { status: 409, message: 'Work order đã hoàn thành, không thể thao tác' },
   WORKORDER_INVALID_ASSIGNEE: {
     status: 400,
@@ -79,15 +89,6 @@ export const ERROR_CODES = Object.freeze({
   },
   MEMBER_CODE_NOT_FOUND: { status: 404, message: 'Không tìm thấy mã cư dân hoặc mã đã hết hiệu lực' },
   HOUSEHOLD_HEAD_REQUIRED: { status: 403, message: 'Chỉ chủ hộ mới thực hiện được thao tác này' },
-  PASS_NOT_REQUIRED: { status: 400, message: 'Trẻ nhỏ được miễn phí nên không cần mua gói tháng' },
-  PASS_NOT_SOLD: { status: 400, message: 'Tiện ích này không bán gói tháng' },
-  PASS_ALREADY_EXISTS: { status: 409, message: 'Người này đã có gói tháng của tiện ích này trong tháng đã chọn' },
-  PASS_ALREADY_BILLED: { status: 409, message: 'Gói tháng đã được gộp vào hóa đơn, không thể hủy' },
-  PASS_ALREADY_CANCELLED: { status: 409, message: 'Gói tháng đã được hủy trước đó' },
-  PASS_CANCEL_NOT_ALLOWED: {
-    status: 409,
-    message: 'Chủ hộ chỉ hủy được gói của tháng sau; gói của tháng này vui lòng liên hệ Trưởng BQL',
-  },
   TOO_MANY_REQUESTS: { status: 429, message: 'Bạn thao tác quá nhiều lần, vui lòng thử lại sau ít phút' },
   SERVER_ERROR: { status: 500, message: 'Lỗi hệ thống, vui lòng thử lại sau' },
 
@@ -126,4 +127,7 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại',
   },
+  // UC05 – Biểu phí điện nước
+  UTILITY_TARIFF_OVERLAP: { status: 409, message: 'Ngày hiệu lực trùng với mức giá đã có của loại tiện ích này' },
+  UTILITY_TARIFF_IN_USE: { status: 409, message: 'Biểu giá đã có hiệu lực, không thể xóa' },
 });

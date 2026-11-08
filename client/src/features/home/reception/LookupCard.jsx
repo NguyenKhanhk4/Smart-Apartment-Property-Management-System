@@ -2,14 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Avatar, Spin } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import { memberCodeApi } from '../../../api/moduleD.api';
 import { CARD, MUTED, TEXT } from './styles';
 import { BOOKING_ACTIVE_STATUSES } from '../../../constants/enums';
-
-
-/** Số ngày còn lại của gói tháng (hết hạn cuối tháng dương lịch) */
-const daysLeftInMonth = () => dayjs().endOf('month').diff(dayjs().startOf('day'), 'day');
 
 function Result({ state, onConfirm }) {
   if (state.status === 'loading') {
@@ -32,9 +27,8 @@ function Result({ state, onConfirm }) {
   }
 
   const d = state.data;
-  const passes = (d.passes ?? []).slice(0, 2).map((p) => `Gói ${p.amenityName} còn ${daysLeftInMonth()} ngày`);
   const today = (d.bookingsToday ?? []).filter((b) => b.isMine && BOOKING_ACTIVE_STATUSES.includes(b.status));
-  const place = [`Căn ${d.apartment.code}`, d.apartment.building?.name, ...passes].filter(Boolean).join(' · ');
+  const place = [`Căn ${d.apartment.code}`, d.apartment.building?.name].filter(Boolean).join(' · ');
 
   return (
     <div className="flex items-center gap-4 flex-wrap">
@@ -65,8 +59,7 @@ function Result({ state, onConfirm }) {
   );
 }
 
-// Tra mã cư dân: luôn hiện ảnh để lễ tân đối chiếu. "Xác nhận vào" mở lịch đặt đã lọc theo mã để check-in
-// (ghi lượt vào tiện ích là UC-D10, chưa có API).
+// Tra mã cư dân: luôn hiện ảnh để lễ tân đối chiếu. "Xác nhận vào" mở lịch đặt đã lọc theo mã để check-in.
 export default function LookupCard() {
   const navigate = useNavigate();
   const [text, setText] = useState('');
@@ -102,13 +95,13 @@ export default function LookupCard() {
             aria-label="Mã cư dân"
             autoComplete="off"
             maxLength={40}
-            className="flex-1 min-w-0 h-[52px] px-4 rounded-[10px] border border-r-border-control bg-white text-[22px] tracking-wider text-r-text dark:bg-[#18263D] dark:text-[#EEF1F6] dark:border-[#24344D]"
+            className="flex-1 min-w-0 h-[52px] px-4 rounded-[10px] border border-r-border-control bg-white text-lg tracking-wider text-r-text dark:bg-[#27272A] dark:text-[#FAFAFA] dark:border-[#2E2E33]"
             style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}
           />
           <button
             type="submit"
             disabled={!text.trim() || state.status === 'loading'}
-            className="h-[52px] px-6 rounded-[10px] border-0 bg-[#1A2440] text-white font-semibold text-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            className="h-[52px] px-6 rounded-[10px] border-0 bg-navy hover:bg-navy-hover text-white font-semibold text-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Tra cứu
           </button>
@@ -117,7 +110,7 @@ export default function LookupCard() {
           Cư dân đọc mã trên thẻ &quot;Mã của tôi&quot;. Đối chiếu ảnh trước khi cho vào tiện ích.
         </p>
       </div>
-      <div className="flex-1 basis-[360px] min-w-0 rounded-xl p-4 bg-r-bg dark:bg-[#18263D] flex items-center" aria-live="polite">
+      <div className="flex-1 basis-[360px] min-w-0 rounded-xl p-4 bg-r-bg dark:bg-[#27272A] flex items-center" aria-live="polite">
         <div className="w-full">
           <Result state={state} onConfirm={(code) => navigate(`/app/booking-schedule?q=${encodeURIComponent(code)}`)} />
         </div>
