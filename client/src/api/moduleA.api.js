@@ -94,14 +94,16 @@ export const vehicleApi = {
   register: (body) => http.post('/vehicles', body),
   requestCancel: (id) => http.patch(`/vehicles/${id}/cancel-request`),
   list: (params) => http.get('/vehicles', { params }),
-  approve: (id, body) => http.patch(`/vehicles/${id}/approve`, body),
+  approve: (id) => http.patch(`/vehicles/${id}/approve`),
   reject: (id, body) => http.patch(`/vehicles/${id}/reject`, body),
   confirmCancel: (id) => http.patch(`/vehicles/${id}/confirm-cancel`),
 };
 
-// ===== UC66: Thẻ gửi xe =====
+// ===== UC66: Thẻ cư dân =====
 export const parkingCardsApi = {
   list: (params) => http.get('/parking-cards', { params }),
+  issue: (body) => http.post('/parking-cards', body),
+  handOver: (id) => http.patch(`/parking-cards/${id}/handover`),
   collect: (id, body) => http.patch(`/parking-cards/${id}/collect`, body),
   lost: (id, body) => http.patch(`/parking-cards/${id}/lost`, body),
   updateStatus: (id, body) => http.patch(`/parking-cards/${id}/status`, body),

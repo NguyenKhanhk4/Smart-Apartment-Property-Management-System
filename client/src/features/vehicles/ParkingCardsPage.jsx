@@ -20,7 +20,7 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import { parkingCardsApi } from '../../api/moduleA.api';
+import { apartmentsApi, parkingCardsApi, residentsApi } from '../../api/moduleA.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
 import { PARKING_CARD_STATUS, VEHICLE_TYPES } from '../../constants/enums';
@@ -29,11 +29,100 @@ import { useAuth } from '../../hooks/useAuth';
 import { formatDateTime } from '../../utils/format';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 
+function IssueCardModal({ replacing, onClose, onDone }) {
+  const [form] = Form.useForm();
+  const [apartmentId, setApartmentId] = useState();
+  const [apartmentSearch, setApartmentSearch] = useState('');
+  const query = useDebouncedValue(apartmentSearch.trim());
+  const { data: apartments, loading: loadingApartments } = useApi(
+    () => apartmentsApi.list({ q: query || undefined, limit: 30 }),
+    [query],
+    { enabled: !replacing },
+  );
+  const { data: residents, loading: loadingResidents } = useApi(
+    () => residentsApi.listByApartment(apartmentId),
+    [apartmentId],
+    { enabled: Boolean(apartmentId) && !replacing },
+  );
+  const [issue, issuing] = useAction(
+    (values) => parkingCardsApi.issue({
+      cardNumber: values.cardNumber,
+      residentId: replacing?.residentId._id ?? values.residentId,
+      replacesId: replacing?._id,
+    }),
+    { onDone },
+  );
+
+  return (
+    <Modal
+      title={replacing ? 'Cấp lại thẻ cư dân' : 'Cấp thẻ cư dân'}
+      open
+      onCancel={onClose}
+      onOk={() => form.submit()}
+      confirmLoading={issuing}
+      okText={replacing ? 'Cấp lại' : 'Cấp thẻ'}
+      cancelText="Hủy"
+    >
+      {replacing && (
+        <p>
+          Cấp mã mới cho <b>{replacing.residentId.userId?.fullName}</b> tại căn{' '}
+          <b>{replacing.apartmentId?.code}</b>. Mã <b>{replacing.cardNumber}</b> sẽ hết hiệu lực.
+        </p>
+      )}
+      <Form form={form} layout="vertical" onFinish={(values) => issue(values).catch(() => {})}>
+        {!replacing && (
+          <>
+            <Form.Item label="Căn hộ" name="apartmentId" rules={[{ required: true, message: 'Chọn căn hộ' }]}>
+              <Select
+                showSearch={{ filterOption: false, onSearch: setApartmentSearch }}
+                placeholder="Tìm theo mã căn hộ"
+                loading={loadingApartments}
+                onChange={(id) => {
+                  setApartmentId(id);
+                  form.setFieldValue('residentId', undefined);
+                }}
+                options={(apartments ?? []).map((apartment) => ({
+                  value: apartment._id,
+                  label: [apartment.code, apartment.buildingId?.name].filter(Boolean).join(' · '),
+                }))}
+              />
+            </Form.Item>
+            <Form.Item label="Cư dân" name="residentId" rules={[{ required: true, message: 'Chọn cư dân' }]}>
+              <Select
+                disabled={!apartmentId || loadingResidents}
+                loading={loadingResidents}
+                placeholder="Chọn cư dân có tài khoản"
+                options={(residents ?? []).filter((resident) => resident.userId).map((resident) => ({
+                  value: resident._id,
+                  label: [resident.fullName, resident.phone].filter(Boolean).join(' · '),
+                }))}
+              />
+            </Form.Item>
+          </>
+        )}
+        <Form.Item
+          label="Mã thẻ cư dân"
+          name="cardNumber"
+          rules={[
+            { required: true, whitespace: true, message: 'Nhập mã thẻ cư dân' },
+            { pattern: /^[A-Z0-9]+(?:[-_][A-Z0-9]+)*$/i, message: 'Dùng chữ, số, dấu gạch ngang hoặc gạch dưới' },
+          ]}
+        >
+          <Input placeholder="Ví dụ: CD-A101-01" maxLength={50} />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}
+
 export default function ParkingCardsPage() {
   const { hasRole } = useAuth();
   const isReceptionist = hasRole('STAFF:RECEPTIONIST');
+  const isManager = hasRole('MANAGER');
 
-  const [statusFilter, setStatusFilter] = useState('DISABLED_TO_COLLECT');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [issueTarget, setIssueTarget] = useState(null);
   const [search, setSearch] = useState('');
   const searchQuery = useDebouncedValue(search.trim());
   const [lostTarget, setLostTarget] = useState(null);
@@ -49,12 +138,18 @@ export default function ParkingCardsPage() {
       parkingCardsApi.list({
         status: statusFilter || undefined,
         q: searchQuery || undefined,
-        limit: 50,
+        page,
+        limit: 20,
       }),
-    [statusFilter, searchQuery],
+    [statusFilter, searchQuery, page],
   );
 
   const items = Array.isArray(listData) ? listData : listData?.items || [];
+
+  const [handOver, handingOver] = useAction(
+    (id) => parkingCardsApi.handOver(id),
+    { onDone: reload },
+  );
 
   const [runCollect, collecting] = useAction(
     (id) => parkingCardsApi.collect(id, {}),
@@ -107,9 +202,17 @@ export default function ParkingCardsPage() {
       ),
     },
     {
-      title: 'Phương tiện',
+      title: 'Quyền sử dụng',
       key: 'vehicle',
       render: (_, r) => {
+        if (r.residentId) {
+          return r.elevatorAllowed ? (
+            <Space size={4} wrap>
+              <Tag color="blue">Thang máy</Tag>
+              {r.parkingVehicleCount > 0 && <Tag color="green">Gửi xe ({r.parkingVehicleCount})</Tag>}
+            </Space>
+          ) : '—';
+        }
         const v = r.vehicleId;
         if (!v) return '—';
         return (
@@ -126,10 +229,10 @@ export default function ParkingCardsPage() {
       },
     },
     {
-      title: 'Chủ xe',
+      title: 'Người giữ thẻ',
       key: 'owner',
       render: (_, r) => {
-        const u = r.vehicleId?.registeredBy;
+        const u = r.residentId?.userId ?? r.vehicleId?.registeredBy;
         if (!u) return '—';
         return (
           <div>
@@ -143,13 +246,20 @@ export default function ParkingCardsPage() {
       title: 'Trạng thái thẻ',
       dataIndex: 'status',
       key: 'status',
-      render: (v) => <EnumTag map={PARKING_CARD_STATUS} value={v} />,
+      render: (v, r) => (
+        <EnumTag map={PARKING_CARD_STATUS} value={v === 'ACTIVE' && r.residentId && !r.handedOverAt ? 'PENDING_HANDOVER' : v} />
+      ),
     },
     {
       title: 'Ngày cấp',
       dataIndex: 'issuedAt',
       key: 'issuedAt',
-      render: (v) => formatDateTime(v),
+      render: (v, r) => (
+        <div>
+          {formatDateTime(v)}
+          {r.handedOverAt && <div className="text-xs text-gray-500">Đã giao: {formatDateTime(r.handedOverAt)}</div>}
+        </div>
+      ),
     },
     {
       title: 'Ghi chú / Đóng thẻ',
@@ -166,6 +276,23 @@ export default function ParkingCardsPage() {
       title: 'Thao tác',
       key: 'actions',
       render: (_, r) => {
+        if (r.status === 'ACTIVE' && r.residentId?.isActive && r.residentId.parkingCardId === r._id) {
+          if (isManager) {
+            return <Button size="small" onClick={() => setIssueTarget(r)}>Cấp lại thẻ</Button>;
+          }
+          if (isReceptionist && !r.handedOverAt) {
+            return (
+              <Popconfirm
+                title={`Xác nhận đã giao thẻ ${r.cardNumber}?`}
+                onConfirm={() => handOver(r._id).catch(() => {})}
+                okText="Đã bàn giao"
+                cancelText="Hủy"
+              >
+                <Button size="small" type="primary" loading={handingOver}>Bàn giao thẻ</Button>
+              </Popconfirm>
+            );
+          }
+        }
         if (r.status !== 'DISABLED_TO_COLLECT') {
           return <span className="text-xs text-gray-400">—</span>;
         }
@@ -209,12 +336,17 @@ export default function ParkingCardsPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Thẻ gửi xe cần thu hồi (UC66)"
-        subtitle="Danh sách thẻ gửi xe đã vô hiệu hóa khi hủy xe hoặc kết thúc hợp đồng, chờ Lễ tân thu hồi hoặc ghi nhận mất thẻ"
+        title="Thẻ cư dân"
+        subtitle="Cấp, bàn giao và thu hồi thẻ dùng cho thang máy và bãi xe"
         extra={
-          <Button icon={<ReloadOutlined />} onClick={() => reload()}>
-            Làm mới
-          </Button>
+          <Space wrap>
+            <Button icon={<ReloadOutlined />} onClick={() => reload()}>Làm mới</Button>
+            {isManager && (
+              <Button type="primary" icon={<IdcardOutlined />} onClick={() => setIssueTarget('new')}>
+                Cấp thẻ cư dân
+              </Button>
+            )}
+          </Space>
         }
       />
 
@@ -224,7 +356,10 @@ export default function ParkingCardsPage() {
             <Select
               className="w-full"
               value={statusFilter}
-              onChange={setStatusFilter}
+              onChange={(value) => {
+                setStatusFilter(value);
+                setPage(1);
+              }}
               options={[
                 { value: '', label: 'Tất cả trạng thái thẻ' },
                 ...Object.entries(PARKING_CARD_STATUS).map(([k, v]) => ({
@@ -238,9 +373,12 @@ export default function ParkingCardsPage() {
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              placeholder="Tìm theo số thẻ gửi xe..."
+              placeholder="Tìm theo mã thẻ..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
             />
           </Col>
         </Row>
@@ -258,6 +396,8 @@ export default function ParkingCardsPage() {
                   current: pagination.page,
                   pageSize: pagination.limit,
                   total: pagination.total,
+                  showSizeChanger: false,
+                  onChange: setPage,
                 }
               : false
           }
@@ -265,8 +405,21 @@ export default function ParkingCardsPage() {
         />
       </Card>
 
+      {issueTarget && (
+        <IssueCardModal
+          replacing={issueTarget === 'new' ? null : issueTarget}
+          onClose={() => setIssueTarget(null)}
+          onDone={() => {
+            setIssueTarget(null);
+            setStatusFilter('PENDING_HANDOVER');
+            setSearch('');
+            setPage(1);
+            reload();
+          }}
+        />
+      )}
       <Modal
-        title={`Ghi nhận mất thẻ gửi xe: ${lostTarget?.cardNumber || ''}`}
+        title={`Ghi nhận mất thẻ: ${lostTarget?.cardNumber || ''}`}
         open={Boolean(lostTarget)}
         onCancel={() => setLostTarget(null)}
         onOk={handleConfirmLost}

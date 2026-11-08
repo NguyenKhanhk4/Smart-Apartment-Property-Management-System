@@ -21,8 +21,16 @@ export async function revokeDepartedResidentServices({ apartmentId, userIds, end
     VEHICLE_STATUS.CANCEL_REQUESTED].includes(v.status));
   await Vehicle.updateMany({ _id: { $in: liveVehicles.map((v) => v._id) } },
     { $set: { status: VEHICLE_STATUS.CANCELLED, cancelledAt: endedAt } }, { session });
-  const cards = await ParkingCard.find({ apartmentId, vehicleId: { $in: vehicleIds }, status: PARKING_CARD_STATUS.ACTIVE })
-    .select('_id cardNumber vehicleId').session(session).lean();
+  const previousMemberships = await Resident.find({ apartmentId, userId: { $in: departing }, isActive: false })
+    .select('_id').session(session).lean();
+  const cards = await ParkingCard.find({
+    apartmentId,
+    status: PARKING_CARD_STATUS.ACTIVE,
+    $or: [
+      { vehicleId: { $in: vehicleIds } },
+      { residentId: { $in: previousMemberships.map((resident) => resident._id) } },
+    ],
+  }).select('_id cardNumber vehicleId residentId').session(session).lean();
   await ParkingCard.updateMany({ _id: { $in: cards.map((c) => c._id) }, status: PARKING_CARD_STATUS.ACTIVE },
     { $set: { status: PARKING_CARD_STATUS.DISABLED_TO_COLLECT } }, { session });
   const passes = await GatePass.find({ apartmentId, createdBy: { $in: departing },
@@ -35,7 +43,7 @@ export async function revokeDepartedResidentServices({ apartmentId, userIds, end
     targetId: row._id, metadata: { apartmentId, reason: 'RESIDENCY_ENDED', endedAt, ...metadata }, ip }, { session });
   for (const v of liveVehicles) await audit(AUDIT_ACTIONS.VEHICLE_CANCELLED, AUDIT_TARGETS.VEHICLE, v, {});
   for (const c of cards) await audit(AUDIT_ACTIONS.PARKING_CARD_DISABLED, AUDIT_TARGETS.PARKING_CARD, c,
-    { cardNumber: c.cardNumber, vehicleId: c.vehicleId });
+    { cardNumber: c.cardNumber, vehicleId: c.vehicleId, residentId: c.residentId });
   for (const p of passes) await audit(AUDIT_ACTIONS.GATEPASS_CANCELLED, AUDIT_TARGETS.GATE_PASS, p, { fromStatus: p.status });
   return { vehicles: liveVehicles.length, cards: cards.length, gatePasses: passes.length };
 }

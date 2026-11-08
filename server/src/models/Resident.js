@@ -12,6 +12,7 @@ const residentSchema = new Schema(
     idNumber: String, // CCCD
     idNumberEnc: { type: String, default: null }, // CCCD mã hóa AES-256-GCM
     idNumberHash: { type: String, default: null }, // HMAC-SHA256 để tìm kiếm/chống trùng
+    parkingCardId: { type: ObjectId, ref: 'ParkingCard', default: null },
     contractId: { type: ObjectId, ref: 'Contract', default: null }, // Hợp đồng SALE/LEASE tạo ra liên kết này
     tenantPaysFees: Boolean, // Có giá trị trên lượt thuê do chủ sở hữu khai báo (UC17).
     isActive: { type: Boolean, default: true }, // false khi đã chuyển đi

@@ -364,6 +364,7 @@ export const PLATE_LOOKUP_RESULTS = {
 };
 
 export const PARKING_CARD_STATUS = {
+  PENDING_HANDOVER: { label: 'Chờ bàn giao', color: 'processing' },
   ACTIVE: { label: 'Đang hoạt động', color: 'success' },
   DISABLED_TO_COLLECT: { label: 'Cần thu hồi', color: 'warning' },
   RETURNED: { label: 'Đã thu hồi', color: 'default' },

@@ -507,7 +507,7 @@ export const adminMenu = [
   {
     key: 'parking-cards',
     group: 'Cư dân & dịch vụ',
-    label: 'Thẻ cần thu hồi',
+    label: 'Thẻ cư dân',
     icon: IdcardOutlined,
     path: 'parking-cards',
     roles: ['STAFF:RECEPTIONIST', 'MANAGER'],

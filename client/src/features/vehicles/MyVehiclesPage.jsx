@@ -100,7 +100,7 @@ export default function MyVehiclesPage() {
       return vehicleApi.register(payload);
     },
     {
-      success: 'Gửi yêu cầu đăng ký xe thành công! Vui lòng chờ Lễ tân duyệt.',
+      success: 'Gửi yêu cầu đăng ký xe thành công! Vui lòng chờ Ban quản lý duyệt.',
       onDone: () => {
         setRegisterModalOpen(false);
         form.resetFields();
@@ -461,7 +461,7 @@ export default function MyVehiclesPage() {
               <ExclamationCircleOutlined /> Lưu ý quy định gửi xe:
             </p>
             <ul className="m-0 mt-1 pl-4 list-disc space-y-0.5">
-              <li>Yêu cầu sẽ được Lễ tân xem xét và duyệt trong giờ làm việc.</li>
+              <li>Yêu cầu sẽ được Ban quản lý xem xét và duyệt trong giờ làm việc.</li>
               <li>Phí gửi xe hàng tháng sẽ bắt đầu được tính từ hóa đơn của tháng kế tiếp.</li>
               <li>Chỗ đỗ xe máy và ô tô phụ thuộc vào sức chứa bãi xe còn trống.</li>
             </ul>

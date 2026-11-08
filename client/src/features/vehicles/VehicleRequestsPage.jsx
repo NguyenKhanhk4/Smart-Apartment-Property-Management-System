@@ -34,6 +34,7 @@ export default function VehicleRequestsPage() {
   const { message } = App.useApp();
   const { hasRole } = useAuth();
   const isReceptionist = hasRole('STAFF:RECEPTIONIST');
+  const isManager = hasRole('MANAGER');
 
   const [activeTab, setActiveTab] = useState('pending');
 
@@ -102,7 +103,7 @@ export default function VehicleRequestsPage() {
     ? allData
     : allData?.items || [];
 
-  // Đang duyệt (cấp thẻ) / từ chối
+  // Đang duyệt / từ chối
   const [approvingItem, setApprovingItem] = useState(null);
   const [rejectingItem, setRejectingItem] = useState(null);
 
@@ -187,7 +188,7 @@ export default function VehicleRequestsPage() {
       width: 180,
       fixed: 'right',
       render: (_, r) =>
-        isReceptionist ? (
+        isManager ? (
           <Space>
             <Button
               type="primary"
@@ -195,7 +196,7 @@ export default function VehicleRequestsPage() {
               icon={<CheckOutlined />}
               onClick={() => setApprovingItem(r)}
             >
-              Duyệt & Cấp thẻ
+              Duyệt
             </Button>
 
             <Button

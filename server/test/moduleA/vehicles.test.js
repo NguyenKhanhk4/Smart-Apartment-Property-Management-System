@@ -36,7 +36,7 @@ test('requestCancel: xe vừa được duyệt (không còn PENDING) không bị
   assert.equal((await Vehicle.findById(v._id)).status, 'REJECTED');
 });
 
-test('approve: 2 lễ tân duyệt cùng lúc khi bãi còn 1 chỗ → không vượt sức chứa', async () => {
+test('approve: 2 lượt duyệt cùng lúc khi bãi còn 1 chỗ → không vượt sức chứa', async () => {
   await SystemConfig.create({ key: 'PARKING_CAPACITY_MOTORBIKE', value: 1, scope: 'BUSINESS' });
   const { user, apartment } = await createHousehold();
   const v1 = await createVehicle({ apartment, registeredBy: user });
@@ -44,10 +44,10 @@ test('approve: 2 lễ tân duyệt cùng lúc khi bãi còn 1 chỗ → không v
   const staff = asUser(await createReceptionist());
 
   const results = await Promise.allSettled([
-    vehicles.approve(v1._id, staff, { cardNumber: 'C001' }),
-    vehicles.approve(v2._id, staff, { cardNumber: 'C002' }),
+    vehicles.approve(v1._id, staff),
+    vehicles.approve(v2._id, staff),
   ]);
   assert.ok(results.some((r) => r.status === 'rejected'));
   assert.ok((await Vehicle.countDocuments({ type: 'MOTORBIKE', status: 'APPROVED' })) <= 1);
-  assert.ok((await ParkingCard.countDocuments({ status: 'ACTIVE' })) <= 1);
+  assert.equal(await ParkingCard.countDocuments(), 0);
 });
