@@ -53,7 +53,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <>
-      <h2 className="m-0 text-[22px] font-semibold tracking-tight text-ink">Quên mật khẩu</h2>
+      <h2 className="m-0 text-lg font-semibold tracking-tight text-ink">Quên mật khẩu</h2>
       <p className="mt-1 mb-6 text-[13px] text-ink-2">
         {phone ? 'Nhập mã đã gửi tới email và đặt mật khẩu mới.' : 'Nhập số điện thoại đăng nhập, mã đặt lại mật khẩu sẽ gửi tới email của tài khoản.'}
       </p>

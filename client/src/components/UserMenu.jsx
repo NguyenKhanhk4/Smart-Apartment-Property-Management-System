@@ -47,7 +47,7 @@ export default function UserMenu({ compact = false, variant }) {
         )}
         {!compact && (
           <span className="text-left leading-tight">
-            <span className={`block font-semibold text-ink dark:text-[#FAFAFA] ${variant === 'reception' ? 'text-[15px]' : 'text-[13px]'}`}>{user.fullName}</span>
+            <span className={`block font-semibold text-ink dark:text-[#FAFAFA] ${variant === 'reception' ? 'text-[14px]' : 'text-[13px]'}`}>{user.fullName}</span>
             {role && <span className="block text-[11px] text-ink-2 dark:text-[#A1A1AA] mt-0.5">{role.label}</span>}
           </span>
         )}

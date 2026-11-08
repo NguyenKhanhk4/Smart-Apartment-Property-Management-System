@@ -58,6 +58,8 @@ export const LABELS = {
   // Tòa, căn, hợp đồng, cư dân
   BUILDING_CHANGED: 'Thay đổi tòa nhà',
   APARTMENT_CHANGED: 'Thay đổi căn hộ',
+  OWNER_ACCOUNT_ISSUED: 'Cấp tài khoản chủ sở hữu',
+  APARTMENT_OWNER_CHANGED: 'Đổi chủ sở hữu căn hộ',
   CONTRACT_CREATED: 'Tạo hợp đồng',
   CONTRACT_UPDATED: 'Sửa hợp đồng',
   CONTRACT_TERMINATED: 'Chấm dứt hợp đồng',
@@ -66,11 +68,13 @@ export const LABELS = {
   RESIDENT_REMOVED: 'Cho cư dân rời căn',
   RESIDENT_UPDATED: 'Sửa thông tin cư dân',
   RESIDENT_CHANGES_EXPORTED: 'Xuất báo cáo biến động nhân khẩu',
+  RESIDENT_OCCUPANCY_EXPORTED: 'Xuất báo cáo cư trú',
   RESIDENT_ID_VIEWED: 'Xem số CCCD',
   VEHICLE_APPROVED: 'Duyệt đăng ký xe',
   VEHICLE_REJECTED: 'Từ chối đăng ký xe',
   VEHICLE_CANCELLED: 'Hủy đăng ký xe',
   PARKING_CARD_ISSUED: 'Cấp thẻ gửi xe',
+  PARKING_CARD_HANDED_OVER: 'Bàn giao thẻ gửi xe',
   PARKING_CARD_DISABLED: 'Khóa thẻ gửi xe',
   PARKING_CARD_RETURNED: 'Trả thẻ gửi xe',
   PARKING_CARD_LOST: 'Báo mất thẻ gửi xe',
@@ -153,8 +157,8 @@ export const auditActionLabel = (action) => LABELS[action] ?? action.replaceAll(
 const TARGET_LABELS = {
   maintenance_fund: 'Quỹ bảo trì', fund_transactions: 'Giao dịch quỹ', fund_proposals: 'Đề xuất chi quỹ',
   operating_expenses: 'Chi phí vận hành', users: 'Tài khoản', buildings: 'Tòa nhà', apartments: 'Căn hộ',
-  contracts: 'Hợp đồng', residents: 'Cư dân', vehicles: 'Phương tiện', gate_passes: 'Giấy chuyển đồ',
-  parking_cards: 'Thẻ gửi xe', fee_types: 'Bảng phí', invoices: 'Thông báo phí', payments: 'Thanh toán',
+  contracts: 'Hợp đồng', residents: 'Cư dân', vehicles: 'Phương tiện',
+  gate_passes: 'Giấy chuyển đồ', parking_cards: 'Thẻ gửi xe', fee_types: 'Bảng phí', invoices: 'Thông báo phí', payments: 'Thanh toán',
   debt_followups: 'Xử lý công nợ', repair_quotes: 'Báo giá sửa chữa', amenities: 'Tiện ích',
   amenity_passes: 'Gói tiện ích', amenity_visits: 'Lượt tiện ích', bookings: 'Đặt tiện ích',
   work_orders: 'Lệnh bảo trì', tickets: 'Sự cố và phản ánh', complaint_categories: 'Danh mục phản ánh',
@@ -171,7 +175,7 @@ export const LEGACY_TARGETS = {
   Contract: AUDIT_TARGETS.CONTRACT,
   Resident: AUDIT_TARGETS.RESIDENT,
   Vehicle: AUDIT_TARGETS.VEHICLE,
-  GatePass: AUDIT_TARGETS.GATE_PASS,
+  GatePass: 'gate_passes',
   ParkingCard: AUDIT_TARGETS.PARKING_CARD,
 };
 /** Tên đối tượng mới → [tên mới, các tên cũ] để lọc */

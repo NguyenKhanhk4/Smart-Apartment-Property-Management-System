@@ -29,10 +29,10 @@ export default function ReceptionHomePage() {
     <div className="max-w-[1240px] mx-auto flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className={`m-0 text-[26px] font-semibold leading-tight ${TEXT}`}>
+          <h1 className={`m-0 text-xl font-semibold leading-tight ${TEXT}`}>
             {greeting(now.hour())}, {user.fullName}
           </h1>
-          <p className={`mt-1 mb-0 text-[15px] ${MUTED}`}>
+          <p className={`mt-1 mb-0 text-[14px] ${MUTED}`}>
             {WEEKDAYS[now.day()]}, {formatDate(now)}
             {waiting != null && ` · Có ${waiting} việc đang chờ bạn xử lý`}
           </p>

@@ -66,19 +66,42 @@ function VehicleIdentityFields({ temporary = false, issuingCard = false }) {
 
 function ResidentPassage({ onRecorded }) {
   const [form] = Form.useForm();
+  const [bicycles, setBicycles] = useState([]);
   const [record, loading] = useAction(parkingGateApi.recordResident, {
     success: ({ data }) => (data.exitedAt ? 'Đã ghi xe ra · Mở thanh chắn mô phỏng' : 'Đã ghi xe vào · Mở thanh chắn mô phỏng'),
-    onDone: () => { form.resetFields(); onRecorded(); },
+    onDone: () => {
+      form.resetFields();
+      setBicycles([]);
+      onRecorded();
+    },
   });
 
   return (
     <Card title="Mô phỏng quẹt thẻ cư dân">
       <Form form={form} name="resident-passage" layout="vertical" initialValues={{ direction: 'IN' }} disabled={loading}
-        onFinish={(values) => record(values).catch(() => { })}>
+        onValuesChange={(changed) => {
+          if (!Object.hasOwn(changed, 'vehicleId')) {
+            setBicycles([]);
+            form.setFieldValue('vehicleId', undefined);
+          }
+        }}
+        onFinish={(values) => record(values).catch((error) => {
+          const options = error.details?.find(({ field }) => field === 'vehicleId')?.candidates;
+          if (options) setBicycles(options);
+        })}>
         <Form.Item name="direction" label="Chiều di chuyển" rules={[{ required: true }]}>
           <Select options={directionOptions} />
         </Form.Item>
         <VehicleIdentityFields />
+        {bicycles.length > 0 && (
+          <Form.Item name="vehicleId" label="Xe đạp đã đối chiếu" preserve={false}
+            rules={[{ required: true, message: 'Chọn xe đạp sau khi đối chiếu' }]}>
+            <Select options={bicycles.map((bike) => ({
+              value: bike._id,
+              label: [bike.brand || 'Xe đạp', bike.color, bike._id.slice(-6)].filter(Boolean).join(' · '),
+            }))} />
+          </Form.Item>
+        )}
         <Button type="primary" htmlType="submit" loading={loading}>Kiểm tra và ghi nhận</Button>
       </Form>
     </Card>

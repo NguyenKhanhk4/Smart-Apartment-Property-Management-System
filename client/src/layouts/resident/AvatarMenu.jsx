@@ -46,7 +46,7 @@ export default function AvatarMenu({ withCaret = false }) {
     >
       {rows.map((r) => (
         <button key={r.key} type="button" role="menuitem" onClick={() => go(r.path)} className={`${itemClass} text-r-text`}>
-          <span className="text-[18px] leading-none">{r.icon}</span>
+          <span className="text-base leading-none">{r.icon}</span>
           <span className="flex-1">{r.label}</span>
           {r.hint && <span className="text-xs text-r-muted">{r.hint}</span>}
         </button>
@@ -61,7 +61,7 @@ export default function AvatarMenu({ withCaret = false }) {
         }}
         className={`${itemClass} text-r-danger-text`}
       >
-        <span className="text-[18px] leading-none">
+        <span className="text-base leading-none">
           <LogoutOutlined />
         </span>
         Đăng xuất

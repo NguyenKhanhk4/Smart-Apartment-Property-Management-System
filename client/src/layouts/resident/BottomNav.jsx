@@ -40,7 +40,7 @@ export default function BottomNav() {
             aria-current={active ? 'page' : undefined}
             className={`${common} min-h-12 justify-center ${active ? 'text-r-navy! font-semibold' : 'text-r-muted!'}`}
           >
-            <span className="text-[22px] leading-none">{createElement(icon)}</span>
+            <span className="text-lg leading-none">{createElement(icon)}</span>
             {label}
           </NavLink>
         );

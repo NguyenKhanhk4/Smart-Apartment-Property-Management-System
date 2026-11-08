@@ -45,6 +45,12 @@ export const CONTRACT_TYPES = {
   LEASE: { label: 'Cho thuê', color: 'green' },
 };
 
+export const OWNERSHIP_DOCUMENT_TYPES = {
+  DEVELOPER_SALE_CONTRACT: { label: 'Hợp đồng mua bán với chủ đầu tư', color: 'blue' },
+  OWNERSHIP_CERTIFICATE: { label: 'Giấy chứng nhận quyền sở hữu', color: 'purple' },
+  TRANSFER_DOCUMENT: { label: 'Giấy tờ xác nhận chuyển nhượng', color: 'blue' },
+};
+
 export const CONTRACT_STATUS = {
   ACTIVE: { label: 'Đang hiệu lực', color: 'green' },
   EXPIRED: { label: 'Hết hạn', color: 'default' },
@@ -378,38 +384,13 @@ export const ASSET_CATEGORIES = {
   OTHER: { label: 'Khác', color: 'default' },
 };
 
-// ===== Gate Pass, thẻ gửi xe, biến động nhân khẩu (Người 2) =====
-export const GATE_PASS_DIRECTIONS = {
-  IN: { label: 'Chuyển đồ vào (IN)', color: 'blue' },
-  OUT: { label: 'Chuyển đồ ra (OUT)', color: 'volcano' },
-};
-
-export const GATE_PASS_STATUS = {
-  AWAITING_OWNER: { label: 'Chờ chủ hộ xác nhận', color: 'gold' },
-  PENDING: { label: 'Chờ BQL duyệt', color: 'processing' },
-  APPROVED: { label: 'Đã duyệt', color: 'success' },
-  USED: { label: 'Đã qua cổng', color: 'cyan' },
-  REJECTED: { label: 'Từ chối', color: 'error' },
-  EXPIRED: { label: 'Hết hạn', color: 'default' },
-  CANCELLED: { label: 'Đã hủy', color: 'default' },
-};
-
-export const PLATE_LOOKUP_RESULTS = {
-  REGISTERED_VEHICLE: { label: 'Xe đã đăng ký', color: 'success' },
-  MATCHES_GATE_PASS: { label: 'Khớp Gate Pass hôm nay', color: 'processing' },
-  UNKNOWN: { label: 'Không có trong hệ thống', color: 'error' },
-};
-
+// ===== Thẻ cư dân và biến động nhân khẩu (Người 2) =====
 export const PARKING_CARD_STATUS = {
+  PENDING_HANDOVER: { label: 'Chờ bàn giao', color: 'processing' },
   ACTIVE: { label: 'Đang hoạt động', color: 'success' },
   DISABLED_TO_COLLECT: { label: 'Cần thu hồi', color: 'warning' },
   RETURNED: { label: 'Đã thu hồi', color: 'default' },
   LOST: { label: 'Mất thẻ', color: 'error' },
-};
-
-export const OCCUPANT_CHANGE_TYPES = {
-  MOVE_IN: { label: 'Vào ở', color: 'green' },
-  MOVE_OUT: { label: 'Chuyển đi', color: 'volcano' },
 };
 
 // ===== Hệ thống =====
@@ -430,7 +411,6 @@ export const CRON_JOBS = {
   TICKET_AUTO_CLOSE: { label: 'Tự đóng phản ánh chờ nghiệm thu', color: 'default' },
   CONTRACT_EXPIRE: { label: 'Quét hợp đồng thuê hết hạn', color: 'purple' },
   FUND_LOW_BALANCE: { label: 'Cảnh báo số dư quỹ thấp', color: 'gold' },
-  GATE_PASS_EXPIRE: { label: 'Hết hạn Gate Pass', color: 'default' },
   CONTRACT_EXPIRY_REMIND: { label: 'Nhắc hợp đồng thuê sắp hết hạn', color: 'purple' },
   TICKET_SLA_ALERT: { label: 'Cảnh báo SLA sự cố / phản ánh', color: 'red' },
   BOOKING_HOLD_EXPIRE: { label: 'Hủy giữ chỗ quá hạn thanh toán', color: 'default' },

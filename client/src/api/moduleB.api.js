@@ -27,6 +27,7 @@ export const invoiceApi = {
   list: (params) => http.get('/invoices', { params }),
   /** Cư dân — params: { apartmentId, page, limit, status, period }. Kèm summary (còn nợ, số dư trả trước) */
   my: (params) => http.get('/invoices/my', { params }),
+  departedTenancies: () => http.get('/invoices/my/departed-tenancies'),
   get: (id) => http.get(`/invoices/${id}`),
 
   // Sửa Nháp (Kế toán)

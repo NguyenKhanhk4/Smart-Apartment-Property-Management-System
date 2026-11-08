@@ -1,11 +1,14 @@
 import { PARKING_CARD_STATUS, values } from '../constants/enums.js';
 import { ObjectId, Schema, model, schemaOptions } from './_shared.js';
 
-// parking_cards — thẻ gửi xe vật lý (UC66)
+// parking_cards — thẻ cư dân và các thẻ gửi xe được cấp trước UC66.
 const parkingCardSchema = new Schema(
   {
     cardNumber: { type: String, required: true, trim: true, uppercase: true },
-    vehicleId: { type: ObjectId, ref: 'Vehicle', required: true },
+    vehicleId: { type: ObjectId, ref: 'Vehicle', default: null },
+    residentId: { type: ObjectId, ref: 'Resident', default: null },
+    handedOverAt: { type: Date, default: null },
+    handedOverBy: { type: ObjectId, ref: 'User', default: null },
     apartmentId: { type: ObjectId, ref: 'Apartment', required: true },
     status: {
       type: String,

@@ -116,7 +116,7 @@ export default function AuthLayout({ portal = 'resident' }) {
         </div>
 
         <div className="relative px-[clamp(20px,4vw,56px)] pt-6 pb-8 lg:pt-[clamp(32px,10vh,96px)] lg:pb-0">
-          <h1 className="m-0 text-[clamp(22px,2.8vw,36px)] leading-[1.2] font-semibold tracking-tight">
+          <h1 className="m-0 text-[clamp(20px,2.2vw,28px)] leading-[1.35] font-semibold tracking-tight">
             {p.title[0]}
             <br />
             <span className={isResident ? 'text-[#BBF7D0]' : 'text-[#93C5FD]'}>{p.title[1]}</span>

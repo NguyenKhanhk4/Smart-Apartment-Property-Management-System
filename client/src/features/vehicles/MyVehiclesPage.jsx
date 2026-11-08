@@ -100,7 +100,7 @@ export default function MyVehiclesPage() {
       return vehicleApi.register(payload);
     },
     {
-      success: 'Gửi yêu cầu đăng ký xe thành công! Vui lòng chờ Lễ tân duyệt.',
+      success: 'Gửi yêu cầu đăng ký xe thành công! Vui lòng chờ Ban quản lý duyệt.',
       onDone: () => {
         setRegisterModalOpen(false);
         form.resetFields();
@@ -113,8 +113,8 @@ export default function MyVehiclesPage() {
   const handleCancelRequest = async (vehicleId) => {
     setCancellingId(vehicleId);
     try {
-      await vehicleApi.requestCancel(vehicleId);
-      message.success('Đã gửi yêu cầu xử lý hủy vé gửi xe thành công');
+      const { data } = await vehicleApi.requestCancel(vehicleId);
+      message.success(data.status === 'CANCELLED' ? 'Đã rút yêu cầu đăng ký xe' : 'Đã gửi yêu cầu hủy vé gửi xe');
       reloadVehicles();
     } catch (err) {
       message.error(err?.message || 'Thao tác không thành công');
@@ -125,7 +125,7 @@ export default function MyVehiclesPage() {
 
   if (loadingApts) {
     return (
-      <div className="flex justify-center items-center min-h-[50vh]">
+      <div className="flex justify-center items-center min-h-[400px]">
         <Spin size="large" tip="Đang tải dữ liệu..." />
       </div>
     );
@@ -138,7 +138,7 @@ export default function MyVehiclesPage() {
           <Empty
             description={
               <div>
-                <p className="font-semibold text-gray-700 dark:text-gray-200 text-base">
+                <p className="font-semibold text-ink dark:text-gray-200 text-base">
                   Bạn chưa được gán vào căn hộ nào
                 </p>
                 <p className="text-ink-3 text-sm mt-1">
@@ -163,10 +163,10 @@ export default function MyVehiclesPage() {
             onClick={() => startTransition(() => navigate(-1))}
           />
           <div>
-            <h1 className="text-xl font-semibold text-ink flex items-center gap-2 m-0">
+            <h1 className="text-xl md:text-2xl font-semibold text-ink dark:text-gray-100 flex items-center gap-2 m-0">
               <CarOutlined className="text-primary" /> Xe của tôi
             </h1>
-            <p className="text-gray-500 dark:text-gray-400 text-xs md:text-sm m-0 mt-0.5">
+            <p className="text-ink-3 dark:text-gray-400 text-xs md:text-sm m-0 mt-0.5">
               Đăng ký và quản lý phương tiện gửi tại hầm chung cư
             </p>
           </div>
@@ -277,6 +277,7 @@ export default function MyVehiclesPage() {
             const isRejected = v.status === 'REJECTED';
             const isCancelled = v.status === 'CANCELLED';
             const hasCancelRequest = Boolean(v.cancelRequestedAt);
+            const isRegistrant = v.registeredBy?._id != null && v.registeredBy._id === (user?._id ?? user?.id);
 
             return (
               <Col xs={24} md={12} key={v._id}>
@@ -286,7 +287,7 @@ export default function MyVehiclesPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <EnumTag map={VEHICLE_TYPES} value={v.type} />
-                        <span className="font-bold text-base text-gray-800 dark:text-gray-100">
+                        <span className="font-semibold text-base text-ink dark:text-gray-100">
                           {v.plateNumber || (isBicycle ? 'Không biển số' : '—')}
                         </span>
                       </div>
@@ -334,7 +335,7 @@ export default function MyVehiclesPage() {
 
                   {/* Nút hành động */}
                   <div className="mt-4 pt-3 border-t border-line dark:border-gray-800 flex justify-end">
-                    {isPending && (
+                    {isRegistrant && isPending && (
                       <Popconfirm
                         title="Rút yêu cầu đăng ký xe"
                         description="Bạn có chắc muốn hủy yêu cầu đăng ký phương tiện này?"
@@ -349,16 +350,16 @@ export default function MyVehiclesPage() {
                       </Popconfirm>
                     )}
 
-                    {isApproved && !hasCancelRequest && (
+                    {isRegistrant && isApproved && !hasCancelRequest && (
                       <Popconfirm
                         title="Yêu cầu hủy vé gửi xe"
                         description={
                           <div className="max-w-xs">
                             <p className="m-0 mb-1">
-                              Sau khi hủy, xe vẫn được gửi và <b>tính phí đến hết tháng hiện tại</b>.
+                              Nếu xe còn trong bãi, bảo vệ cần ghi nhận xe ra trước. Quyền gửi xe kết thúc khi lễ tân xác nhận hủy.
                             </p>
                             <p className="m-0 text-xs text-ink-3">
-                              Lễ tân sẽ xác nhận yêu cầu hủy vé của bạn.
+                              Phí gửi xe được tính riêng theo kỳ hóa đơn.
                             </p>
                           </div>
                         }
@@ -461,7 +462,7 @@ export default function MyVehiclesPage() {
               <ExclamationCircleOutlined /> Lưu ý quy định gửi xe:
             </p>
             <ul className="m-0 mt-1 pl-4 list-disc space-y-0.5">
-              <li>Yêu cầu sẽ được Lễ tân xem xét và duyệt trong giờ làm việc.</li>
+              <li>Yêu cầu sẽ được Ban quản lý xem xét và duyệt trong giờ làm việc.</li>
               <li>Phí gửi xe hàng tháng sẽ bắt đầu được tính từ hóa đơn của tháng kế tiếp.</li>
               <li>Chỗ đỗ xe máy và ô tô phụ thuộc vào sức chứa bãi xe còn trống.</li>
             </ul>

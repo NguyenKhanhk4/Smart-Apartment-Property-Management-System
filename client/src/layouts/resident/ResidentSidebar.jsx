@@ -41,7 +41,7 @@ export default function ResidentSidebar({ collapsed, onToggle }) {
         <BrandLogo size={34} />
         {!collapsed && (
           <span className="vt-brand-title leading-tight whitespace-nowrap">
-            <span className="block text-[15px] font-semibold">SAPMS</span>
+            <span className="block text-[14px] font-semibold">SAPMS</span>
             <span className="block text-[11px] text-r-subtle">Cổng cư dân</span>
           </span>
         )}
@@ -69,7 +69,7 @@ export default function ResidentSidebar({ collapsed, onToggle }) {
                       collapsed ? 'justify-center' : 'px-3'
                     } ${active ? 'text-r-navy font-semibold' : 'text-r-muted font-medium hover:text-r-text hover:bg-r-bg'}`}
                   >
-                    {item.icon && <span className="text-[17px] leading-none shrink-0">{createElement(item.icon)}</span>}
+                    {item.icon && <span className="text-[15px] leading-none shrink-0">{createElement(item.icon)}</span>}
                     {!collapsed && <span className="truncate">{item.label}</span>}
                   </span>
                 </Link>

@@ -182,7 +182,7 @@ export default function HistoryTab({ wide }) {
           <div className="text-xs text-r-muted">Th{d.format('MM')}</div>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[15px] font-medium truncate">{b.amenity?.name ?? 'Tiện ích'}</div>
+          <div className="text-[14px] font-medium truncate">{b.amenity?.name ?? 'Tiện ích'}</div>
           <div className="text-[13px] text-r-muted">
             {timeOf(b)} · {feeOf(b)}
           </div>

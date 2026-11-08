@@ -126,12 +126,10 @@ const AuditLogsPage = lazy(() => import('../features/auditLogs/AuditLogsPage'));
 const PermissionMatrixPage = lazy(() => import('../features/permissions/PermissionMatrixPage'));
 const BuildingSettingsPage = lazy(() => import('../features/settings/BuildingSettingsPage'));
 
-// ===== Gate Pass & Kiểm soát xe (Người 2) =====
-const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
-const ResidentGatePassesPage = lazy(() => import('../features/gatePasses/ResidentGatePassesPage'));
+// ===== Kiểm soát xe (Người 2) =====
 const SecurityGatePage = lazy(() => import('../features/security-gate/SecurityGatePage'));
 const ParkingCardsPage = lazy(() => import('../features/vehicles/ParkingCardsPage'));
-const OccupantChangesPage = lazy(() => import('../features/residents/OccupantChangesPage'));
+const ResidentOccupancyPage = lazy(() => import('../features/residents/ResidentOccupancyPage'));
 
 // Giao diện nội bộ (/app/*) — hiện ở sidebar
 export const adminMenu = [
@@ -433,7 +431,7 @@ export const adminMenu = [
   {
     key: 'contracts',
     group: 'Cư dân & dịch vụ',
-    label: 'Hợp đồng',
+    label: 'Hồ sơ sở hữu căn hộ',
     icon: FileTextOutlined,
     path: 'contracts',
     roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
@@ -520,16 +518,7 @@ export const adminMenu = [
     roles: ['MANAGER'],
     component: SystemDashboardPage,
   },
-  // ===== Gate Pass & Kiểm soát xe (Người 2) =====
-  {
-    key: 'gate-passes',
-    group: 'Cư dân & dịch vụ',
-    label: 'Duyệt Gate Pass',
-    icon: FileTextOutlined,
-    path: 'gate-passes',
-    roles: ['MANAGER'],
-    component: ManagerGatePassesPage,
-  },
+  // ===== Kiểm soát xe (Người 2) =====
   {
     key: 'security-gate',
     group: 'Tiện ích & khách',
@@ -542,20 +531,20 @@ export const adminMenu = [
   {
     key: 'parking-cards',
     group: 'Cư dân & dịch vụ',
-    label: 'Thẻ cần thu hồi',
+    label: 'Thẻ cư dân',
     icon: IdcardOutlined,
     path: 'parking-cards',
     roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
     component: ParkingCardsPage,
   },
   {
-    key: 'resident-changes',
+    key: 'resident-occupancy',
     group: 'Cư dân & dịch vụ',
-    label: 'Biến động nhân khẩu',
+    label: 'Thông tin cư trú',
     icon: TeamOutlined,
-    path: 'resident-changes',
-    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
-    component: OccupantChangesPage,
+    path: 'resident-occupancy',
+    roles: ['MANAGER'],
+    component: ResidentOccupancyPage,
   },
 ];
 
@@ -571,7 +560,6 @@ export const receptionNav = [
       { key: 'tickets', badge: 'ticketsNew' },
       { key: 'vehicle-requests', badge: 'vehiclesPending' },
       { key: 'parking-cards' },
-      { key: 'resident-changes' },
       { key: 'contracts' },
     ],
   },
@@ -645,13 +633,6 @@ export const residentMenu = [
     path: 'profile',
     component: ProfilePage,
     hideInMenu: true,
-  },
-  {
-    key: 'gate-passes',
-    label: 'Đơn chuyển đồ',
-    icon: FileTextOutlined,
-    path: 'gate-passes',
-    component: ResidentGatePassesPage,
   },
 ];
 

@@ -61,7 +61,7 @@ export default function ResidentTicketsPage() {
         <ToolOutlined />
       </span>
       <div>
-        <div className="text-[15px] font-semibold">
+        <div className="text-[14px] font-semibold">
           {tab === 'open' ? 'Không có phản ánh nào đang xử lý' : tab === 'confirm' ? 'Không có phản ánh chờ nghiệm thu' : 'Chưa có phản ánh đã đóng'}
         </div>
         <div className="mt-1 text-[13px] text-r-muted">Gặp sự cố trong căn hộ hoặc khu chung? Gửi phản ánh để Ban quản lý xử lý.</div>

@@ -95,7 +95,7 @@ export default function LookupCard() {
             aria-label="Mã cư dân"
             autoComplete="off"
             maxLength={40}
-            className="flex-1 min-w-0 h-[52px] px-4 rounded-[10px] border border-r-border-control bg-white text-[22px] tracking-wider text-r-text dark:bg-[#27272A] dark:text-[#FAFAFA] dark:border-[#2E2E33]"
+            className="flex-1 min-w-0 h-[52px] px-4 rounded-[10px] border border-r-border-control bg-white text-lg tracking-wider text-r-text dark:bg-[#27272A] dark:text-[#FAFAFA] dark:border-[#2E2E33]"
             style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}
           />
           <button

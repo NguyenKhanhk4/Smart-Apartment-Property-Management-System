@@ -11,7 +11,6 @@ export { Apartment } from './Apartment.js';
 export { Contract } from './Contract.js';
 export { Resident } from './Resident.js';
 export { Vehicle } from './Vehicle.js';
-export { GatePass } from './GatePass.js';
 export { ParkingCard } from './ParkingCard.js';
 export { ParkingSession } from './ParkingSession.js';
 

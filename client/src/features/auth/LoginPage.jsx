@@ -88,7 +88,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <h2 className="m-0 text-[22px] font-semibold tracking-tight text-ink">{COPY[portal].title}</h2>
+      <h2 className="m-0 text-lg font-semibold tracking-tight text-ink">{COPY[portal].title}</h2>
       <p className="mt-1 mb-7 text-[13px] text-ink-2">{COPY[portal].desc}</p>
 
       {sessionExpired && (

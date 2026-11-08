@@ -28,7 +28,7 @@ export default function PageHeader({ title, subtitle, breadcrumb, extra, titleTr
         <div className="min-w-0">
           <h1
             style={titleTransitionName ? { viewTransitionName: titleTransitionName } : undefined}
-            className="vt-page-title m-0 text-xl font-semibold leading-tight tracking-[-0.01em] text-ink dark:text-[#FAFAFA]">
+            className="vt-page-title m-0 text-xl font-semibold leading-tight text-ink dark:text-[#FAFAFA]">
             {title}
           </h1>
           {subtitle && <p className="mt-1.5 mb-0 max-w-[90ch] text-[13px] leading-relaxed text-ink-2 dark:text-[#A1A1AA]">{subtitle}</p>}

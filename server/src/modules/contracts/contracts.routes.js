@@ -3,6 +3,7 @@ import Joi from 'joi';
 import {
   CONTRACT_STATUS,
   CONTRACT_TYPES,
+  OWNERSHIP_DOCUMENT_TYPES,
   values,
 } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
@@ -24,6 +25,7 @@ const listQuery = Joi.object({
   sort: sortable('startDate', 'endDate', 'createdAt'),
   buildingId: objectId(),
   apartmentId: objectId(),
+  floor: Joi.number().integer().min(1),
   type: Joi.string().valid(...values(CONTRACT_TYPES)),
   status: Joi.string().valid(...values(CONTRACT_STATUS)),
   endingWithinDays: Joi.number().integer().min(0).max(365),
@@ -40,25 +42,15 @@ const personSchema = Joi.object({
 
 const createContractBody = Joi.object({
   apartmentId: objectId().required(),
-  type: Joi.string().valid(...values(CONTRACT_TYPES)).required(),
+  type: Joi.string().valid(CONTRACT_TYPES.SALE).required(),
   startDate: Joi.date().required(),
-  endDate: Joi.date().allow(null, ''),
-  tenantPaysFees: Joi.boolean().default(false),
-  owner: personSchema.when('type', {
-    is: CONTRACT_TYPES.SALE,
-    then: Joi.required(),
-    otherwise: Joi.optional(),
-  }),
-  tenant: personSchema.when('type', {
-    is: CONTRACT_TYPES.LEASE,
-    then: Joi.required(),
-    otherwise: Joi.optional(),
-  }),
-});
+  owner: personSchema.required(),
+  ownershipDocumentType: Joi.string().valid(...values(OWNERSHIP_DOCUMENT_TYPES)),
+  ownershipDocumentNumber: Joi.string().trim().max(100),
+}).and('ownershipDocumentType', 'ownershipDocumentNumber');
 
 const updateContractBody = Joi.object({
   endDate: Joi.date().allow(null, ''),
-  tenantPaysFees: Joi.boolean(),
 });
 
 // Middleware tiền xử lý nếu dữ liệu gửi dưới dạng multipart/form-data
@@ -71,16 +63,6 @@ const parseMultipartContract = (req, _res, next) => {
         // Giữ nguyên chuỗi
       }
     }
-    if (typeof req.body.tenant === 'string') {
-      try {
-        req.body.tenant = JSON.parse(req.body.tenant);
-      } catch {
-        // Giữ nguyên chuỗi
-      }
-    }
-    if (typeof req.body.tenantPaysFees === 'string') {
-      req.body.tenantPaysFees = req.body.tenantPaysFees === 'true';
-    }
   }
   next();
 };
@@ -90,12 +72,52 @@ const parseMultipartContract = (req, _res, next) => {
  * /contracts:
  *   get:
  *     tags: [Hợp đồng]
- *     summary: Danh sách hợp đồng (phân trang, lọc theo tòa/căn/loại/trạng thái/hạn) — UC-A06
+ *     summary: Danh sách hợp đồng (phân trang, lọc theo tòa/tầng/căn/loại/trạng thái/hạn) — UC-A06
+ *     parameters:
+ *       - { in: query, name: floor, schema: { type: integer, minimum: 1 } }
  */
 router.get('/', authenticate, authorize(...VIEWERS), validate({ query: listQuery }), async (req, res) => {
   const { items, pagination } = await service.listContracts(req.validated.query);
   paginated(res, items, pagination);
 });
+
+/** UC20 — Một hồ sơ hiện tại làm mốc cho việc ghi nhận công nợ và đổi chủ. */
+const transferDebtPath = '/apartments/:id/ownership-transfer/debt-review';
+const transferDebtBody = Joi.object({ contractId: objectId().required() });
+
+router.get(transferDebtPath, authenticate, authorize('ACCOUNTANT', 'MANAGER'),
+  validate({ params: idParams }), async (req, res) => {
+    ok(res, await service.getTransferDebtReview(req.validated.params.id));
+  });
+
+router.post(transferDebtPath, authenticate, authorize('MANAGER'),
+  validate({ params: idParams, body: transferDebtBody }), async (req, res) => {
+    const { params, body } = req.validated;
+    ok(res, await service.requestTransferDebtReview(params.id, body.contractId));
+  });
+
+router.patch(transferDebtPath, authenticate, authorize('ACCOUNTANT'),
+  validate({ params: idParams, body: transferDebtBody }), async (req, res) => {
+    const { params, body } = req.validated;
+    ok(res, await service.acknowledgeTransferDebt(params.id, body.contractId, req.user));
+  });
+
+router.post('/apartments/:id/ownership-transfer', authenticate, authorize('MANAGER'),
+  validate({
+    params: idParams,
+    body: Joi.object({
+      contractId: objectId().required(),
+      owner: personSchema.keys({ phone: phoneVn().required() }).required(),
+      ownershipDocumentType: Joi.string().valid(
+        OWNERSHIP_DOCUMENT_TYPES.TRANSFER_DOCUMENT, OWNERSHIP_DOCUMENT_TYPES.OWNERSHIP_CERTIFICATE,
+      ).required(),
+      ownershipDocumentNumber: Joi.string().trim().max(100).required(),
+      identityVerified: Joi.boolean().valid(true).required(),
+    }),
+  }), async (req, res) => {
+    const { params, body } = req.validated;
+    ok(res, await service.transferApartmentOwner(params.id, body, req.user, req.ip));
+  });
 
 /**
  * @openapi
@@ -116,12 +138,12 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
  * /contracts:
  *   post:
  *     tags: [Hợp đồng]
- *     summary: Lễ tân tạo mới hợp đồng mua bán hoặc cho thuê — UC-A06
+ *     summary: Ban quản lý ghi nhận hồ sơ sở hữu căn hộ — UC-A06
  */
 router.post(
   '/',
   authenticate,
-  authorize('STAFF:RECEPTIONIST'),
+  authorize('MANAGER'),
   uploadImages('file', 1),
   parseMultipartContract,
   validate({ body: createContractBody }),
@@ -141,14 +163,14 @@ router.post(
  * /contracts/{id}:
  *   patch:
  *     tags: [Hợp đồng]
- *     summary: Gia hạn hợp đồng hoặc cập nhật người chịu phí — UC-A06
+ *     summary: Cập nhật hồ sơ hợp đồng mua bán — UC-A06
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */
 router.patch(
   '/:id',
   authenticate,
-  authorize('STAFF:RECEPTIONIST'),
+  authorize('MANAGER'),
   uploadImages('file', 1),
   parseMultipartContract,
   validate({ params: idParams, body: updateContractBody }),
@@ -172,7 +194,7 @@ router.patch(
  * /contracts/{id}/terminate:
  *   patch:
  *     tags: [Hợp đồng]
- *     summary: Chấm dứt sớm hợp đồng (Trưởng BQL) — UC-A06
+ *     summary: Chấm dứt hợp đồng mua bán (Trưởng BQL) — UC-A06
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */

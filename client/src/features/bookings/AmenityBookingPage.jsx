@@ -125,7 +125,7 @@ function BookingPanel({ amenity, apartmentId }) {
   return (
     <SurfaceCard as="section" className="p-4 md:p-6 flex flex-col gap-4" aria-label="Đặt chỗ">
       <div>
-        <h2 className="m-0 text-base md:text-[17px] font-semibold">Đặt chỗ</h2>
+        <h2 className="m-0 text-base md:text-[15px] font-semibold">Đặt chỗ</h2>
         <p className="mt-1 mb-0 text-[13px] md:text-sm text-r-muted">
           Chọn ngày và khung giờ còn trống.
         </p>
@@ -319,7 +319,7 @@ export default function AmenityBookingPage() {
         <button type="button" onClick={back} aria-label="Quay lại" className="w-11 h-11 -ml-2.5 border-0 bg-transparent text-r-text text-base cursor-pointer">
           <ArrowLeftOutlined />
         </button>
-        <h1 className="m-0 text-[clamp(20px,2.2vw,26px)] font-semibold">{a.name}</h1>
+        <h1 className="m-0 text-[clamp(18px,1.6vw,21px)] font-semibold">{a.name}</h1>
       </div>
 
       <div className="flex flex-wrap gap-4 md:gap-6 items-start">
@@ -338,7 +338,7 @@ export default function AmenityBookingPage() {
           </SurfaceCard>
 
           <SurfaceCard as="section" className="px-4 md:px-5 py-2 md:py-3" aria-label="Bảng giá">
-            <h2 className="m-0 pt-2 text-[15px] font-semibold">Bảng giá</h2>
+            <h2 className="m-0 pt-2 text-[14px] font-semibold">Bảng giá</h2>
             <PriceTable a={a} />
           </SurfaceCard>
         </div>

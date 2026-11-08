@@ -35,11 +35,11 @@ function personOf(resident) {
  *   ownerResiding: boolean  // false khi căn RENTED đang có TENANT
  * }>}
  */
-export async function getHousehold(apartmentId) {
-  const apartment = await Apartment.findById(apartmentId).populate('buildingId', 'code name').lean();
+export async function getHousehold(apartmentId, session = null) {
+  const apartment = await Apartment.findById(apartmentId).session(session).populate('buildingId', 'code name').lean();
   if (!apartment) throw ApiError.notFound('Không tìm thấy căn hộ');
 
-  const rows = await Resident.find({ apartmentId, isActive: true }).populate('userId', USER_FIELDS).lean();
+  const rows = await Resident.find({ apartmentId, isActive: true }).session(session).populate('userId', USER_FIELDS).lean();
   // Tài khoản đã bị khóa / bị xóa không còn quyền
   const residents = rows.filter((r) => r.userId && r.userId.isActive !== false);
 
@@ -52,6 +52,7 @@ export async function getHousehold(apartmentId) {
   const dobs = new Map(
     (
       await MemberCode.find({ apartmentId, isActive: true, userId: { $in: having.map((r) => r.userId._id) } })
+        .session(session)
         .select('userId dateOfBirth')
         .lean()
     ).map((c) => [String(c.userId), c.dateOfBirth]),

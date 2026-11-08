@@ -74,7 +74,7 @@ export default function ServicesTab() {
               </span>
             </div>
             <div className="flex flex-col gap-0.5">
-              <div className="text-[15px] md:text-[17px] font-medium md:font-semibold">{a.name}</div>
+              <div className="text-[14px] md:text-[15px] font-medium md:font-semibold">{a.name}</div>
               <div className="text-[13px] md:text-sm text-r-muted">{noteOf(a, slotsLeft[a._id])}</div>
               <div className="text-[13px] md:text-sm font-medium mt-1">{priceOf(a)}</div>
             </div>

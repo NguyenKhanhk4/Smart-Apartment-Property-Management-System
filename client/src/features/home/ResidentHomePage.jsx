@@ -65,12 +65,12 @@ function TodoCard({ to, tone, icon, label, title, subtitle, badge, wide }) {
     return (
       <SurfaceCard as={Link} to={to} viewTransition className="flex flex-col gap-3.5 p-5 text-r-text! no-underline">
         <span className="flex justify-between items-center">
-          <span className={`${iconBox} w-11 h-11 rounded-xl text-[22px]`}>{icon}</span>
+          <span className={`${iconBox} w-11 h-11 rounded-xl text-lg`}>{icon}</span>
           {badge}
         </span>
         <span>
           <span className="block text-[13px] text-r-muted">{label}</span>
-          <span className="block text-[17px] font-semibold mt-0.5">{title}</span>
+          <span className="block text-[15px] font-semibold mt-0.5">{title}</span>
           <span className="block text-sm text-r-muted">{subtitle}</span>
         </span>
       </SurfaceCard>
@@ -80,7 +80,7 @@ function TodoCard({ to, tone, icon, label, title, subtitle, badge, wide }) {
     <SurfaceCard as={Link} to={to} viewTransition className="flex items-center gap-3.5 px-4 py-3.5 text-r-text! no-underline">
       <span className={`${iconBox} w-10 h-10 rounded-[10px] text-xl`}>{icon}</span>
       <span className="flex-1 min-w-0">
-        <span className="block text-[15px] font-medium truncate">{title}</span>
+        <span className="block text-[14px] font-medium truncate">{title}</span>
         <span className="block text-[13px] text-r-muted truncate">{subtitle}</span>
       </span>
       {badge ?? <RightOutlined className="text-r-subtle" style={{ fontSize: 14 }} />}
@@ -96,7 +96,7 @@ function NewsRow({ item, last, wide }) {
       className={`flex gap-5 text-r-text! no-underline ${wide ? 'px-6 py-[18px]' : 'px-4 py-3.5 flex-col gap-0'} ${last ? '' : 'border-b border-r-divider'}`}
     >
       <span className="flex-1 min-w-0">
-        <span className={`flex items-center gap-1.5 font-medium text-[15px]`}>
+        <span className={`flex items-center gap-1.5 font-medium text-[14px]`}>
           {item.isPinned && <PushpinOutlined className="text-r-navy" style={{ fontSize: 16 }} aria-label="Đã ghim" />}
           <span className="truncate">{item.title}</span>
         </span>
@@ -183,7 +183,7 @@ export default function ResidentHomePage() {
     <Skeleton active paragraph={{ rows: 2 }} title={false} />
   ) : cards.length > 0 ? (
     <section className="flex flex-col gap-2.5 md:gap-3" aria-labelledby="todo-title">
-      <h2 id="todo-title" className="m-0 text-[15px] md:text-[17px] font-semibold">Việc của bạn</h2>
+      <h2 id="todo-title" className="m-0 text-[14px] md:text-[15px] font-semibold">Việc của bạn</h2>
       <div className={wide ? 'grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]' : 'flex flex-col gap-2.5'}>{cards}</div>
     </section>
   ) : null;
@@ -191,7 +191,7 @@ export default function ResidentHomePage() {
   const newsCard = showNews && (
     <SurfaceCard as="section" className="overflow-hidden">
       <div className={`flex items-center justify-between border-b border-r-divider ${wide ? 'px-6 py-[18px]' : 'px-4 py-3.5'}`}>
-        <h2 className="m-0 text-[15px] md:text-[17px] font-semibold">Bảng tin mới</h2>
+        <h2 className="m-0 text-[14px] md:text-[15px] font-semibold">Bảng tin mới</h2>
         <Link to="/r/announcements" viewTransition className="text-sm font-medium text-r-link no-underline">Xem tất cả</Link>
       </div>
       {news.loading && !newsItems.length ? (
@@ -210,7 +210,7 @@ export default function ResidentHomePage() {
       {wide ? (
         <>
           <div>
-            <h1 className="m-0 text-[clamp(18px,1.6vw,22px)] font-semibold">Tổng quan</h1>
+            <h1 className="m-0 text-[clamp(17px,1.4vw,19px)] font-semibold">Tổng quan</h1>
             <p className="mt-0.5 mb-0 text-[13px] text-r-muted">
               {apartment ? `Căn ${apartment.code}${apartment.building?.name ? ` · ${apartment.building.name}` : ''}` : 'Chưa có căn hộ'}
             </p>

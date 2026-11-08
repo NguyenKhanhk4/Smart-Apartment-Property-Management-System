@@ -42,7 +42,7 @@ export default function ResidentCard({ person, variant = 'full' }) {
           </div>
         </div>
         <div className="mx-5 mb-4 px-4 py-3 bg-r-bg rounded-xl flex items-center justify-between gap-2">
-          <span className="font-mono text-[26px] font-semibold tracking-[0.06em]">{person.code}</span>
+          <span className="font-mono text-xl font-semibold tracking-[0.06em]">{person.code}</span>
           <button
             type="button"
             onClick={() => copy(person.code)}
