@@ -71,9 +71,8 @@ export default function MyApartmentPage() {
   const currentApartment = apartments.find((a) => a.apartmentId === activeAptId);
   const canDeclareFamily = currentApartment?.canDeclareFamily;
 
-  // Load danh sách thành viên trong căn hộ đang chọn
   const {
-    data: members = [],
+    data: residentRecords = [],
     loading: loadingMembers,
     reload: reloadMembers,
   } = useApi(
@@ -81,6 +80,8 @@ export default function MyApartmentPage() {
     [activeAptId],
     { enabled: Boolean(activeAptId) },
   );
+  const occupants = residentRecords.filter((resident) => resident.occupancyRole)
+    .sort((a, b) => Number(b.occupancyRole === 'HEAD') - Number(a.occupancyRole === 'HEAD'));
 
   const [declareMember, declaringMember] = useAction(
     ({ fullName, dateOfBirth }) => residentsApi.declareFamilyMember({
@@ -90,7 +91,11 @@ export default function MyApartmentPage() {
     }),
     {
       success: 'Đã khai báo thành viên ở cùng',
-      onDone: () => { setDeclaringApartment(null); reloadMembers(); },
+      onDone: () => {
+        setDeclaringApartment(null);
+        reloadMembers();
+        reloadResidency();
+      },
     },
   );
 
@@ -198,8 +203,8 @@ export default function MyApartmentPage() {
             </Col>
             <Col xs={12} sm={6}>
               <Statistic
-                title="Số nhân khẩu"
-                value={members.length}
+                title="Số người đang ở"
+                value={occupants.length}
                 prefix={<TeamOutlined className="text-emerald-500 mr-1" />}
                 suffix="người"
               />
@@ -237,13 +242,12 @@ export default function MyApartmentPage() {
           }} />
       )}
 
-      {/* Danh sách thành viên trong căn hộ */}
       <Card
         className="shadow-sm border-gray-100 dark:border-gray-800"
         title={
           <div className="flex items-center gap-2">
             <TeamOutlined className="text-blue-500" />
-            <span>Danh sách thành viên ({members.length})</span>
+            <span>Người đang ở ({occupants.length})</span>
           </div>
         }
         extra={canDeclareFamily && (
@@ -255,8 +259,8 @@ export default function MyApartmentPage() {
         <List
           loading={loadingMembers}
           itemLayout="horizontal"
-          dataSource={members}
-          locale={{ emptyText: 'Chưa có thông tin thành viên' }}
+          dataSource={occupants}
+          locale={{ emptyText: 'Chưa có người đang ở' }}
           renderItem={(m) => (
             <List.Item className="border-b border-gray-50 dark:border-gray-800/60 last:border-0 py-3">
               <List.Item.Meta
@@ -273,7 +277,7 @@ export default function MyApartmentPage() {
                     <span className="font-semibold text-gray-800 dark:text-gray-100">
                       {m.fullName}
                     </span>
-                    {m.isHead && (
+                    {m.occupancyRole === 'HEAD' && (
                       <Tag color="gold" icon={<CrownOutlined />}>
                         Chủ hộ
                       </Tag>

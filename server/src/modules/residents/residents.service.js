@@ -16,7 +16,13 @@ import { withTransaction } from '../../utils/transaction.js';
 import { normalizePhone } from '../../utils/validators.js';
 import { getHousehold } from '../household/household.service.js';
 import { revokeDepartedResidentServices } from './residentExit.service.js';
-import { effectiveOccupancy, occupyingHeadRelation } from './residentOccupancy.js';
+import {
+  currentOccupants,
+  effectiveOccupancy,
+  findLegacyDeclarations,
+  occupancyResidentSort,
+  occupyingHeadRelation,
+} from './residentOccupancy.js';
 import { ensureCodes, parseDateOfBirth } from '../memberCodes/memberCodes.service.js';
 import {
   buildIdNumberFields,
@@ -28,13 +34,14 @@ import { toPublicUser } from '../auth/auth.service.js';
 import { findUserByPhone, maskEmail } from '../users/userLookup.js';
 
 /**
- * Danh sách thành viên đang hoạt động trong căn hộ (UC-A07, BR-A8)
+ * Danh sách hồ sơ đang hoạt động trong căn hộ (UC-A07, BR-A8)
+ * - occupancyRole xác định người đang ở theo cùng quy tắc với UC21.
  * - Trả CCCD dạng che (********1234) cho mọi vai trò.
  * - Muốn xem đầy đủ CCCD dùng endpoint riêng GET /residents/:id/id-number (STAFF:RECEPTIONIST, MANAGER).
  */
 export async function listApartmentResidents(apartmentId, viewer) {
   const apartment = await Apartment.findById(apartmentId)
-    .select('_id code buildingId status')
+    .select('_id code buildingId status occupancyStatus')
     .lean();
 
   if (!apartment) {
@@ -53,9 +60,17 @@ export async function listApartmentResidents(apartmentId, viewer) {
     }
   }
 
+  const now = new Date();
   const rows = await Resident.find({ apartmentId, isActive: true })
     .populate('userId', 'fullName email phone dateOfBirth avatarUrl isActive')
+    .sort(occupancyResidentSort)
     .lean();
+  const movedIn = rows.filter((resident) => !resident.moveInDate || resident.moveInDate <= now);
+  const legacyDeclarations = await findLegacyDeclarations(movedIn);
+  const occupants = currentOccupants(effectiveOccupancy(apartment), movedIn, legacyDeclarations);
+  const occupancyRoles = new Map(occupants.map((resident, index) => [
+    String(resident._id), index === 0 ? 'HEAD' : 'MEMBER',
+  ]));
 
   // Xác định chủ hộ từ getHousehold()
   const household = await getHousehold(apartmentId).catch(() => null);
@@ -80,6 +95,7 @@ export async function listApartmentResidents(apartmentId, viewer) {
       idNumber: maskIdNumber(plainId),
       hasIdNumber: Boolean(plainId),
       isHead,
+      occupancyRole: occupancyRoles.get(String(r._id)) ?? null,
     };
   });
 

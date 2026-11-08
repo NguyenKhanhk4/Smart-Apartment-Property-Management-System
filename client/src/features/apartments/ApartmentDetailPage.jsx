@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import {
   Card,
   Tabs,
+  Segmented,
   Table,
   Button,
   Modal,
@@ -57,6 +58,7 @@ export default function ApartmentDetailPage() {
   const isReceptionist = hasRole('STAFF:RECEPTIONIST');
   const canRevealIdNumber = hasRole('STAFF:RECEPTIONIST', 'MANAGER');
   const [revealedIds, setRevealedIds] = useState({});
+  const [residentView, setResidentView] = useState('occupants');
 
   const handleRevealIdNumber = async (residentId) => {
     try {
@@ -77,19 +79,25 @@ export default function ApartmentDetailPage() {
     reload: reloadApt,
   } = useApi(() => apartmentsApi.getById(id), [id]);
 
-  const [confirmMoveIn, confirmingMoveIn] = useAction(() => apartmentsApi.confirmMoveIn(id), {
-    success: 'Đã xác nhận cư dân vào ở',
-    onDone: reloadApt,
-  });
-  const canConfirmMoveIn = isReceptionist && apartment?.handoverDate &&
-    apartment.activeContracts?.some((contract) => contract.type === 'SALE');
-
   // Load residents list
   const {
     data: residents = [],
     loading: loadingResidents,
     reload: reloadResidents,
   } = useApi(() => residentsApi.listByApartment(id), [id]);
+  const occupants = residents.filter((resident) => resident.occupancyRole)
+    .sort((a, b) => Number(b.occupancyRole === 'HEAD') - Number(a.occupancyRole === 'HEAD'));
+  const showOccupants = residentView === 'occupants';
+
+  const [confirmMoveIn, confirmingMoveIn] = useAction(() => apartmentsApi.confirmMoveIn(id), {
+    success: 'Đã xác nhận cư dân vào ở',
+    onDone: () => {
+      reloadApt();
+      reloadResidents();
+    },
+  });
+  const canConfirmMoveIn = isReceptionist && apartment?.handoverDate &&
+    apartment.activeContracts?.some((contract) => contract.type === 'SALE');
 
   // Load contracts list
   const {
@@ -144,6 +152,7 @@ export default function ApartmentDetailPage() {
         setAddModalOpen(false);
         addForm.resetFields();
         check.reset();
+        setResidentView('records');
         reloadResidents();
         reloadApt();
       },
@@ -204,7 +213,7 @@ export default function ApartmentDetailPage() {
         <div>
           <Space>
             <span className="font-semibold text-gray-800 dark:text-gray-100">{r.fullName}</span>
-            {r.isHead && (
+            {(showOccupants ? r.occupancyRole === 'HEAD' : r.isHead) && (
               <Tag color="gold" icon={<CrownOutlined />}>
                 Chủ hộ
               </Tag>
@@ -468,7 +477,7 @@ export default function ApartmentDetailPage() {
           <Col xs={12} sm={6} md={5}>
             <Statistic
               title="Cư dân đang ở"
-              value={residents.length}
+              value={occupants.length}
               prefix={<TeamOutlined className="text-blue-500 mr-1" />}
               suffix="người"
             />
@@ -508,15 +517,21 @@ export default function ApartmentDetailPage() {
               key: 'residents',
               label: (
                 <span>
-                  <TeamOutlined /> Thành viên ({residents.length})
+                  <TeamOutlined /> Cư dân ({occupants.length} đang ở)
                 </span>
               ),
               children: (
                 <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="text-sm text-gray-500">
-                      Danh sách nhân khẩu đang sinh sống thực tế tại căn hộ
-                    </div>
+                  <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
+                    <Segmented
+                      aria-label="Danh sách cư dân"
+                      options={[
+                        { label: 'Người đang ở', value: 'occupants' },
+                        { label: 'Hồ sơ đang hoạt động', value: 'records' },
+                      ]}
+                      value={residentView}
+                      onChange={setResidentView}
+                    />
                     {isReceptionist && apartment?.status !== 'VACANT' && (
                       <Button
                         type="primary"
@@ -532,11 +547,11 @@ export default function ApartmentDetailPage() {
                   </div>
                   <Table
                     columns={residentColumns}
-                    dataSource={residents}
+                    dataSource={showOccupants ? occupants : residents}
                     rowKey="_id"
                     loading={loadingResidents}
                     pagination={false}
-                    locale={{ emptyText: 'Chưa có thành viên nào trong căn hộ' }}
+                    locale={{ emptyText: showOccupants ? 'Chưa có người đang ở' : 'Chưa có hồ sơ đang hoạt động' }}
                   />
                 </div>
               ),

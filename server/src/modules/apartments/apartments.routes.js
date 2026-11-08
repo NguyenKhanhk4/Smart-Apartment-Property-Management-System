@@ -85,7 +85,8 @@ router.get('/', authenticate, authorize(...VIEWERS), validate({ query: listQuery
  * /apartments/{id}/residents:
  *   get:
  *     tags: [Tòa nhà & Căn hộ, Cư dân]
- *     summary: Danh sách thành viên đang ở trong căn hộ — UC-A07, UC-A08
+ *     summary: Danh sách hồ sơ trong căn hộ — UC-A07, UC-A08
+ *     description: occupancyRole đánh dấu chủ hộ và thành viên đang ở theo UC21.
  *     parameters:
  *       - $ref: '#/components/parameters/id'
  */

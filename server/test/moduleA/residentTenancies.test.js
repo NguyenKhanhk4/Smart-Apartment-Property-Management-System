@@ -59,6 +59,15 @@ test('UC17 liên kết tài khoản, xử lý phí, rời căn và giữ quyền
   const app = await startApp();
   t.after(app.close);
   const { owner, apartment, sale, path } = await ownedApartment();
+  const residentsPath = `/apartments/${apartment.id}/residents`;
+  const listResidents = async (user) => {
+    const response = await app.request('GET', residentsPath, { user });
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    return response.body.data;
+  };
+  const ownerResidents = await listResidents(asUser(owner));
+  assert.deepEqual(ownerResidents.map((row) => [row.userId, row.occupancyRole]), [[owner.id, 'HEAD']]);
+
   const tenant = await createResidentUser();
   const another = await createApartment();
   await linkResident(tenant, another, { relationType: 'OWNER' });
@@ -92,6 +101,13 @@ test('UC17 liên kết tài khoản, xử lý phí, rời căn và giữ quyền
     return report.body.data.flatMap((building) => building.apartments).find((row) => row._id === apartment.id);
   };
   assert.deepEqual((await occupancy()).residents.map((row) => row._id), [memberId, familyId]);
+  for (const viewer of [USERS.manager, asUser(owner), asUser(tenant)]) {
+    const residents = await listResidents(viewer);
+    assert.equal(residents.find((row) => row.userId === owner.id).occupancyRole, null);
+    const roles = Object.fromEntries(residents.filter((row) => row.occupancyRole)
+      .map((row) => [row._id, row.occupancyRole]));
+    assert.deepEqual(roles, { [memberId]: 'HEAD', [familyId]: 'MEMBER' });
+  }
 
   const invoice = await createInvoice({ apartment, payerId: tenant._id });
   await createInvoice({ apartment, payerId: owner._id, period: '2026-11' });
@@ -108,6 +124,8 @@ test('UC17 liên kết tài khoản, xử lý phí, rời căn và giữ quyền
   assert.ok(departed.moveOutDate);
   assert.equal((await Resident.findById(familyId)).isActive, false);
   assert.deepEqual((await occupancy()).residents, []);
+  const afterTenancy = await listResidents(asUser(owner));
+  assert.deepEqual(afterTenancy.map((row) => [row.userId, row.occupancyRole]), [[owner.id, null]]);
   assert.equal((await Apartment.findById(apartment._id)).occupancyStatus, 'VACANT');
   assert.equal((await Vehicle.findById(vehicle._id)).status, 'CANCELLED');
   assert.equal((await ParkingCard.findById(card._id)).status, 'DISABLED_TO_COLLECT');

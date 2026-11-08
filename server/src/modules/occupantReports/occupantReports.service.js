@@ -1,13 +1,17 @@
 import ExcelJS from 'exceljs';
-import { AUDIT_ACTIONS, AUDIT_TARGETS, RELATION_TYPES } from '../../constants/enums.js';
-import { Apartment, AuditLog, Building, Resident } from '../../models/index.js';
+import { AUDIT_ACTIONS, AUDIT_TARGETS } from '../../constants/enums.js';
+import { Apartment, Building, Resident } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { fmtDateVn, toVnYmd } from '../../utils/time.js';
 import { decryptIdNumber, maskIdNumber } from '../residents/idCrypto.js';
-import { effectiveOccupancy, occupyingHeadRelation } from '../residents/residentOccupancy.js';
+import {
+  currentOccupants,
+  effectiveOccupancy,
+  findLegacyDeclarations,
+  occupancyResidentSort,
+} from '../residents/residentOccupancy.js';
 
-const { FAMILY_MEMBER } = RELATION_TYPES;
 const RELATION_LABELS = {
   OWNER: 'Chủ sở hữu đang ở',
   TENANT: 'Khách thuê (chủ hộ hiện tại)',
@@ -20,31 +24,6 @@ const OCCUPANCY_LABELS = {
   RENTED: 'Đang cho thuê',
   UNDER_REPAIR: 'Đang sửa chữa',
 };
-
-async function findLegacyDeclarations(residents) {
-  const ids = residents
-    .filter((resident) => resident.relationType === FAMILY_MEMBER && !resident.declaredByResidenceId)
-    .map((resident) => resident._id);
-  if (!ids.length) return new Map();
-
-  const logs = await AuditLog.find({
-    action: AUDIT_ACTIONS.RESIDENT_ASSIGNED,
-    targetType: AUDIT_TARGETS.RESIDENT,
-    targetId: { $in: ids },
-  }).select('targetId performedBy createdAt').sort({ createdAt: 1, _id: 1 }).lean();
-  return new Map(logs.map((entry) => [String(entry.targetId), entry]));
-}
-
-function isDeclaredBy(member, head, legacyDeclarations) {
-  if (member.declaredByResidenceId) return String(member.declaredByResidenceId) === String(head._id);
-
-  // Các khai báo tự phục vụ trước khi có liên kết lượt ở được nhận diện qua người ghi nhật ký.
-  const declaration = legacyDeclarations.get(String(member._id));
-  const residenceStart = head.createdAt ?? head.moveInDate;
-  return Boolean(declaration?.performedBy && residenceStart
-    && String(declaration.performedBy) === String(head.userId._id)
-    && declaration.createdAt >= residenceStart);
-}
 
 function reportPerson(row, isHead) {
   return {
@@ -73,7 +52,7 @@ export async function listResidentOccupancy({ buildingId, floor } = {}, { now = 
     apartmentId: { $in: apartments.map((apartment) => apartment._id) },
     isActive: true,
     $or: [{ moveInDate: null }, { moveInDate: { $lte: now } }],
-  }).populate('userId', 'fullName dateOfBirth').sort({ moveInDate: 1, createdAt: 1, _id: 1 }).lean();
+  }).populate('userId', 'fullName dateOfBirth').sort(occupancyResidentSort).lean();
 
   const byApartment = new Map();
   for (const resident of residents) {
@@ -86,13 +65,8 @@ export async function listResidentOccupancy({ buildingId, floor } = {}, { now = 
   for (const apartment of apartments) {
     const rows = byApartment.get(String(apartment._id)) ?? [];
     const occupancyStatus = effectiveOccupancy(apartment);
-    const headRelation = occupyingHeadRelation(occupancyStatus);
-    const head = rows.find((resident) => resident.relationType === headRelation && resident.userId);
-    const occupants = head ? [
-      reportPerson(head, true),
-      ...rows.filter((resident) => resident.relationType === FAMILY_MEMBER && isDeclaredBy(resident, head, legacyDeclarations))
-        .map((resident) => reportPerson(resident, false)),
-    ] : [];
+    const occupants = currentOccupants(occupancyStatus, rows, legacyDeclarations)
+      .map((resident, index) => reportPerson(resident, index === 0));
 
     byBuilding.get(String(apartment.buildingId)).apartments.push({
       _id: apartment._id, code: apartment.code, floor: apartment.floor ?? null, occupancyStatus, residents: occupants,
