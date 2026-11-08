@@ -33,7 +33,7 @@ export default function AssetsPage() {
       res.data?.status === 'FAILED'
         ? undefined
         : `Đã tạo ${res.data?.affectedCount ?? 0} work order`,
-    onDone: (res) => (res.data?.status === 'FAILED' ? message.error(res.data.errorMessage || 'Quét tài sản đến hạn thất bại') : reload()),
+    onDone: (res) => (res.data?.status === 'FAILED' ? message.error(res.data.errorMessage || 'Quét thiết bị đến hạn thất bại') : reload()),
   });
 
   const toggle = async (asset) => {
@@ -80,8 +80,13 @@ export default function AssetsPage() {
     {
       title: 'Phiếu đang mở',
       dataIndex: 'openWorkOrder',
-      width: 130,
-      render: (w) => (w ? <EnumTag map={WORK_ORDER_STATUS} value={w.status} /> : '—'),
+      width: 150,
+      render: (w, r) => (
+        <Flex vertical gap={2} align="start">
+          {w ? <EnumTag map={WORK_ORDER_STATUS} value={w.status} /> : !r.postponedRepair && '—'}
+          {r.postponedRepair && <Tag color="purple">Hoãn sửa đến {formatDate(r.postponedRepair.reviewDate)}</Tag>}
+        </Flex>
+      ),
     },
     ...(canEdit
       ? [

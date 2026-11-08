@@ -1,6 +1,6 @@
 // UC07 – Quản lý thiết bị và lịch bảo trì (BR-E01, BR-E02, BR-O17..O19)
 import {
-  AUDIT_ACTIONS, AUDIT_TARGETS, CYCLE_UNITS, WORK_ORDER_OPEN_STATUSES as OPEN_WO_STATUSES, WORK_ORDER_STATUS,
+  AUDIT_ACTIONS, AUDIT_TARGETS, CYCLE_UNITS, WORK_ORDER_ACTIVE_STATUSES, WORK_ORDER_OPEN_STATUSES as OPEN_WO_STATUSES, WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
 import { Asset, Building, WorkOrder } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
@@ -149,14 +149,20 @@ export async function listAssets(query) {
     assetId: { $in: result.items.map((a) => a._id) },
     status: { $in: OPEN_WO_STATUSES },
   })
-    .select('assetId status assignedTo scheduledDate')
+    .select('assetId status assignedTo scheduledDate repair.reviewDate')
     .populate('assignedTo', 'fullName')
     .lean();
-  const byAsset = Object.fromEntries(openWos.map((w) => [String(w.assetId), w]));
+  const byAsset = {};
+  const postponed = {};
+  for (const w of openWos) {
+    if (w.status === WORK_ORDER_STATUS.REPAIR_POSTPONED) postponed[String(w.assetId)] = { _id: w._id, reviewDate: w.repair?.reviewDate ?? null };
+    else byAsset[String(w.assetId)] = w;
+  }
   const today = startOfVnDay();
   result.items = result.items.map((a) => ({
     ...a,
     openWorkOrder: byAsset[String(a._id)] ?? null,
+    postponedRepair: postponed[String(a._id)] ?? null, // UC10: đang tạm hoãn sửa
     isDue: a.isActive && a.nextMaintenanceDate <= endOfVnDay(today),
   }));
   return result;
@@ -169,15 +175,17 @@ export async function getAsset(id) {
     .populate('createdBy', 'fullName')
     .lean();
   if (!asset) throw ApiError.notFound('Không tìm thấy thiết bị');
-  const [openWorkOrder, doneCount] = await Promise.all([
-    WorkOrder.findOne({ assetId: id, status: { $in: OPEN_WO_STATUSES } })
+  const [openWorkOrder, postponedRepair, doneCount] = await Promise.all([
+    WorkOrder.findOne({ assetId: id, status: { $in: WORK_ORDER_ACTIVE_STATUSES } })
       .populate('assignedTo', 'fullName phone')
       .lean(),
+    WorkOrder.findOne({ assetId: id, status: WORK_ORDER_STATUS.REPAIR_POSTPONED }).populate('assignedTo', 'fullName').lean(), // UC10
     WorkOrder.countDocuments({ assetId: id, status: WORK_ORDER_STATUS.DONE }),
   ]);
   return {
     ...asset,
     openWorkOrder,
+    postponedRepair,
     doneCount,
     isDue: asset.isActive && asset.nextMaintenanceDate <= endOfVnDay(),
   };
@@ -188,7 +196,7 @@ export async function getAssetHistory(id, query) {
   if (!(await Asset.exists({ _id: id }))) throw ApiError.notFound('Không tìm thấy thiết bị');
   const result = await paginate(
     WorkOrder,
-    { assetId: id, status: WORK_ORDER_STATUS.DONE },
+    { assetId: id, status: { $in: [WORK_ORDER_STATUS.DONE, WORK_ORDER_STATUS.CLOSED] } }, // CLOSED: ngừng sử dụng (UC10)
     { ...query, sort: '-completedAt' },
     {
       populate: [

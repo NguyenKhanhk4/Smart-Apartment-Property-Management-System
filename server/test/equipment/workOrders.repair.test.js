@@ -5,6 +5,7 @@ import { Asset, AuditLog, Notification, SystemConfig, WorkOrder } from '../../sr
 import * as assetsService from '../../src/modules/assets/assets.service.js';
 import * as inspection from '../../src/modules/workOrders/workOrders.inspection.js';
 import { generateMaintenanceWorkOrders, warnEquipment } from '../../src/modules/workOrders/workOrders.jobs.js';
+import * as decision from '../../src/modules/workOrders/workOrders.decision.js';
 import * as repair from '../../src/modules/workOrders/workOrders.repair.js';
 import * as service from '../../src/modules/workOrders/workOrders.service.js';
 import { DAY_MS, startOfVnDay } from '../../src/utils/time.js';
@@ -57,7 +58,7 @@ describe('UC09 — báo hư hỏng và nghiệm thu sửa chữa', () => {
     if (until === 'faulty') return ctx;
     await repair.reportFault(ctx.tUser, wo._id, FAULT, [PHOTO]);
     if (until === 'reported') return ctx;
-    await repair.approveRepair(ctx.mUser, wo._id, { costSource: 'OPERATING', note: 'Làm ngay' });
+    await decision.decideRepair(ctx.mUser, wo._id, { decision: 'APPROVE', costSource: 'OPERATING', comment: 'Làm ngay' });
     if (until === 'approved') return ctx;
     await repair.uploadAcceptance(ctx.tUser, wo._id, { note: 'Nhà thầu đã thay biến áp' }, [PHOTO]);
     return ctx;
@@ -88,15 +89,14 @@ describe('UC09 — báo hư hỏng và nghiệm thu sửa chữa', () => {
     await assert.rejects(repair.reportFault(tUser, wo._id, FAULT, [PHOTO]), { errorCode: 'WORKORDER_INVALID_STATUS' });
   });
 
-  it('duyệt sửa: nguồn quỹ chưa hỗ trợ; chi phí vận hành → Đang sửa, báo KTV (MSG-E07); tải biên bản trước khi duyệt bị chặn', async () => {
+  it('duyệt sửa: chi phí vận hành → Đang sửa, báo KTV (MSG-E07); tải biên bản trước khi duyệt bị chặn', async () => {
     const { tUser, mUser, wo } = await setup('reported');
     await assert.rejects(repair.uploadAcceptance(tUser, wo._id, {}, [PHOTO]), { errorCode: 'WORKORDER_INVALID_STATUS' });
-    await assert.rejects(repair.approveRepair(mUser, wo._id, { costSource: 'FUND' }), { errorCode: 'WORKORDER_COST_SOURCE_UNSUPPORTED' });
-    const res = await repair.approveRepair(mUser, wo._id, { costSource: 'OPERATING' });
+    const res = await decision.decideRepair(mUser, wo._id, { decision: 'APPROVE', costSource: 'OPERATING' });
     assert.equal(res.status, 'UNDER_REPAIR');
     assert.equal(res.repair.costSource, 'OPERATING');
     assert.ok(await Notification.exists({ userId: tUser.id, title: 'Sửa chữa đã được duyệt' }));
-    await assert.rejects(repair.approveRepair(mUser, wo._id, { costSource: 'OPERATING' }), { errorCode: 'WORKORDER_INVALID_STATUS' });
+    await assert.rejects(decision.decideRepair(mUser, wo._id, { decision: 'APPROVE', costSource: 'OPERATING' }), { errorCode: 'WORKORDER_INVALID_STATUS' });
   });
 
   it('tải biên bản: bắt buộc ảnh; chỉ chuyển Chờ nghiệm thu (chưa hoàn thành, thiết bị chưa dời lịch); báo Trưởng BQL (MSG-E13)', async () => {
@@ -185,8 +185,8 @@ describe('UC09 — báo hư hỏng và nghiệm thu sửa chữa', () => {
     assert.equal(missing.status, 400);
     const ok = await upload('POST', `/work-orders/${wo._id}/fault-report`, tech, { ...FAULT, estimatedCost: String(FAULT.estimatedCost) }, [['a.jpg', JPEG, 'image/jpeg']]);
     assert.equal(ok.status, 200);
-    assert.equal((await api('POST', `/work-orders/${wo._id}/approve-repair`, tech, { costSource: 'OPERATING' })).status, 403);
-    assert.equal((await api('POST', `/work-orders/${wo._id}/approve-repair`, manager, { costSource: 'OPERATING' })).status, 200);
+    assert.equal((await api('PATCH', `/work-orders/${wo._id}/repair-decision`, tech, { decision: 'APPROVE', costSource: 'OPERATING' })).status, 403);
+    assert.equal((await api('PATCH', `/work-orders/${wo._id}/repair-decision`, manager, { decision: 'APPROVE', costSource: 'OPERATING' })).status, 200);
     const shift = await api('GET', '/work-orders/shift-checklist', tech);
     assert.deepEqual(shift.body.data.items.map((i) => i.status), ['UNDER_REPAIR']);
   });

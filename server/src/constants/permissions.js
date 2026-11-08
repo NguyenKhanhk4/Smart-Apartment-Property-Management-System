@@ -51,7 +51,7 @@ export const FEATURES = [
   // Tài sản
   { code: 'APARTMENTS', label: 'Tòa nhà và căn hộ', group: 'Tài sản', prefixes: ['/buildings', '/apartments'], menuKeys: ['buildings', 'apartment-detail', 'my-apartment'] },
   { code: 'ASSETS', label: 'Thiết bị', group: 'Tài sản', prefixes: ['/assets'], menuKeys: ['assets', 'asset-detail'] },
-  { code: 'WORK_ORDERS', label: 'Phiếu bảo trì', group: 'Tài sản', prefixes: ['/work-orders'], menuKeys: ['work-orders', 'my-work-orders'] },
+  { code: 'WORK_ORDERS', label: 'Phiếu bảo trì', group: 'Tài sản', prefixes: ['/work-orders'], menuKeys: ['work-orders', 'my-work-orders', 'repair-approvals'] },
   // Cư dân
   { code: 'CONTRACTS', label: 'Hợp đồng', group: 'Cư dân', prefixes: ['/contracts'], menuKeys: ['contracts'] },
   { code: 'RESIDENTS', label: 'Cư dân và nhân khẩu', group: 'Cư dân', prefixes: ['/residents'], menuKeys: ['resident-changes'] },
@@ -102,7 +102,7 @@ export const CORE_PERMISSIONS = {
 /** Đoạn cuối của đường dẫn mang nghĩa phê duyệt / quyết định */
 const APPROVE_WORDS = new Set([
   'approve', 'reject', 'publish', 'return', 'review', 'owner-decision', 'quote-decision', 'votes', 'accept-work',
-  'approve-repair', 'accept', 'return-repair', // UC09, UC10: duyệt sửa chữa, nghiệm thu / yêu cầu sửa lại
+  'repair-decision', 'accept', 'return-repair', // UC09, UC10: quyết định sửa chữa, nghiệm thu / yêu cầu sửa lại
 ]);
 /** Ngoại lệ: đường dẫn mà quy tắc chung đoán sai (khóa: 'PHƯƠNG_THỨC /chức-năng/đường/dẫn' với tham số là :id) */
 const ACTION_OVERRIDES = {

@@ -1,5 +1,5 @@
 import {
-  CONFIG_KEYS, NOTIFICATION_TYPES, ROLE_TITLES, WORK_ORDER_INSPECTING_STATUSES, WORK_ORDER_OPEN_STATUSES, WORK_ORDER_STATUS, WORK_ORDER_TYPES,
+  CONFIG_KEYS, NOTIFICATION_TYPES, ROLE_TITLES, WORK_ORDER_ACTIVE_STATUSES, WORK_ORDER_INSPECTING_STATUSES, WORK_ORDER_STATUS, WORK_ORDER_TYPES,
 } from '../../constants/enums.js';
 import { Asset, WorkOrder } from '../../models/index.js';
 import { notifyRoles } from '../../services/notification.service.js';
@@ -9,10 +9,11 @@ import { listShifts } from '../dutyShifts/dutyShifts.service.js';
 
 export const WARRANTY_WARNING_DAYS = 30; // BR-E07, MSG-E08
 
-// Thiết bị còn phiếu định kỳ chưa xong (đang kiểm tra hoặc đang sửa chữa) thì không tạo phiếu mới
+// Thiết bị còn phiếu định kỳ đang làm (kiểm tra hoặc sửa chữa) thì không tạo phiếu mới.
+// Phiếu tạm hoãn sửa KHÔNG chặn: thiết bị vẫn được kiểm tra định kỳ (UC10, Q8)
 const OPEN_SCHEDULED = {
   type: WORK_ORDER_TYPES.SCHEDULED,
-  status: { $in: [...WORK_ORDER_OPEN_STATUSES] },
+  status: { $in: [...WORK_ORDER_ACTIVE_STATUSES] },
 };
 // Quá hạn kiểm tra: chỉ phiếu chưa nộp kết quả. Phiếu đang sửa chữa / chờ nghiệm thu là việc của bước khác
 const AWAITING_INSPECTION = {

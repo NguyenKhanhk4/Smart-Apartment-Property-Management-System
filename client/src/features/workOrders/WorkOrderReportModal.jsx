@@ -27,14 +27,18 @@ export default function WorkOrderReportModal({ workOrder, open, onClose }) {
         <Descriptions.Item label="Kiểm tra lúc">{formatDateTime(workOrder.inspectedAt ?? workOrder.completedAt)}</Descriptions.Item>
         <Descriptions.Item label="Kết quả">
           {workOrder.result ? <EnumTag map={WORK_ORDER_RESULTS} value={workOrder.result} /> : '—'}
-          {workOrder.result === 'FAULTY' && workOrder.status !== 'DONE' && (
+          {workOrder.status === 'CLOSED' && <Typography.Text type="secondary"> Không sửa, thiết bị ngừng sử dụng</Typography.Text>}
+          {workOrder.result === 'FAULTY' && workOrder.status === 'DONE' && workOrder.repair && (
+            <Typography.Text type="secondary"> Đã sửa và nghiệm thu{workOrder.repair.acceptedAt ? ` lúc ${formatDateTime(workOrder.repair.acceptedAt)}` : ''}</Typography.Text>
+          )}
+          {workOrder.result === 'FAULTY' && workOrder.status === 'IN_PROGRESS' && (
             <Typography.Text type="secondary"> Chờ báo cáo hư hỏng</Typography.Text>
           )}
         </Descriptions.Item>
         <Descriptions.Item label={workOrder.result === 'FAULTY' ? 'Mô tả sự cố' : 'Ghi chú'}>
           <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{workOrder.note || '—'}</Typography.Text>
         </Descriptions.Item>
-        <Descriptions.Item label="Ảnh">
+        <Descriptions.Item label="Ảnh kiểm tra">
           {workOrder.completionImages?.length ? (
             <EvidencePhotos urls={workOrder.completionImages} />
           ) : (
@@ -65,7 +69,7 @@ export default function WorkOrderReportModal({ workOrder, open, onClose }) {
       )}
       {workOrder.repair && (
         <>
-          <Typography.Title level={5} style={{ marginTop: 20 }}>Sửa chữa</Typography.Title>
+          <Typography.Title level={5} style={{ marginTop: 20 }}>Sửa chữa (ảnh hư hỏng, biên bản nghiệm thu)</Typography.Title>
           <RepairInfo workOrder={workOrder} />
         </>
       )}

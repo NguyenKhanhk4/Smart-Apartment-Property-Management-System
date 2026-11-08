@@ -3,6 +3,7 @@ import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import { workOrderApi } from '../../api/equipment.api';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
 import { useAction } from '../../hooks/useApi';
+import { formatDate } from '../../utils/format';
 import { toFiles } from '../../utils/upload';
 import { failingRequired, isMeasured, itemStatus, rangeText, toPayload } from './inspectionForm';
 
@@ -28,6 +29,7 @@ export default function InspectionModal({ workOrder, open, onClose, onDone }) {
   const inputs = Form.useWatch('inputs', form) ?? [];
   const result = Form.useWatch('result', form);
   const failing = failingRequired(checklist, inputs);
+  const faulty = result === 'FAULTY' || failing.length > 0; // Đạt bị khóa thì chỉ còn Có sự cố
 
   const [save, saving] = useAction(
     (v) => workOrderApi.submitInspection(
@@ -63,6 +65,17 @@ export default function InspectionModal({ workOrder, open, onClose, onDone }) {
         <Typography.Text strong>{asset?.code} – {asset?.name}</Typography.Text>
         <Typography.Text type="secondary">{asset?.location ? ` · ${asset.location}` : ''}</Typography.Text>
       </Typography.Paragraph>
+      {workOrder.knownFault && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={workOrder.knownFault.status === 'REPAIR_POSTPONED'
+            ? `Thiết bị đang tạm hoãn sửa${workOrder.knownFault.reviewDate ? ` đến ${formatDate(workOrder.knownFault.reviewDate)}` : ''}`
+            : 'Thiết bị đang có phiếu sửa chữa'}
+          description={<>Lỗi đã biết: {workOrder.knownFault.faultDesc}. Kiểm tra bình thường; nếu lỗi vẫn còn, chọn Có sự cố, kết quả được ghi vào phiếu sửa chữa đó.</>}
+        />
+      )}
       <Form
         form={form}
         layout="vertical"
@@ -152,9 +165,9 @@ export default function InspectionModal({ workOrder, open, onClose, onDone }) {
         </Form.Item>
         <Form.Item
           name="note"
-          label={result === 'FAULTY' ? 'Mô tả sự cố' : 'Ghi chú'}
-          rules={result === 'FAULTY' ? [{ required: true, whitespace: true, min: 5, message: 'Mô tả sự cố tối thiểu 5 ký tự' }] : []}
-          extra={result === 'FAULTY' ? 'Phiếu sẽ chờ báo cáo hư hỏng để Trưởng BQL duyệt sửa chữa; lịch bảo trì chưa được dời.' : 'Đạt: phiếu hoàn thành và lịch bảo trì tiếp theo được tính lại từ hôm nay.'}
+          label={faulty ? 'Mô tả sự cố' : 'Ghi chú'}
+          rules={faulty ? [{ required: true, whitespace: true, min: 5, message: 'Mô tả sự cố tối thiểu 5 ký tự' }] : []}
+          extra={faulty && workOrder.knownFault ? 'Thiết bị đã có phiếu sửa chữa: kết quả ghi vào phiếu đó và báo Trưởng BQL; phiếu kiểm tra này hoàn thành, lịch bảo trì dời như bình thường.' : faulty ? 'Phiếu sẽ chờ báo cáo hư hỏng để Trưởng BQL duyệt sửa chữa; lịch bảo trì chưa được dời.' : 'Đạt: phiếu hoàn thành và lịch bảo trì tiếp theo được tính lại từ hôm nay.'}
         >
           <Input.TextArea rows={3} maxLength={1000} showCount />
         </Form.Item>

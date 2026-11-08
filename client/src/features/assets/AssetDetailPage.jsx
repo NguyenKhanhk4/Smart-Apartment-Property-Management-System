@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
-import { App, Button, Card, Descriptions, Flex, Skeleton, Table, Tag, Typography } from 'antd';
+import { App, Button, Card, Descriptions, Flex, Skeleton, Table, Tag, Typography, Space } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, PrinterOutlined } from '@ant-design/icons';
 import { QRCodeSVG } from 'qrcode.react';
 import { assetApi } from '../../api/equipment.api';
@@ -13,9 +13,10 @@ import { formatDate, formatDateTime } from '../../utils/format';
 import PageHeader from '../../components/PageHeader';
 import AssignWorkOrderModal from '../workOrders/AssignWorkOrderModal';
 import WorkOrderReportModal from '../workOrders/WorkOrderReportModal';
+import { RepairInfo, RepairRequestModal } from '../workOrders/RepairModals';
 import AssetCode from './AssetCode';
 import AssetFormModal from './AssetFormModal';
-import { checklistRule, cycleText, dueText, warrantyState } from './assetFormat';
+import { checklistRule, cycleText, dueText, historyOutcome, historyPhotoCount, warrantyState } from './assetFormat';
 
 const WARRANTY_TAG = {
   EXPIRED: { color: 'default', label: 'Hết bảo hành' },
@@ -70,6 +71,7 @@ export default function AssetDetailPage() {
   const [page, setPage] = useState(1);
   const [assigning, setAssigning] = useState(false);
   const [viewing, setViewing] = useState(null);
+  const [requesting, setRequesting] = useState(false); // UC10: gửi yêu cầu sửa lại phiếu hoãn
   const [editing, setEditing] = useState(false);
   const qrRef = useRef(null);
   const asset = useApi(() => assetApi.get(id), [id]);
@@ -77,6 +79,7 @@ export default function AssetDetailPage() {
   const buildings = useApi(() => lookupApi.buildings(), [], { enabled: isManager });
   const a = asset.data;
   const wo = a?.openWorkOrder;
+  const postponed = a?.postponedRepair; // UC10: đang tạm hoãn sửa
   const warranty = warrantyState(a?.warrantyEnd);
 
   return (
@@ -181,12 +184,21 @@ export default function AssetDetailPage() {
           </Typography.Text>
         )}
       </Card>
+      {postponed && (
+        <Card
+          title={<Space><Tag color="purple">Tạm hoãn sửa</Tag>đến {formatDate(postponed.repair?.reviewDate)}</Space>}
+          size="small"
+          extra={<Button size="small" type="primary" onClick={() => setRequesting(true)}>Gửi yêu cầu sửa lại</Button>}
+        >
+          <RepairInfo workOrder={postponed} />
+        </Card>
+      )}
       <Card
         title="Phiếu bảo trì đang mở"
         size="small"
         loading={asset.loading}
         extra={
-          wo && isManager && (
+          wo && isManager && ['PENDING', 'IN_PROGRESS'].includes(wo.status) && (
             <Button size="small" type={wo.assignedTo ? 'default' : 'primary'} onClick={() => setAssigning(true)}>
               {wo.assignedTo ? 'Giao lại' : 'Phân công'}
             </Button>
@@ -209,27 +221,38 @@ export default function AssetDetailPage() {
           size="small"
           loading={history.loading}
           dataSource={history.data ?? []}
-          scroll={{ x: 700 }}
+          scroll={{ x: 900 }}
           pagination={{ current: page, pageSize: 10, total: history.pagination?.total, onChange: setPage, hideOnSinglePage: true }}
           columns={[
             { title: 'Ngày dự kiến', dataIndex: 'scheduledDate', width: 120, render: formatDate },
             { title: 'Hoàn thành', dataIndex: 'completedAt', width: 160, render: formatDateTime },
             { title: 'Kỹ thuật viên', dataIndex: ['assignedTo', 'fullName'], width: 150, render: (v) => v ?? '—' },
             { title: 'Đúng hạn', dataIndex: 'onTime', width: 100, render: (v) => (v ? <Tag color="green">Đúng hạn</Tag> : <Tag color="red">Trễ hạn</Tag>) },
-            { title: 'Kết quả', dataIndex: 'note' },
+            {
+              title: 'Kết quả',
+              width: 150,
+              render: (_, r) => {
+                const o = historyOutcome(r);
+                return <Tag color={o.color}>{o.label}</Tag>;
+              },
+            },
+            { title: 'Ghi chú', dataIndex: 'note', ellipsis: true, render: (v) => v || '—' },
             {
               title: '',
-              width: 120,
-              render: (_, r) => (
-                <Button size="small" onClick={() => setViewing(r)}>
-                  {r.completionImages?.length ? `Xem ${r.completionImages.length} ảnh` : 'Xem báo cáo'}
-                </Button>
-              ),
+              width: 130,
+              fixed: 'right',
+              render: (_, r) => {
+                const photos = historyPhotoCount(r);
+                return <Button size="small" onClick={() => setViewing(r)}>{photos ? `Xem chi tiết (${photos} ảnh)` : 'Xem chi tiết'}</Button>;
+              },
             },
           ]}
         />
       </Card>
       {viewing && <WorkOrderReportModal workOrder={viewing} open onClose={() => setViewing(null)} />}
+      {requesting && postponed && (
+        <RepairRequestModal workOrder={{ ...postponed, assetId: a }} open onClose={() => setRequesting(false)} onDone={asset.reload} />
+      )}
       {assigning && wo && (
         <AssignWorkOrderModal workOrder={wo} open onClose={() => setAssigning(false)} onDone={asset.reload} />
       )}

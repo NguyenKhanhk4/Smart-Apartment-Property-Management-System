@@ -63,14 +63,23 @@ const workOrderSchema = new Schema(
         decidedBy: { type: ObjectId, ref: 'User', default: null },
         decidedAt: { type: Date, default: null },
         decisionNote: { type: String, default: null },
+        // UC10 tạm hoãn: ngày xem lại (đầu ngày giờ VN), job nhắc từ ngày đó, lặp mỗi N ngày cho tới khi xử lý
+        reviewDate: { type: Date, default: null },
+        postponedAt: { type: Date, default: null },
+        lastRemindedAt: { type: Date, default: null },
+        remindCount: { type: Number, default: 0 },
         acceptanceImages: { type: [String], default: [] }, // biên bản nghiệm thu của nhà thầu (bản đang chờ / đã nghiệm thu)
         acceptanceNote: { type: String, default: null },
         acceptanceUploadedAt: { type: Date, default: null },
         acceptedBy: { type: ObjectId, ref: 'User', default: null },
         acceptedAt: { type: Date, default: null },
-        // Mỗi bước: báo cáo, duyệt, tải biên bản, nghiệm thu, yêu cầu sửa lại (giữ cả biên bản cũ bị trả lại)
+        // Mỗi bước: báo cáo, duyệt, quỹ, hoãn, yêu cầu lại, kiểm tra lại, tải biên bản, nghiệm thu... Không ghi đè bản cũ
         history: {
-          type: [{ _id: false, action: String, by: { type: ObjectId, ref: 'User' }, at: Date, note: String, images: [String] }],
+          type: [{
+            _id: false, action: String, by: { type: ObjectId, ref: 'User', default: null }, at: Date, note: String, images: [String],
+            cost: { type: Number, default: null }, reviewDate: { type: Date, default: null }, // POSTPONED: hoãn đến ngày
+            refId: { type: ObjectId, default: null }, // FOLLOWUP_CHECK: phiếu kiểm tra lại; FUND_*: đề xuất chi quỹ
+          }],
           default: [],
         },
       }, { _id: false }),
@@ -90,7 +99,7 @@ workOrderSchema.index(
     unique: true,
     partialFilterExpression: {
       type: WORK_ORDER_TYPES.SCHEDULED,
-      status: { $in: [...WORK_ORDER_INSPECTING_STATUSES] }, // phiếu đang sửa chữa: job tự kiểm tra (WORK_ORDER_OPEN_STATUSES)
+      status: { $in: [...WORK_ORDER_INSPECTING_STATUSES] }, // phiếu đang sửa chữa: job tự kiểm tra (WORK_ORDER_ACTIVE_STATUSES)
     },
   },
 );

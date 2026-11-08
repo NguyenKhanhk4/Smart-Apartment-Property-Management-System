@@ -104,12 +104,12 @@ describe('UC08 — kiểm tra định kỳ', () => {
       assert.deepEqual((await inspection.shiftChecklist(tUser)).canClaim, true);
     });
 
-    it('BR-E04: sai mã QR → MSG-E03, phiếu không đổi; đúng → Đang kiểm tra, gán KTV, ghi lúc quét; mã QR không lộ ra client', async () => {
+    it('BR-E04: sai mã QR → MSG-E03, phiếu không đổi; đúng → Đang kiểm tra, gán KTV, ghi lúc quét; mã QR không lộ ra client; nhập tay chữ thường vẫn khớp', async () => {
       const { tUser, wo, asset } = await setup();
       await assert.rejects(scan(tUser, wo, 'EQ-SAI'), { errorCode: 'WORKORDER_WRONG_ASSET', status: 409 });
       assert.equal((await reload(wo)).status, 'PENDING');
 
-      const res = await scan(tUser, wo, ` ${asset.qrCode} `);
+      const res = await scan(tUser, wo, ` ${asset.qrCode.toLowerCase()} `);
       assert.equal(res.status, 'IN_PROGRESS');
       assert.equal(res.assetId.qrCode, undefined);
       assert.deepEqual(res.checklist.map((c) => c.label), CHECKLIST.map((c) => c.label));

@@ -9,7 +9,7 @@ import { useApi } from '../../hooks/useApi';
 import { formatDate } from '../../utils/format';
 import AssetCode from '../assets/AssetCode';
 import InspectionModal from './InspectionModal';
-import { AcceptanceUploadModal, FaultReportModal } from './RepairModals';
+import { AcceptanceUploadModal, FaultReportModal, RepairRequestModal } from './RepairModals';
 
 // UC08 (KTV): checklist ca → "Quét QR" → đúng thiết bị thì mở checklist. UC09: Có sự cố → báo hư hỏng; Đang sửa → tải biên bản
 export default function ShiftChecklist() {
@@ -19,6 +19,7 @@ export default function ShiftChecklist() {
   const [inspecting, setInspecting] = useState(null); // phiếu đã quét đúng, đang nhập checklist
   const [reporting, setReporting] = useState(null); // UC09: báo hư hỏng
   const [uploading, setUploading] = useState(null); // UC09: tải biên bản nghiệm thu
+  const [requesting, setRequesting] = useState(null); // UC10: gửi yêu cầu sửa lại phiếu đang hoãn
   const data = shift.data;
 
   // Lỗi (sai thiết bị MSG-E03, người khác đã nhận...) báo rồi cho quét tiếp; không ném ra ngoài
@@ -46,6 +47,7 @@ export default function ShiftChecklist() {
       return <Button type="primary" icon={<FileProtectOutlined />} onClick={() => setUploading(wo)}>Tải biên bản nghiệm thu</Button>;
     }
     if (wo.status === 'AWAITING_ACCEPTANCE') return <Tag color="gold">Chờ Trưởng BQL nghiệm thu</Tag>;
+    if (wo.status === 'REPAIR_POSTPONED') return <Button onClick={() => setRequesting(wo)}>Gửi yêu cầu sửa lại</Button>;
     const blocked = !wo.mine && !data?.canClaim;
     return (
       <Button type="primary" icon={<QrcodeOutlined />} disabled={blocked} onClick={() => setScanning(wo)}>
@@ -90,9 +92,13 @@ export default function ShiftChecklist() {
                 description={
                   <Flex gap={12} wrap>
                     <span>{wo.assetId?.buildingId?.name}{wo.assetId?.location ? ` · ${wo.assetId.location}` : ''}</span>
-                    <Typography.Text type={wo.isOverdue ? 'danger' : 'secondary'}>
-                      Hạn: {formatDate(wo.scheduledDate)}{wo.isOverdue ? ' (quá hạn)' : ''}
-                    </Typography.Text>
+                    {wo.status === 'REPAIR_POSTPONED' ? (
+                      <Typography.Text type="secondary">Hoãn sửa đến {formatDate(wo.repair?.reviewDate)}</Typography.Text>
+                    ) : (
+                      <Typography.Text type={wo.isOverdue ? 'danger' : 'secondary'}>
+                        Hạn: {formatDate(wo.scheduledDate)}{wo.isOverdue ? ' (quá hạn)' : ''}
+                      </Typography.Text>
+                    )}
                     <span>{wo.checklistCount ? `${wo.checklistCount} mục kiểm tra` : 'Chưa có checklist'}</span>
                   </Flex>
                 }
@@ -116,11 +122,18 @@ export default function ShiftChecklist() {
           onClose={() => setInspecting(null)}
           onDone={(wo) => {
             shift.reload();
-            if (wo?.result === 'FAULTY') setReporting(wo); // UC09 bước 1: mở ngay form báo hư hỏng
+            if (wo?.result !== 'FAULTY') return;
+            if (wo.status === 'IN_PROGRESS') setReporting(wo); // UC09 bước 1: mở ngay form báo hư hỏng
+            else if (wo.knownFault?.status === 'REPAIR_POSTPONED') {
+              // UC10: lỗi đã có phiếu hoãn → đề nghị gửi yêu cầu sửa lại phiếu đó (không bắt buộc)
+              const { _id, status, ...repair } = wo.knownFault;
+              setRequesting({ _id, status, assetId: wo.assetId, title: wo.title, repair });
+            }
           }}
         />
       )}
       {reporting && <FaultReportModal workOrder={reporting} open onClose={() => setReporting(null)} onDone={shift.reload} />}
+      {requesting && <RepairRequestModal workOrder={requesting} open onClose={() => setRequesting(null)} onDone={shift.reload} />}
       {uploading && (
         <AcceptanceUploadModal workOrder={uploading} open onClose={() => setUploading(null)} onDone={shift.reload} />
       )}

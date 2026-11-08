@@ -1,4 +1,4 @@
-// UC09 – Báo cáo hư hỏng và nghiệm thu sửa chữa; UC10 (phần tối thiểu) – Trưởng BQL duyệt sửa bằng chi phí vận hành.
+// UC09 – Báo cáo hư hỏng và nghiệm thu sửa chữa (quyết định sửa của Trưởng BQL ở workOrders.decision.js, UC10).
 // Luồng (BR-E05, Q12): Đang kiểm tra (Có sự cố) → Chờ duyệt sửa → Đang sửa → Chờ nghiệm thu → Hoàn thành.
 // Mọi bước ghi có điều kiện trạng thái cũ nên 2 thao tác cùng lúc không ghi đè nhau; thêm 1 dòng repair.history + audit.
 import {
@@ -12,6 +12,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { computeNextMaintenance } from '../assets/assets.service.js';
+import { markFundWorkAccepted } from './workOrders.fund.js';
 
 const S = WORK_ORDER_STATUS;
 const sameId = (a, b) => a != null && b != null && String(a) === String(b);
@@ -71,43 +72,7 @@ export async function reportFault(user, id, { faultDesc, vendorName, vendorPropo
   return WorkOrder.findById(id).lean();
 }
 
-// ===== UC10 (tối thiểu): Trưởng BQL duyệt sửa =====
-/**
- * Chỉ nguồn Chi phí vận hành: chuyển Đang sửa, báo KTV (MSG-E07). Nguồn Quỹ bảo trì (đề xuất chi qua Ban quản trị)
- * và Tạm hoãn làm ở UC10.
- */
-export async function approveRepair(user, id, { costSource, note }, now = new Date()) {
-  if (costSource !== REPAIR_COST_SOURCES.OPERATING) throw new ApiError('WORKORDER_COST_SOURCE_UNSUPPORTED');
-  const wo = await load(id);
-  if (wo.status !== S.AWAITING_REPAIR_APPROVAL) throw invalid('Phiếu không ở trạng thái chờ duyệt sửa');
-  const res = await WorkOrder.updateOne(
-    { _id: id, status: S.AWAITING_REPAIR_APPROVAL },
-    {
-      $set: {
-        status: S.UNDER_REPAIR,
-        'repair.costSource': costSource,
-        'repair.decidedBy': user.id,
-        'repair.decidedAt': now,
-        'repair.decisionNote': note || null,
-      },
-      $push: { 'repair.history': step('APPROVED', user, now, { note: note || null }) },
-    },
-  );
-  if (!res.modifiedCount) throw new ApiError('CONCURRENT_UPDATE');
-  await logAudit({
-    action: AUDIT_ACTIONS.WORKORDER_REPAIR_APPROVED, user, targetType: AUDIT_TARGETS.WORK_ORDER, targetId: wo._id,
-    before: { status: wo.status }, after: { status: S.UNDER_REPAIR, costSource, estimatedCost: wo.repair?.estimatedCost ?? null },
-    metadata: { assetId: wo.assetId },
-  });
-  await safely(async () => notify(wo.assignedTo, {
-    type: NOTIFICATION_TYPES.MAINTENANCE,
-    title: 'Sửa chữa đã được duyệt',
-    content: `Sửa chữa ${await assetLabel(wo.assetId)} đã được duyệt (chi phí vận hành). Khi nhà thầu sửa xong, tải biên bản nghiệm thu lên phiếu.`, // MSG-E07
-    refId: wo._id,
-    link: '/app/my-work-orders',
-  }));
-  return WorkOrder.findById(id).lean();
-}
+// UC10 (quyết định duyệt / Quỹ / tạm hoãn / ngừng sử dụng): workOrders.decision.js
 
 // ===== UC09 bước 4–6: KTV tải biên bản nghiệm thu của nhà thầu =====
 /** Đang sửa → Chờ nghiệm thu (không hoàn thành thẳng, Q12); thiết bị vẫn đang sửa; báo Trưởng BQL (MSG-E13) */
@@ -159,6 +124,8 @@ export async function acceptRepair(user, id, now = new Date()) {
       { returnDocument: 'after', session },
     ).lean();
     if (!done) throw new ApiError('CONCURRENT_UPDATE');
+    // Q12: sửa bằng Quỹ → đánh dấu đã nghiệm thu bên đề xuất chi, Kế toán mới lập phiếu chi được
+    if (done.repair?.costSource === REPAIR_COST_SOURCES.FUND) await markFundWorkAccepted(done._id, user, now, session);
     if (done.type !== WORK_ORDER_TYPES.SCHEDULED) return null;
     const asset = await Asset.findById(done.assetId).session(session);
     if (!asset) return null;

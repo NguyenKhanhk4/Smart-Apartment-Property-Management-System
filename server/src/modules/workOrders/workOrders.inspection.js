@@ -1,6 +1,7 @@
 // UC08 – Kiểm tra thiết bị định kỳ (BR-E04, BR-E05): checklist ca → quét QR thiết bị → nhập checklist, ảnh → Đạt / Có sự cố
 import {
-  AUDIT_ACTIONS, AUDIT_TARGETS, NOTIFICATION_TYPES, ROLE_TITLES, WORK_ORDER_OPEN_STATUSES, WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES,
+  AUDIT_ACTIONS, AUDIT_TARGETS, NOTIFICATION_TYPES, ROLE_TITLES, WORK_ORDER_INSPECTING_STATUSES, WORK_ORDER_OPEN_STATUSES, WORK_ORDER_REPAIR_STATUSES,
+  WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES,
 } from '../../constants/enums.js';
 import { Asset, User, WorkOrder } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
@@ -97,13 +98,15 @@ export async function shiftChecklist(user, now = new Date()) {
 export async function scanWorkOrder(user, id, qrCode, now = new Date()) {
   const wo = await WorkOrder.findById(id).select('assetId status assignedTo').lean();
   if (!wo) throw ApiError.notFound('Không tìm thấy phiếu bảo trì');
-  if (wo.status === DONE) throw new ApiError('WORKORDER_INVALID_STATUS', 'Phiếu bảo trì đã hoàn thành');
+  if (!WORK_ORDER_INSPECTING_STATUSES.includes(wo.status)) {
+    throw new ApiError('WORKORDER_INVALID_STATUS', wo.status === DONE ? 'Phiếu bảo trì đã hoàn thành' : 'Phiếu không còn ở bước kiểm tra');
+  }
   if (wo.assignedTo && !sameId(wo.assignedTo, user.id)) throw new ApiError('WORKORDER_TAKEN');
   // Phiếu chưa ai nhận: phải đang trong ca (Trưởng BQL giao đích danh thì không cần)
   if (!wo.assignedTo && !(await dutyOf(user.id, now)).canClaim) throw new ApiError('WORKORDER_NOT_ON_DUTY');
 
   const asset = await Asset.findById(wo.assetId).select('qrCode').lean();
-  if (!asset?.qrCode || String(qrCode ?? '').trim() !== asset.qrCode) throw new ApiError('WORKORDER_WRONG_ASSET'); // MSG-E03
+  if (!asset?.qrCode || String(qrCode ?? '').trim().toUpperCase() !== asset.qrCode.toUpperCase()) throw new ApiError('WORKORDER_WRONG_ASSET'); // MSG-E03
 
   if (wo.status === IN_PROGRESS) {
     await WorkOrder.updateOne({ _id: id, assignedTo: user.id, status: IN_PROGRESS, scannedAt: null }, { $set: { scannedAt: now } });
@@ -118,7 +121,22 @@ export async function scanWorkOrder(user, id, qrCode, now = new Date()) {
   return getInspection(user, id);
 }
 
-/** Phiếu để làm checklist: kèm bản sao checklist, thiết bị (không trả mã QR cho client) */
+/**
+ * UC10 lớp 3: thiết bị đang có lỗi đã biết (phiếu sửa chữa khác đang tạm hoãn / chờ duyệt / đang sửa).
+ * Kiểm tra định kỳ trên thiết bị đó không tạo báo cáo hư hỏng thứ 2, mà ghi vào lịch sử phiếu kia.
+ */
+export async function findKnownFault(assetId, excludeId, session = null) {
+  return WorkOrder.findOne({
+    assetId,
+    _id: { $ne: excludeId },
+    status: { $in: [WORK_ORDER_STATUS.REPAIR_POSTPONED, ...WORK_ORDER_REPAIR_STATUSES] },
+  })
+    .select('status repair.faultDesc repair.reviewDate repair.estimatedCost repair.reportedAt')
+    .session(session)
+    .lean();
+}
+
+/** Phiếu để làm checklist: kèm bản sao checklist, thiết bị (không trả mã QR cho client) và lỗi đã biết của thiết bị */
 export async function getInspection(user, id) {
   const wo = await WorkOrder.findById(id)
     .populate({ path: 'assetId', select: 'code name category location buildingId', populate: { path: 'buildingId', select: 'name' } })
@@ -126,7 +144,8 @@ export async function getInspection(user, id) {
     .lean();
   if (!wo) throw ApiError.notFound('Không tìm thấy phiếu bảo trì');
   if (!sameId(wo.assignedTo?._id, user.id) && !(wo.status === PENDING && !wo.assignedTo)) throw ApiError.forbidden();
-  return wo;
+  const known = wo.assetId?._id ? await findKnownFault(wo.assetId._id, wo._id) : null;
+  return { ...wo, knownFault: known ? { _id: known._id, status: known.status, ...known.repair } : null };
 }
 
 // ===== UC08 bước 5–7: nộp kết quả =====
@@ -139,6 +158,8 @@ const missingError = (checklist, missing, noImages) => {
 /**
  * PASSED: hoàn thành, dời lịch bảo trì của thiết bị (chỉ phiếu định kỳ) trong 1 transaction; báo Trưởng BQL (MSG-E04).
  * FAULTY: lưu kết quả, ảnh, mô tả sự cố; phiếu vẫn "Đang kiểm tra", không dời lịch, chờ báo cáo hư hỏng (UC09).
+ * UC10 lớp 3 – thiết bị đã có lỗi đã biết (findKnownFault): FAULTY cũng hoàn thành và dời lịch như PASSED (không báo hư hỏng
+ * lần 2); cả 2 kết quả thêm dòng FOLLOWUP_CHECK vào lịch sử phiếu kia trong cùng transaction và báo Trưởng BQL.
  * Có mục bắt buộc không đạt thì không được chọn PASSED.
  */
 export async function submitInspection(user, id, { result, note = '', results: inputs = [] }, files = [], now = new Date()) {
@@ -168,11 +189,24 @@ export async function submitInspection(user, id, { result, note = '', results: i
   const base = { result, results, inspectedAt: now, note: note.trim(), completionImages };
   const condition = { _id: id, status: IN_PROGRESS, assignedTo: user.id, result: null };
   let nextDate = null;
+  const known = await findKnownFault(wo.assetId, wo._id);
+  const faulty = result === WORK_ORDER_RESULTS.FAULTY;
 
-  if (result === WORK_ORDER_RESULTS.PASSED) {
+  if (!faulty || known) {
     nextDate = await withTransaction(async (session) => {
       const done = await WorkOrder.findOneAndUpdate(condition, { $set: { ...base, status: DONE, completedAt: now } }, { returnDocument: 'after', session }).lean();
       if (!done) throw new ApiError('CONCURRENT_UPDATE');
+      if (known) {
+        const check = {
+          action: 'FOLLOWUP_CHECK',
+          by: user.id,
+          at: now,
+          note: faulty ? `Kiểm tra định kỳ: lỗi vẫn còn. ${note.trim()}` : `Kiểm tra định kỳ: Đạt.${note.trim() ? ` ${note.trim()}` : ''}`,
+          images: completionImages,
+          refId: done._id,
+        };
+        await WorkOrder.updateOne({ _id: known._id }, { $push: { 'repair.history': check } }, { session });
+      }
       if (done.type !== WORK_ORDER_TYPES.SCHEDULED) return null; // chỉ phiếu định kỳ mới dời lịch bảo trì
       const asset = await Asset.findById(done.assetId).session(session);
       if (!asset) return null;
@@ -192,7 +226,7 @@ export async function submitInspection(user, id, { result, note = '', results: i
     targetType: AUDIT_TARGETS.WORK_ORDER,
     targetId: wo._id,
     after: { result, failing: failing.length, ...(nextDate && { nextMaintenanceDate: nextDate.toISOString() }) },
-    metadata: { assetId: wo.assetId },
+    metadata: { assetId: wo.assetId, ...(known && { knownFaultOrderId: known._id }) },
   });
 
   // Thông báo gửi sau khi đã lưu; lỗi gửi không làm hỏng kết quả
@@ -203,7 +237,18 @@ export async function submitInspection(user, id, { result, note = '', results: i
     ]);
     const who = tech?.fullName ?? 'Kỹ thuật viên';
     const what = asset ? `${asset.code} – ${asset.name}` : wo.title;
-    await notifyRoles(['MANAGER'], result === WORK_ORDER_RESULTS.PASSED
+    const knownText = known?.status === WORK_ORDER_STATUS.REPAIR_POSTPONED
+      ? ` Thiết bị đang tạm hoãn sửa${known.repair?.reviewDate ? ` đến ${fmtDateVn(known.repair.reviewDate)}` : ''}.`
+      : ' Thiết bị đang có phiếu sửa chữa.';
+    await notifyRoles(['MANAGER'], known
+      ? {
+          type: NOTIFICATION_TYPES.MAINTENANCE,
+          title: faulty ? 'Kiểm tra lại: lỗi vẫn còn' : 'Kiểm tra lại: thiết bị đạt',
+          content: `${who} kiểm tra định kỳ ${what}: ${faulty ? `lỗi vẫn còn (${note.trim()})` : 'Đạt'}.${knownText}`,
+          refId: known._id,
+          link: '/app/repair-approvals',
+        }
+      : result === WORK_ORDER_RESULTS.PASSED
       ? {
           type: NOTIFICATION_TYPES.MAINTENANCE,
           title: 'Kiểm tra định kỳ đạt',

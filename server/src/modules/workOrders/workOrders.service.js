@@ -4,7 +4,7 @@ import {
   ROLES,
   ROLE_TITLES,
   WORK_ORDER_INSPECTING_STATUSES,
-  WORK_ORDER_OPEN_STATUSES as OPEN_WO_STATUSES,
+  WORK_ORDER_ACTIVE_STATUSES as OPEN_WO_STATUSES,
   WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
 import { isRole } from '../../middlewares/authorize.js';
@@ -100,7 +100,7 @@ export async function assignWorkOrder(user, id, { assignedTo, note }) {
   const wo = await WorkOrder.findById(id).lean();
   if (!wo) throw ApiError.notFound('Không tìm thấy work order');
   if (!WORK_ORDER_INSPECTING_STATUSES.includes(wo.status)) {
-    throw new ApiError('WORKORDER_INVALID_STATUS', wo.status === WORK_ORDER_STATUS.DONE ? undefined : 'Phiếu đang sửa chữa, không giao lại được');
+    throw new ApiError('WORKORDER_INVALID_STATUS', [WORK_ORDER_STATUS.DONE, WORK_ORDER_STATUS.CLOSED].includes(wo.status) ? undefined : 'Phiếu đang sửa chữa hoặc tạm hoãn, không giao lại được');
   }
 
   const tech = await User.findOne({ _id: assignedTo, ...TECHNICIAN }).select('fullName').lean();

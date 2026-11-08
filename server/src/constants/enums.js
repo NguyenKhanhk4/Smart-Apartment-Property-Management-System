@@ -309,7 +309,16 @@ export const WORK_ORDER_STATUS = Object.freeze({
   AWAITING_REPAIR_APPROVAL: 'AWAITING_REPAIR_APPROVAL', // UC09: KTV đã báo hư hỏng, chờ Trưởng BQL duyệt (UC10)
   UNDER_REPAIR: 'UNDER_REPAIR', // đã duyệt, nhà thầu đang sửa
   AWAITING_ACCEPTANCE: 'AWAITING_ACCEPTANCE', // KTV đã tải biên bản của nhà thầu, chờ Trưởng BQL nghiệm thu
+  REPAIR_POSTPONED: 'REPAIR_POSTPONED', // UC10 (Q5): Trưởng BQL tạm hoãn sửa, có ngày xem lại; kiểm tra định kỳ vẫn chạy
   DONE: 'DONE',
+  CLOSED: 'CLOSED', // UC10: thiết bị ngừng sử dụng, phiếu đóng không sửa
+});
+
+// UC10: quyết định của Trưởng BQL với báo cáo hư hỏng
+export const REPAIR_DECISIONS = Object.freeze({
+  APPROVE: 'APPROVE', // duyệt, kèm nguồn chi
+  POSTPONE: 'POSTPONE', // tạm hoãn, kèm lý do và ngày xem lại
+  RETIRE: 'RETIRE', // không sửa: ngừng sử dụng thiết bị
 });
 
 // UC10: nguồn chi phí sửa chữa (BR-E06)
@@ -331,8 +340,10 @@ export const WORK_ORDER_INSPECTING_STATUSES = Object.freeze([WORK_ORDER_STATUS.P
 export const WORK_ORDER_REPAIR_STATUSES = Object.freeze([
   WORK_ORDER_STATUS.AWAITING_REPAIR_APPROVAL, WORK_ORDER_STATUS.UNDER_REPAIR, WORK_ORDER_STATUS.AWAITING_ACCEPTANCE,
 ]);
-// Chưa hoàn thành: không ngừng theo dõi thiết bị được; job không tạo phiếu mới
-export const WORK_ORDER_OPEN_STATUSES = Object.freeze([...WORK_ORDER_INSPECTING_STATUSES, ...WORK_ORDER_REPAIR_STATUSES]);
+// Đang làm (kiểm tra hoặc sửa): job không tạo phiếu mới; hiện là "phiếu đang mở" của thiết bị
+export const WORK_ORDER_ACTIVE_STATUSES = Object.freeze([...WORK_ORDER_INSPECTING_STATUSES, ...WORK_ORDER_REPAIR_STATUSES]);
+// Chưa hoàn thành (thêm phiếu tạm hoãn sửa): không ngừng theo dõi thiết bị được. Phiếu hoãn không chặn job (Q8)
+export const WORK_ORDER_OPEN_STATUSES = Object.freeze([...WORK_ORDER_ACTIVE_STATUSES, WORK_ORDER_STATUS.REPAIR_POSTPONED]);
 
 // ===== Tiện ích (Module D) =====
 // BR-O12: booking tự xác nhận APPROVED khi đặt → CHECKED_IN (lễ tân) → COMPLETED (hết giờ, tính phí BR-O5);
@@ -531,6 +542,7 @@ export const CRON_JOBS = Object.freeze({
   BOOKING_COMPLETE: 'BOOKING_COMPLETE',
   WORK_ORDER_GENERATE: 'WORK_ORDER_GENERATE',
   EQUIPMENT_WARNING: 'EQUIPMENT_WARNING', // UC07, BR-E07: phiếu bảo trì quá hạn, thiết bị sắp hết bảo hành (MSG-E08)
+  REPAIR_REVIEW: 'REPAIR_REVIEW', // UC10: nhắc Trưởng BQL xem lại phiếu tạm hoãn sửa (MSG-E12)
   TICKET_ESCALATE: 'TICKET_ESCALATE',
   TICKET_AUTO_CLOSE: 'TICKET_AUTO_CLOSE',
   CONTRACT_EXPIRE: 'CONTRACT_EXPIRE',
@@ -583,6 +595,11 @@ export const AUDIT_ACTIONS = Object.freeze({
   WORKORDER_ACCEPTANCE_UPLOADED: 'WORKORDER_ACCEPTANCE_UPLOADED', // UC09
   WORKORDER_REPAIR_ACCEPTED: 'WORKORDER_REPAIR_ACCEPTED',
   WORKORDER_REPAIR_RETURNED: 'WORKORDER_REPAIR_RETURNED',
+  WORKORDER_FUND_REQUESTED: 'WORKORDER_FUND_REQUESTED', // UC10: duyệt bằng Quỹ bảo trì, chờ đề xuất chi
+  WORKORDER_FUND_DECIDED: 'WORKORDER_FUND_DECIDED', // UC10: Ban quản trị duyệt / từ chối, Kế toán rút đề xuất
+  WORKORDER_REPAIR_POSTPONED: 'WORKORDER_REPAIR_POSTPONED',
+  WORKORDER_REPAIR_REQUESTED: 'WORKORDER_REPAIR_REQUESTED',
+  WORKORDER_REPAIR_RETIRED: 'WORKORDER_REPAIR_RETIRED',
   ASSET_DEACTIVATED: 'ASSET_DEACTIVATED',
   ASSET_REACTIVATED: 'ASSET_REACTIVATED',
   AMENITY_FEE_CHANGED: 'AMENITY_FEE_CHANGED',
@@ -708,6 +725,8 @@ export const CONFIG_KEYS = Object.freeze({
   COMPLAINT_RESPONSE_HOURS: 'COMPLAINT_RESPONSE_HOURS',
   BOOKING_PAYMENT_HOLD_MINUTES: 'BOOKING_PAYMENT_HOLD_MINUTES',
   REPAIR_ACCEPTANCE_REMIND_DAYS: 'REPAIR_ACCEPTANCE_REMIND_DAYS', // UC09: chờ nghiệm thu quá N ngày thì nhắc Trưởng BQL (BR-X8)
+  REPAIR_REVIEW_REPEAT_DAYS: 'REPAIR_REVIEW_REPEAT_DAYS', // UC10: phiếu hoãn đã tới ngày xem lại thì nhắc lại mỗi N ngày
+  REPAIR_POSTPONE_MAX_DAYS: 'REPAIR_POSTPONE_MAX_DAYS', // UC10: ngày xem lại tối đa N ngày kể từ hôm hoãn
 });
 
 export const DEFAULT_CONFIGS = Object.freeze([
@@ -744,6 +763,8 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
   { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán qua payOS (phút); 0 hoặc chưa cấu hình payOS = phí gộp vào thông báo phí tháng' },
   // TECHNICAL — tham số kỹ thuật, Trưởng BQL sửa
+  { key: CONFIG_KEYS.REPAIR_REVIEW_REPEAT_DAYS, value: 7, scope: CONFIG_SCOPES.BUSINESS, description: 'Phiếu tạm hoãn sửa đã tới ngày xem lại: nhắc Trưởng BQL lại mỗi N ngày cho tới khi xử lý (UC10, BR-X8)' },
+  { key: CONFIG_KEYS.REPAIR_POSTPONE_MAX_DAYS, value: 90, scope: CONFIG_SCOPES.BUSINESS, description: 'Tạm hoãn sửa chữa: ngày xem lại tối đa N ngày kể từ hôm hoãn (UC10)' },
   { key: CONFIG_KEYS.REPAIR_ACCEPTANCE_REMIND_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Phiếu chờ nghiệm thu sửa chữa quá N ngày thì nhắc Trưởng BQL, không tự nghiệm thu (UC09, BR-X8)' },
   { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 10, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10. Client tự thu nhỏ ảnh trước khi gửi; mức này là lưới an toàn (Cloudinary miễn phí giới hạn ~10MB/ảnh)' },
 ]);

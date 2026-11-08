@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { CRON_JOBS, REPAIR_COST_SOURCES, WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES, values } from '../../constants/enums.js';
+import { CRON_JOBS, REPAIR_COST_SOURCES, REPAIR_DECISIONS, WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES, values } from '../../constants/enums.js';
 import { runTrackedJob } from '../../jobs/cronRunner.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
@@ -11,6 +11,7 @@ import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId } from '../../utils/validators.js';
 import { generateMaintenanceWorkOrders } from './workOrders.jobs.js';
+import * as decision from './workOrders.decision.js';
 import * as inspection from './workOrders.inspection.js';
 import * as repair from './workOrders.repair.js';
 import * as service from './workOrders.service.js';
@@ -42,7 +43,7 @@ const assignBody = Joi.object({
  * @openapi
  * /work-orders:
  *   get:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: Danh sách work order (UC-D03). Manager thấy tất cả; kỹ thuật viên chỉ thấy việc được giao cho mình
  *     parameters:
  *       - $ref: '#/components/parameters/page'
@@ -70,14 +71,14 @@ router.get(
  * @openapi
  * /work-orders/assignees:
  *   get:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: Kỹ thuật viên đang hoạt động kèm số work order đang mở của từng người (UC-D03 bước 2)
  */
 /**
  * @openapi
  * /work-orders/shift-checklist:
  *   get:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: Checklist ca của kỹ thuật viên (UC08 bước 1)
  *     description: |
  *       Phiếu định kỳ chưa ai nhận + phiếu của chính KTV đang làm / được giao, gần hạn trước.
@@ -85,6 +86,24 @@ router.get(
  */
 router.get('/shift-checklist', authenticate, authorize('STAFF:TECHNICIAN'), async (req, res) =>
   ok(res, await inspection.shiftChecklist(req.user)),
+);
+
+/**
+ * @openapi
+ * /work-orders/repairs:
+ *   get:
+ *     tags: [Thiết bị & bảo trì]
+ *     summary: Danh sách duyệt sửa chữa lớn (UC10 bước 1) theo tab pending | postponed | decided, kèm số đếm và tham số
+ */
+router.get(
+  '/repairs',
+  authenticate,
+  authorize('MANAGER'),
+  validate({ query: Joi.object({ ...paginationQuery, tab: Joi.string().valid('pending', 'postponed', 'decided').default('pending') }) }),
+  async (req, res) => {
+    const { items, pagination, counts, settings } = await decision.listRepairs(req.validated.query);
+    paginated(res, items, pagination, { counts, settings });
+  },
 );
 
 router.get('/assignees', authenticate, authorize('MANAGER'), async (_req, res) =>
@@ -95,7 +114,7 @@ router.get('/assignees', authenticate, authorize('MANAGER'), async (_req, res) =
  * @openapi
  * /work-orders/jobs/generate/run:
  *   post:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: Chạy thủ công cron quét tài sản đến hạn và tạo work order bảo trì định kỳ (UC-D02), ghi cron_runs
  *     description: Trả về bản ghi cron_runs; affectedCount = số work order mới tạo.
  */
@@ -112,7 +131,7 @@ router.post('/jobs/generate/run', authenticate, authorize('MANAGER'), async (_re
  * @openapi
  * /work-orders/{id}:
  *   get:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: Chi tiết work order. Kỹ thuật viên xem việc không phải của mình → 403
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
@@ -128,7 +147,7 @@ router.get(
  * @openapi
  * /work-orders/{id}/assign:
  *   patch:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: Phân công / giao lại kỹ thuật viên (UC-D03). Trạng thái work order giữ nguyên
  *     description: |
  *       Lỗi: WORKORDER_INVALID_ASSIGNEE (400) người nhận không phải KTV đang hoạt động;
@@ -160,7 +179,7 @@ router.patch(
  * @openapi
  * /work-orders/{id}/scan:
  *   post:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: Quét mã QR trên thiết bị để nhận phiếu và mở checklist (UC08 bước 2–4, BR-E04)
  *     description: |
  *       Sai thiết bị → 409 WORKORDER_WRONG_ASSET (MSG-E03), phiếu không đổi. Phiếu chưa ai nhận mà KTV không trong ca
@@ -183,7 +202,7 @@ router.post(
  * @openapi
  * /work-orders/{id}/inspection:
  *   post:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: Nộp kết quả kiểm tra (UC08 bước 5–7)
  *     description: |
  *       results: chuỗi JSON, cùng thứ tự checklist của phiếu: [{ value }] cho mục đo, [{ ok }] cho mục tick.
@@ -225,7 +244,10 @@ router.post(
     const { error } = Joi.array().items(resultItem.allow(null)).max(50).validate(results);
     if (error || !Array.isArray(results)) throw ApiError.field('results', 'Kết quả checklist không hợp lệ');
     const wo = await inspection.submitInspection(req.user, req.params.id, { ...req.body, results }, req.files);
-    ok(res, wo, req.body.result === WORK_ORDER_RESULTS.PASSED ? 'Đã nộp kết quả kiểm tra: Đạt.' : 'Đã ghi nhận sự cố. Phiếu chờ báo cáo hư hỏng.'); // MSG-E04
+    let message = 'Đã ghi nhận sự cố. Phiếu chờ báo cáo hư hỏng.';
+    if (req.body.result === WORK_ORDER_RESULTS.PASSED) message = 'Đã nộp kết quả kiểm tra: Đạt.'; // MSG-E04
+    else if (wo.knownFault) message = 'Đã ghi nhận lỗi vẫn còn vào phiếu sửa chữa của thiết bị và báo Trưởng BQL.'; // UC10 lớp 3
+    ok(res, wo, message);
   },
 );
 
@@ -233,7 +255,7 @@ router.post(
  * @openapi
  * /work-orders/{id}/fault-report:
  *   post:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: KTV báo cáo hư hỏng sau khi kiểm tra Có sự cố (UC09 bước 1–3, MSG-E06)
  *     description: multipart. Bắt buộc mô tả, phương án, chi phí dự kiến, ≥ 1 ảnh. Phiếu → Chờ duyệt sửa.
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
@@ -255,28 +277,74 @@ router.post(
 
 /**
  * @openapi
- * /work-orders/{id}/approve-repair:
- *   post:
- *     tags: [Tài sản & bảo trì]
- *     summary: Trưởng BQL duyệt sửa chữa (UC10, hiện chỉ nguồn chi phí vận hành; MSG-E07)
+ * /work-orders/{id}/repair-decision:
+ *   patch:
+ *     tags: [Thiết bị & bảo trì]
+ *     summary: Trưởng BQL quyết định sửa chữa (UC10, MSG-E07)
+ *     description: |
+ *       APPROVE + OPERATING → Đang sửa. APPROVE + FUND → chờ đề xuất chi quỹ (báo Kế toán).
+ *       POSTPONE (comment, reviewDate ≤ REPAIR_POSTPONE_MAX_DAYS) → Tạm hoãn sửa. RETIRE (comment) → Đã đóng, thiết bị ngừng theo dõi.
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
-router.post(
-  '/:id/approve-repair',
+const DECISION_MESSAGES = {
+  APPROVE: { OPERATING: 'Đã duyệt sửa chữa', FUND: 'Đã duyệt bằng Quỹ bảo trì, đã báo Kế toán lập đề xuất chi' },
+  POSTPONE: 'Đã tạm hoãn sửa chữa',
+  RETIRE: 'Đã ngừng sử dụng thiết bị',
+};
+router.patch(
+  '/:id/repair-decision',
   authenticate,
   authorize('MANAGER'),
   validate({
     params: idParams,
-    body: Joi.object({ costSource: Joi.string().valid(...values(REPAIR_COST_SOURCES)).required(), note: Joi.string().trim().max(1000).allow('') }),
+    body: Joi.object({
+      decision: Joi.string().valid(...values(REPAIR_DECISIONS)).required(),
+      costSource: Joi.when('decision', {
+        is: REPAIR_DECISIONS.APPROVE,
+        then: Joi.string().valid(...values(REPAIR_COST_SOURCES)).required(),
+        otherwise: Joi.forbidden(),
+      }),
+      comment: Joi.when('decision', {
+        is: REPAIR_DECISIONS.APPROVE,
+        then: Joi.string().trim().max(1000).allow(''),
+        otherwise: Joi.string().trim().min(5).max(1000).required(),
+      }),
+      reviewDate: Joi.when('decision', { is: REPAIR_DECISIONS.POSTPONE, then: Joi.date().required(), otherwise: Joi.forbidden() }),
+    }),
   }),
-  async (req, res) => ok(res, await repair.approveRepair(req.user, req.params.id, req.body), 'Đã duyệt sửa chữa'),
+  async (req, res) => {
+    const wo = await decision.decideRepair(req.user, req.params.id, req.body);
+    const m = DECISION_MESSAGES[req.body.decision];
+    ok(res, wo, typeof m === 'string' ? m : m[req.body.costSource]);
+  },
+);
+
+/**
+ * @openapi
+ * /work-orders/{id}/repair-request:
+ *   post:
+ *     tags: [Thiết bị & bảo trì]
+ *     summary: Gửi yêu cầu sửa lại phiếu đang tạm hoãn (UC10, KTV hoặc Trưởng BQL; MSG-E06) → Chờ duyệt sửa
+ *     description: multipart. Bắt buộc note; estimatedCost và ảnh mới không bắt buộc.
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.post(
+  '/:id/repair-request',
+  authenticate,
+  authorize(...VIEWERS),
+  uploadImages('images', 5),
+  validate({
+    params: idParams,
+    body: Joi.object({ note: Joi.string().trim().min(5).max(2000).required(), estimatedCost: Joi.number().integer().min(1).max(1e12) }),
+  }),
+  async (req, res) => ok(res, await decision.requestRepair(req.user, req.params.id, req.body, req.files), 'Đã gửi yêu cầu sửa lại cho Trưởng BQL'),
 );
 
 /**
  * @openapi
  * /work-orders/{id}/acceptance:
  *   post:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: KTV tải biên bản nghiệm thu của nhà thầu (UC09 bước 4–6) → Chờ nghiệm thu (MSG-E13)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
@@ -293,7 +361,7 @@ router.post(
  * @openapi
  * /work-orders/{id}/accept:
  *   post:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: Trưởng BQL xác nhận nghiệm thu sửa chữa (Q12, MSG-E11) → Hoàn thành
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
@@ -305,7 +373,7 @@ router.post('/:id/accept', authenticate, authorize('MANAGER'), validate({ params
  * @openapi
  * /work-orders/{id}/return-repair:
  *   post:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: Trưởng BQL yêu cầu sửa lại (bắt buộc lý do) → Đang sửa; biên bản cũ giữ trong lịch sử
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */

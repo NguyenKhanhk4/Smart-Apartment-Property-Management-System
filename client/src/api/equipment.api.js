@@ -42,7 +42,16 @@ export const workOrderApi = {
     files.forEach((f) => form.append('images', f));
     return http.post(`/work-orders/${id}/acceptance`, form);
   },
-  approveRepair: (id, body) => http.post(`/work-orders/${id}/approve-repair`, body),
+  // UC10: danh sách duyệt sửa chữa (tab pending | postponed | decided), quyết định, gửi yêu cầu sửa lại phiếu đang hoãn
+  repairs: (params) => http.get('/work-orders/repairs', { params }),
+  repairDecision: (id, body) => http.patch(`/work-orders/${id}/repair-decision`, body),
+  repairRequest: (id, { note, estimatedCost }, files = []) => {
+    const form = new FormData();
+    form.append('note', note);
+    if (estimatedCost) form.append('estimatedCost', estimatedCost);
+    files.forEach((f) => form.append('images', f));
+    return http.post(`/work-orders/${id}/repair-request`, form);
+  },
   acceptRepair: (id) => http.post(`/work-orders/${id}/accept`),
   returnRepair: (id, comment) => http.post(`/work-orders/${id}/return-repair`, { comment }),
   // Chạy thủ công cron quét tài sản đến hạn; trả bản ghi cron_runs (affectedCount = số work order mới)

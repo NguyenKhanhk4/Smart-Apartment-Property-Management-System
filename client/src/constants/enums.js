@@ -286,7 +286,16 @@ export const WORK_ORDER_STATUS = {
   AWAITING_REPAIR_APPROVAL: { label: 'Chờ duyệt sửa', color: 'orange' },
   UNDER_REPAIR: { label: 'Đang sửa', color: 'volcano' },
   AWAITING_ACCEPTANCE: { label: 'Chờ nghiệm thu', color: 'gold' },
+  REPAIR_POSTPONED: { label: 'Tạm hoãn sửa', color: 'purple' }, // UC10 (Q5)
   DONE: { label: 'Hoàn thành', color: 'success' },
+  CLOSED: { label: 'Đã đóng', color: 'default' }, // UC10: thiết bị ngừng sử dụng
+};
+
+// UC10: quyết định với báo cáo hư hỏng
+export const REPAIR_DECISIONS = {
+  APPROVE: { label: 'Duyệt sửa', color: 'green' },
+  POSTPONE: { label: 'Tạm hoãn', color: 'purple' },
+  RETIRE: { label: 'Ngừng sử dụng thiết bị', color: 'red' },
 };
 
 export const REPAIR_COST_SOURCES = {
@@ -294,7 +303,7 @@ export const REPAIR_COST_SOURCES = {
   FUND: { label: 'Quỹ bảo trì', color: 'purple' },
 };
 
-export const WORK_ORDER_OPEN_STATUSES = ['PENDING', 'IN_PROGRESS', 'AWAITING_REPAIR_APPROVAL', 'UNDER_REPAIR', 'AWAITING_ACCEPTANCE'];
+export const WORK_ORDER_OPEN_STATUSES = ['PENDING', 'IN_PROGRESS', 'AWAITING_REPAIR_APPROVAL', 'UNDER_REPAIR', 'AWAITING_ACCEPTANCE', 'REPAIR_POSTPONED'];
 
 export const WORK_ORDER_TYPES = {
   SCHEDULED: { label: 'Bảo trì định kỳ', color: 'geekblue' },
@@ -409,6 +418,7 @@ export const CRON_JOBS = {
   BOOKING_COMPLETE: { label: 'Hoàn tất / không đến booking tiện ích', color: 'cyan' },
   WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
   EQUIPMENT_WARNING: { label: 'Cảnh báo bảo trì quá hạn, sắp hết bảo hành', color: 'orange' },
+  REPAIR_REVIEW: { label: 'Nhắc xem lại sửa chữa tạm hoãn', color: 'purple' },
   TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },
   TICKET_AUTO_CLOSE: { label: 'Tự đóng phản ánh chờ nghiệm thu', color: 'default' },
   CONTRACT_EXPIRE: { label: 'Quét hợp đồng thuê hết hạn', color: 'purple' },
