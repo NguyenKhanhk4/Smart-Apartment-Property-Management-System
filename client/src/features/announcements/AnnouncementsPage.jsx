@@ -198,11 +198,15 @@ export default function AnnouncementsPage() {
   const [commentPage, setCommentPage] = useState(1);
   const [commentText, setCommentText] = useState('');
   const [choice, setChoice] = useState();
+  const [moderating, setModerating] = useState(null);
+  const [moderationForm] = Form.useForm();
   const comments = useApi(() => announcementApi.comments(detail._id, { page: commentPage, limit: 10 }), [detail?._id, commentPage], { enabled: Boolean(detail) });
   const poll = useApi(() => announcementApi.poll(detail._id, apartmentId), [detail?._id, apartmentId], { enabled: Boolean(detail?.poll) && (!isResident || Boolean(apartmentId)) });
   usePolling(() => { if (detail?.poll && (!isResident || apartmentId)) poll.reload(); }, 10000);
   const [submitComment, commenting] = useAction(() => announcementApi.comment(detail._id, commentText), { success: 'Đã gửi bình luận', onDone: () => { setCommentText(''); comments.reload(); } });
-  const [hide] = useAction((id) => announcementApi.hideComment(detail._id, id), { success: 'Đã ẩn bình luận', onDone: comments.reload });
+  const [hide, hiding] = useAction(({ reason }) => announcementApi.hideComment(moderating.announcementId, moderating.commentId, reason.trim()), {
+    success: 'Đã ẩn bình luận', onDone: () => { setModerating(null); comments.reload(); },
+  });
   const [vote, voting] = useAction(() => announcementApi.vote(detail._id, { apartmentId, option: choice ?? poll.data?.myOption }), { success: 'Đã lưu phiếu', onDone: poll.reload });
   const [closePoll, closing] = useAction(() => announcementApi.closePoll(detail._id), { success: 'Đã đóng khảo sát', onDone: poll.reload });
   const [searchParams] = useSearchParams();
@@ -349,8 +353,9 @@ export default function AnnouncementsPage() {
                     <div className={`mt-1 text-[13.5px] leading-relaxed whitespace-pre-wrap ${c.hidden ? 'italic text-ink-3' : 'text-ink'}`}>
                       {c.hidden ? 'Bình luận đã bị ẩn' : c.content}
                     </div>
+                    {canPublish && c.hidden && <p className="mt-1 text-xs text-ink-3">Lý do: {c.hideReason || 'Bình luận cũ chưa ghi lý do'} · {formatDateTime(c.hiddenAt)}</p>}
                     {canPublish && !c.hidden && (
-                      <Button size="small" type="link" danger className="px-0! mt-1" onClick={() => hide(c._id).catch(() => {})}>
+                      <Button size="small" type="link" danger className="px-0! mt-1" onClick={() => setModerating({ announcementId: detail._id, commentId: c._id })}>
                         Ẩn vì vi phạm
                       </Button>
                     )}
@@ -438,6 +443,14 @@ export default function AnnouncementsPage() {
           <div className="pt-2">{detailBody}</div>
         </Modal>
       )}
+      <Modal open={Boolean(moderating)} title="Ẩn bình luận vi phạm" okText="Xác nhận ẩn" confirmLoading={hiding}
+        onOk={() => moderationForm.submit()} onCancel={() => { if (!hiding) setModerating(null); }} destroyOnHidden mask={{ closable: !hiding }}>
+        <Form form={moderationForm} layout="vertical" preserve={false} onFinish={(v) => hide(v).catch(() => {})}>
+          <Form.Item name="reason" label="Lý do ẩn" rules={[{ required: true, whitespace: true, message: 'Nhập lý do ẩn bình luận' }, { max: 500 }]}>
+            <Input.TextArea maxLength={500} showCount rows={3} placeholder="Nêu lý do bình luận vi phạm" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }
