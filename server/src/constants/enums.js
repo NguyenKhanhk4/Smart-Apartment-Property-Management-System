@@ -359,22 +359,6 @@ export const AGE_GROUPS = Object.freeze({
   ADULT: 'ADULT',
 });
 
-// Dữ liệu cũ gói tháng / lượt vào cửa (đã bỏ khỏi nghiệp vụ). Chỉ model AmenityPass, AmenityVisit và phần tính phí
-// (invoices.*, Người 3) còn đọc — gỡ cùng lúc khi Người 3 bỏ dòng gói tháng / vé lẻ khỏi thông báo phí.
-export const AMENITY_PASS_STATUS = Object.freeze({
-  ACTIVE: 'ACTIVE',
-  CANCELLED: 'CANCELLED',
-});
-export const VISIT_CHARGE_TYPES = Object.freeze({
-  PASS: 'PASS',
-  SINGLE: 'SINGLE',
-  FREE: 'FREE',
-});
-export const VISIT_STATUS = Object.freeze({
-  VALID: 'VALID',
-  CANCELLED: 'CANCELLED',
-});
-
 // ===== Ticket, sổ khách, bảng tin, thông báo (Module E) =====
 // Thứ tự trong mảng = thứ tự leo thang (BR-O8)
 export const PRIORITIES = Object.freeze({

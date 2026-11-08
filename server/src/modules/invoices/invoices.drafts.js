@@ -3,7 +3,7 @@
 //   - Tính lại: lấy lại đơn giá, xe, phí tiện ích, Người nộp phí mới nhất; giữ nguyên các khoản thu khác đã thêm tay.
 // Chỉ sửa được khi còn DRAFT; cập nhật có điều kiện (status + updatedAt) để 2 người sửa cùng lúc không ghi đè nhau.
 import { AUDIT_ACTIONS, AUDIT_TARGETS, FEE_CATEGORIES, INVOICE_STATUS } from '../../constants/enums.js';
-import { AmenityPass, AmenityVisit, Booking, Invoice, RepairQuote } from '../../models/index.js';
+import { Booking, Invoice, RepairQuote } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { withTransaction } from '../../utils/transaction.js';
@@ -97,8 +97,6 @@ export async function recalculateDraft(user, invoiceId) {
     await linkAmenityCharges(draft.charges, invoice._id, session);
     // Gỡ các bản ghi tiện ích từng gắn vào thông báo này nhưng không còn được tính
     const keep = {
-      passIds: draft.charges.passIds,
-      visitIds: draft.charges.visitIds,
       bookingIds: draft.charges.bookingIds,
       repairQuoteIds: draft.charges.repairQuoteIds,
     };
@@ -113,8 +111,6 @@ export async function recalculateDraft(user, invoiceId) {
 // Tuần tự: MongoDB không cho chạy song song nhiều lệnh trong cùng 1 transaction
 async function unlinkStale(invoiceId, keep, session) {
   for (const [Model, ids] of [
-    [AmenityPass, keep.passIds],
-    [AmenityVisit, keep.visitIds],
     [Booking, keep.bookingIds],
     [RepairQuote, keep.repairQuoteIds],
   ]) {

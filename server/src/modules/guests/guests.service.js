@@ -207,9 +207,9 @@ export async function updateCheckpoint(user, id, active) {
 }
 export async function createTour(user, data) {
   requireManager(user);
-  const shift = await DutyShift.findOne({ _id: data.shiftId, roleTitle: 'SECURITY', isBackup: false }).lean();
+  const shift = await DutyShift.findOne({ _id: data.shiftId, roleTitle: 'SECURITY' }).lean();
   const now = new Date();
-  if (!shift || shift.endAt <= now) throw ApiError.badRequest('Chọn ca Bảo vệ chính chưa kết thúc');
+  if (!shift || shift.endAt <= now) throw ApiError.badRequest('Chọn ca Bảo vệ chưa kết thúc');
   const guard = await User.exists({ _id: shift.userId, isActive: true, role: 'STAFF', roleTitle: 'SECURITY' });
   if (!guard || data.startAt < shift.startAt || data.endAt > shift.endAt || data.endAt <= data.startAt || data.endAt <= now) {
     throw ApiError.badRequest('Thời gian tuần tra phải nằm trong ca đang hoạt động của Bảo vệ');
@@ -271,7 +271,7 @@ export async function acknowledgeIncident(user, id) {
   if (!incident) throw ApiError.notFound();
   if (!isManager(user)) {
     const shifts = await Promise.all(['TECHNICIAN', 'SECURITY'].map((r) => getOnDuty(r)));
-    if (!shifts.some((s) => s.backup.some((p) => String(p._id) === user.id))) throw ApiError.forbidden('Chỉ Trưởng BQL hoặc người trực dự phòng tiếp nhận');
+    if (!shifts.some((s) => s.onDuty.some((p) => String(p._id) === user.id))) throw ApiError.forbidden('Chỉ Trưởng BQL hoặc người đang trực tiếp nhận');
   }
   const updated = await SecurityIncident.findOneAndUpdate({ _id: id, acknowledgedAt: null },
     { $set: { acknowledgedBy: user.id, acknowledgedAt: new Date() } }, { new: true });
@@ -301,7 +301,7 @@ async function dispatchIncident(id, now = new Date()) {
   try {
     const shifts = await Promise.all(['SECURITY', 'TECHNICIAN'].map((r) => getOnDuty(r, now)));
     const managers = await User.find({ role: 'MANAGER', isActive: true }).select('_id').lean();
-    const targets = [...managers.map((p) => p._id), ...shifts.flatMap((s) => s.backup.map((p) => p._id))];
+    const targets = [...managers.map((p) => p._id), ...shifts.flatMap((s) => s.onDuty.map((p) => p._id))];
     await notify(targets, { type: NOTIFICATION_TYPES.SYSTEM, title: 'KHẨN CẤP: Cần tiếp nhận sự cố',
       content: `${incident.location}: ${incident.description}`, refId: incident._id, link: '/app/guests', email: true });
     // Nhân viên trực thấy banner qua API; không gửi Email toàn bộ nhân viên ngoài ca.
@@ -326,7 +326,7 @@ export async function activeAlerts(user) {
     if (!onDuty) return [];
   }
   const shifts = await Promise.all(['SECURITY', 'TECHNICIAN'].map((r) => getOnDuty(r)));
-  const canAcknowledge = isManager(user) || shifts.some((s) => s.backup.some((p) => String(p._id) === user.id));
+  const canAcknowledge = isManager(user) || shifts.some((s) => s.onDuty.some((p) => String(p._id) === user.id));
   const alerts = await SecurityIncident.find({ acknowledgedAt: null }).select('location description createdAt').sort({ createdAt: -1 }).limit(20).lean();
   return alerts.map((alert) => ({ ...alert, canAcknowledge }));
 }
