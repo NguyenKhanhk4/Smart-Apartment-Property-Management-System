@@ -40,6 +40,7 @@ const commentSchema = new Schema({
   hidden: { type: Boolean, default: false },
   hiddenBy: { type: ObjectId, ref: 'User' },
   hiddenAt: Date,
+  hideReason: { type: String, trim: true, maxlength: 500 }, // Tùy chọn cho dữ liệu cũ; bắt buộc tại API/service khi ẩn mới.
 }, schemaOptions('announcement_comments'));
 commentSchema.index({ announcementId: 1, createdAt: -1 });
 export const AnnouncementComment = model('AnnouncementComment', commentSchema);

@@ -238,6 +238,11 @@ export async function scanCheckpoint(user, id, data, now = new Date()) {
 // requestId duy nhất giúp gửi lại từ điện thoại không tạo hai sự cố; không tự đóng ticket khi tiếp nhận.
 export async function reportIncident(user, data, imageUrls = []) {
   requireStaff(user, 'SECURITY');
+  // Chỉ áp dụng cho báo cáo Bảo vệ; cảnh báo từ ticket được job tạo theo luồng riêng.
+  if (!Array.isArray(imageUrls) || !imageUrls.length || imageUrls.length > 3 ||
+      imageUrls.some((url) => typeof url !== 'string' || !/^https?:\/\/\S+$/.test(url))) {
+    throw ApiError.badRequest('Cần từ 1 đến 3 ảnh hiện trường hợp lệ để báo sự cố khẩn');
+  }
   const filter = { requestId: data.requestId };
   const existing = await SecurityIncident.findOne(filter).lean();
   if (existing) {

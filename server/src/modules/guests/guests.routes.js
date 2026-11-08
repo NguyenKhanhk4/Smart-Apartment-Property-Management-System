@@ -58,7 +58,10 @@ router.patch('/tours/:id/scan', authenticate, authorize(...GATE), validate({ par
 router.post('/incidents', authenticate, authorize(...GATE), uploadImages('images', 3), validate({ body: Joi.object({
   requestId: Joi.string().guid({ version: 'uuidv4' }).required(), type: Joi.string().valid('FIRE', 'SECURITY', 'COLLISION', 'TECHNICAL').required(),
   location: Joi.string().trim().max(200).required(), description: Joi.string().trim().min(5).max(2000).required(),
-}) }), async (req, res) => created(res, await service.reportIncident(req.user, req.body, await uploadToCloudinary(req.files, 'security-incidents'))));
+}) }), async (req, res) => {
+  if (!req.files?.length) throw ApiError.badRequest('Cần ít nhất một ảnh hiện trường để báo sự cố khẩn');
+  created(res, await service.reportIncident(req.user, req.body, await uploadToCloudinary(req.files, 'security-incidents')));
+});
 router.patch('/incidents/:id/acknowledge', authenticate, authorize('MANAGER', 'STAFF:SECURITY', 'STAFF:TECHNICIAN'), validate({ params: idParams }),
   async (req, res) => ok(res, await service.acknowledgeIncident(req.user, req.params.id)));
 router.patch('/incidents/:id/broadcast', authenticate, authorize('MANAGER'), validate({ params: idParams }),

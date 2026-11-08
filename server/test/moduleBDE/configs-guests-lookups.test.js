@@ -3,6 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
+import { Writable } from 'node:stream';
+import { v2 as cloudinary } from 'cloudinary';
+import { env } from '../../src/config/env.js';
+import guestsRouter from '../../src/modules/guests/guests.routes.js';
 import { GuestLog, SystemConfig, DutyShift, Notification } from '../../src/models/index.js';
 import { Parcel, PatrolTour, SecurityIncident } from '../../src/models/GuestLog.js';
 import { assertValidValue } from '../../src/modules/systemConfigs/configRules.js';
@@ -12,7 +16,7 @@ import { errorHandler } from '../../src/middlewares/errorHandler.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { asUser, createApartment, createBuilding, createHousehold, createSecurity, createManager, createReceptionist, createTechnician, createTicket } from '../helpers/fixtures.js';
 import { createAmenity } from '../helpers/fixtures.moduleBDE.js';
-import { startApp } from '../helpers/http.js';
+import { startApp, tokenFor } from '../helpers/http.js';
 
 before(connectTestDB);
 afterEach(clearTestDB);
@@ -118,7 +122,7 @@ test('Module 7: cảnh báo khẩn nhắc sau 15 phút, chỉ người đang tr�
   const onDuty = asUser(await createSecurity());
   const now = new Date();
   await DutyShift.create({ roleTitle: 'SECURITY', userId: onDuty.id, startAt: new Date(+now - 60000), endAt: new Date(+now + 3600000) });
-  const incident = await guests.reportIncident(guard, { requestId: randomUUID(), type: 'FIRE', location: 'Tầng 1', description: 'Khói bất thường ở hành lang' });
+  const incident = await guests.reportIncident(guard, { requestId: randomUUID(), type: 'FIRE', location: 'Tầng 1', description: 'Khói bất thường ở hành lang' }, ['https://example.test/scene.png']);
   assert.equal(await Notification.countDocuments({ refId: incident._id }), 2);
   await guests.runOperationsJobs(new Date(+now + 5 * 60000));
   assert.equal(await Notification.countDocuments({ refId: incident._id }), 2);
@@ -136,10 +140,52 @@ test('Module 7: gửi báo khẩn đồng thời chỉ tạo một sự cố và
   await createManager();
   const guard = asUser(await createSecurity());
   const data = { requestId: randomUUID(), type: 'SECURITY', location: 'Sảnh', description: 'Phát hiện người khả nghi' };
-  const results = await Promise.all([guests.reportIncident(guard, data), guests.reportIncident(guard, data)]);
+  const results = await Promise.all([guests.reportIncident(guard, data, ['https://example.test/scene.png']), guests.reportIncident(guard, data, ['https://example.test/scene.png'])]);
   assert.equal(String(results[0]._id), String(results[1]._id));
   assert.equal(await SecurityIncident.countDocuments({ requestId: data.requestId }), 1);
   assert.equal(await Notification.countDocuments({ refId: results[0]._id }), 1);
+});
+
+test('N5-01: service chặn ảnh hiện trường thiếu/rỗng/sai; không tạo sự cố hoặc thông báo', async () => {
+  const guard = asUser(await createSecurity());
+  const data = { requestId: randomUUID(), type: 'FIRE', location: 'Hầm', description: 'Có khói bất thường' };
+  for (const images of [undefined, [], [''], ['javascript:alert(1)'], 'https://example.test/scene.png', Array(4).fill('https://example.test/a.png')]) {
+    await assert.rejects(guests.reportIncident(guard, data, images), { status: 400 });
+  }
+  assert.equal(await SecurityIncident.countDocuments(), 0);
+  assert.equal(await Notification.countDocuments(), 0);
+});
+
+test('N5-01: HTTP chặn thiếu/giả ảnh trước upload, ảnh hợp lệ lưu báo cáo và gửi cảnh báo', async (t) => {
+  await createManager();
+  const guard = asUser(await createSecurity());
+  const enabled = env.cloudinary.enabled;
+  env.cloudinary.enabled = true;
+  t.after(() => { env.cloudinary.enabled = enabled; });
+  const upload = t.mock.method(cloudinary.uploader, 'upload_stream', (_options, callback) => new Writable({
+    write(_chunk, _encoding, done) { done(); },
+    final(done) { callback(null, { secure_url: 'https://example.test/scene.png' }); done(); },
+  }));
+  const app = express(); app.use(express.json()); app.use('/guests', guestsRouter); app.use(errorHandler);
+  const server = app.listen(0); await new Promise((resolve) => server.once('listening', resolve));
+  try {
+    const send = async (bytes, mime = 'image/png') => {
+      const body = new FormData();
+      for (const [key, value] of Object.entries({ requestId: randomUUID(), type: 'FIRE', location: 'Hầm', description: 'Khói bất thường' })) body.append(key, value);
+      if (bytes !== undefined) body.append('images', new Blob([bytes], { type: mime }), 'scene.png');
+      return fetch(`http://127.0.0.1:${server.address().port}/guests/incidents`, { method: 'POST', headers: { authorization: `Bearer ${tokenFor(guard)}` }, body });
+    };
+    assert.equal((await send()).status, 400);
+    assert.equal((await send('<script>fake</script>')).status, 400);
+    assert.equal((await send('not-an-image', 'text/plain')).status, 400);
+    assert.equal(upload.mock.callCount(), 0);
+    assert.equal(await SecurityIncident.countDocuments(), 0);
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8S8AAAAASUVORK5CYII=', 'base64');
+    assert.equal((await send(png)).status, 201);
+    assert.equal(upload.mock.callCount(), 1);
+    assert.deepEqual((await SecurityIncident.findOne().lean()).imageUrls, ['https://example.test/scene.png']);
+    assert.equal(await Notification.countDocuments(), 1);
+  } finally { await new Promise((resolve) => server.close(resolve)); }
 });
 
 test('Module 7: HTTP chặn sai quyền, CCCD dài, ảnh thiếu và dữ liệu scan sai', async () => {
