@@ -77,12 +77,12 @@ function PhotoPicker({ value = [], onChange }) {
  * Giá trị field là fileList của antd; gửi lên server bằng toFiles(values.images) ở utils/upload.js.
  * @example <EvidencePhotosField name="images" label="Ảnh kết quả" />
  */
-export default function EvidencePhotosField({ name = 'images', label = 'Ảnh kết quả', required = true, extra }) {
+export default function EvidencePhotosField({ name = 'images', label = 'Ảnh kết quả', required = true, extra, message }) {
   return (
     <Form.Item
       name={name}
       label={label}
-      rules={required ? [{ required: true, type: 'array', min: 1, message: 'Chụp hoặc tải lên ít nhất 1 ảnh kết quả' }] : []}
+      rules={required ? [{ required: true, type: 'array', min: 1, message: message ?? `Chụp hoặc tải lên ít nhất 1 ${label.charAt(0).toLowerCase()}${label.slice(1)}` }] : []}
       extra={extra ?? `${IMAGE_HINT}. Tối đa ${MAX_COUNT} ảnh.`}
     >
       <PhotoPicker />

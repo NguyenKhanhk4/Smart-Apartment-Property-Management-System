@@ -72,3 +72,15 @@ export function cleanChecklist(rows = []) {
       required: r.required !== false,
     }));
 }
+
+/** Kết quả 1 phiếu trong lịch sử bảo trì: Đạt / Có sự cố, đã sửa (UC09) / dữ liệu cũ chưa có kết quả */
+export function historyOutcome(wo) {
+  if (wo.status === 'CLOSED') return { label: 'Ngừng sử dụng', color: 'default' };
+  if (wo.result === 'FAULTY') return wo.repair ? { label: 'Có sự cố, đã sửa', color: 'orange' } : { label: 'Có sự cố', color: 'red' };
+  if (wo.result === 'PASSED') return { label: 'Đạt', color: 'green' };
+  return { label: 'Hoàn thành', color: 'default' };
+}
+
+/** Tổng số ảnh của phiếu: ảnh kiểm tra + ảnh hư hỏng + ảnh biên bản nghiệm thu */
+export const historyPhotoCount = (wo) =>
+  (wo.completionImages?.length ?? 0) + (wo.repair?.faultImages?.length ?? 0) + (wo.repair?.acceptanceImages?.length ?? 0);

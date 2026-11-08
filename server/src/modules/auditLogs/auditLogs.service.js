@@ -1,7 +1,7 @@
 // UC06 – Xem nhật ký hoạt động (BR-S10, BR-X2, BR-D02). Chỉ đọc; Ban quản trị chỉ thấy phần tài chính.
 import mongoose from 'mongoose';
 import { AUDIT_ACTIONS, AUDIT_TARGETS, ROLES } from '../../constants/enums.js';
-import { AuditLog, Resident, User } from '../../models/index.js';
+import { Apartment, Asset, AuditLog, Resident, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { col, renderReport } from '../../services/export.service.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -180,8 +180,56 @@ const nameOf = (names, log) =>
   ?? (typeof log.metadata?.code === 'string' ? log.metadata.code : null)
   ?? (typeof log.metadata?.roleLabel === 'string' ? `Vai trò ${log.metadata.roleLabel}` : null);
 
+// ===== Trường tham chiếu: đổi ObjectId sang tên / mã dễ đọc =====
+const REF_FIELDS = {
+  assignee: 'user', assignedTo: 'user', prevAssignee: 'user', userId: 'user', ownerId: 'user', tenantId: 'user',
+  payerId: 'user', recipientId: 'user', technicianId: 'user',
+  assetId: 'asset',
+  apartmentId: 'apartment',
+};
+const REF_LOOKUP = {
+  user: (ids) => User.find({ _id: { $in: ids } }).select('fullName').lean().then((rows) => rows.map((r) => [r._id, r.fullName])),
+  asset: (ids) => Asset.find({ _id: { $in: ids } }).select('code name').lean().then((rows) => rows.map((r) => [r._id, r.code ? `${r.code} – ${r.name}` : r.name])),
+  apartment: (ids) => Apartment.find({ _id: { $in: ids } }).select('code').lean().then((rows) => rows.map((r) => [r._id, `Căn ${r.code}`])),
+};
+const OBJECT_ID = /^[0-9a-f]{24}$/i;
+const idOf = (v) => {
+  const s = v && typeof v.toHexString === 'function' ? v.toHexString() : v;
+  return typeof s === 'string' && OBJECT_ID.test(s) ? s.toLowerCase() : null;
+};
+
+/** Gom ID trong các trường tham chiếu của 1 trang log → Map id → tên. Một truy vấn cho mỗi loại */
+async function refNames(logs) {
+  const wanted = { user: new Set(), asset: new Set(), apartment: new Set() };
+  const add = (field, value) => {
+    const kind = REF_FIELDS[field];
+    if (!kind) return;
+    for (const v of [value].flat()) {
+      const id = idOf(v);
+      if (id) wanted[kind].add(id);
+    }
+  };
+  for (const log of logs) {
+    const { changes, rest } = extractChanges(log);
+    changes.forEach((c) => { add(c.field, c.before); add(c.field, c.after); });
+    Object.entries(rest).forEach(([k, v]) => add(k, v));
+  }
+  const names = new Map();
+  await Promise.all(Object.entries(wanted).filter(([, ids]) => ids.size).map(async ([kind, ids]) => {
+    for (const [id, name] of await REF_LOOKUP[kind]([...ids])) names.set(String(id), name);
+  }));
+  return names;
+}
+
+/** Giá trị của trường tham chiếu → tên; ID không còn bản ghi thì giữ nguyên */
+const withRef = (refs, field, value) => {
+  if (!REF_FIELDS[field]) return value;
+  if (Array.isArray(value)) return value.map((v) => refs.get(idOf(v)) ?? v);
+  return refs.get(idOf(value)) ?? value;
+};
+
 /** Dạng trả về cho client: nhãn, giá trị cũ / mới đã che, IP chỉ cho Trưởng BQL */
-function present(user, log, names = new Map()) {
+function present(user, log, names = new Map(), refs = new Map()) {
   const isBoard = user.role === ROLES.BOARD;
   const { changes, rest } = extractChanges(log);
   const metadata = isBoard ? Object.fromEntries(Object.entries(rest).filter(([key]) => FINANCIAL_METADATA.has(key))) : rest;
@@ -196,8 +244,8 @@ function present(user, log, names = new Map()) {
     targetName: nameOf(names, log),
     changes: changes.map((c) => (sensitive(c.field)
       ? { field: c.field, before: c.before === undefined ? undefined : HIDDEN, after: c.after === undefined ? undefined : HIDDEN }
-      : { field: c.field, before: redactAuditMetadata(c.before), after: redactAuditMetadata(c.after) })),
-    metadata: redactAuditMetadata(metadata),
+      : { field: c.field, before: withRef(refs, c.field, redactAuditMetadata(c.before)), after: withRef(refs, c.field, redactAuditMetadata(c.after)) })),
+    metadata: Object.fromEntries(Object.entries(redactAuditMetadata(metadata)).map(([k, v]) => [k, withRef(refs, k, v)])),
     ...(!isBoard && { ip }),
   };
 }
@@ -205,8 +253,8 @@ function present(user, log, names = new Map()) {
 export async function listAuditLogs(user, query = {}) {
   assertReader(user);
   const result = await paginate(AuditLog, await buildFilter(user, query), { ...query, sort: sortOf(query) }, { select: SELECT, populate: POPULATE });
-  const names = await targetNames(result.items);
-  result.items = result.items.map((log) => present(user, log, names));
+  const [names, refs] = await Promise.all([targetNames(result.items), refNames(result.items)]);
+  result.items = result.items.map((log) => present(user, log, names, refs));
   return result;
 }
 
@@ -242,9 +290,9 @@ export async function exportAuditLogs(user, { format, ...query }) {
   }
   const logs = await AuditLog.find(filter).sort(sortOf(query)).select(SELECT).populate(POPULATE).lean();
   const isBoard = user.role === ROLES.BOARD;
-  const names = await targetNames(logs);
+  const [names, refs] = await Promise.all([targetNames(logs), refNames(logs)]);
   const rows = logs.map((log) => {
-    const item = present(user, log, names);
+    const item = present(user, log, names, refs);
     return {
       time: fmtDateTimeVn(log.createdAt),
       user: log.performedBy?.fullName ?? 'Hệ thống',

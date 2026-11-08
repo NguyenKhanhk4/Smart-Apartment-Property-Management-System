@@ -1,6 +1,6 @@
 // UC07 – Quản lý thiết bị và lịch bảo trì (BR-E01, BR-E02, BR-O17..O19)
 import {
-  AUDIT_ACTIONS, AUDIT_TARGETS, CYCLE_UNITS, WORK_ORDER_OPEN_STATUSES as OPEN_WO_STATUSES, WORK_ORDER_STATUS,
+  AUDIT_ACTIONS, AUDIT_TARGETS, CYCLE_UNITS, WORK_ORDER_ACTIVE_STATUSES, WORK_ORDER_OPEN_STATUSES as OPEN_WO_STATUSES, WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
 import { Asset, Building, WorkOrder } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
@@ -10,10 +10,14 @@ import { DAY_MS, VN_OFFSET_MS, endOfVnDay, startOfVnDay } from '../../utils/time
 
 const LIST_POPULATE = [{ path: 'buildingId', select: 'code name' }];
 
-/** Work order đúng hạn = hoàn thành không muộn hơn 1 ngày sau ngày lên lịch (khớp báo cáo UC-E12) */
-export const isOnTime = (wo) =>
-  Boolean(wo.completedAt) &&
-  new Date(wo.completedAt).getTime() <= new Date(wo.scheduledDate ?? wo.createdAt).getTime() + DAY_MS;
+/**
+ * Đúng hạn = kiểm tra (UC08: inspectedAt; phiếu cũ: completedAt) không muộn hơn 1 ngày sau ngày lên lịch (khớp báo cáo UC-E12).
+ * Đo theo lúc kiểm tra để phiếu có sự cố phải chờ sửa lâu không bị tính trễ hạn kiểm tra.
+ */
+export const isOnTime = (wo) => {
+  const at = wo.inspectedAt ?? wo.completedAt;
+  return Boolean(at) && new Date(at).getTime() <= new Date(wo.scheduledDate ?? wo.createdAt).getTime() + DAY_MS;
+};
 
 const MONTHS_OF = { [CYCLE_UNITS.MONTH]: 1, [CYCLE_UNITS.QUARTER]: 3 };
 
@@ -145,14 +149,20 @@ export async function listAssets(query) {
     assetId: { $in: result.items.map((a) => a._id) },
     status: { $in: OPEN_WO_STATUSES },
   })
-    .select('assetId status assignedTo scheduledDate')
+    .select('assetId status assignedTo scheduledDate repair.reviewDate')
     .populate('assignedTo', 'fullName')
     .lean();
-  const byAsset = Object.fromEntries(openWos.map((w) => [String(w.assetId), w]));
+  const byAsset = {};
+  const postponed = {};
+  for (const w of openWos) {
+    if (w.status === WORK_ORDER_STATUS.REPAIR_POSTPONED) postponed[String(w.assetId)] = { _id: w._id, reviewDate: w.repair?.reviewDate ?? null };
+    else byAsset[String(w.assetId)] = w;
+  }
   const today = startOfVnDay();
   result.items = result.items.map((a) => ({
     ...a,
     openWorkOrder: byAsset[String(a._id)] ?? null,
+    postponedRepair: postponed[String(a._id)] ?? null, // UC10: đang tạm hoãn sửa
     isDue: a.isActive && a.nextMaintenanceDate <= endOfVnDay(today),
   }));
   return result;
@@ -165,15 +175,17 @@ export async function getAsset(id) {
     .populate('createdBy', 'fullName')
     .lean();
   if (!asset) throw ApiError.notFound('Không tìm thấy thiết bị');
-  const [openWorkOrder, doneCount] = await Promise.all([
-    WorkOrder.findOne({ assetId: id, status: { $in: OPEN_WO_STATUSES } })
+  const [openWorkOrder, postponedRepair, doneCount] = await Promise.all([
+    WorkOrder.findOne({ assetId: id, status: { $in: WORK_ORDER_ACTIVE_STATUSES } })
       .populate('assignedTo', 'fullName phone')
       .lean(),
+    WorkOrder.findOne({ assetId: id, status: WORK_ORDER_STATUS.REPAIR_POSTPONED }).populate('assignedTo', 'fullName').lean(), // UC10
     WorkOrder.countDocuments({ assetId: id, status: WORK_ORDER_STATUS.DONE }),
   ]);
   return {
     ...asset,
     openWorkOrder,
+    postponedRepair,
     doneCount,
     isDue: asset.isActive && asset.nextMaintenanceDate <= endOfVnDay(),
   };
@@ -184,7 +196,7 @@ export async function getAssetHistory(id, query) {
   if (!(await Asset.exists({ _id: id }))) throw ApiError.notFound('Không tìm thấy thiết bị');
   const result = await paginate(
     WorkOrder,
-    { assetId: id, status: WORK_ORDER_STATUS.DONE },
+    { assetId: id, status: { $in: [WORK_ORDER_STATUS.DONE, WORK_ORDER_STATUS.CLOSED] } }, // CLOSED: ngừng sử dụng (UC10)
     { ...query, sort: '-completedAt' },
     {
       populate: [

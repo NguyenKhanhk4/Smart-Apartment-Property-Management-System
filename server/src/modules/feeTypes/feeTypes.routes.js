@@ -87,9 +87,10 @@ router.get('/current', authenticate, async (_req, res) => ok(res, await service.
  *               unitPrice: { type: integer, example: 150000 }
  *               effectiveFrom: { type: string, example: '2026-11' }
  */
-router.post('/', authenticate, authorize('MANAGER'), validate({ body: createBody }), async (req, res) =>
-  created(res, await service.createFeeType(req.user, req.body), 'Đã lưu mức giá'),
-);
+router.post('/', authenticate, authorize('MANAGER'), validate({ body: createBody }), async (req, res) => {
+  const result = await service.createFeeType(req.user, req.body);
+  created(res, result, result.message || 'Đã lưu mức giá');
+});
 
 /**
  * @openapi

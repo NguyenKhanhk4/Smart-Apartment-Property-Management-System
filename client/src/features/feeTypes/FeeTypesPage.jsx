@@ -210,7 +210,7 @@ function EndModal({ version, onClose, onDone }) {
 }
 
 // UC-B01 — Danh mục phí & đơn giá theo thời gian. Trưởng BQL cấu hình, Kế toán chỉ xem. Mọi thay đổi ghi audit log.
-export default function FeeTypesPage() {
+export default function FeeTypesPage({ embedded = false } = {}) {
   const { hasRole } = useAuth();
   const canEdit = hasRole('MANAGER');
   const [modal, setModal] = useState(null); // { type: 'new' | 'price' | 'edit' | 'end', target }
@@ -283,10 +283,11 @@ export default function FeeTypesPage() {
     {
       title: 'Loại phí',
       dataIndex: 'name',
+      width: 240,
       render: (name, g) => (
-        <Flex vertical>
+        <Flex vertical style={{ whiteSpace: 'nowrap' }}>
           <b>{name}</b>
-          <Typography.Text type="secondary" code>
+          <Typography.Text type="secondary" code style={{ whiteSpace: 'nowrap' }}>
             {g.code}
           </Typography.Text>
         </Flex>
@@ -343,19 +344,30 @@ export default function FeeTypesPage() {
 
   return (
     <>
-      <PageHeader
-        title="Bảng phí & đơn giá"
-        subtitle="Cấu hình phí quản lý theo loại căn, phí vệ sinh và phí gửi xe. Mức giá mới áp dụng từ kỳ được chọn."
-        breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Bảng phí' }]}
+      {!embedded && (
+        <PageHeader
+          title="Bảng phí & đơn giá"
+          subtitle="Cấu hình phí quản lý theo loại căn, phí vệ sinh và phí gửi xe. Mức giá mới áp dụng từ kỳ được chọn."
+          breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Bảng phí' }]}
+          extra={
+            canEdit && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setModal({ type: 'new' })}>
+                Thêm loại phí
+              </Button>
+            )
+          }
+        />
+      )}
+      <Card
+        title={embedded ? 'Phí quản lý, vệ sinh & gửi xe' : undefined}
         extra={
-          canEdit && (
+          embedded && canEdit ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModal({ type: 'new' })}>
               Thêm loại phí
             </Button>
-          )
+          ) : undefined
         }
-      />
-      <Card>
+      >
         <Table
           rowKey="code"
           loading={list.loading}

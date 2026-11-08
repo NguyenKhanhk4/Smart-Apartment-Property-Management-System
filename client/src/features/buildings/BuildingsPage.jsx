@@ -19,6 +19,7 @@ import {
   Statistic,
   Descriptions,
   App,
+  Tooltip,
 } from 'antd';
 import {
   BankOutlined,
@@ -340,22 +341,27 @@ export default function BuildingsPage() {
                 >
                   Sửa
                 </Button>
-                <Popconfirm
-                  title="Xóa tòa nhà"
-                  description={
-                    record.apartmentCount > 0
-                      ? 'Tòa nhà đã có căn hộ, không thể xóa!'
-                      : `Bạn có chắc chắn muốn xóa tòa ${record.name}?`
-                  }
-                  okText="Xóa"
-                  cancelText="Hủy"
-                  okButtonProps={{ danger: true, disabled: record.apartmentCount > 0 }}
-                  onConfirm={() => deleteBuilding(record._id).catch(() => {})}
-                >
-                  <Button size="small" type="text" danger icon={<DeleteOutlined />}>
-                    Xóa
-                  </Button>
-                </Popconfirm>
+                <Tooltip title={record.apartmentCount > 0 ? 'Tòa nhà đã có căn hộ, không thể xóa' : undefined}>
+                  <Popconfirm
+                    title="Xóa tòa nhà"
+                    description={`Bạn có chắc chắn muốn xóa tòa ${record.name}?`}
+                    okText="Xóa"
+                    cancelText="Hủy"
+                    okButtonProps={{ danger: true }}
+                    disabled={record.apartmentCount > 0}
+                    onConfirm={() => deleteBuilding(record._id).catch(() => {})}
+                  >
+                    <Button
+                      size="small"
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      disabled={record.apartmentCount > 0}
+                    >
+                      Xóa
+                    </Button>
+                  </Popconfirm>
+                </Tooltip>
               </Space>
             ),
           },

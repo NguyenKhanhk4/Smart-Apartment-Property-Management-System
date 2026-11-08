@@ -288,6 +288,9 @@ describe('workOrders UC-D03 — phân công / danh sách', () => {
 
       assert.equal((await service.getWorkOrder(tUser, mine._id)).title, mine.title);
       await assert.rejects(service.getWorkOrder(tUser, theirs._id), { errorCode: 'FORBIDDEN_ROLE' });
+      // UC08: phiếu chưa ai nhận xem được (Checklist ca); nhận rồi thì chỉ người nhận xem
+      assert.equal((await service.getWorkOrder(tUser, wo._id)).title, wo.title);
+      await WorkOrder.updateOne({ _id: wo._id }, { status: 'IN_PROGRESS', assignedTo: t2._id });
       await assert.rejects(service.getWorkOrder(tUser, wo._id), { errorCode: 'FORBIDDEN_ROLE' });
 
       // Manager thấy tất cả

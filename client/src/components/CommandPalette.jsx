@@ -68,7 +68,7 @@ function PaletteDialog({ onClose }) {
               setCursor(0);
             }}
             onKeyDown={onKeyDown}
-            placeholder="Gõ tên chức năng, vd: tài sản, phản ánh…"
+            placeholder="Gõ tên chức năng, vd: thiết bị, phản ánh…"
             className="w-full border-none bg-transparent text-sm text-ink outline-none placeholder:text-ink-3 dark:text-[#EEF1F6]"
           />
           <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[11px] text-ink-2">ESC</kbd>
