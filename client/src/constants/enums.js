@@ -111,6 +111,7 @@ export const TICKET_HISTORY_ACTIONS = {
   REJECTED: { label: 'Từ chối', color: 'gray' },
   RECLASSIFIED: { label: 'Đổi phân loại', color: 'purple' },
   MERGED: { label: 'Gộp phiếu trùng', color: 'gray' },
+  EMERGENCY_ACKED: { label: 'Đã tiếp nhận cảnh báo khẩn', color: 'red' },
 };
 
 // ===== Sự cố & tiện ích (Người 4) =====

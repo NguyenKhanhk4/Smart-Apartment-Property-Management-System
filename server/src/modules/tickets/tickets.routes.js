@@ -38,6 +38,7 @@ const ticketFields = {
   description: Joi.string().trim().min(10).max(2000).required(),
   type: Joi.string().valid(...values(TICKET_TYPES)).default(TICKET_TYPES.INCIDENT),
   scope: Joi.string().valid(...values(TICKET_SCOPES)).default(TICKET_SCOPES.COMMON_AREA),
+  location: Joi.string().trim().max(150).allow(''), // UC38: vị trí cụ thể
   // Thông tin liên hệ để xác minh / hẹn giờ xử lý
   contactName: Joi.string().trim().max(100).allow(''),
   contactPhone: phoneVn().allow(''),
@@ -170,8 +171,22 @@ router.get(
   '/board',
   authenticate,
   authorize('MANAGER'),
-  validate({ query: Joi.object({ buildingId: objectId() }) }),
+  validate({ query: Joi.object({ buildingId: objectId(), categoryId: objectId(), assignedTo: objectId() }) }),
   async (req, res) => ok(res, await service.getBoard(req.user, req.validated.query)),
+);
+
+/**
+ * @openapi
+ * /tickets/emergency-alerts:
+ *   get:
+ *     tags: [Phản ánh]
+ *     summary: 'BR-X6 - Sự cố khẩn cấp quá hạn nhận mà chưa ai nhận (banner). Trưởng BQL, Lễ tân luôn thấy; KTV / Bảo vệ chỉ khi đang trực'
+ */
+router.get(
+  '/emergency-alerts',
+  authenticate,
+  authorize('MANAGER', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN', 'STAFF:SECURITY'),
+  async (req, res) => ok(res, await service.emergencyAlerts(req.user)),
 );
 
 /**
@@ -379,6 +394,7 @@ router.patch(
   '/:id/confirm',
   authenticate,
   authorize('RESIDENT'),
+  uploadImages('images', 3), // UC49: ảnh kèm khi chưa đồng ý kết quả (tùy chọn)
   validate({
     params: idParams,
     body: Joi.object({
@@ -397,7 +413,7 @@ router.patch(
     }),
   }),
   async (req, res) =>
-    ok(res, await service.confirmTicket(req.user, req.params.id, req.body), 'Đã ghi nhận'),
+    ok(res, await service.confirmTicket(req.user, req.params.id, req.body, req.files ?? []), 'Đã ghi nhận'),
 );
 
 /**
@@ -408,6 +424,21 @@ router.patch(
  *     summary: KTV nhận sự cố trong hàng chờ — chỉ 1 người nhận được (TICKET_ALREADY_CLAIMED); có lịch trực thì phải trong ca (NOT_ON_DUTY)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
+/**
+ * @openapi
+ * /tickets/{id}/emergency-ack:
+ *   patch:
+ *     tags: [Phản ánh]
+ *     summary: 'BR-X6 - Bấm "Đã tiếp nhận" cảnh báo khẩn: dừng lặp cảnh báo (Trưởng BQL hoặc KTV / Bảo vệ đang trực)'
+ */
+router.patch(
+  '/:id/emergency-ack',
+  authenticate,
+  authorize('MANAGER', 'STAFF:TECHNICIAN', 'STAFF:SECURITY'),
+  validate({ params: idParams }),
+  async (req, res) => ok(res, await service.acknowledgeEmergency(req.user, req.params.id), 'Đã tiếp nhận cảnh báo'),
+);
+
 router.patch('/:id/claim', authenticate, authorize('STAFF:TECHNICIAN'), validate({ params: idParams }), async (req, res) =>
   ok(res, await service.claimTicket(req.user, req.params.id), 'Đã nhận sự cố'),
 );

@@ -14,6 +14,7 @@ import { toPublicUser, verifyCurrentPassword } from '../auth/auth.service.js';
 import { voidAllCodes } from '../auth/verification.service.js';
 import { recordContactChange } from './contactChanges.js';
 import { signAccessToken, signRefreshToken } from '../auth/auth.tokens.js';
+import { releaseShiftsOf } from '../dutyShifts/dutyShifts.service.js';
 
 /**
  * UC-A03: Xem hồ sơ cá nhân
@@ -333,6 +334,9 @@ export async function setStatus(managerUser, targetId, { isActive }, { ip } = {}
     after: { isActive },
     ip,
   });
+
+  // UC37 Alt 3b: khóa nhân viên kỹ thuật / bảo vệ → gỡ khỏi các ca trực sắp tới (ca đang diễn ra kết thúc ngay)
+  if (!isActive && wasActive && target.role === ROLES.STAFF) await releaseShiftsOf(target._id);
 
   // Tài khoản cư dân: đồng bộ mã cư dân của các căn
   if (target.role === ROLES.RESIDENT) {

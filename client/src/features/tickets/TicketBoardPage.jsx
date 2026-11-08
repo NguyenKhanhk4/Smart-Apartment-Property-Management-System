@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Badge, Button, Card, Empty, Flex, Select, Spin, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { lookupApi, ticketApi } from '../../api/moduleE.api';
+import { complaintCategoryApi, lookupApi, ticketApi } from '../../api/moduleE.api';
 import { useApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import EnumTag from '../../components/EnumTag';
@@ -15,8 +15,12 @@ import { AssignModal } from './TicketActionModals';
 export default function TicketBoardPage() {
   const navigate = useNavigate();
   const [buildingId, setBuildingId] = useState();
+  const [categoryId, setCategoryId] = useState();
+  const [assignedTo, setAssignedTo] = useState();
   const [assigning, setAssigning] = useState(null);
-  const { data, loading, reload } = useApi(() => ticketApi.board({ buildingId }), [buildingId]);
+  const { data, loading, reload } = useApi(() => ticketApi.board({ buildingId, categoryId, assignedTo }), [buildingId, categoryId, assignedTo]);
+  const { data: categories = [] } = useApi(() => complaintCategoryApi.list(), []);
+  const { data: techs = [] } = useApi(() => ticketApi.assignees(), []);
   const { data: buildings = [] } = useApi(() => lookupApi.buildings(), []);
   usePolling(reload, 60_000);
   const columns = data?.columns ?? [];
@@ -35,6 +39,26 @@ export default function TicketBoardPage() {
               value={buildingId}
               options={buildings.map((b) => ({ value: b._id, label: b.name }))}
               onChange={setBuildingId}
+            />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Tất cả danh mục"
+              style={{ width: 180 }}
+              value={categoryId}
+              options={categories.map((c) => ({ value: c._id, label: c.name }))}
+              onChange={setCategoryId}
+            />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Tất cả kỹ thuật viên"
+              style={{ width: 190 }}
+              value={assignedTo}
+              options={techs.map((t) => ({ value: t._id, label: t.fullName }))}
+              onChange={setAssignedTo}
             />
             <Button icon={<ReloadOutlined />} onClick={reload}>
               Làm mới

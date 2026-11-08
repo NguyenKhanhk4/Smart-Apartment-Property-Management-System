@@ -16,7 +16,7 @@ import { notify, notifyApartment, notifyRoles } from '../../services/notificatio
 import { getConfig } from '../../services/systemConfig.service.js';
 import { DAY_MS, HOUR_MS, fmtDateTimeVn, startOfVnDay } from '../../utils/time.js';
 import { isOverdue, partsPauseExceeded, slaBreaches } from './ticket.rules.js';
-import { closeMergedChildren } from './tickets.service.js';
+import { closeMergedChildren, dispatchEmergencies } from './tickets.service.js';
 
 const partsPauseMs = async () => Number(await getConfig(CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS)) * HOUR_MS;
 
@@ -226,5 +226,7 @@ export async function alertSlaBreaches(now = new Date()) {
       await notifyRoles(['MANAGER'], { ...payload, email: true });
     }
   }
+  // BR-X6: sự cố khẩn cấp chưa ai nhận → cảnh báo khẩn lặp mỗi 15 phút
+  affected += await dispatchEmergencies(now);
   return affected;
 }

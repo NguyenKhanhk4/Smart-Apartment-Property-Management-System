@@ -48,7 +48,11 @@ export const ticketApi = {
     if (!files.length) return http.patch(`/tickets/${id}/progress`, body);
     return http.patch(`/tickets/${id}/progress`, toForm(body, files));
   },
-  confirm: (id, body) => http.patch(`/tickets/${id}/confirm`, body),
+  /** UC49: chưa đồng ý kết quả có thể kèm ảnh (tối đa 3) */
+  confirm: (id, body, files = []) => http.patch(`/tickets/${id}/confirm`, files.length ? toForm(body, files) : body),
+  /** BR-X6: sự cố khẩn cấp chưa ai nhận (banner) và bấm "Đã tiếp nhận" */
+  emergencyAlerts: () => http.get('/tickets/emergency-alerts'),
+  emergencyAck: (id) => http.patch(`/tickets/${id}/emergency-ack`),
   runJob: (job) => http.post(`/tickets/jobs/${job}/run`),
   /** M5-6: sự cố khu vực chung đang mở cùng tòa, cùng loại. params: { apartmentId?, categoryId, excludeId? } */
   similar: (params) => http.get('/tickets/similar', { params }),
@@ -152,5 +156,7 @@ export const dutyShiftApi = {
   create: (body) => http.post('/duty-shifts', body),
   /** body: { userId?, startAt?, endAt?, note? } — sửa ca chưa kết thúc / kéo thả sang ngày khác */
   update: (id, body) => http.patch(`/duty-shifts/${id}`, body),
+  /** UC37: sao chép ca tuần trước sang tuần bắt đầu `weekStart` → { created, skipped } */
+  copyWeek: (body) => http.post('/duty-shifts/copy-week', body),
   remove: (id) => http.delete(`/duty-shifts/${id}`),
 };

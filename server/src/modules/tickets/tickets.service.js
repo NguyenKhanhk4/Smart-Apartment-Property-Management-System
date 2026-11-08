@@ -20,6 +20,7 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyApartment, notifyRoles } from '../../services/notification.service.js';
 import { getActiveApartmentIds, resolveResidentApartment } from '../../services/residency.service.js';
 import { normalizePhone } from '../../utils/validators.js';
+import { consentState } from '../../utils/consent.js';
 import { getConfig, getConfigs } from '../../services/systemConfig.service.js';
 import { uploadToCloudinary } from '../../services/upload.service.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -143,7 +144,7 @@ async function technicianRecipients(now = new Date()) {
  * phản ánh → màn hình xử lý của Trưởng BQL. Phản ánh không phân biệt phạm vi (luôn COMMON_AREA).
  */
 async function placeTicket({ apartment, reporterId, staff = null, contact, body, files }) {
-  const { categoryId, title, description, type = INCIDENT, scope = TICKET_SCOPES.COMMON_AREA } = body;
+  const { categoryId, title, description, location, type = INCIDENT, scope = TICKET_SCOPES.COMMON_AREA } = body;
   const category = await ComplaintCategory.findOne({ _id: categoryId, isActive: true }).lean();
   if (!category) throw ApiError.badRequest('Loại phản ánh không tồn tại hoặc đã ngưng sử dụng');
 
@@ -178,6 +179,7 @@ async function placeTicket({ apartment, reporterId, staff = null, contact, body,
       title,
       description,
       imageUrls,
+      location: location?.trim() || null,
       contact,
       priority: category.defaultPriority,
       ...deadlines,
@@ -204,7 +206,11 @@ async function placeTicket({ apartment, reporterId, staff = null, contact, body,
 export async function createTicket(user, body, files) {
   const apartment = await resolveResidentApartment(user.id, body.apartmentId);
   // Liên hệ mặc định lấy từ tài khoản; cư dân sửa được SĐT / tên người cần gọi (vd người nhà đang ở căn)
-  const me = await User.findById(user.id).select('fullName phone').lean();
+  const me = await User.findById(user.id).select('fullName phone consents').lean();
+  // BR-X7 / UC38 Alt 3b: chưa đồng ý điều khoản dữ liệu cá nhân thì không đính kèm ảnh (vẫn gửi phiếu được)
+  if (files?.length && !consentState(me?.consents).accepted) {
+    throw new ApiError('CONSENT_REQUIRED', 'Cần đồng ý điều khoản dữ liệu cá nhân để đính kèm ảnh. Bạn vẫn gửi được phiếu không kèm ảnh.');
+  }
   const contact = {
     name: body.contactName?.trim() || me?.fullName || null,
     phone: normalizePhone(body.contactPhone?.trim() || me?.phone || '') || null,
@@ -357,8 +363,14 @@ export async function claimTicket(user, id, { now = new Date() } = {}) {
 }
 
 /** Kanban điều phối của Trưởng BQL: sự cố đang mở + chờ nghiệm thu, nhóm theo cột trạng thái */
-export async function getBoard(_user, { buildingId, now = new Date() } = {}) {
-  const items = await Ticket.find({ type: INCIDENT, status: { $in: BOARD_STATUSES }, ...(buildingId && { buildingId }) })
+export async function getBoard(_user, { buildingId, categoryId, assignedTo, now = new Date() } = {}) {
+  const items = await Ticket.find({
+    type: INCIDENT,
+    status: { $in: BOARD_STATUSES },
+    ...(buildingId && { buildingId }),
+    ...(categoryId && { category: categoryId }),
+    ...(assignedTo && { assignedTo }),
+  })
     .sort({ priorityRank: -1, dueDate: 1 })
     .limit(500)
     .populate(LIST_POPULATE)
@@ -430,6 +442,16 @@ export async function assignTicket(user, id, { assignedTo, priority, note }) {
     refId: ticket._id,
     link: ticketLink(ticket, false),
   });
+  // UC41 bước 4: giao lại thì báo cả kỹ thuật viên trước đó
+  if (prevAssignee && prevAssignee !== String(tech._id)) {
+    await notify(prevAssignee, {
+      type: NOTIFICATION_TYPES.TICKET,
+      title: `Phiếu ${ticket.code} đã chuyển cho người khác`,
+      content: `Trưởng BQL đã giao "${ticket.title}" cho ${tech.fullName}. Bạn không cần xử lý phiếu này nữa.`,
+      refId: ticket._id,
+      link: ticketLink(ticket, false),
+    });
+  }
   if (!prevAssignee) {
     await notifyReporter(ticket, {
       type: NOTIFICATION_TYPES.TICKET,
@@ -571,7 +593,7 @@ export async function updateProgress(user, id, { status, note }, files = []) {
 }
 
 // ===== UC-E05: Cư dân xác nhận kết quả + đánh giá sao =====
-export async function confirmTicket(user, id, { accepted, rating, comment, reason }) {
+export async function confirmTicket(user, id, { accepted, rating, comment, reason }, files = []) {
   const ticket = await findTicketOr404(id);
   const myApartments = await getActiveApartmentIds(user.id);
   if (!myApartments.includes(String(ticket.apartmentId))) {
@@ -622,6 +644,8 @@ export async function confirmTicket(user, id, { accepted, rating, comment, reaso
       fromStatus: WAITING_CONFIRM,
       toStatus: IN_PROGRESS,
       note: reason,
+      // UC49: ảnh minh chứng kết quả chưa đạt (tùy chọn)
+      ...(files.length && { imageUrls: await uploadToCloudinary(files, 'tickets') }),
     });
   }
   await ticket.save();
@@ -877,3 +901,96 @@ export async function closeMergedChildren(parent, now = new Date()) {
   }
   return children.length;
 }
+
+// ===== BR-X6: cảnh báo khẩn sự cố khẩn cấp chưa ai nhận =====
+const EMERGENCY_ACTIVE = { 'emergency.startedAt': { $ne: null }, 'emergency.ackAt': null, status: NEW, assignedTo: null };
+
+/** Có đang trong ca (KTV / Bảo vệ) không */
+async function onDutyNow(user) {
+  const title = user.roleTitle;
+  if (!['TECHNICIAN', 'SECURITY'].includes(title)) return false;
+  const { onDuty } = await getOnDuty(title);
+  return onDuty.some((p) => String(p._id) === user.id);
+}
+
+/**
+ * Banner cảnh báo khẩn: sự cố khẩn cấp đã quá hạn nhận mà chưa ai nhận, chưa ai bấm "Đã tiếp nhận".
+ * Trưởng BQL, Lễ tân luôn thấy; KTV / Bảo vệ chỉ thấy khi đang trực. canAcknowledge: Trưởng BQL hoặc người đang trực.
+ */
+export async function emergencyAlerts(user) {
+  const manager = isRole(user, 'MANAGER');
+  const duty = manager ? false : await onDutyNow(user);
+  if (!manager && !isRole(user, 'STAFF:RECEPTIONIST') && !duty) return [];
+  const items = await Ticket.find(EMERGENCY_ACTIVE)
+    .select('code title location apartmentId emergency createdAt ackDueAt')
+    .populate('apartmentId', 'code')
+    .sort({ 'emergency.startedAt': 1 })
+    .limit(20)
+    .lean();
+  return items.map((t) => ({ ...t, canAcknowledge: manager || duty }));
+}
+
+/** Bấm "Đã tiếp nhận": dừng lặp cảnh báo (phiếu vẫn cần KTV nhận / Trưởng BQL phân công) */
+export async function acknowledgeEmergency(user, id) {
+  if (!isRole(user, 'MANAGER') && !(await onDutyNow(user))) {
+    throw ApiError.forbidden('Chỉ Trưởng BQL hoặc người đang trực tiếp nhận cảnh báo');
+  }
+  const now = new Date();
+  const ticket = await Ticket.findOneAndUpdate(
+    { _id: id, ...EMERGENCY_ACTIVE },
+    {
+      $set: { 'emergency.ackBy': user.id, 'emergency.ackAt': now, 'emergency.nextNotifyAt': null },
+      $push: { history: { at: now, by: user.id, action: ACT.EMERGENCY_ACKED, fromStatus: NEW, toStatus: NEW, note: 'Đã tiếp nhận cảnh báo khẩn' } },
+      $inc: { __v: 1 },
+    },
+    { new: true },
+  );
+  if (!ticket) throw ApiError.badRequest('Cảnh báo đã được tiếp nhận hoặc phiếu đã có người nhận');
+  return { _id: ticket._id, emergency: ticket.emergency };
+}
+
+/**
+ * [Job mỗi phút] Bắt đầu cảnh báo khẩn cho sự cố mức Khẩn cấp quá hạn nhận chưa ai nhận, và gửi lại mỗi 15 phút
+ * (web + email) cho Trưởng BQL và KTV / Bảo vệ đang trực đến khi có người tiếp nhận hoặc phiếu được nhận.
+ * Trả về số lượt đã gửi.
+ */
+export async function dispatchEmergencies(now = new Date()) {
+  await Ticket.updateMany(
+    {
+      type: INCIDENT,
+      priority: PRIORITIES.URGENT,
+      status: NEW,
+      assignedTo: null,
+      ackDueAt: { $lt: now },
+      'emergency.startedAt': null,
+    },
+    { $set: { 'emergency.startedAt': now, 'emergency.nextNotifyAt': now } },
+  );
+  const due = await Ticket.find({ ...EMERGENCY_ACTIVE, 'emergency.nextNotifyAt': { $lte: now } })
+    .select('_id code title location apartmentId')
+    .populate('apartmentId', 'code')
+    .lean();
+  let sent = 0;
+  for (const t of due) {
+    // Giữ lượt gửi bằng cập nhật có điều kiện: 2 tiến trình chạy job cùng lúc không gửi trùng
+    const claimed = await Ticket.updateOne(
+      { _id: t._id, ...EMERGENCY_ACTIVE, 'emergency.nextNotifyAt': { $lte: now } },
+      { $set: { 'emergency.nextNotifyAt': new Date(now.getTime() + 15 * 60 * 1000) }, $inc: { 'emergency.notifyCount': 1 } },
+    );
+    if (!claimed.modifiedCount) continue;
+    const [tech, security] = await Promise.all([getOnDuty('TECHNICIAN', now), getOnDuty('SECURITY', now)]);
+    const managers = await User.find({ role: ROLES.MANAGER, isActive: true }).select('_id').lean();
+    const targets = [...managers, ...tech.onDuty, ...security.onDuty].map((p) => p._id);
+    await notify(targets, {
+      type: NOTIFICATION_TYPES.TICKET,
+      title: `KHẨN CẤP: Sự cố ${t.code} chưa có người nhận`,
+      content: `${t.title}${t.location ? ` — ${t.location}` : ''}${t.apartmentId?.code ? ` (căn ${t.apartmentId.code})` : ''}. Cần nhận xử lý ngay.`,
+      refId: t._id,
+      link: `/app/tickets/${t._id}`,
+      email: true,
+    });
+    sent += 1;
+  }
+  return sent;
+}
+
