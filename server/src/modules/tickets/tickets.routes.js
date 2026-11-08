@@ -8,7 +8,7 @@ import { validate } from '../../middlewares/validate.js';
 import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
-import { csvEnum, idParams, objectId } from '../../utils/validators.js';
+import { csvEnum, idParams, objectId, phoneVn } from '../../utils/validators.js';
 import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from './tickets.jobs.js';
 import * as service from './tickets.service.js';
 
@@ -38,9 +38,19 @@ const ticketFields = {
   description: Joi.string().trim().min(10).max(2000).required(),
   type: Joi.string().valid(...values(TICKET_TYPES)).default(TICKET_TYPES.INCIDENT),
   scope: Joi.string().valid(...values(TICKET_SCOPES)).default(TICKET_SCOPES.COMMON_AREA),
+  // Thông tin liên hệ để xác minh / hẹn giờ xử lý
+  contactName: Joi.string().trim().max(100).allow(''),
+  contactPhone: phoneVn().allow(''),
+  contactNote: Joi.string().trim().max(200).allow(''),
 };
 const createBody = Joi.object({ ...ticketFields, apartmentId: objectId() });
-const staffCreateBody = Joi.object({ ...ticketFields, apartmentId: objectId().required() });
+// Lễ tân tạo hộ: bắt buộc tên + SĐT người báo (người gửi trên phiếu lúc này là Lễ tân)
+const staffCreateBody = Joi.object({
+  ...ticketFields,
+  apartmentId: objectId().required(),
+  contactName: Joi.string().trim().min(2).max(100).required(),
+  contactPhone: phoneVn().required(),
+});
 
 // Chạy lại thủ công các cron của ticket (ghi cron_runs)
 const MANUAL_JOBS = {

@@ -260,3 +260,10 @@ main canvas {
 .ant-modal .ant-modal-title {
   padding-right: 24px;
 }
+
+/* Nhóm nút trong ô bảng (cột Thao tác…) được xuống dòng khi cột hẹp hơn nội dung, không tràn ra ngoài bảng */
+.ant-table-tbody .ant-space-horizontal,
+.ant-table-tbody .ant-flex:not(.ant-flex-vertical) {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}

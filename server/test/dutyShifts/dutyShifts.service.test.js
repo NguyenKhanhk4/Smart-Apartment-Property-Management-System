@@ -49,7 +49,8 @@ test('không xếp ca cho người sai chức danh', async () => {
 test('getOnDuty: mọi người đang trong ca (1 ca nhiều người trực), bỏ ca chưa tới', async () => {
   const manager = asUser(await createManager());
   const [a, b, c] = await Promise.all([createTechnician(), createTechnician(), createTechnician()]);
-  await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [a._id, b._id], ...window(-1, 7) });
+  // Ca đang diễn ra ghi thẳng vào DB (qua service, ca bắt đầu 1 giờ trước có thể rơi vào hôm qua nếu chạy lúc 0h)
+  await DutyShift.insertMany([a, b].map((u) => ({ roleTitle: 'TECHNICIAN', userId: u._id, ...window(-1, 7) })));
   await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [c._id], ...window(7, 15) });
 
   const duty = await service.getOnDuty('TECHNICIAN');
@@ -87,4 +88,50 @@ test('2 request xếp ca trùng nhau gửi đồng thời: không bao giờ tạ
   const results = await Promise.allSettled([service.createShifts(manager, body), service.createShifts(manager, body)]);
   assert.ok(results.some((r) => r.status === 'rejected'));
   assert.ok((await DutyShift.countDocuments()) <= 1);
+});
+
+test('sửa ca: chuyển sang ngày khác (kéo thả), đổi người; trùng giờ với ca khác của người mới thì chặn', async () => {
+  const manager = asUser(await createManager());
+  const a = await createTechnician();
+  const b = await createTechnician();
+  const base = Date.now();
+  const [shift] = await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [a._id], ...window(1, 9, base) });
+  await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [b._id], ...window(25, 33, base) });
+
+  const moved = await service.updateShift(manager, shift._id, window(49, 57, base)); // dời sang 2 ngày sau
+  assert.equal(new Date(moved.startAt).getTime(), base + 49 * H);
+  const swapped = await service.updateShift(manager, shift._id, { userId: String(b._id) });
+  assert.equal(String(swapped.userId._id), String(b._id));
+  await assert.rejects(service.updateShift(manager, shift._id, window(26, 30, base)), { errorCode: 'DUTY_SHIFT_OVERLAP' });
+  assert.equal(new Date((await DutyShift.findById(shift._id)).startAt).getTime(), base + 49 * H, 'bị chặn thì giữ nguyên ca');
+});
+
+test('sửa ca: ca đang diễn ra không đổi giờ bắt đầu, ca đã kết thúc không sửa được, không dời về quá khứ, sai chức danh bị chặn', async () => {
+  const manager = asUser(await createManager());
+  const tech = await createTechnician();
+  const guard = await createSecurity();
+  const base = Date.now();
+  const running = await DutyShift.create({ roleTitle: 'TECHNICIAN', userId: tech._id, startAt: new Date(base - H), endAt: new Date(base + 3 * H) });
+  const ended = await DutyShift.create({ roleTitle: 'TECHNICIAN', userId: tech._id, startAt: new Date(base - 10 * H), endAt: new Date(base - 5 * H) });
+  const [future] = await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [tech._id], ...window(5, 9, base) });
+
+  await assert.rejects(service.updateShift(manager, running._id, { startAt: new Date(base).toISOString() }), /bắt đầu/);
+  const extended = await service.updateShift(manager, running._id, { endAt: new Date(base + 4 * H).toISOString() });
+  assert.equal(new Date(extended.endAt).getTime(), base + 4 * H);
+  await assert.rejects(service.updateShift(manager, ended._id, { note: 'x' }), /đã kết thúc/);
+  await assert.rejects(service.updateShift(manager, future._id, window(-3, 2, base)), /đã qua/);
+  await assert.rejects(service.updateShift(manager, future._id, { userId: String(guard._id) }), /chức danh/);
+});
+
+test('lịch cũ chỉ để xem: không xếp ca cho ngày đã qua, không xếp ca đã kết thúc; ca hôm nay đang diễn ra vẫn xếp thêm được', async () => {
+  const manager = asUser(await createManager());
+  const tech = await createTechnician();
+  const now = new Date('2026-11-10T08:00:00+07:00');
+  const at = (iso) => new Date(iso).toISOString();
+  const create = (startAt, endAt) => service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [tech._id], startAt: at(startAt), endAt: at(endAt) }, { now });
+
+  await assert.rejects(create('2026-11-09T06:00:00+07:00', '2026-11-09T14:00:00+07:00'), /ngày đã qua/);
+  await assert.rejects(create('2026-11-10T00:00:00+07:00', '2026-11-10T06:00:00+07:00'), /đã kết thúc/);
+  const [running] = await create('2026-11-10T06:00:00+07:00', '2026-11-10T14:00:00+07:00');
+  assert.ok(running);
 });

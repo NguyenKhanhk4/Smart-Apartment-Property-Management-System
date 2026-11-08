@@ -21,7 +21,7 @@ test('Kanban: chỉ Trưởng BQL', async () => {
   assert.equal((await app.request('GET', '/tickets/board', { user: USERS.technician })).status, 403);
 });
 
-test('Lễ tân tạo hộ: chỉ Lễ tân, bắt buộc apartmentId', async () => {
+test('Lễ tân tạo hộ: chỉ Lễ tân, bắt buộc apartmentId và tên + SĐT người báo', async () => {
   assert.equal((await app.request('POST', '/tickets/staff', { user: USERS.resident, body: {} })).status, 403);
   const res = await app.request('POST', '/tickets/staff', {
     user: USERS.receptionist,
@@ -29,6 +29,17 @@ test('Lễ tân tạo hộ: chỉ Lễ tân, bắt buộc apartmentId', async ()
   });
   assert.equal(res.status, 400);
   assert.ok(res.body.details.some((d) => d.field === 'apartmentId'));
+  assert.ok(res.body.details.some((d) => d.field === 'contactPhone'));
+  assert.ok(res.body.details.some((d) => d.field === 'contactName'));
+});
+
+test('tạo phiếu: SĐT liên hệ phải đúng định dạng', async () => {
+  const res = await app.request('POST', '/tickets', {
+    user: USERS.resident,
+    body: { categoryId: ID, title: 'Rò nước', description: 'Rò nước từ trần nhà tắm', contactPhone: '12345' },
+  });
+  assert.equal(res.status, 400);
+  assert.ok(res.body.details.some((d) => d.field === 'contactPhone'));
 });
 
 test('tạo phiếu: loại / phạm vi phải hợp lệ', async () => {

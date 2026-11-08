@@ -69,15 +69,29 @@ test('phản ánh: có hạn phản hồi, không vào hàng chờ KTV, không g
   await assert.rejects(service.assignTicket(manager, ticket._id, { assignedTo: tech._id }), { errorCode: 'VALIDATION_ERROR' });
 });
 
-test('Lễ tân tạo hộ cư dân: ghi createdByStaff, căn bắt buộc', async () => {
+test('Lễ tân tạo hộ cư dân: ghi createdByStaff, căn bắt buộc, lưu liên hệ người báo', async () => {
   const { apartment } = await createHousehold();
   const category = await createCategory();
   const receptionist = asUser(await createReceptionist());
   const ticket = await service.createTicketByStaff(receptionist, {
     apartmentId: apartment._id, categoryId: category._id, title: 'Thang máy kẹt', description: 'Thang máy số 2 kẹt tầng 7', type: 'INCIDENT',
+    contactName: 'Chị Hoa', contactPhone: '+84912000111', contactNote: 'Gọi sau 18h',
   }, []);
   assert.equal(String(ticket.createdByStaff), receptionist.id);
   assert.equal(String(ticket.apartmentId), String(apartment._id));
+  assert.deepEqual({ ...ticket.toObject().contact }, { name: 'Chị Hoa', phone: '0912000111', note: 'Gọi sau 18h' });
+});
+
+test('cư dân gửi phiếu: liên hệ mặc định lấy tên + SĐT tài khoản, đổi được SĐT liên hệ', async () => {
+  const { user, apartment } = await createHousehold();
+  const category = await createCategory();
+  const base = { categoryId: category._id, title: 'Rò nước trần', description: 'Rò nước trần nhà tắm từ sáng nay', type: 'INCIDENT', scope: 'IN_APARTMENT' };
+  const t1 = await service.createTicket(asUser(user), { ...base, apartmentId: apartment._id }, []);
+  assert.equal(t1.contact.name, user.fullName);
+  assert.equal(t1.contact.phone, user.phone ?? null);
+  const t2 = await service.createTicket(asUser(user), { ...base, apartmentId: apartment._id, contactPhone: '0987654321', contactNote: 'Có nhà buổi tối' }, []);
+  assert.equal(t2.contact.phone, '0987654321');
+  assert.equal(t2.contact.note, 'Có nhà buổi tối');
 });
 
 test('nút Nhận: 2 KTV bấm cùng lúc chỉ 1 người nhận được, người còn lại TICKET_ALREADY_CLAIMED', async () => {
@@ -198,6 +212,7 @@ test('phiếu Lễ tân tạo hộ: KTV nhận / từ chối thì báo cư dân 
   const tech = await createTechnician();
   const ticket = await service.createTicketByStaff(asUser(receptionistDoc), {
     apartmentId: apartment._id, categoryId: category._id, title: 'Mất nước', description: 'Căn hộ mất nước từ sáng', type: 'INCIDENT',
+    contactName: 'Anh Nam', contactPhone: '0912000222',
   }, []);
   const before = { resident: await notified(user), staff: await notified(receptionistDoc) };
   await service.claimTicket(asUser(tech), ticket._id);

@@ -137,6 +137,7 @@ export const LABELS = {
   COMPLAINT_CATEGORY_CHANGED: 'Thay đổi danh mục phản ánh',
   DUTY_SHIFT_CREATED: 'Tạo ca trực',
   DUTY_SHIFT_DELETED: 'Xóa ca trực',
+  DUTY_SHIFT_UPDATED: 'Sửa ca trực',
   // UC05 – Cấu hình tòa nhà & biểu phí (Vũ Việt)
   BUILDING_PROFILE_UPDATED: 'Cập nhật thông tin tòa nhà',
   UTILITY_TARIFF_CREATED: 'Thêm biểu giá điện/nước',

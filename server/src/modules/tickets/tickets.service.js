@@ -19,6 +19,7 @@ import { Apartment, ComplaintCategory, Ticket, User } from '../../models/index.j
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyApartment, notifyRoles } from '../../services/notification.service.js';
 import { getActiveApartmentIds, resolveResidentApartment } from '../../services/residency.service.js';
+import { normalizePhone } from '../../utils/validators.js';
 import { getConfig, getConfigs } from '../../services/systemConfig.service.js';
 import { uploadToCloudinary } from '../../services/upload.service.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -141,7 +142,7 @@ async function technicianRecipients(now = new Date()) {
  * Lõi tạo phiếu cho cả cư dân tự gửi và Lễ tân tạo hộ. Sự cố → hàng chờ Kỹ thuật (báo KTV đang trực);
  * phản ánh → màn hình xử lý của Trưởng BQL. Phản ánh không phân biệt phạm vi (luôn COMMON_AREA).
  */
-async function placeTicket({ apartment, reporterId, staff = null, body, files }) {
+async function placeTicket({ apartment, reporterId, staff = null, contact, body, files }) {
   const { categoryId, title, description, type = INCIDENT, scope = TICKET_SCOPES.COMMON_AREA } = body;
   const category = await ComplaintCategory.findOne({ _id: categoryId, isActive: true }).lean();
   if (!category) throw ApiError.badRequest('Loại phản ánh không tồn tại hoặc đã ngưng sử dụng');
@@ -177,6 +178,7 @@ async function placeTicket({ apartment, reporterId, staff = null, body, files })
       title,
       description,
       imageUrls,
+      contact,
       priority: category.defaultPriority,
       ...deadlines,
       status: NEW,
@@ -201,14 +203,26 @@ async function placeTicket({ apartment, reporterId, staff = null, body, files })
 // ===== UC-E02: Cư dân gửi sự cố / phản ánh kèm ảnh =====
 export async function createTicket(user, body, files) {
   const apartment = await resolveResidentApartment(user.id, body.apartmentId);
-  return placeTicket({ apartment, reporterId: user.id, body, files });
+  // Liên hệ mặc định lấy từ tài khoản; cư dân sửa được SĐT / tên người cần gọi (vd người nhà đang ở căn)
+  const me = await User.findById(user.id).select('fullName phone').lean();
+  const contact = {
+    name: body.contactName?.trim() || me?.fullName || null,
+    phone: normalizePhone(body.contactPhone?.trim() || me?.phone || '') || null,
+    note: body.contactNote?.trim() || null,
+  };
+  return placeTicket({ apartment, reporterId: user.id, contact, body, files });
 }
 
 /** Lễ tân tạo hộ cư dân gọi điện / đến quầy (người gửi ghi là Lễ tân, createdByStaff để truy vết) */
 export async function createTicketByStaff(staff, body, files) {
   const apartment = await Apartment.findById(body.apartmentId).select('code buildingId').lean();
   if (!apartment) throw ApiError.notFound('Không tìm thấy căn hộ');
-  return placeTicket({ apartment, reporterId: staff.id, staff, body, files });
+  const contact = {
+    name: body.contactName?.trim() || null,
+    phone: normalizePhone(body.contactPhone?.trim() || '') || null,
+    note: body.contactNote?.trim() || null,
+  };
+  return placeTicket({ apartment, reporterId: staff.id, staff, contact, body, files });
 }
 
 // ===== Danh sách theo quyền (UC-E03 xem danh sách/quá hạn, E04 ticket được giao, E05 của căn mình) =====

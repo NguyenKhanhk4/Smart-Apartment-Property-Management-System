@@ -6,7 +6,7 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { activeShifts, overlaps, repeatWindows, validateShiftWindow } from './shift.rules.js';
-import { DAY_MS, fmtDateTimeVn } from '../../utils/time.js';
+import { DAY_MS, fmtDateTimeVn, startOfVnDay } from '../../utils/time.js';
 
 const USER_SELECT = 'fullName phone roleTitle avatarUrl';
 const LINK = '/app/duty-shifts';
@@ -49,11 +49,14 @@ export async function isUserOnDuty(userId, roleTitle, at = new Date()) {
 /**
  * Xếp ca cho 1 hoặc nhiều người cùng khung giờ (có thể lặp `repeatDays` ngày liên tiếp). Người được xếp phải là
  * nhân viên đang hoạt động đúng chức danh; không trùng giờ với ca khác của chính người đó. Có người trùng thì
- * không tạo ca nào. Trả về các ca đã tạo.
+ * không tạo ca nào. Lịch cũ chỉ để xem: không xếp ca cho ngày đã qua hay ca đã kết thúc (ca hôm nay đang diễn ra
+ * vẫn xếp thêm người được). Trả về các ca đã tạo.
  */
-export async function createShifts(user, { roleTitle, userIds, startAt, endAt, note, repeatDays = 1 }) {
+export async function createShifts(user, { roleTitle, userIds, startAt, endAt, note, repeatDays = 1 }, { now = new Date() } = {}) {
   const error = validateShiftWindow(startAt, endAt);
   if (error) throw ApiError.badRequest(error, [{ field: 'endAt', message: error }]);
+  if (new Date(startAt) < startOfVnDay(now)) throw ApiError.badRequest('Không xếp ca cho ngày đã qua', [{ field: 'startAt', message: 'Ngày đã qua' }]);
+  if (new Date(endAt) <= now) throw ApiError.badRequest('Ca này đã kết thúc, không xếp được', [{ field: 'endAt', message: 'Ca đã kết thúc' }]);
 
   const ids = [...new Set(userIds.map(String))];
   const staffList = await User.find({ _id: { $in: ids }, role: ROLES.STAFF, roleTitle, isActive: true }).select('fullName').lean();
@@ -110,6 +113,68 @@ export async function createShifts(user, { roleTitle, userIds, startAt, endAt, n
     link: LINK,
   });
   return shifts;
+}
+
+/**
+ * Sửa ca chưa kết thúc: đổi người trực, giờ bắt đầu / kết thúc, ghi chú (kéo thả ca sang ngày khác cũng gọi hàm này).
+ * Ca đang diễn ra không đổi giờ bắt đầu và không kết thúc sớm hơn hiện tại; người mới phải là nhân viên đang hoạt động
+ * đúng chức danh và không trùng giờ với ca khác của chính người đó. Báo người trực (cả người cũ nếu đổi người).
+ */
+export async function updateShift(user, id, changes, { now = new Date() } = {}) {
+  const shift = await DutyShift.findById(id).lean();
+  if (!shift) throw ApiError.notFound('Không tìm thấy ca trực');
+  if (shift.endAt <= now) throw ApiError.badRequest('Ca trực đã kết thúc, không thể sửa');
+
+  const started = shift.startAt <= now;
+  const startAt = changes.startAt ? new Date(changes.startAt) : shift.startAt;
+  const endAt = changes.endAt ? new Date(changes.endAt) : shift.endAt;
+  const userId = String(changes.userId ?? shift.userId);
+  if (started && startAt.getTime() !== new Date(shift.startAt).getTime()) {
+    throw ApiError.badRequest('Ca đang diễn ra, không đổi được giờ bắt đầu');
+  }
+  if (!started && startAt <= now) throw ApiError.badRequest('Không chuyển ca về thời điểm đã qua');
+  if (endAt <= now) throw ApiError.badRequest('Giờ kết thúc ca phải sau thời điểm hiện tại');
+  const error = validateShiftWindow(startAt, endAt);
+  if (error) throw ApiError.badRequest(error, [{ field: 'endAt', message: error }]);
+
+  const staff = await User.findOne({ _id: userId, role: ROLES.STAFF, roleTitle: shift.roleTitle, isActive: true }).select('fullName').lean();
+  if (!staff) throw ApiError.badRequest('Người được xếp ca phải là nhân viên đang hoạt động đúng chức danh');
+  const findClash = () =>
+    DutyShift.exists({ _id: { $ne: shift._id }, userId, startAt: { $lt: endAt }, endAt: { $gt: startAt } });
+  const overlapError = () => new ApiError('DUTY_SHIFT_OVERLAP', `${staff.fullName} đã có ca trực trùng thời gian ${fmtDateTimeVn(startAt)}`);
+  if (await findClash()) throw overlapError();
+
+  const note = changes.note === undefined ? shift.note : changes.note;
+  await DutyShift.updateOne({ _id: shift._id }, { $set: { userId, startAt, endAt, note } });
+  // 2 thao tác cùng lúc có thể cùng qua bước kiểm tra → kiểm tra lại, trùng thì trả ca về như cũ
+  if (await findClash()) {
+    await DutyShift.updateOne({ _id: shift._id }, { $set: { userId: shift.userId, startAt: shift.startAt, endAt: shift.endAt, note: shift.note } });
+    throw overlapError();
+  }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.DUTY_SHIFT_UPDATED,
+    user,
+    targetType: AUDIT_TARGETS.DUTY_SHIFT,
+    targetId: shift._id,
+    metadata: {
+      before: { userId: shift.userId, startAt: shift.startAt, endAt: shift.endAt },
+      after: { userId, startAt, endAt },
+    },
+  });
+  const window = `${fmtDateTimeVn(startAt)} – ${fmtDateTimeVn(endAt)}`;
+  if (userId !== String(shift.userId)) {
+    await notify(shift.userId, {
+      type: NOTIFICATION_TYPES.SYSTEM,
+      title: 'Ca trực của bạn đã chuyển cho người khác',
+      content: `Ca ${fmtDateTimeVn(shift.startAt)} – ${fmtDateTimeVn(shift.endAt)} đã được Trưởng BQL chuyển cho ${staff.fullName}.`,
+      link: LINK,
+    });
+    await notify(userId, { type: NOTIFICATION_TYPES.SYSTEM, title: 'Bạn được xếp ca trực', content: `Ca ${window}.`, refId: shift._id, link: LINK });
+  } else {
+    await notify(userId, { type: NOTIFICATION_TYPES.SYSTEM, title: 'Ca trực của bạn đã thay đổi', content: `Ca mới: ${window}.`, refId: shift._id, link: LINK });
+  }
+  return DutyShift.findById(shift._id).populate('userId', USER_SELECT).lean();
 }
 
 /** Xóa ca chưa kết thúc (ca đã qua giữ lại để tra cứu ai trực lúc xảy ra sự cố) */

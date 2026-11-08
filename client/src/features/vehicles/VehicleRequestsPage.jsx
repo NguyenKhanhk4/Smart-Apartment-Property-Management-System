@@ -184,7 +184,7 @@ export default function VehicleRequestsPage() {
     {
       title: 'Thao tác',
       key: 'action',
-      width: 180,
+      width: 240,
       fixed: 'right',
       render: (_, r) =>
         isReceptionist ? (

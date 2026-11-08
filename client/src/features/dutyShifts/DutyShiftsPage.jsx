@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Flex, Popconfirm, Segmented, Skeleton, Tag, Typography } from 'antd';
-import { DeleteOutlined, LeftOutlined, PhoneOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons';
+import { Button, Card, Flex, Segmented, Skeleton, Typography } from 'antd';
+import { CalendarOutlined, DragOutlined, LeftOutlined, MoonOutlined, PhoneOutlined, PlusOutlined, RightOutlined, TableOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { dutyShiftApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
@@ -8,15 +8,14 @@ import { useAuth } from '../../hooks/useAuth';
 import PageHeader from '../../components/PageHeader';
 import { DUTY_ROLE_TITLES, enumOptions } from '../../constants/enums';
 import CreateShiftModal from './CreateShiftModal';
-import { formatDate } from '../../utils/format';
+import EditShiftModal from './EditShiftModal';
+import ShiftDetailModal from './ShiftDetailModal';
+import MonthCalendar from './MonthCalendar';
+import WeekTimeline from './WeekTimeline';
+import { SHIFT_KINDS } from './shiftLayout';
+import { moveToDay } from './shiftWindow';
 
 const hhmm = (d) => dayjs(d).format('HH:mm');
-
-// Ca qua đêm hiện ở ngày bắt đầu, kèm "(+1)" ở giờ kết thúc
-function shiftTime(s) {
-  const overnight = !dayjs(s.endAt).isSame(dayjs(s.startAt), 'day');
-  return `${hhmm(s.startAt)} – ${hhmm(s.endAt)}${overnight ? ' (+1)' : ''}`;
-}
 
 function OnDutyCard({ roleTitle }) {
   const { data, loading } = useApi(() => dutyShiftApi.onDuty(roleTitle), [roleTitle]);
@@ -55,24 +54,86 @@ function OnDutyCard({ roleTitle }) {
   );
 }
 
-// Lịch ca trực theo tuần. Trưởng BQL xếp / hủy ca; Kỹ thuật viên, Bảo vệ xem lịch và ca của mình.
+/** Chú thích màu loại ca + cách hiển thị ca qua đêm */
+function Legend({ view }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[12px] text-ink-2">
+      {Object.values(SHIFT_KINDS).map((k) => (
+        <span key={k.label} className="inline-flex items-center gap-1.5" title={k.hint}>
+          <span className={`w-3 h-3 rounded-[3px] border ${k.className}`} aria-hidden />
+          {k.label} <span className="text-ink-3">({k.hint})</span>
+        </span>
+      ))}
+      <span className="inline-flex items-center gap-1.5">
+        <MoonOutlined />
+        {view === 'week'
+          ? 'Ca qua đêm: khối nối qua nửa đêm, mép nét đứt = còn tiếp ở ngày bên cạnh'
+          : 'Ca qua đêm nằm ở ngày bắt đầu, giờ kết thúc ghi sau mũi tên (sáng hôm sau)'}
+      </span>
+    </div>
+  );
+}
+
+// Lịch ca trực Kỹ thuật viên / Bảo vệ — 2 chế độ xem: Tuần (lưới giờ) và Tháng (lịch).
+// Trưởng BQL xếp, sửa, kéo thả, hủy ca; Kỹ thuật viên, Bảo vệ xem lịch (ca của mình có viền đậm).
 export default function DutyShiftsPage() {
   const { user, hasRole } = useAuth();
   const isManager = hasRole('MANAGER');
   const [roleTitle, setRoleTitle] = useState(hasRole('STAFF:SECURITY') ? 'SECURITY' : 'TECHNICIAN');
-  const [weekStart, setWeekStart] = useState(() => dayjs().startOf('week'));
-  const [creating, setCreating] = useState(null); // ngày mặc định khi mở form
+  const [view, setView] = useState('week');
+  const [anchor, setAnchor] = useState(() => dayjs()); // ngày bất kỳ trong tuần / tháng đang xem
+  const [creating, setCreating] = useState(null); // thời điểm mặc định khi mở form xếp ca
+  const [editing, setEditing] = useState(null);
+  const [viewing, setViewing] = useState(null); // ca chỉ xem (đã kết thúc, hoặc người xem không phải Trưởng BQL)
 
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => weekStart.add(i, 'day')), [weekStart]);
-  const params = useMemo(
-    () => ({ roleTitle, from: weekStart.toISOString(), to: weekStart.add(7, 'day').toISOString() }),
-    [roleTitle, weekStart],
-  );
+  const unit = view === 'week' ? 'week' : 'month';
+  const rangeStart = anchor.startOf(unit);
+  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => anchor.startOf('week').add(i, 'day')), [anchor]);
+  // Tuần: lấy thêm hôm trước để hiện đoạn tiếp của ca đêm bắt đầu từ Chủ nhật tuần trước.
+  // Tháng: lấy trọn lưới lịch (có thể gồm vài ngày của tháng trước / sau).
+  const params = useMemo(() => {
+    const from = view === 'week' ? anchor.startOf('week').subtract(1, 'day') : anchor.startOf('month').startOf('week');
+    const to = view === 'week' ? anchor.startOf('week').add(7, 'day') : anchor.endOf('month').endOf('week').add(1, 'millisecond');
+    return { roleTitle, from: from.toISOString(), to: to.toISOString() };
+  }, [roleTitle, view, anchor]);
   const { data: shifts = [], loading, reload } = useApi(() => dutyShiftApi.list(params), [params]);
   const [remove] = useAction(dutyShiftApi.remove, { success: 'Đã hủy ca trực', onDone: reload });
 
-  const byDay = (day) => shifts.filter((s) => dayjs(s.startAt).isSame(day, 'day'));
-  const isToday = (day) => day.isSame(dayjs(), 'day');
+  // Kéo thả: chỉ Trưởng BQL, ca chưa bắt đầu; thả vào ngày chưa qua → dời ca, giữ giờ và độ dài
+  const [dragging, setDragging] = useState(null);
+  const [overDay, setOverDay] = useState(null);
+  const [move] = useAction(({ shift, day }) => dutyShiftApi.update(shift._id, moveToDay(shift, day, dayjs)), {
+    success: (res) => `Đã chuyển ca sang ${dayjs(res.data.startAt).format('dd DD/MM')}`,
+    onDone: reload,
+  });
+  const dnd = {
+    dragging,
+    setDragging,
+    overDay,
+    setOverDay,
+    canDrag: (s) => isManager && dayjs(s.startAt).isAfter(dayjs()),
+    canDropOn: (day) => Boolean(dragging) && !day.isBefore(dayjs(), 'day') && !day.isSame(dragging.startAt, 'day'),
+    dropOn: (day) => {
+      const shift = dragging;
+      setDragging(null);
+      setOverDay(null);
+      if (shift && !day.isBefore(dayjs(), 'day') && !day.isSame(shift.startAt, 'day')) move({ shift, day }).catch(() => {});
+    },
+  };
+  // Lịch cũ chỉ để xem: ca đã kết thúc (hoặc người xem không phải Trưởng BQL) mở chi tiết chỉ đọc
+  const openShift = (s) => (isManager && dayjs(s.endAt).isAfter(dayjs()) ? setEditing(s) : setViewing(s));
+  // Xếp ca mới: không vào ngày / giờ đã qua — mặc định 06:00, hôm nay đã qua 06:00 thì lấy giờ chẵn kế tiếp
+  const createAt = (t) => {
+    const now = dayjs();
+    if (t.isBefore(now, 'day')) return;
+    setCreating(t.isBefore(now) ? now.add(1, 'hour').startOf('hour') : t);
+  };
+
+  const title =
+    view === 'week'
+      ? `${rangeStart.format('DD/MM')} – ${rangeStart.add(6, 'day').format('DD/MM/YYYY')}`
+      : `Tháng ${anchor.format('MM/YYYY')}`;
+  const shared = { shifts, userId: user.id, isManager, onOpen: openShift, onCreate: createAt, dnd };
 
   return (
     <>
@@ -81,107 +142,57 @@ export default function DutyShiftsPage() {
         subtitle="Kỹ thuật viên và Bảo vệ theo ca, 1 ca có thể nhiều người trực. Ngoài giờ hành chính chỉ sự cố Khẩn cấp / Cao báo người trực ngay."
         extra={
           isManager && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(dayjs())}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => createAt(dayjs().hour(6).minute(0))}>
               Xếp ca
             </Button>
           )
         }
       />
 
-      <Flex gap={12} wrap align="center" justify="space-between" className="mb-4">
-        <Segmented value={roleTitle} options={enumOptions(DUTY_ROLE_TITLES)} onChange={setRoleTitle} />
+      <OnDutyCard roleTitle={roleTitle} />
+
+      <Flex gap={12} wrap align="center" justify="space-between" className="mb-3">
+        <Flex gap={8} wrap align="center">
+          <Segmented value={roleTitle} options={enumOptions(DUTY_ROLE_TITLES)} onChange={setRoleTitle} />
+          <Segmented
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'week', label: 'Tuần', icon: <TableOutlined /> },
+              { value: 'month', label: 'Tháng', icon: <CalendarOutlined /> },
+            ]}
+          />
+        </Flex>
         <Flex gap={8} align="center">
-          <Button icon={<LeftOutlined />} onClick={() => setWeekStart((w) => w.subtract(7, 'day'))} />
-          <Button onClick={() => setWeekStart(dayjs().startOf('week'))}>Tuần này</Button>
-          <Button icon={<RightOutlined />} onClick={() => setWeekStart((w) => w.add(7, 'day'))} />
-          <Typography.Text strong>
-            {weekStart.format('DD/MM')} – {formatDate(weekStart.add(6, 'day'))}
-          </Typography.Text>
+          <Button icon={<LeftOutlined />} aria-label={view === 'week' ? 'Tuần trước' : 'Tháng trước'} onClick={() => setAnchor((a) => a.subtract(1, unit))} />
+          <Button onClick={() => setAnchor(dayjs())}>{view === 'week' ? 'Tuần này' : 'Tháng này'}</Button>
+          <Button icon={<RightOutlined />} aria-label={view === 'week' ? 'Tuần sau' : 'Tháng sau'} onClick={() => setAnchor((a) => a.add(1, unit))} />
+          <span className="min-w-[150px] text-[14px] font-semibold text-ink">{title}</span>
         </Flex>
       </Flex>
 
-      <OnDutyCard roleTitle={roleTitle} />
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-        {days.map((day) => {
-          const items = byDay(day);
-          return (
-            <Card
-              key={day.valueOf()}
-              size="small"
-              loading={loading}
-              className={`h-full ${isToday(day) ? 'border-navy! ring-2 ring-navy/15' : ''}`}
-              styles={{ body: { minHeight: 120 } }}
-              title={
-                <span className="flex items-center gap-2">
-                  <span className={isToday(day) ? 'text-navy font-semibold' : 'font-semibold'}>{day.format('dd DD/MM')}</span>
-                  {isToday(day) && <Tag color="blue" className="m-0">Hôm nay</Tag>}
-                </span>
-              }
-              extra={
-                isManager &&
-                !day.isBefore(dayjs(), 'day') && (
-                  <Button size="small" type="text" icon={<PlusOutlined />} onClick={() => setCreating(day)} />
-                )
-              }
-            >
-              {items.length === 0 ? (
-                <div className="h-full min-h-[96px] flex items-center justify-center rounded-md border border-dashed border-line text-xs text-ink-3">
-                  Chưa xếp ca
-                </div>
-              ) : (
-                <Flex vertical gap={8}>
-                  {items.map((s) => {
-                    const mine = s.userId?._id === user.id;
-                    return (
-                      <Flex
-                        key={s._id}
-                        justify="space-between"
-                        align="start"
-                        gap={4}
-                        className={`rounded-md px-2.5 py-2 border ${mine ? 'bg-navy-bg border-navy/30 dark:bg-blue-900/20' : 'bg-surface-alt border-line dark:bg-white/[0.04] dark:border-[#2E2E33]'}`}
-                      >
-                        <Flex vertical className="min-w-0">
-                          <Typography.Text strong>{shiftTime(s)}</Typography.Text>
-                          <Typography.Text ellipsis>{s.userId?.fullName ?? '—'}</Typography.Text>
-                          <Flex gap={4} wrap>
-                            {mine && <Tag color="blue">Ca của tôi</Tag>}
-                          </Flex>
-                          {s.note && (
-                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                              {s.note}
-                            </Typography.Text>
-                          )}
-                        </Flex>
-                        {isManager && dayjs(s.endAt).isAfter(dayjs()) && (
-                          <Popconfirm
-                            title="Hủy ca trực này?"
-                            description="Nhân viên sẽ nhận thông báo ca bị hủy."
-                            okText="Hủy ca"
-                            cancelText="Không"
-                            onConfirm={() => remove(s._id).catch(() => {})}
-                          >
-                            <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-                          </Popconfirm>
-                        )}
-                      </Flex>
-                    );
-                  })}
-                </Flex>
-              )}
-            </Card>
-          );
-        })}
+      <div className="mb-3 flex flex-col gap-1.5">
+        <Legend view={view} />
+        {isManager && (
+          <div className="flex items-center gap-2 text-[12px] text-ink-3">
+            <DragOutlined />
+            Bấm ô trống để xếp ca{view === 'week' ? ' vào giờ đó' : ' ngày đó'} · bấm một ca để sửa / hủy · kéo ca sang ngày khác để dời (giữ nguyên giờ) · lịch đã qua chỉ để xem.
+          </div>
+        )}
       </div>
 
+      {loading && !shifts.length ? (
+        <Skeleton active paragraph={{ rows: 8 }} />
+      ) : view === 'week' ? (
+        <WeekTimeline days={days} {...shared} />
+      ) : (
+        <MonthCalendar month={anchor} {...shared} />
+      )}
+
+      {viewing && <ShiftDetailModal shift={viewing} onClose={() => setViewing(null)} />}
+      {editing && <EditShiftModal shift={editing} onClose={() => setEditing(null)} onDone={reload} onRemove={(id) => remove(id)} />}
       {creating && (
-        <CreateShiftModal
-          open
-          roleTitle={roleTitle}
-          defaultDate={creating}
-          onClose={() => setCreating(null)}
-          onDone={reload}
-        />
+        <CreateShiftModal open roleTitle={roleTitle} defaultDate={creating} onClose={() => setCreating(null)} onDone={reload} />
       )}
     </>
   );

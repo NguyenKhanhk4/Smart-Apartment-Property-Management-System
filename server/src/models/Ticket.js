@@ -52,6 +52,13 @@ const ticketSchema = new Schema(
     // M5-2: SLA tạm dừng từ lúc vào Chờ cư dân đồng ý phí / Chờ linh kiện; rời trạng thái thì dueDate được cộng bù (ticket.rules)
     slaPausedAt: { type: Date, default: null },
     partsAlertedAt: { type: Date, default: null }, // đã cảnh báo Trưởng BQL chờ linh kiện quá hạn dừng
+    // Người cần liên hệ để xác minh / hẹn vào xử lý. Cư dân tự gửi: mặc định tên + SĐT tài khoản (sửa được);
+    // Lễ tân tạo hộ: tên + SĐT người báo (bắt buộc, vì createdBy lúc đó là Lễ tân)
+    contact: {
+      name: { type: String, trim: true, default: null },
+      phone: { type: String, trim: true, default: null },
+      note: { type: String, trim: true, default: null }, // vd thời gian có nhà
+    },
     // Sự cố trong căn hộ: cư dân đồng ý / từ chối báo giá (form báo giá do Người 3 làm)
     quoteDecision: {
       accepted: { type: Boolean, default: null },

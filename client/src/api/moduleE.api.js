@@ -150,5 +150,7 @@ export const dutyShiftApi = {
   staff: (roleTitle) => http.get('/duty-shifts/staff', { params: { roleTitle } }),
   /** body: { roleTitle, userIds: [], startAt, endAt, repeatDays?, note? } — 1 ca có thể nhiều người trực */
   create: (body) => http.post('/duty-shifts', body),
+  /** body: { userId?, startAt?, endAt?, note? } — sửa ca chưa kết thúc / kéo thả sang ngày khác */
+  update: (id, body) => http.patch(`/duty-shifts/${id}`, body),
   remove: (id) => http.delete(`/duty-shifts/${id}`),
 };

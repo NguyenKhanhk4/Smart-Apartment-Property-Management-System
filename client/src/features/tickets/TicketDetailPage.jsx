@@ -13,7 +13,7 @@ import {
   Timeline,
   Typography,
 } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, PhoneOutlined } from '@ant-design/icons';
 import { ticketApi } from '../../api/moduleE.api';
 import { repairQuoteApi } from '../../api/moduleB.api';
 import QuoteFormModal from '../repairQuotes/QuoteFormModal';
@@ -216,6 +216,40 @@ export default function TicketDetailPage() {
             </Image.PreviewGroup>
           )}
         </Card>
+
+        {/* Liên hệ người gửi để xác minh / hẹn giờ vào xử lý — chỉ nhân viên thấy */}
+        {hasRole('MANAGER', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN') && (
+          <Card size="small" title="Người gửi & liên hệ">
+            <Descriptions column={{ xs: 1, md: 2 }} size="small">
+              <Descriptions.Item label="Người cần liên hệ">{t.contact?.name ?? t.createdBy?.fullName ?? '—'}</Descriptions.Item>
+              <Descriptions.Item label="SĐT liên hệ">
+                {(t.contact?.phone ?? (!t.createdByStaff && t.createdBy?.phone)) ? (
+                  <Typography.Link href={`tel:${t.contact?.phone ?? t.createdBy?.phone}`} copyable={{ text: t.contact?.phone ?? t.createdBy?.phone }}>
+                    <PhoneOutlined /> {t.contact?.phone ?? t.createdBy?.phone}
+                  </Typography.Link>
+                ) : (
+                  <Typography.Text type="secondary">Chưa có</Typography.Text>
+                )}
+              </Descriptions.Item>
+              {t.contact?.note && <Descriptions.Item label="Ghi chú liên hệ">{t.contact.note}</Descriptions.Item>}
+              <Descriptions.Item label="Kênh gửi">
+                {t.createdByStaff ? `Lễ tân ${t.createdBy?.fullName ?? ''} tạo hộ tại quầy / qua điện thoại` : 'Cư dân tự gửi trên web'}
+              </Descriptions.Item>
+              {!t.createdByStaff && t.createdBy && (
+                <Descriptions.Item label="Tài khoản gửi">
+                  {t.createdBy.fullName}
+                  {t.createdBy.phone && ` · ${t.createdBy.phone}`}
+                  {t.createdBy.email && ` · ${t.createdBy.email}`}
+                </Descriptions.Item>
+              )}
+              <Descriptions.Item label="Căn hộ">
+                {t.apartmentId?.code}
+                {t.apartmentId?.floor != null && ` · Tầng ${t.apartmentId.floor}`}
+                {t.apartmentId?.buildingId?.name && ` · ${t.apartmentId.buildingId.name}`}
+              </Descriptions.Item>
+            </Descriptions>
+          </Card>
+        )}
 
         {hasQuotes && (
           <QuotePanel
