@@ -1,8 +1,10 @@
+// Đăng ký cron toàn hệ thống và lịch nhắc khách, bưu kiện, tuần tra, cảnh báo khẩn Module 7.
 import cron from 'node-cron';
+import { runOperationsJobs } from '../modules/guests/guests.service.js';
 import { env } from '../config/env.js';
 import { CRON_JOBS } from '../constants/enums.js';
 import { runTrackedJob } from './cronRunner.js';
-import { generateMaintenanceWorkOrders } from '../modules/workOrders/workOrders.jobs.js';
+import { generateMaintenanceWorkOrders, warnEquipment } from '../modules/workOrders/workOrders.jobs.js';
 import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from '../modules/tickets/tickets.jobs.js';
 import { expireLeases } from '../modules/contracts/contracts.jobs.js';
 import { billingReminders, markOverdueInvoices } from '../modules/invoices/invoices.jobs.js';
@@ -20,6 +22,7 @@ import { remindProposals } from '../modules/fund/fund.service.js';
  *   { name: CRON_JOBS.BILLING_REMIND, schedule: '0 8 * * *', handler: billingReminders }
  */
 export const JOBS = [
+  { name: CRON_JOBS.OPERATIONS_SECURITY, schedule: '* * * * *', handler: runOperationsJobs },
   // UC-E06 / BR-O8 — 09:00 hằng ngày
   { name: CRON_JOBS.TICKET_ESCALATE, schedule: '0 9 * * *', handler: escalateOverdueTickets },
   // Người 4 — mỗi 5 phút cảnh báo sự cố quá hạn nhận / phản ánh quá hạn phản hồi
@@ -27,7 +30,10 @@ export const JOBS = [
   // BR-O9 — 01:00 hằng ngày tự đóng ticket chờ xác nhận quá hạn
   { name: CRON_JOBS.TICKET_AUTO_CLOSE, schedule: '0 1 * * *', handler: autoCloseTickets },
   // UC-D02 / BR-O6 — 02:00 hằng ngày tạo work order bảo trì định kỳ cho tài sản đến hạn
-  { name: CRON_JOBS.WORK_ORDER_GENERATE, schedule: '0 2 * * *', handler: generateMaintenanceWorkOrders },
+  // UC07, BR-E03: 01:00 tạo phiếu bảo trì đến hạn (kèm bản sao checklist), báo khi cả ngày không có ca kỹ thuật
+  { name: CRON_JOBS.WORK_ORDER_GENERATE, schedule: '0 1 * * *', handler: generateMaintenanceWorkOrders },
+  // UC07, BR-E07: 07:00 cảnh báo phiếu bảo trì quá hạn, thiết bị sắp hết bảo hành (MSG-E08)
+  { name: CRON_JOBS.EQUIPMENT_WARNING, schedule: '0 7 * * *', handler: warnEquipment },
   // UC-A06 / BR-O2 — 00:00 hằng ngày kiểm tra và chuyển hợp đồng thuê hết hạn
   { name: CRON_JOBS.CONTRACT_EXPIRE, schedule: '0 0 * * *', handler: expireLeases },
   // Mô đun 4 — 08:00 hằng ngày: đến ngày cấu hình thì nhắc Kế toán tính phí; nhắc Trưởng BQL thông báo chờ duyệt quá N ngày (không tự duyệt)

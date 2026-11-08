@@ -42,9 +42,12 @@ export function authorize(...specs) {
   // Bắt lỗi gõ sai role ngay lúc khởi động server thay vì lúc gọi API
   specs.forEach(assertValidSpec);
 
-  return (req, _res, next) => {
+  const middleware = (req, _res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
     if (!hasPermission(req.user, specs)) return next(ApiError.forbidden());
     return next();
   };
+  // UC04: ma trận phân quyền đọc specs này để biết quyền trần của từng vai trò trên từng route
+  middleware.specs = specs;
+  return middleware;
 }

@@ -23,6 +23,8 @@ import {
 import PhoneAccountNotice from '../../components/PhoneAccountNotice';
 import { usePhoneAccount } from '../../hooks/usePhoneAccount';
 import { PHONE_RULES } from '../../utils/phone';
+import { useImageCheck } from '../../hooks/useImageCheck';
+import { IMAGE_ACCEPT, IMAGE_HINT } from '../../utils/imageUpload';
 import {
   PlusOutlined,
   ReloadOutlined,
@@ -95,6 +97,7 @@ function PartyFields({ prefix, title, check, namePlaceholder, emailPlaceholder, 
 export default function ContractsPage() {
   const { hasRole } = useAuth();
   const { message } = App.useApp();
+  const checkPhoto = useImageCheck(); // UC63
   const isReceptionist = hasRole('STAFF:RECEPTIONIST');
   const isManager = hasRole('MANAGER');
 
@@ -401,8 +404,8 @@ export default function ContractsPage() {
               title="Chấm dứt hợp đồng"
               description={
                 record.type === 'SALE'
-                  ? 'Chấm dứt hợp đồng mua bán sẽ gỡ toàn bộ cư dân và đưa căn hộ về trạng thái Trống. Tiếp tục?'
-                  : 'Chấm dứt hợp đồng thuê sẽ gỡ người thuê và đưa căn hộ về trạng thái Đã sở hữu. Tiếp tục?'
+                  ? 'Chấm dứt hợp đồng mua bán sẽ kết thúc cư trú của các thành viên. Căn đã bàn giao chuyển sang Đang trống trên sơ đồ. Tiếp tục?'
+                  : 'Chấm dứt hợp đồng thuê sẽ kết thúc cư trú của khách thuê. Nếu hợp đồng đã bắt đầu và căn đã bàn giao, sơ đồ chuyển sang Đang trống. Tiếp tục?'
               }
               okText="Chấm dứt"
               cancelText="Hủy"
@@ -636,10 +639,10 @@ export default function ContractsPage() {
             />
           )}
 
-          <Form.Item label="File đính kèm (hợp đồng có chữ ký / công chứng, jpg/png ≤ 5MB)">
+          <Form.Item label="Ảnh hợp đồng có chữ ký / công chứng" extra={IMAGE_HINT}>
             <Upload
-              accept="image/png,image/jpeg"
-              beforeUpload={() => false}
+              accept={IMAGE_ACCEPT}
+              beforeUpload={checkPhoto}
               fileList={contractFileList}
               onChange={({ fileList }) => setContractFileList(fileList.slice(-1))}
               maxCount={1}
@@ -681,10 +684,10 @@ export default function ContractsPage() {
             </Form.Item>
           )}
 
-          <Form.Item label="Cập nhật file đính kèm mới (nếu có, jpg/png ≤ 5MB)">
+          <Form.Item label="Cập nhật ảnh hợp đồng mới (nếu có)" extra={IMAGE_HINT}>
             <Upload
-              accept="image/png,image/jpeg"
-              beforeUpload={() => false}
+              accept={IMAGE_ACCEPT}
+              beforeUpload={checkPhoto}
               fileList={extendFileList}
               onChange={({ fileList }) => setExtendFileList(fileList.slice(-1))}
               maxCount={1}

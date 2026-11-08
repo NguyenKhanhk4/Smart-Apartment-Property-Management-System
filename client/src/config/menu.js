@@ -1,3 +1,4 @@
+// Khai báo menu theo quyền hiện có; Module 7 dùng chung màn khách/vận hành, giữ các route của thành viên khác.
 import { lazy } from 'react';
 import {
   AppstoreOutlined,
@@ -20,6 +21,7 @@ import {
   NotificationOutlined,
   IdcardOutlined,
   PieChartOutlined,
+  SafetyCertificateOutlined,
   ScheduleOutlined,
   SettingOutlined,
   TeamOutlined,
@@ -119,6 +121,7 @@ const TicketBoardPage = lazy(() => import('../features/tickets/TicketBoardPage')
 
 // ===== Module C — audit (TM) =====
 const AuditLogsPage = lazy(() => import('../features/auditLogs/AuditLogsPage'));
+const PermissionMatrixPage = lazy(() => import('../features/permissions/PermissionMatrixPage'));
 
 // ===== Gate Pass & Kiểm soát xe (Người 2) =====
 const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
@@ -240,7 +243,7 @@ export const adminMenu = [
   {
     key: 'guests',
     group: 'Tiện ích & khách',
-    label: 'Sổ khách',
+    label: 'Khách & vận hành an ninh',
     icon: UsergroupAddOutlined,
     path: 'guests',
     roles: ['STAFF:SECURITY', 'STAFF:RECEPTIONIST', 'MANAGER'],
@@ -459,6 +462,16 @@ export const adminMenu = [
     roles: ['MANAGER'],
     component: InternalAccountsPage,
   },
+  // UC04: ma trận phân quyền theo vai trò
+  {
+    key: 'permissions',
+    group: 'Cấu hình',
+    label: 'Phân quyền',
+    icon: SafetyCertificateOutlined,
+    path: 'permissions',
+    roles: ['MANAGER'],
+    component: PermissionMatrixPage,
+  },
   {
     key: 'apartment-detail',
     label: 'Chi tiết căn hộ',
@@ -498,7 +511,7 @@ export const adminMenu = [
   {
     key: 'security-gate',
     group: 'Tiện ích & khách',
-    label: 'Gate Pass & Tra biển số',
+    label: 'Quản lí bãi xe',
     icon: ScanOutlined,
     path: 'security-gate',
     roles: ['STAFF:SECURITY', 'MANAGER'],

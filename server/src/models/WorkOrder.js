@@ -21,6 +21,18 @@ const workOrderSchema = new Schema(
     scheduledDate: Date,
     completedAt: Date,
     note: String,
+    // UC07: bản sao mẫu checklist của thiết bị lúc tạo phiếu; Trưởng BQL sửa mẫu sau đó không làm đổi phiếu này (UC08 dùng)
+    checklist: {
+      type: [{
+        _id: false,
+        label: String,
+        unit: { type: String, default: null },
+        minValue: { type: Number, default: null },
+        maxValue: { type: Number, default: null },
+        required: { type: Boolean, default: true },
+      }],
+      default: [],
+    },
     // Ảnh bằng chứng KTV chụp khi hoàn thành (UC-D04), bắt buộc ≥ 1 ảnh khi DONE
     completionImages: { type: [String], default: [], validate: [(v) => v.length <= 5, 'Tối đa 5 ảnh'] },
   },

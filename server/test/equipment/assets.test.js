@@ -1,7 +1,7 @@
-// Người 1 (Mô đun 10) — UC-D01: Quản lý tài sản chung & chu kỳ bảo trì
+// Người 1 (Mô đun 10) — UC07: Quản lý thiết bị, chu kỳ ngày / tháng / quý, mẫu checklist, mã QR (BR-E01, BR-E02)
 import { after, afterEach, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { Asset, WorkOrder } from '../../src/models/index.js';
+import { Asset, AuditLog, WorkOrder } from '../../src/models/index.js';
 import * as assets from '../../src/modules/assets/assets.service.js';
 import { startOfVnDay } from '../../src/utils/time.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
@@ -12,13 +12,19 @@ let server;
 let api;
 
 const DAY = 24 * 60 * 60 * 1000;
+let seq = 0;
+const CHECKLIST = [{ label: 'Điện áp tủ điều khiển', unit: 'V', minValue: 370, maxValue: 400, required: true }];
 const body = (b, name, extra = {}) => ({
   buildingId: String(b._id),
+  code: `TB-${(seq += 1)}`,
   name,
   category: 'ELEVATOR',
-  maintenanceCycleDays: 30,
+  cycleValue: 30,
+  cycleUnit: 'DAY',
+  checklist: CHECKLIST,
   ...extra,
 });
+const vnDate = (iso) => new Date(`${iso}T00:00:00+07:00`);
 
 before(async () => {
   await connectTestDB();
@@ -30,7 +36,7 @@ after(async () => {
   await closeTestDB();
 });
 
-describe('assets (UC-D01)', () => {
+describe('assets (UC07)', () => {
   afterEach(clearTestDB);
 
   it('tạo tài sản: next = last + chu kỳ; chưa có last → hôm nay + chu kỳ (BR-O18)', async () => {
@@ -42,17 +48,76 @@ describe('assets (UC-D01)', () => {
     assert.equal(a1.isActive, true);
     assert.equal(String(a1.createdBy), manager.id);
 
-    const a2 = await assets.createAsset(manager, body(b, 'Máy bơm', { category: 'PUMP', maintenanceCycleDays: 90 }));
+    const a2 = await assets.createAsset(manager, body(b, 'Máy bơm', { category: 'PUMP', cycleValue: 90 }));
     assert.equal(a2.lastMaintenanceDate, null);
     assert.equal(a2.nextMaintenanceDate.getTime(), startOfVnDay().getTime() + 90 * DAY);
   });
 
-  it('trùng tên trong cùng tòa (không phân biệt hoa thường) → ASSET_NAME_EXISTS; khác tòa thì được (BR-O17)', async () => {
+  it('BR-E01: mã thiết bị duy nhất (MSG-E01), cho trùng tên; mã QR tự sinh, duy nhất, không đổi khi sửa', async () => {
     const manager = asUser(await createManager());
     const [b1, b2] = [await createBuilding(), await createBuilding()];
-    await assets.createAsset(manager, body(b1, 'Thang máy A'));
-    await assert.rejects(assets.createAsset(manager, body(b1, 'thang MÁY a')), { errorCode: 'ASSET_NAME_EXISTS' });
-    assert.ok(await assets.createAsset(manager, body(b2, 'Thang máy A')));
+    const a = await assets.createAsset(manager, body(b1, 'Thang máy A', { code: 'TM-01' }));
+    await assert.rejects(assets.createAsset(manager, body(b2, 'Khác', { code: 'TM-01' })), { errorCode: 'ASSET_CODE_EXISTS' });
+    assert.ok(await assets.createAsset(manager, body(b1, 'Thang máy A'))); // trùng tên vẫn được
+    assert.match(a.qrCode, /^EQ-[A-Z0-9_-]{12}$/);
+    const other = await assets.createAsset(manager, body(b1, 'Thang máy B'));
+    assert.notEqual(other.qrCode, a.qrCode);
+    const edited = await assets.updateAsset(a._id, { name: 'Thang máy A (đổi tên)', qrCode: 'EQ-GIA-MAO' });
+    assert.equal(edited.qrCode, a.qrCode);
+    await assert.rejects(assets.updateAsset(other._id, { code: 'TM-01' }), { errorCode: 'ASSET_CODE_EXISTS' });
+  });
+
+  it('MSG-E01 vẫn chặn trùng mã khi DB chưa có index uniq_asset_code (Atlas trước khi chạy migrate)', async () => {
+    const manager = asUser(await createManager());
+    const b = await createBuilding();
+    await Asset.collection.dropIndex('uniq_asset_code');
+    try {
+      await assets.createAsset(manager, body(b, 'Thiết bị 1', { code: 'TEST-UC07' }));
+      await assert.rejects(assets.createAsset(manager, body(b, 'Thiết bị 2', { code: 'test-uc07' })), { errorCode: 'ASSET_CODE_EXISTS' });
+      const other = await assets.createAsset(manager, body(b, 'Thiết bị 3', { code: 'TEST-UC07-B' }));
+      await assert.rejects(assets.updateAsset(other._id, { code: 'TEST-UC07' }), { errorCode: 'ASSET_CODE_EXISTS' });
+      assert.ok(await assets.updateAsset(other._id, { code: 'TEST-UC07-B', name: 'Giữ mã của chính nó' }));
+      assert.equal(await Asset.countDocuments({ code: 'TEST-UC07' }), 1);
+    } finally {
+      await Asset.createIndexes();
+    }
+  });
+
+  it('BR-E02: chu kỳ tháng giữ ngày, cuối tháng lùi về ngày cuối tháng đích; quý = 3 tháng (giờ Việt Nam)', () => {
+    const next = (iso, cycleValue, cycleUnit) => assets.computeNextMaintenance(vnDate(iso), { cycleValue, cycleUnit }).getTime();
+    assert.equal(next('2026-01-31', 1, 'MONTH'), vnDate('2026-02-28').getTime());
+    assert.equal(next('2028-01-31', 1, 'MONTH'), vnDate('2028-02-29').getTime()); // năm nhuận
+    assert.equal(next('2026-03-15', 1, 'MONTH'), vnDate('2026-04-15').getTime());
+    assert.equal(next('2026-11-30', 1, 'QUARTER'), vnDate('2027-02-28').getTime());
+    assert.equal(next('2026-12-01', 2, 'QUARTER'), vnDate('2027-06-01').getTime());
+    assert.equal(next('2026-12-31', 13, 'MONTH'), vnDate('2028-01-31').getTime());
+    assert.equal(next('2026-11-08', 10, 'DAY'), vnDate('2026-11-18').getTime());
+  });
+
+  it('BR-E02: mẫu checklist ít nhất 1 mục, không trùng mục, min ≤ max; bảo hành không trước ngày lắp', async () => {
+    const manager = asUser(await createManager());
+    const b = await createBuilding();
+    await assert.rejects(assets.createAsset(manager, body(b, 'X', { checklist: [] })), { errorCode: 'VALIDATION_ERROR' });
+    await assert.rejects(assets.createAsset(manager, body(b, 'X', { checklist: [{ label: 'A' }, { label: ' a ' }] })), { errorCode: 'VALIDATION_ERROR' });
+    await assert.rejects(assets.createAsset(manager, body(b, 'X', { checklist: [{ label: 'Áp', minValue: 5, maxValue: 2 }] })), { errorCode: 'VALIDATION_ERROR' });
+    await assert.rejects(assets.createAsset(manager, body(b, 'X', { installDate: vnDate('2026-05-01'), warrantyEnd: vnDate('2026-04-01') })), { errorCode: 'VALIDATION_ERROR' });
+    const ok = await assets.createAsset(manager, body(b, 'Y', { installDate: vnDate('2026-01-01'), warrantyEnd: vnDate('2028-01-01') }));
+    await assert.rejects(assets.updateAsset(ok._id, { checklist: [] }), { errorCode: 'VALIDATION_ERROR' });
+    await assert.rejects(assets.updateAsset(ok._id, { warrantyEnd: vnDate('2025-12-01') }), { errorCode: 'VALIDATION_ERROR' });
+  });
+
+  it('nhật ký: thêm / sửa (chỉ trường đổi, checklist ghi số mục) / ngừng theo dõi đều có giá trị cũ / mới', async () => {
+    const manager = asUser(await createManager());
+    const a = await assets.createAsset(manager, body(await createBuilding(), 'Thang máy N', { code: 'TM-N' }));
+    await assets.updateAsset(a._id, { name: 'Thang máy N2', checklist: [...CHECKLIST, { label: 'Phanh' }] }, { user: manager });
+    await assets.updateAsset(a._id, { name: 'Thang máy N2' }, { user: manager }); // không đổi gì → không ghi
+    await assets.setAssetStatus(a._id, false, { user: manager });
+    const logs = await AuditLog.find({ targetId: a._id }).sort({ createdAt: 1, _id: 1 }).lean();
+    assert.deepEqual(logs.map((l) => l.action), ['ASSET_CREATED', 'ASSET_UPDATED', 'ASSET_DEACTIVATED']);
+    assert.equal(logs[0].after.code, 'TM-N');
+    assert.deepEqual(logs[1].before, { name: 'Thang máy N', checklist: '1 mục' });
+    assert.deepEqual(logs[1].after, { name: 'Thang máy N2', checklist: '2 mục' });
+    assert.deepEqual([logs[2].before, logs[2].after], [{ isActive: true }, { isActive: false }]);
   });
 
   it('ngày bảo trì gần nhất ở tương lai / tòa không tồn tại → VALIDATION_ERROR', async () => {
@@ -67,7 +132,7 @@ describe('assets (UC-D01)', () => {
     const b = await createBuilding();
     const last = new Date(Date.now() - 5 * DAY);
     const asset = await assets.createAsset(manager, body(b, 'Thang máy B', { lastMaintenanceDate: last }));
-    const updated = await assets.updateAsset(asset._id, { maintenanceCycleDays: 10 });
+    const updated = await assets.updateAsset(asset._id, { cycleValue: 10 });
     assert.equal(updated.nextMaintenanceDate.getTime(), startOfVnDay(last).getTime() + 10 * DAY);
 
     await WorkOrder.create({ assetId: asset._id, type: 'SCHEDULED', status: 'IN_PROGRESS', scheduledDate: new Date() });
@@ -99,7 +164,8 @@ describe('assets (UC-D01)', () => {
     // UI luôn gửi lại cả chu kỳ + ngày gần nhất cũ khi sửa tên
     const renamed = await assets.updateAsset(asset._id, {
       name: 'Đang quá hạn (đổi tên)',
-      maintenanceCycleDays: 30,
+      cycleValue: 30,
+      cycleUnit: 'DAY',
       lastMaintenanceDate: last,
     });
     assert.equal(renamed.nextMaintenanceDate.getTime(), due);
@@ -112,12 +178,10 @@ describe('assets (UC-D01)', () => {
     await assert.rejects(assets.updateAsset(asset._id, { lastMaintenanceDate: new Date(Date.now() + 2 * DAY) }), { errorCode: 'VALIDATION_ERROR' });
   });
 
-  it('sửa trùng tên tài sản khác cùng tòa → ASSET_NAME_EXISTS; id không tồn tại → NOT_FOUND', async () => {
+  it('id không tồn tại → NOT_FOUND; tìm theo mã thiết bị', async () => {
     const manager = asUser(await createManager());
-    const b = await createBuilding();
-    await assets.createAsset(manager, body(b, 'Máy bơm 1', { category: 'PUMP' }));
-    const other = await assets.createAsset(manager, body(b, 'Máy bơm 2', { category: 'PUMP' }));
-    await assert.rejects(assets.updateAsset(other._id, { name: 'MÁY BƠM 1' }), { errorCode: 'ASSET_NAME_EXISTS' });
+    await assets.createAsset(manager, body(await createBuilding(), 'Máy bơm 1', { category: 'PUMP', code: 'BOM-HAM' }));
+    assert.deepEqual((await assets.listAssets({ page: 1, limit: 20, q: 'bom-ham' })).items.map((a) => a.code), ['BOM-HAM']);
     await assert.rejects(assets.updateAsset('0123456789abcdef01234567', { name: 'X' }), { errorCode: 'NOT_FOUND' });
     await assert.rejects(assets.setAssetStatus('0123456789abcdef01234567', false), { errorCode: 'NOT_FOUND' });
   });
@@ -181,8 +245,10 @@ describe('assets (UC-D01)', () => {
       const manager = await createManager();
       const tech = await createTechnician();
       const b = await createBuilding();
-      const created = await api('POST', '/assets', manager, body(b, 'Hệ thống PCCC', { category: 'FIRE_SYSTEM', maintenanceCycleDays: 180 }));
+      const created = await api('POST', '/assets', manager, body(b, 'Hệ thống PCCC', { category: 'FIRE_SYSTEM', cycleValue: 6, cycleUnit: 'MONTH' }));
       assert.equal(created.status, 201);
+      assert.match(created.body.message, /in mã QR/); // MSG-E02
+      assert.ok(created.body.data.qrCode);
       assert.equal(await Asset.countDocuments(), 1);
 
       const list = await api('GET', '/assets', tech);
@@ -192,9 +258,15 @@ describe('assets (UC-D01)', () => {
       const forbidden = await api('POST', '/assets', tech, body(b, 'Khác'));
       assert.equal(forbidden.status, 403);
 
-      const invalid = await api('POST', '/assets', manager, { buildingId: String(b._id), name: 'Thiếu chu kỳ', category: 'OTHER' });
+      const invalid = await api('POST', '/assets', manager, { buildingId: String(b._id), code: 'X-1', name: 'Thiếu chu kỳ', category: 'OTHER' });
       assert.equal(invalid.status, 400);
       assert.equal(invalid.body.errorCode, 'VALIDATION_ERROR');
+      const noCode = await api('POST', '/assets', manager, { ...body(b, 'Thiếu mã'), code: undefined });
+      assert.equal(noCode.status, 400);
+      assert.equal((await api('POST', '/assets', manager, body(b, 'Mã sai', { code: 'có dấu cách' }))).status, 400);
+      const dup = await api('POST', '/assets', manager, body(b, 'Trùng mã', { code: created.body.data.code }));
+      assert.equal(dup.status, 409);
+      assert.equal(dup.body.errorCode, 'ASSET_CODE_EXISTS');
     });
 
     it('PUT/PATCH: KTV 403, không token 401, body rỗng / chu kỳ ≤ 0 / loại sai / sort lạ → 400, id lạ → 404', async () => {
@@ -208,13 +280,14 @@ describe('assets (UC-D01)', () => {
 
       const put = (payload) => api('PUT', `/assets/${asset._id}`, manager, payload);
       assert.equal((await put({})).status, 400);
-      assert.equal((await put({ maintenanceCycleDays: 0 })).status, 400);
+      assert.equal((await put({ cycleValue: 0 })).status, 400);
+      assert.equal((await put({ cycleUnit: 'YEAR' })).status, 400);
       assert.equal((await put({ category: 'ROBOT' })).status, 400);
       assert.equal((await api('GET', '/assets?sort=-passwordHash', manager)).status, 400);
 
-      const okRes = await put({ maintenanceCycleDays: 45, note: 'Kiểm định 2026' });
+      const okRes = await put({ cycleValue: 2, cycleUnit: 'QUARTER', note: 'Kiểm định 2026' });
       assert.equal(okRes.status, 200);
-      assert.equal(okRes.body.data.maintenanceCycleDays, 45);
+      assertMatch(okRes.body.data, { cycleValue: 2, cycleUnit: 'QUARTER' });
 
       const stop = await api('PATCH', `/assets/${asset._id}/status`, manager, { isActive: false });
       assert.equal(stop.status, 200);

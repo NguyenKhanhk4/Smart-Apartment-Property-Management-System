@@ -1,5 +1,7 @@
+// Module 8: API bảng tin/bình luận/khảo sát, quyền đăng và kiểm duyệt chỉ dành cho Trưởng BQL.
 import { Router } from 'express';
 import Joi from 'joi';
+import { ApiError } from '../../utils/ApiError.js';
 import { ANNOUNCEMENT_SCOPES, values } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
@@ -8,9 +10,10 @@ import { paginationQuery } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { idParams, objectId } from '../../utils/validators.js';
 import * as service from './announcements.service.js';
+import { uploadImages, uploadToCloudinary } from '../../services/upload.service.js';
 
 const router = Router();
-const PUBLISHERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
+const PUBLISHERS = ['MANAGER'];
 
 const createBody = Joi.object({
   title: Joi.string().trim().min(3).max(200).required(),
@@ -25,6 +28,11 @@ const createBody = Joi.object({
   }),
   isPinned: Joi.boolean().default(false),
   sendEmail: Joi.boolean().default(false),
+  poll: Joi.object({
+    audience: Joi.string().valid('OWNER', 'ACTIVE_RESIDENT').required(),
+    options: Joi.array().items(Joi.string().trim().min(1).max(200)).min(2).max(10).unique().required(),
+    closesAt: Joi.date().greater('now').required(),
+  }),
 });
 
 /**
@@ -63,6 +71,7 @@ router.get(
       ...paginationQuery,
       q: Joi.string().trim().max(100),
       targetScope: Joi.string().valid(...values(ANNOUNCEMENT_SCOPES)),
+      apartmentId: objectId(),
     }),
   }),
   async (req, res) => {
@@ -75,9 +84,37 @@ router.post(
   '/',
   authenticate,
   authorize(...PUBLISHERS),
+  uploadImages('attachments', 5, true),
+  (req, _res, next) => {
+    if (typeof req.body?.poll === 'string') {
+      try { req.body.poll = JSON.parse(req.body.poll); } catch { return next(ApiError.badRequest('Dữ liệu khảo sát không hợp lệ')); }
+    }
+    next();
+  },
   validate({ body: createBody }),
-  async (req, res) => created(res, await service.publish(req.user, req.body), 'Đã đăng bảng tin'),
+  async (req, res) => {
+    const urls = await uploadToCloudinary(req.files, 'announcements');
+    const attachments = urls.map((url, i) => ({ url, name: req.files[i].originalname }));
+    created(res, await service.publish(req.user, { ...req.body, attachments }), 'Đã đăng bảng tin');
+  },
 );
+
+router.get('/:id/comments', authenticate, validate({ params: idParams, query: Joi.object(paginationQuery) }), async (req, res) => {
+  const { items, pagination } = await service.comments(req.user, req.params.id, req.validated.query);
+  paginated(res, items, pagination);
+});
+router.post('/:id/comments', authenticate, authorize('RESIDENT'), validate({ params: idParams,
+  body: Joi.object({ content: Joi.string().trim().min(1).max(2000).required() }) }),
+async (req, res) => created(res, await service.addComment(req.user, req.params.id, req.body.content)));
+router.patch('/:id/comments/:commentId/hide', authenticate, authorize('MANAGER'), validate({ params: Joi.object({ id: objectId().required(), commentId: objectId().required() }) }),
+async (req, res) => ok(res, await service.hideComment(req.user, req.params.id, req.params.commentId)));
+router.get('/:id/poll', authenticate, authorize('MANAGER', 'BOARD', 'RESIDENT'), validate({ params: idParams, query: Joi.object({ apartmentId: objectId() }) }),
+async (req, res) => ok(res, await service.pollResults(req.user, req.params.id, req.validated.query.apartmentId)));
+router.put('/:id/poll/vote', authenticate, authorize('RESIDENT'), validate({ params: idParams,
+  body: Joi.object({ apartmentId: objectId().required(), option: Joi.number().integer().min(0).max(9).required() }) }),
+async (req, res) => ok(res, await service.vote(req.user, req.params.id, req.body)));
+router.patch('/:id/poll/close', authenticate, authorize('MANAGER'), validate({ params: idParams }),
+async (req, res) => ok(res, await service.closePoll(req.user, req.params.id)));
 
 /**
  * @openapi

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router';
 import { Alert, Button, Form, Input, Steps } from 'antd';
 import { ArrowRightOutlined, HomeOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons';
 import { authApi } from '../../api/auth.api';
+import { ALERT_GAP } from './authStyles';
 import { PHONE_RULES } from '../../utils/phone';
 import PersonalDataTerms from './PersonalDataTerms';
 
@@ -23,6 +24,8 @@ export default function ActivationPage() {
   const prefillPhone = useLocation().state?.phone; // từ trang đăng nhập khi tài khoản chưa kích hoạt
   const [step, setStep] = useState(0);
   const [identity, setIdentity] = useState(null); // Thông tin bước 1; null = dùng mã in tại quầy
+  const [deskPhone, setDeskPhone] = useState(null); // SĐT đã gõ ở bước 1 trước khi chuyển sang mã in tại quầy
+  const [infoForm] = Form.useForm();
   const [credentials, setCredentials] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -61,7 +64,8 @@ export default function ActivationPage() {
     if (res) {
       // Mã đặt lại mật khẩu in tại quầy cũng nhập ở đây (UC02 bước 7)
       const mode = res.data?.mode;
-      navigate('/login', { replace: true, state: mode === 'PASSWORD_RESET' ? { passwordReset: true } : { activated: true } });
+      const done = mode === 'PASSWORD_RESET' ? { passwordReset: true } : { activated: true };
+      navigate('/login', { replace: true, state: { ...done, phone } }); // trang đăng nhập điền sẵn SĐT
     } else {
       // Mã sai hoặc hết hạn thì phải quay lại nhập mã
       setStep(1);
@@ -88,10 +92,10 @@ export default function ActivationPage() {
         />
       </div>
 
-      {error && <Alert type="error" showIcon title={error} className="mb-4" closable onClose={() => setError(null)} />}
+      {error && <Alert type="error" showIcon title={error} style={ALERT_GAP} closable={{ onClose: () => setError(null) }} />}
 
       {step === 0 && (
-        <Form layout="vertical" requiredMark={false} onFinish={sendOtp} disabled={loading} initialValues={identity ?? (prefillPhone ? { phone: prefillPhone } : undefined)}>
+        <Form form={infoForm} layout="vertical" requiredMark={false} onFinish={sendOtp} disabled={loading} initialValues={identity ?? { phone: deskPhone ?? prefillPhone }}>
           <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
             <Input size="large" prefix={icon(PhoneOutlined)} placeholder="0912345678" autoComplete="tel" />
           </Form.Item>
@@ -118,6 +122,7 @@ export default function ActivationPage() {
             onClick={() => {
               setError(null);
               setIdentity(null);
+              setDeskPhone(infoForm.getFieldValue('phone')?.trim() || null); // không bắt gõ lại SĐT
               setStep(1);
             }}
           >
@@ -130,7 +135,7 @@ export default function ActivationPage() {
         <Form
           layout="vertical"
           requiredMark={false}
-          initialValues={{ phone: identity?.phone, ...credentials }}
+          initialValues={{ phone: identity?.phone ?? deskPhone, ...credentials }}
           onFinish={(values) => {
             setError(null);
             setCredentials(values);
@@ -138,7 +143,7 @@ export default function ActivationPage() {
           }}
         >
           {identity && (
-            <Alert type="info" showIcon className="mb-4" title="Mã xác minh đã được gửi tới email của bạn, có hiệu lực 10 phút." />
+            <Alert type="info" showIcon style={ALERT_GAP} title="Mã xác minh đã được gửi tới email của bạn, có hiệu lực 10 phút." />
           )}
           <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
             <Input size="large" prefix={icon(PhoneOutlined)} disabled={Boolean(identity)} />
@@ -198,7 +203,15 @@ export default function ActivationPage() {
           <Button type="primary" size="large" block className="mt-4" loading={loading} onClick={() => finish('ACCEPTED')}>
             Đồng ý và kích hoạt
           </Button>
-          <Button size="large" block className="mt-2" disabled={loading} onClick={() => finish('DECLINED')}>
+          {/* Chữ dài: cho xuống dòng và có khoảng đệm, không để chạm mép nút trên màn hẹp */}
+          <Button
+            size="large"
+            block
+            className="mt-2"
+            disabled={loading}
+            onClick={() => finish('DECLINED')}
+            style={{ height: 'auto', minHeight: 40, whiteSpace: 'normal', paddingInline: 16, paddingBlock: 8, lineHeight: 1.4 }}
+          >
             Không đồng ý, kích hoạt với chức năng giới hạn
           </Button>
           <Button type="link" block className="mt-2" disabled={loading} onClick={() => setStep(1)}>

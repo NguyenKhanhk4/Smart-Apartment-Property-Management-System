@@ -171,6 +171,15 @@ export function progressError(ticket, to) {
   return null;
 }
 
+/** Phản ánh do Trưởng BQL xử lý và đóng trực tiếp; không đi qua nghiệm thu kỹ thuật. */
+export function complaintResponseError(ticket, to) {
+  if (ticket.type !== TICKET_TYPES.COMPLAINT) return 'Chỉ dùng thao tác này cho phản ánh, khiếu nại';
+  if (![NEW, IN_PROGRESS].includes(ticket.status) || ![IN_PROGRESS, TICKET_STATUS.CLOSED].includes(to)) {
+    return `Không thể chuyển phản ánh từ ${ticket.status} sang ${to}`;
+  }
+  return null;
+}
+
 /** Vi phạm SLA chưa cảnh báo: 'ACK' (sự cố chưa ai nhận quá hạn nhận), 'RESPONSE' (phản ánh chưa phản hồi quá hạn) */
 export function slaBreaches(ticket, now = new Date()) {
   const late = (due) => Boolean(due) && new Date(due).getTime() < now.getTime();

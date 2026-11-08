@@ -309,6 +309,19 @@ router.patch(
  *     summary: KTV cập nhật tiến độ IN_PROGRESS / WAITING_CONFIRM (UC-E04). WAITING_CONFIRM bắt buộc kèm ≥ 1 ảnh kết quả (field images, multipart)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
+/** UC42: phản hồi và đóng phản ánh, không yêu cầu ảnh như nghiệm thu kỹ thuật. */
+router.patch(
+  '/:id/respond-complaint',
+  authenticate,
+  authorize('MANAGER'),
+  uploadImages('images', 5),
+  validate({ params: idParams, body: Joi.object({
+    status: Joi.string().valid(TICKET_STATUS.IN_PROGRESS, TICKET_STATUS.CLOSED).required(),
+    note: Joi.string().trim().min(5).max(2000).required(),
+  }) }),
+  async (req, res) => ok(res, await service.respondComplaint(req.user, req.params.id, req.body, req.files), 'Đã lưu phản hồi'),
+);
+
 router.patch(
   '/:id/progress',
   authenticate,

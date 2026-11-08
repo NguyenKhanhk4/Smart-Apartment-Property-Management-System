@@ -4,6 +4,11 @@ export const ERROR_CODES = Object.freeze({
   UNAUTHORIZED: { status: 401, message: 'Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn' },
   FORBIDDEN_ROLE: { status: 403, message: 'Bạn không có quyền thực hiện thao tác này' },
   NOT_FOUND: { status: 404, message: 'Không tìm thấy dữ liệu' },
+  NO_DATA: { status: 404, message: 'Không có dữ liệu cho bộ lọc đã chọn' }, // MSG-D01
+  // UC04 phân quyền
+  PERMISSION_REVOKED: { status: 403, message: 'Trưởng BQL đã tắt quyền này của vai trò bạn' },
+  ROLE_READ_ONLY: { status: 403, message: 'Quyền của vai trò Trưởng BQL cố định, không chỉnh sửa được' }, // BR-X2
+  CORE_PERMISSION: { status: 400, message: 'Đây là quyền lõi của vai trò, không thể bỏ' }, // MSG-S14, BR-X3
   AUTH_INVALID_CREDENTIALS: { status: 401, message: 'Số điện thoại hoặc mật khẩu không đúng' },
   ACCOUNT_LOCKED_TEMP: { status: 423, message: 'Tài khoản bị tạm khóa 15 phút do nhập sai mật khẩu 5 lần liên tiếp' },
   ACCOUNT_NOT_ACTIVATED: { status: 403, message: 'Tài khoản chưa được kích hoạt. Vui lòng kích hoạt tài khoản trước khi đăng nhập' },
@@ -46,6 +51,8 @@ export const ERROR_CODES = Object.freeze({
     message: 'Bạn chưa được chủ hộ cho phép phát sinh phí tiện ích. Hãy nhờ chủ hộ bật quyền hoặc chọn khung giờ miễn phí',
   },
   VEHICLE_SLOT_FULL: { status: 409, message: 'Bãi xe đã hết chỗ' },
+  PARKING_TARIFF_UNDEFINED: { status: 422, message: 'Chưa có quy tắc tính phí cho lượt gửi này. Lượt gửi vẫn đang mở.' },
+  PARKING_FEE_CHANGED: { status: 409, message: 'Phí đã thay đổi theo giờ ra. Hãy tính lại trước khi xác nhận thu tiền.' },
   RESIDENCY_DATE_OVERLAP: { status: 409, message: 'Khai báo bị trùng thời gian với khai báo khác' },
   TICKET_ALREADY_CLOSED: { status: 409, message: 'Phản ánh đã đóng, không thể cập nhật' },
   // Sự cố & tiện ích (Người 4)
@@ -58,8 +65,8 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Tài sản đang có work order chưa hoàn thành',
   },
-  ASSET_NAME_EXISTS: { status: 409, message: 'Tên tài sản đã tồn tại trong tòa này' },
-  ASSET_HAS_OPEN_WORKORDER: { status: 409, message: 'Tài sản còn work order chưa hoàn thành' },
+  ASSET_CODE_EXISTS: { status: 409, message: 'Mã thiết bị đã tồn tại' }, // MSG-E01
+  ASSET_HAS_OPEN_WORKORDER: { status: 409, message: 'Thiết bị còn phiếu bảo trì đang mở, không thể ngừng theo dõi' }, // MSG-E10
   WORKORDER_INVALID_STATUS: { status: 409, message: 'Work order đã hoàn thành, không thể thao tác' },
   WORKORDER_INVALID_ASSIGNEE: {
     status: 400,

@@ -125,6 +125,18 @@ test('không phản hồi: nhắc 1 lần sau 2 ngày, tự đóng phiếu (Từ
 test('phiếu đã nghiệm thu → chi phí vào thông báo phí kỳ sau, đánh dấu đã tính, tính lại không cộng 2 lần', async () => {
   const { ownerUser, tech, ticket, apartment } = await setup();
   const accountant = asUser(await createUser('ACCOUNTANT'));
+  apartment.type = 'RESIDENTIAL';
+  apartment.netArea = 62;
+  apartment.handoverDate = new Date('2026-11-16T00:00:00+07:00');
+  await apartment.save();
+  await FeeType.create({
+    code: 'MANAGEMENT_RESIDENTIAL',
+    name: 'Phí quản lý căn ở',
+    feeCategory: 'MANAGEMENT',
+    calcMethod: 'PER_M2',
+    unitPrice: 12_000,
+    effectiveFrom: new Date('2026-11-01T00:00:00+07:00'),
+  });
   await FeeType.create({
     code: 'CLEANING',
     name: 'Phí vệ sinh',
@@ -138,7 +150,7 @@ test('phiếu đã nghiệm thu → chi phí vào thông báo phí kỳ sau, đ�
 
   // Chưa nghiệm thu → kỳ 11 chưa tính
   await Ticket.updateOne({ _id: ticket._id }, { $set: { status: 'WAITING_CONFIRM' } });
-  const nov = await generateForApartment(accountant, { period: '2026-11', apartmentId: apartment._id }, { now: new Date('2026-11-02T03:00:00Z') });
+  const nov = await generateForApartment(accountant, { period: '2026-11', apartmentId: apartment._id }, { now: new Date('2026-11-20T03:00:00Z') });
   assert.equal(nov.items.filter((i) => i.feeCategory === 'REPAIR').length, 0);
 
   // Nghiệm thu 20/10 → tính lại Nháp kỳ 11 có dòng sửa chữa
@@ -147,13 +159,17 @@ test('phiếu đã nghiệm thu → chi phí vào thông báo phí kỳ sau, đ�
   const repair = recalculated.items.find((i) => i.feeCategory === 'REPAIR');
   assert.equal(repair.amount, 350_000);
   assert.match(repair.description, /Sửa chữa: .*nghiệm thu 20\/10/);
-  assert.equal(recalculated.totalAmount, 70 * 7000 + 350_000);
+  const management = recalculated.items.find((i) => i.feeCategory === 'MANAGEMENT');
+  assert.equal(management.amount, 372_000);
+  assert.match(management.description, /15\/30 ngày/);
+  assert.equal(recalculated.totalAmount, 70 * 7000 + 372_000 + 350_000);
   const [q] = await quotesOf(ticket._id);
   assert.equal(String(q.invoiceId), String(nov._id));
 
   // Tính lại lần nữa vẫn 1 dòng; kỳ 12 không tính lại
   const again = await recalculateDraft(accountant, nov._id);
   assert.equal(again.items.filter((i) => i.feeCategory === 'REPAIR').length, 1);
+  assert.equal(again.totalAmount, recalculated.totalAmount);
   await Invoice.updateOne({ _id: nov._id }, { $set: { status: 'UNPAID' } });
   const dec = await generateForApartment(accountant, { period: '2026-12', apartmentId: apartment._id }, { now: new Date('2026-12-02T03:00:00Z') });
   assert.equal(dec.items.filter((i) => i.feeCategory === 'REPAIR').length, 0);

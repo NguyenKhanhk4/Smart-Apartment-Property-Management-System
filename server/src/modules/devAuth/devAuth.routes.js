@@ -5,6 +5,7 @@ import { env } from '../../config/env.js';
 import { validate } from '../../middlewares/validate.js';
 import { User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { apartmentsOf } from '../auth/auth.service.js';
 import { ok } from '../../utils/response.js';
 
 // CHỈ DÙNG KHI DEV (NODE_ENV=development) — đăng nhập nhanh bằng tài khoản seed, không cần mật khẩu,
@@ -38,7 +39,9 @@ router.post(
     );
     const { consents, ...profile } = user;
     const publicUser = { ...profile, id: String(user._id), consentStatus: consents?.at(-1)?.action ?? null };
-    ok(res, { user: publicUser, accessToken, refreshToken: null }, 'Đăng nhập dev thành công');
+    // Trả danh sách căn như đăng nhập thật, để cư dân từ 2 căn vào được màn Chọn căn hộ (UC01 bước 5)
+    const apartments = await apartmentsOf(user);
+    ok(res, { user: publicUser, accessToken, refreshToken: null, apartments }, 'Đăng nhập dev thành công');
   },
 );
 

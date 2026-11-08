@@ -1,19 +1,22 @@
 import { createElement } from 'react';
 import { NavLink, useLocation } from 'react-router';
 import { residentBottomNav, residentMenu } from '../../config/menu';
+import { useAuth } from '../../hooks/useAuth';
 
-const items = residentBottomNav.map((key) => residentMenu.find((m) => m.key === key)).filter(Boolean);
+const allItems = residentBottomNav.map((key) => residentMenu.find((m) => m.key === key)).filter(Boolean);
 const CENTER_KEY = 'my-code';
 
 /** Thanh điều hướng dưới (mobile): 5 mục, "Mã của tôi" là nút tròn navy nổi ở giữa */
 export default function BottomNav() {
   const activeKey = useLocation().pathname.split('/')[2];
+  const { canSee } = useAuth();
+  const items = allItems.filter(canSee); // UC04: ẩn mục bị Trưởng BQL tắt quyền Xem
 
   return (
     <nav
       aria-label="Điều hướng chính"
-      className="fixed bottom-0 inset-x-0 z-40 grid grid-cols-5 bg-white border-t border-r-border pt-2 px-1"
-      style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
+      className="fixed bottom-0 inset-x-0 z-40 grid bg-white border-t border-r-border pt-2 px-1"
+      style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`, paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
     >
       {items.map(({ key, path, label, icon }) => {
         const active = activeKey === path.split('/')[0];

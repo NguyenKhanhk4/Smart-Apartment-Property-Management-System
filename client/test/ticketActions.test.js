@@ -44,6 +44,18 @@ test('progressOptions: khu vực chung', () => {
   assert.deepEqual(progressOptions({ ...base, status: 'WAITING_PARTS' }), ['IN_PROGRESS', 'WAITING_CONFIRM']);
 });
 
+test('phản ánh: manager được xử lý; cư dân đánh giá sau khi BQL đóng, không sửa phiếu đã kết thúc', () => {
+  const complaint = { ...base, type: 'COMPLAINT' };
+  const manager = can('MANAGER');
+  assert.equal(ticketActions(complaint, me, manager).canRespondComplaint, true);
+  assert.equal(ticketActions({ ...complaint, status: 'IN_PROGRESS' }, me, manager).canRespondComplaint, true);
+  assert.equal(ticketActions(complaint, me, can('STAFF:RECEPTIONIST')).canRespondComplaint, false);
+  assert.equal(ticketActions(base, me, manager).canRespondComplaint, false);
+  assert.equal(ticketActions({ ...complaint, status: 'CLOSED' }, me, manager).canRespondComplaint, false);
+  assert.equal(ticketActions({ ...complaint, status: 'CLOSED' }, me, can('RESIDENT')).canConfirm, true);
+  assert.equal(ticketActions({ ...complaint, status: 'CLOSED', rating: 4 }, me, can('RESIDENT')).canConfirm, false);
+});
+
 test('progressOptions: trong căn hộ chưa đồng ý phí thì không cập nhật tiến độ, phải gửi báo giá qua form', () => {
   const inApt = { ...base, scope: 'IN_APARTMENT', status: 'ASSIGNED' };
   assert.deepEqual(progressOptions(inApt), []);

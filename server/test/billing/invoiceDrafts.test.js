@@ -1,10 +1,11 @@
 // Mô đun 4 — Bước 2: tính phí ra thông báo Nháp, khoản thu khác, tính lại, cron nhắc Kế toán.
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AuditLog, Booking, FeeType, Invoice, Notification, SystemConfig } from '../../src/models/index.js';
+import { AuditLog, Booking, Contract, FeeType, Invoice, Notification, SystemConfig } from '../../src/models/index.js';
 import { addOtherItem, recalculateDraft, removeOtherItem } from '../../src/modules/invoices/invoices.drafts.js';
 import { remindBilling } from '../../src/modules/invoices/invoices.jobs.js';
-import { generateForApartment, generateForPeriod } from '../../src/modules/invoices/invoices.service.js';
+import { generateForApartment, generateForPeriod, previewInvoices } from '../../src/modules/invoices/invoices.service.js';
+import { createFeeType } from '../../src/modules/feeTypes/feeTypes.service.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { asUser, createHousehold, createUser } from '../helpers/fixtures.js';
 import { createContract } from '../helpers/fixtures.moduleA.js';
@@ -44,6 +45,54 @@ test('tính phí 1 căn → Nháp, chưa có hạn đóng, chưa gửi thông b�
   assert.equal(String(inv.payerId), String(owner._id));
   assert.equal(inv.payerSource, 'OWNER');
   assert.equal(await Notification.countDocuments({ userId: owner._id }), 0);
+});
+
+test('UC13: căn chưa bàn giao bị bỏ qua kể cả khi đã có hợp đồng mua bán', async () => {
+  const { user, apartment } = await setup();
+  apartment.handoverDate = null;
+  apartment.occupancyStatus = 'NOT_HANDED_OVER';
+  await apartment.save();
+
+  const preview = await previewInvoices({ period: PERIOD, apartmentId: apartment._id });
+  assert.equal(preview.rows[0].status, 'NOT_HANDED_OVER');
+  assert.equal(preview.summary.notHandedOver, 1);
+  const batch = await generateForPeriod({ period: PERIOD, user });
+  assert.equal(batch.notHandedOver, 1);
+  assert.equal(batch.created, 0);
+  await assert.rejects(generateForApartment(user, { period: PERIOD, apartmentId: apartment._id }, { now: NOW }), /chưa bàn giao trong kỳ/);
+});
+
+test('UC13: phí quản lý lấy diện tích thông thủy, đúng loại căn và số ngày từ bàn giao', async () => {
+  const { user, apartment } = await setup();
+  apartment.type = 'RESIDENTIAL';
+  apartment.netArea = 62;
+  apartment.handoverDate = new Date('2026-10-16T00:00:00+07:00');
+  apartment.occupancyStatus = 'UNDER_REPAIR';
+  await apartment.save();
+  await Contract.updateOne({ apartmentId: apartment._id }, { $set: { startDate: apartment.handoverDate } });
+  const managementRate = {
+    name: 'Phí quản lý căn ở', feeCategory: 'MANAGEMENT', calcMethod: 'PER_M2',
+    unitPrice: 12_000, effectiveFrom: PERIOD,
+  };
+  await assert.rejects(createFeeType(user, { ...managementRate, code: 'MANAGEMENT_OTHER' }, { now: NOW }), /mã phí tương ứng/);
+  await createFeeType(user, { ...managementRate, code: 'MANAGEMENT_RESIDENTIAL' }, { now: NOW });
+  await createFeeType(user, {
+    ...managementRate, code: 'MANAGEMENT_COMMERCIAL', name: 'Phí quản lý căn kinh doanh', unitPrice: 20_000,
+  }, { now: NOW });
+
+  const beforeHandover = await previewInvoices({ period: '2026-09', apartmentId: apartment._id });
+  assert.equal(beforeHandover.rows[0].status, 'NOT_HANDED_OVER');
+  const draft = await generateForApartment(user, { period: PERIOD, apartmentId: apartment._id }, {
+    now: new Date('2026-10-20T03:00:00Z'),
+  });
+  const management = draft.items.filter((item) => item.feeCategory === 'MANAGEMENT');
+  assert.equal(management.length, 1);
+  assert.equal(management[0].feeCode, 'MANAGEMENT_RESIDENTIAL');
+  assert.equal(management[0].amount, 384_000);
+  assert.match(management[0].description, /16\/31 ngày/);
+  assert.equal(draft.totalAmount, 384_000 + 70 * 7000);
+  const recalculated = await recalculateDraft(user, draft._id);
+  assert.equal(recalculated.totalAmount, draft.totalAmount);
 });
 
 test('tính phí cả kỳ chạy lại không tạo trùng (Nháp cũng được tính là đã có)', async () => {

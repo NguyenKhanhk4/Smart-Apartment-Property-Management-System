@@ -4,12 +4,14 @@ import ForbiddenPage from '../features/errors/ForbiddenPage';
 import { roleHome } from './roleHome';
 
 // Chưa đăng nhập → /login (nhớ trang đang vào); không đủ quyền → trang 403
-export function RequireAuth({ roles, children }) {
-  const { user, hasRole } = useAuth();
+export function RequireAuth({ roles, menuKey, children }) {
+  const { user, hasRole, canSee } = useAuth();
   const location = useLocation();
 
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
   if (roles?.length && !hasRole(...roles)) return <ForbiddenPage />;
+  // UC04: mở thẳng đường dẫn của mục bị Trưởng BQL tắt quyền Xem cũng ra trang 403
+  if (menuKey && !canSee({ key: menuKey, roles })) return <ForbiddenPage />;
   return children;
 }
 

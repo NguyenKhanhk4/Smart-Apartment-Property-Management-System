@@ -1,4 +1,4 @@
-// Enum dùng chung toàn hệ thống — khớp srs_final.md §III.2.2 (Table Descriptions).
+// Enum dùng chung toàn hệ thống; bổ sung cron an ninh và thời hạn lưu khách Module 7, giữ quy ước các module hiện có.
 // Client có bản nhãn tiếng Việt tương ứng ở client/src/constants/enums.js.
 
 export const values = (enumObj) => Object.values(enumObj);
@@ -46,6 +46,19 @@ export const BOARD_TITLES = Object.freeze({
 });
 
 // ===== Tòa nhà, căn hộ, hợp đồng, cư dân, xe (Module A) =====
+export const APARTMENT_OCCUPANCY = Object.freeze({
+  NOT_HANDED_OVER: 'NOT_HANDED_OVER',
+  VACANT: 'VACANT',
+  OWNER_OCCUPIED: 'OWNER_OCCUPIED',
+  RENTED: 'RENTED',
+  UNDER_REPAIR: 'UNDER_REPAIR',
+});
+
+export const APARTMENT_TYPES = Object.freeze({
+  RESIDENTIAL: 'RESIDENTIAL',
+  COMMERCIAL: 'COMMERCIAL',
+});
+
 export const APARTMENT_STATUS = Object.freeze({
   VACANT: 'VACANT',
   OWNED: 'OWNED',
@@ -92,6 +105,7 @@ export const GATE_PASS_STATUS = Object.freeze({
   USED: 'USED',
   REJECTED: 'REJECTED',
   EXPIRED: 'EXPIRED',
+  CANCELLED: 'CANCELLED',
 });
 
 export const PLATE_LOOKUP_RESULTS = Object.freeze({
@@ -114,6 +128,7 @@ export const PARKING_CARD_STATUS = Object.freeze({
 // ===== Phí, hóa đơn, thanh toán, công nợ (Module B) =====
 // Nhóm phí trên hóa đơn (BR-F1)
 export const FEE_CATEGORIES = Object.freeze({
+  MANAGEMENT: 'MANAGEMENT',
   CLEANING: 'CLEANING',
   PARKING: 'PARKING',
   AMENITY: 'AMENITY',
@@ -139,6 +154,7 @@ export const FEE_TYPE_STATES = Object.freeze({ ACTIVE: 'ACTIVE', UPCOMING: 'UPCO
 export const INVOICE_PREVIEW_STATUS = Object.freeze({
   NEW: 'NEW', // sẽ được lập
   EXISTS: 'EXISTS', // đã có hóa đơn chưa hủy (BR-F2)
+  NOT_HANDED_OVER: 'NOT_HANDED_OVER',
   NO_PAYER: 'NO_PAYER', // chưa có hợp đồng hiệu lực → bỏ qua
   ERROR: 'ERROR', // thiếu đơn giá...
 });
@@ -272,6 +288,13 @@ export const ASSET_CATEGORIES = Object.freeze({
   PUMP: 'PUMP',
   FIRE_SYSTEM: 'FIRE_SYSTEM',
   OTHER: 'OTHER',
+});
+
+// UC07, BR-E02: đơn vị chu kỳ bảo trì
+export const CYCLE_UNITS = Object.freeze({
+  DAY: 'DAY',
+  MONTH: 'MONTH',
+  QUARTER: 'QUARTER',
 });
 
 export const WORK_ORDER_TYPES = Object.freeze({
@@ -474,6 +497,7 @@ export const CRON_STATUS = Object.freeze({ SUCCESS: 'SUCCESS', FAILED: 'FAILED' 
 export const CRON_TRIGGERS = Object.freeze({ SCHEDULE: 'SCHEDULE', MANUAL: 'MANUAL' });
 
 export const CRON_JOBS = Object.freeze({
+  OPERATIONS_SECURITY: 'OPERATIONS_SECURITY',
   INVOICE_GENERATE: 'INVOICE_GENERATE',
   INVOICE_OVERDUE: 'INVOICE_OVERDUE',
   BILLING_REMIND: 'BILLING_REMIND', // nhắc Kế toán đến kỳ tính phí + nhắc Trưởng BQL duyệt quá hạn (X8)
@@ -483,6 +507,7 @@ export const CRON_JOBS = Object.freeze({
   DEBT_REMIND: 'DEBT_REMIND', // nhắc nợ quá hạn N ngày/lần, tối đa M lần → Nợ quá hạn dài; quá ngày hẹn trả → báo Trưởng BQL // payOS: tra cứu giao dịch chờ kết quả, quá 15 phút → Cần đối soát
   BOOKING_COMPLETE: 'BOOKING_COMPLETE',
   WORK_ORDER_GENERATE: 'WORK_ORDER_GENERATE',
+  EQUIPMENT_WARNING: 'EQUIPMENT_WARNING', // UC07, BR-E07: phiếu bảo trì quá hạn, thiết bị sắp hết bảo hành (MSG-E08)
   TICKET_ESCALATE: 'TICKET_ESCALATE',
   TICKET_AUTO_CLOSE: 'TICKET_AUTO_CLOSE',
   CONTRACT_EXPIRE: 'CONTRACT_EXPIRE',
@@ -527,6 +552,10 @@ export const AUDIT_ACTIONS = Object.freeze({
   TICKET_CLOSED: 'TICKET_CLOSED',
   ANNOUNCEMENT_PUBLISHED: 'ANNOUNCEMENT_PUBLISHED',
   WORKORDER_ASSIGNED: 'WORKORDER_ASSIGNED',
+  ASSET_CREATED: 'ASSET_CREATED', // UC07
+  ASSET_UPDATED: 'ASSET_UPDATED',
+  ASSET_DEACTIVATED: 'ASSET_DEACTIVATED',
+  ASSET_REACTIVATED: 'ASSET_REACTIVATED',
   AMENITY_FEE_CHANGED: 'AMENITY_FEE_CHANGED',
   BOOKING_CANCELLED_BY_STAFF: 'BOOKING_CANCELLED_BY_STAFF',
   AMENITY_VISIT_CANCELLED: 'AMENITY_VISIT_CANCELLED',
@@ -546,6 +575,8 @@ export const AUDIT_ACTIONS = Object.freeze({
   PHONE_CHANGED: 'PHONE_CHANGED',
   EMAIL_CHANGED: 'EMAIL_CHANGED',
   CONSENT_CHANGED: 'CONSENT_CHANGED',
+  AUDIT_LOG_EXPORTED: 'AUDIT_LOG_EXPORTED', // UC06 bước 5 / UC65: xuất nhật ký cũng được ghi lại
+  ROLE_PERMISSIONS_CHANGED: 'ROLE_PERMISSIONS_CHANGED', // UC04: lưu ma trận phân quyền
   VEHICLE_APPROVED: 'VEHICLE_APPROVED',
   VEHICLE_REJECTED: 'VEHICLE_REJECTED',
   VEHICLE_CANCELLED: 'VEHICLE_CANCELLED',
@@ -559,6 +590,8 @@ export const AUDIT_ACTIONS = Object.freeze({
   GATEPASS_REJECTED: 'GATEPASS_REJECTED',
   GATEPASS_USED: 'GATEPASS_USED',
   GATEPASS_EXPIRED: 'GATEPASS_EXPIRED',
+  GATEPASS_CANCELLED: 'GATEPASS_CANCELLED',
+  TICKET_COMPLAINT_RESPONDED: 'TICKET_COMPLAINT_RESPONDED',
   // Thẻ gửi xe (Người 2 — UC66)
   PARKING_CARD_ISSUED: 'PARKING_CARD_ISSUED',
   PARKING_CARD_DISABLED: 'PARKING_CARD_DISABLED',
@@ -581,6 +614,9 @@ export const AUDIT_ACTIONS = Object.freeze({
 export const AUDIT_TARGETS = Object.freeze({
   MAINTENANCE_FUND: 'maintenance_fund',
   OPERATING_EXPENSE: 'operating_expenses',
+  AUDIT_LOG: 'audit_logs',
+  ASSET: 'assets',
+  ROLE_PERMISSION: 'role_permissions',
   USER: 'users',
   BUILDING: 'buildings',
   APARTMENT: 'apartments',
@@ -609,6 +645,7 @@ export const AUDIT_TARGETS = Object.freeze({
 
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
 export const CONFIG_KEYS = Object.freeze({
+  GUEST_RETENTION_MONTHS: 'GUEST_RETENTION_MONTHS',
   SLA_HOURS_URGENT: 'SLA_HOURS_URGENT',
   SLA_HOURS_HIGH: 'SLA_HOURS_HIGH',
   SLA_HOURS_MEDIUM: 'SLA_HOURS_MEDIUM',
@@ -647,6 +684,7 @@ export const CONFIG_KEYS = Object.freeze({
 });
 
 export const DEFAULT_CONFIGS = Object.freeze([
+  { key: CONFIG_KEYS.GUEST_RETENTION_MONTHS, value: 12, scope: CONFIG_SCOPES.BUSINESS, description: 'Thời hạn lưu dữ liệu khách vãng lai (tháng) — Module 7' },
   // BUSINESS — Manager sửa (UC-E01)
   { key: CONFIG_KEYS.SLA_HOURS_URGENT, value: 24, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Khẩn cấp (giờ) — BR-O7' },
   { key: CONFIG_KEYS.SLA_HOURS_HIGH, value: 72, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA ticket Cao (giờ) — BR-O7' },
@@ -682,7 +720,7 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
   { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán qua payOS (phút); 0 hoặc chưa cấu hình payOS = phí gộp vào thông báo phí tháng' },
   // TECHNICAL — tham số kỹ thuật, Trưởng BQL sửa
-  { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 5, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10' },
+  { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 10, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10. Client tự thu nhỏ ảnh trước khi gửi; mức này là lưới an toàn (Cloudinary miễn phí giới hạn ~10MB/ảnh)' },
 ]);
 
 // key → giá trị mặc định (module thuần như pricing / slot.utils đọc từ đây, không tự dựng lại map)
