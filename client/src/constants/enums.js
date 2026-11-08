@@ -334,6 +334,13 @@ export const RELATION_TYPES = {
   FAMILY_MEMBER: { label: 'Thành viên', color: 'default' },
 };
 
+// UC07: đơn vị chu kỳ bảo trì
+export const CYCLE_UNITS = {
+  DAY: { label: 'Ngày', color: 'default' },
+  MONTH: { label: 'Tháng', color: 'blue' },
+  QUARTER: { label: 'Quý', color: 'purple' },
+};
+
 export const ASSET_CATEGORIES = {
   ELEVATOR: { label: 'Thang máy', color: 'blue' },
   PUMP: { label: 'Máy bơm', color: 'cyan' },
@@ -387,6 +394,7 @@ export const CRON_JOBS = {
   FUND_PROPOSAL_REMIND: { label: 'Nhắc Ban quản trị duyệt chi quỹ', color: 'purple' },
   BOOKING_COMPLETE: { label: 'Hoàn tất / không đến booking tiện ích', color: 'cyan' },
   WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
+  EQUIPMENT_WARNING: { label: 'Cảnh báo bảo trì quá hạn, sắp hết bảo hành', color: 'orange' },
   TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },
   TICKET_AUTO_CLOSE: { label: 'Tự đóng phản ánh chờ nghiệm thu', color: 'default' },
   CONTRACT_EXPIRE: { label: 'Quét hợp đồng thuê hết hạn', color: 'purple' },

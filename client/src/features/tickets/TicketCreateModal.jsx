@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Alert, Form, Input, Modal, Radio, Select, Upload } from 'antd';
+import { Alert, App, Form, Input, Modal, Radio, Select, Upload } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { complaintCategoryApi, lookupApi, ticketApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
 import ApartmentSelect from '../../components/ApartmentSelect';
 import { PRIORITIES, TICKET_SCOPES, TICKET_STATUS, TICKET_TYPES, enumOptions } from '../../constants/enums';
+import { IMAGE_ACCEPT, IMAGE_HINT, checkImageFile } from '../../utils/imageUpload';
 
-const MAX_SIZE = 5 * 1024 * 1024;
+const MAX_PHOTOS = 5;
 
 const TYPE_HINT = {
   INCIDENT: 'Hỏng hóc cần kỹ thuật xử lý: điện, nước, thang máy, cửa... Kỹ thuật viên đang trực sẽ nhận phiếu.',
@@ -14,11 +15,12 @@ const TYPE_HINT = {
 };
 
 /**
- * UC-E02 — Gửi sự cố / phản ánh kèm tối đa 5 ảnh jpg/png ≤ 5MB.
+ * UC-E02 — Gửi sự cố / phản ánh kèm tối đa 5 ảnh (mọi định dạng ảnh, tự chuyển JPEG và thu nhỏ khi gửi — UC63).
  * `staff` = Lễ tân tạo hộ cư dân: chọn căn bất kỳ, gọi API /tickets/staff.
  */
 export default function TicketCreateModal({ open, onClose, onCreated, staff = false }) {
   const [form] = Form.useForm();
+  const { message } = App.useApp();
   const [files, setFiles] = useState([]);
   const type = Form.useWatch('type', form) ?? 'INCIDENT';
   const { data: categories = [] } = useApi(() => complaintCategoryApi.list(), [], { enabled: open });
@@ -37,12 +39,16 @@ export default function TicketCreateModal({ open, onClose, onCreated, staff = fa
   );
 
   const beforeUpload = (file) => {
-    const okType = ['image/jpeg', 'image/png'].includes(file.type);
-    if (!okType || file.size > MAX_SIZE) {
-      Modal.error({ title: 'Ảnh không hợp lệ', content: 'Chỉ nhận ảnh jpg/png, tối đa 5MB mỗi ảnh.' });
+    const error = checkImageFile(file);
+    if (error) {
+      message.error(error);
       return Upload.LIST_IGNORE;
     }
     return false; // giữ lại, gửi cùng form
+  };
+  const changeFiles = ({ fileList }) => {
+    if (fileList.length > MAX_PHOTOS) message.warning(`Tối đa ${MAX_PHOTOS} ảnh, đã bỏ bớt ảnh chọn thêm`);
+    setFiles(fileList.slice(0, MAX_PHOTOS));
   };
 
   const categoryId = Form.useWatch('categoryId', form);
@@ -134,16 +140,16 @@ export default function TicketCreateModal({ open, onClose, onCreated, staff = fa
         >
           <Input.TextArea rows={4} maxLength={2000} showCount />
         </Form.Item>
-        <Form.Item label="Ảnh minh họa (tối đa 5)">
+        <Form.Item label={`Ảnh minh họa (tối đa ${MAX_PHOTOS})`} extra={IMAGE_HINT}>
           <Upload
             listType="picture-card"
-            accept="image/jpeg,image/png"
+            accept={IMAGE_ACCEPT}
             multiple
             fileList={files}
             beforeUpload={beforeUpload}
-            onChange={({ fileList }) => setFiles(fileList.slice(0, 5))}
+            onChange={changeFiles}
           >
-            {files.length < 5 && (
+            {files.length < MAX_PHOTOS && (
               <div>
                 <PlusOutlined />
                 <div style={{ marginTop: 4 }}>Thêm ảnh</div>

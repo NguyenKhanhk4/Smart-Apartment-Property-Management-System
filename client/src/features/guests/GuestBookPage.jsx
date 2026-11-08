@@ -25,6 +25,8 @@ import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
 import { GUEST_STATUS } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
+import { useImageCheck } from '../../hooks/useImageCheck';
+import { IMAGE_ACCEPT } from '../../utils/imageUpload';
 
 function ApartmentSelect(props) {
   const [q, setQ] = useState('');
@@ -43,6 +45,7 @@ function ApartmentSelect(props) {
 // UC-E08 — Bảo vệ ghi nhận giờ khách đến/rời (gồm khách vãng lai — BR-O10). Lễ tân/Manager xem.
 export default function GuestBookPage() {
   const { hasRole } = useAuth();
+  const checkPhoto = useImageCheck(); // UC63
   const isGate = hasRole('STAFF:SECURITY');
   const isManager = hasRole('MANAGER');
   const isReception = hasRole('STAFF:RECEPTIONIST');
@@ -294,7 +297,7 @@ export default function GuestBookPage() {
           <Form.Item name="carrier" label="Đơn vị vận chuyển" rules={[{ required: true }]}><Input maxLength={100} /></Form.Item>
         </>}
         {['parcel', 'incident'].includes(operation?.kind) && <Form.Item label={operation.kind === 'parcel' ? 'Ảnh bưu kiện (bắt buộc)' : 'Ảnh hiện trường'}>
-          <Upload accept="image/jpeg,image/png" beforeUpload={() => false} fileList={photos} onChange={({ fileList }) => setPhotos(fileList)} maxCount={3} listType="picture"><Button>Chọn/chụp ảnh</Button></Upload>
+          <Upload accept={IMAGE_ACCEPT} beforeUpload={checkPhoto} fileList={photos} onChange={({ fileList }) => setPhotos(fileList)} maxCount={3} listType="picture"><Button>Chọn/chụp ảnh</Button></Upload>
         </Form.Item>}
         {operation?.kind === 'handover' && <>
           <Form.Item name="recipientId" label="Thành viên nhận hàng" rules={[{ required: true }]}><Select loading={recipients.loading} options={(recipients.data || []).map((p) => ({ value: p._id, label: p.fullName }))} /></Form.Item>

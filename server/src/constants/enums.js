@@ -290,6 +290,13 @@ export const ASSET_CATEGORIES = Object.freeze({
   OTHER: 'OTHER',
 });
 
+// UC07, BR-E02: đơn vị chu kỳ bảo trì
+export const CYCLE_UNITS = Object.freeze({
+  DAY: 'DAY',
+  MONTH: 'MONTH',
+  QUARTER: 'QUARTER',
+});
+
 export const WORK_ORDER_TYPES = Object.freeze({
   SCHEDULED: 'SCHEDULED',
   TICKET_LINKED: 'TICKET_LINKED',
@@ -500,6 +507,7 @@ export const CRON_JOBS = Object.freeze({
   DEBT_REMIND: 'DEBT_REMIND', // nhắc nợ quá hạn N ngày/lần, tối đa M lần → Nợ quá hạn dài; quá ngày hẹn trả → báo Trưởng BQL // payOS: tra cứu giao dịch chờ kết quả, quá 15 phút → Cần đối soát
   BOOKING_COMPLETE: 'BOOKING_COMPLETE',
   WORK_ORDER_GENERATE: 'WORK_ORDER_GENERATE',
+  EQUIPMENT_WARNING: 'EQUIPMENT_WARNING', // UC07, BR-E07: phiếu bảo trì quá hạn, thiết bị sắp hết bảo hành (MSG-E08)
   TICKET_ESCALATE: 'TICKET_ESCALATE',
   TICKET_AUTO_CLOSE: 'TICKET_AUTO_CLOSE',
   CONTRACT_EXPIRE: 'CONTRACT_EXPIRE',
@@ -544,6 +552,10 @@ export const AUDIT_ACTIONS = Object.freeze({
   TICKET_CLOSED: 'TICKET_CLOSED',
   ANNOUNCEMENT_PUBLISHED: 'ANNOUNCEMENT_PUBLISHED',
   WORKORDER_ASSIGNED: 'WORKORDER_ASSIGNED',
+  ASSET_CREATED: 'ASSET_CREATED', // UC07
+  ASSET_UPDATED: 'ASSET_UPDATED',
+  ASSET_DEACTIVATED: 'ASSET_DEACTIVATED',
+  ASSET_REACTIVATED: 'ASSET_REACTIVATED',
   AMENITY_FEE_CHANGED: 'AMENITY_FEE_CHANGED',
   BOOKING_CANCELLED_BY_STAFF: 'BOOKING_CANCELLED_BY_STAFF',
   AMENITY_VISIT_CANCELLED: 'AMENITY_VISIT_CANCELLED',
@@ -603,6 +615,7 @@ export const AUDIT_TARGETS = Object.freeze({
   MAINTENANCE_FUND: 'maintenance_fund',
   OPERATING_EXPENSE: 'operating_expenses',
   AUDIT_LOG: 'audit_logs',
+  ASSET: 'assets',
   ROLE_PERMISSION: 'role_permissions',
   USER: 'users',
   BUILDING: 'buildings',
@@ -701,7 +714,7 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
   { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán qua payOS (phút); 0 hoặc chưa cấu hình payOS = phí gộp vào thông báo phí tháng' },
   // TECHNICAL — tham số kỹ thuật, Trưởng BQL sửa
-  { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 5, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10' },
+  { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 10, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10. Client tự thu nhỏ ảnh trước khi gửi; mức này là lưới an toàn (Cloudinary miễn phí giới hạn ~10MB/ảnh)' },
 ]);
 
 // key → giá trị mặc định (module thuần như pricing / slot.utils đọc từ đây, không tự dựng lại map)

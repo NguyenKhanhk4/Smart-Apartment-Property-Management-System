@@ -23,6 +23,8 @@ import {
 import PhoneAccountNotice from '../../components/PhoneAccountNotice';
 import { usePhoneAccount } from '../../hooks/usePhoneAccount';
 import { PHONE_RULES } from '../../utils/phone';
+import { useImageCheck } from '../../hooks/useImageCheck';
+import { IMAGE_ACCEPT, IMAGE_HINT } from '../../utils/imageUpload';
 import {
   PlusOutlined,
   ReloadOutlined,
@@ -95,6 +97,7 @@ function PartyFields({ prefix, title, check, namePlaceholder, emailPlaceholder, 
 export default function ContractsPage() {
   const { hasRole } = useAuth();
   const { message } = App.useApp();
+  const checkPhoto = useImageCheck(); // UC63
   const isReceptionist = hasRole('STAFF:RECEPTIONIST');
   const isManager = hasRole('MANAGER');
 
@@ -636,10 +639,10 @@ export default function ContractsPage() {
             />
           )}
 
-          <Form.Item label="File đính kèm (hợp đồng có chữ ký / công chứng, jpg/png ≤ 5MB)">
+          <Form.Item label="Ảnh hợp đồng có chữ ký / công chứng" extra={IMAGE_HINT}>
             <Upload
-              accept="image/png,image/jpeg"
-              beforeUpload={() => false}
+              accept={IMAGE_ACCEPT}
+              beforeUpload={checkPhoto}
               fileList={contractFileList}
               onChange={({ fileList }) => setContractFileList(fileList.slice(-1))}
               maxCount={1}
@@ -681,10 +684,10 @@ export default function ContractsPage() {
             </Form.Item>
           )}
 
-          <Form.Item label="Cập nhật file đính kèm mới (nếu có, jpg/png ≤ 5MB)">
+          <Form.Item label="Cập nhật ảnh hợp đồng mới (nếu có)" extra={IMAGE_HINT}>
             <Upload
-              accept="image/png,image/jpeg"
-              beforeUpload={() => false}
+              accept={IMAGE_ACCEPT}
+              beforeUpload={checkPhoto}
               fileList={extendFileList}
               onChange={({ fileList }) => setExtendFileList(fileList.slice(-1))}
               maxCount={1}
