@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { APARTMENT_STATUS, values } from '../../constants/enums.js';
+import { APARTMENT_OCCUPANCY, APARTMENT_STATUS, APARTMENT_TYPES, values } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
-import { idParams, objectId } from '../../utils/validators.js';
+import { idParams, objectId, ymd } from '../../utils/validators.js';
 import * as service from './apartments.service.js';
 import { listApartmentResidents } from '../residents/residents.service.js';
 
@@ -20,6 +20,7 @@ const listQuery = Joi.object({
   buildingId: objectId(),
   floor: Joi.number().integer().min(1),
   status: Joi.string().valid(...values(APARTMENT_STATUS)),
+  occupancyStatus: Joi.string().valid(...values(APARTMENT_OCCUPANCY)),
   q: Joi.string().trim().max(50),
 });
 
@@ -27,18 +28,33 @@ const apartmentFields = {
   buildingId: objectId(),
   code: Joi.string().trim().uppercase().max(20),
   floor: Joi.number().integer().min(1),
-  area: Joi.number().positive(),
+  area: Joi.number().min(1),
   status: Joi.string(), // Sẽ bị chặn trong service/validator nếu gửi lên PUT
 };
 
+const propertyFields = {
+  blockId: objectId().allow(null),
+  type: Joi.string().valid(...values(APARTMENT_TYPES)),
+  grossArea: Joi.number().positive(),
+  netArea: Joi.number().min(1),
+  technicalShaft: Joi.string().trim().max(200).allow(''),
+  handoverDate: ymd().allow(null),
+};
+
 const createApartmentBody = Joi.object({
+  ...propertyFields,
   buildingId: apartmentFields.buildingId.required(),
   code: apartmentFields.code.required(),
   floor: apartmentFields.floor.required(),
-  area: apartmentFields.area.required(),
+  area: apartmentFields.area.when('netArea', {
+    is: Joi.exist(),
+    then: Joi.optional(),
+    otherwise: Joi.required(),
+  }),
 });
 
 const updateApartmentBody = Joi.object({
+  ...propertyFields,
   code: apartmentFields.code,
   floor: apartmentFields.floor,
   area: apartmentFields.area,
@@ -103,7 +119,7 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
  * /apartments:
  *   post:
  *     tags: [Tòa nhà & Căn hộ]
- *     summary: Tạo mới căn hộ với trạng thái VACANT (Trưởng BQL) — UC-A05
+ *     summary: Tạo căn hộ và ghi nhận ngày bàn giao (Trưởng BQL) — UC13
  */
 router.post(
   '/',
@@ -138,6 +154,38 @@ router.put(
       req.ip,
     );
     ok(res, apartment);
+  },
+);
+
+router.patch(
+  '/:id/confirm-move-in',
+  authenticate,
+  authorize('STAFF:RECEPTIONIST'),
+  validate({ params: idParams }),
+  async (req, res) => {
+    ok(res, await service.confirmMoveIn(req.validated.params.id, req.user, req.ip));
+  },
+);
+
+router.patch(
+  '/:id/occupancy-status',
+  authenticate,
+  authorize('MANAGER'),
+  validate({
+    params: idParams,
+    body: Joi.object({
+      status: Joi.string().valid(
+        APARTMENT_OCCUPANCY.VACANT,
+        APARTMENT_OCCUPANCY.OWNER_OCCUPIED,
+        APARTMENT_OCCUPANCY.RENTED,
+        APARTMENT_OCCUPANCY.UNDER_REPAIR,
+      ).required(),
+      reason: Joi.string().trim().max(500).required(),
+    }),
+  }),
+  async (req, res) => {
+    const { params, body } = req.validated;
+    ok(res, await service.setOccupancyStatus(params.id, body, req.user, req.ip));
   },
 );
 

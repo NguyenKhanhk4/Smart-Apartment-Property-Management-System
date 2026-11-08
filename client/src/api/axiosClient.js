@@ -14,6 +14,8 @@
 
 import axios from 'axios';
 import { authStorage } from '../utils/authStorage';
+import { notifyPermissionsChanged } from '../utils/permissionEvents';
+import { prepareFormData } from '../utils/imageUpload';
 import { readErrorPayload } from './errorPayload';
 import {
   DEFAULT_ERROR_MESSAGE,
@@ -50,9 +52,12 @@ const refreshClient = axios.create({ baseURL: API_BASE_URL, timeout: 30000 });
 
 const NO_REFRESH_PATHS = ['/auth/login', '/auth/activation', '/auth/password', '/auth/refresh', '/auth/logout'];
 
-apiClient.interceptors.request.use((config) => {
+apiClient.interceptors.request.use(async (config) => {
   const token = authStorage.getAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  // UC63: mọi ảnh gửi kèm FormData được chuyển sang JPEG và thu nhỏ ngay trước khi gửi (utils/imageUpload.js).
+  // Chỉ đụng file ảnh; file khác (Excel, PDF...) giữ nguyên.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) config.data = await prepareFormData(config.data);
   return config;
 });
 
@@ -111,6 +116,8 @@ apiClient.interceptors.response.use(
   async (error) => {
     // Request tải file (responseType 'blob') nhận body lỗi dạng Blob → đọc lại để lấy message của server
     if (error.response?.data instanceof Blob) error.response.data = await readErrorPayload(error.response.data);
+    // UC04: Trưởng BQL vừa tắt quyền này → nạp lại quyền để ẩn menu tương ứng
+    if (error.response?.data?.errorCode === 'PERMISSION_REVOKED') notifyPermissionsChanged();
     if (!shouldTryRefresh(error)) throw toApiError(error);
 
     const { config } = error;

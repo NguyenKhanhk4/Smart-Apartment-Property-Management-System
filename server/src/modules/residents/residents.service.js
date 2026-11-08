@@ -15,6 +15,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { normalizePhone } from '../../utils/validators.js';
 import { getHousehold } from '../household/household.service.js';
+import { revokeDepartedResidentServices } from './residentExit.service.js';
 import { ensureCodes, parseDateOfBirth } from '../memberCodes/memberCodes.service.js';
 import {
   buildIdNumberFields,
@@ -66,11 +67,11 @@ export async function listApartmentResidents(apartmentId, viewer) {
 
     return {
       _id: r._id,
-      userId: u._id,
-      fullName: u.fullName || '—',
+      userId: u._id ?? null,
+      fullName: u.fullName || r.fullName || '—',
       email: u.email,
       phone: u.phone,
-      dateOfBirth: u.dateOfBirth,
+      dateOfBirth: u.dateOfBirth ?? r.dateOfBirth,
       avatarUrl: u.avatarUrl,
       relationType: r.relationType,
       contractId: r.contractId,
@@ -146,21 +147,34 @@ export async function addMember(receptionistUser, data, ip) {
       );
     }
 
-    account = await findOrCreateResidentUser(data, session);
-    const alreadyActive = await Resident.exists({ apartmentId, userId: account.user._id, isActive: true }).session(session);
-    if (alreadyActive) throw new ApiError('STATUS_CONFLICT', 'Cư dân đã là thành viên đang ở của căn hộ này');
+    if (data.hasAccount === false) {
+      if (data.phone || data.userId || data.email || !data.fullName?.trim()) {
+        throw ApiError.badRequest('Nhân khẩu không tài khoản cần họ tên và không gửi thông tin đăng nhập');
+      }
+      const [resident] = await Resident.create([{
+        userId: null, fullName: data.fullName.trim(),
+        dateOfBirth: data.dateOfBirth ? parseDateOfBirth(data.dateOfBirth) : null,
+        apartmentId, relationType: RELATION_TYPES.FAMILY_MEMBER, contractId: activeContract._id,
+        isActive: true, moveInDate: new Date(), ...buildIdNumberFields(idNumber?.trim() || null),
+      }], { session });
+      savedResident = resident;
+    } else {
+      account = await findOrCreateResidentUser(data, session);
+      const alreadyActive = await Resident.exists({ apartmentId, userId: account.user._id, isActive: true }).session(session);
+      if (alreadyActive) throw new ApiError('STATUS_CONFLICT', 'Cư dân đã là thành viên đang ở của căn hộ này');
 
-    savedResident = await linkResident(
-      {
-        userId: account.user._id,
-        apartmentId,
-        relationType: RELATION_TYPES.FAMILY_MEMBER,
-        contractId: activeContract._id,
-        moveInDate: new Date(),
-        idNumber: idNumber?.trim() || null,
-      },
-      session,
-    );
+      savedResident = await linkResident(
+        {
+          userId: account.user._id,
+          apartmentId,
+          relationType: RELATION_TYPES.FAMILY_MEMBER,
+          contractId: activeContract._id,
+          moveInDate: new Date(),
+          idNumber: idNumber?.trim() || null,
+        },
+        session,
+      );
+    }
 
     await logAudit(
       {
@@ -168,15 +182,15 @@ export async function addMember(receptionistUser, data, ip) {
         user: receptionistUser,
         targetType: AUDIT_TARGETS.RESIDENT,
         targetId: savedResident._id,
-        metadata: { apartmentId, userId: account.user._id, relationType: RELATION_TYPES.FAMILY_MEMBER },
+        metadata: { apartmentId, userId: account?.user._id ?? null, relationType: RELATION_TYPES.FAMILY_MEMBER },
         ip,
       },
       { session },
     );
   });
 
-  const activationInviteSent = await inviteNewResident(account);
-  await notify(account.user._id, {
+  const activationInviteSent = account ? await inviteNewResident(account) : null;
+  await notify(account?.user._id, {
     type: NOTIFICATION_TYPES.SYSTEM,
     title: 'Đã thêm vào căn hộ',
     content: `Bạn đã được thêm vào danh sách nhân khẩu căn hộ ${apartment.code}`,
@@ -185,7 +199,11 @@ export async function addMember(receptionistUser, data, ip) {
   });
   await syncMemberCodes(apartmentId);
 
-  return { resident: savedResident, user: toPublicUser(account.user), activationInviteSent };
+  const resident = savedResident.toObject();
+  resident.idNumber = maskIdNumber(decryptIdNumber(resident.idNumberEnc));
+  delete resident.idNumberEnc;
+  delete resident.idNumberHash;
+  return { resident, user: account ? toPublicUser(account.user) : null, activationInviteSent };
 }
 
 async function syncMemberCodes(apartmentId) {
@@ -225,7 +243,10 @@ export async function updateMember(residentId, data, receptionistUser, ip) {
   if (dateOfBirth !== undefined) {
     const user = await User.findById(resident.userId).select('dateOfBirth');
     const parsed = dateOfBirth ? parseDateOfBirth(dateOfBirth) : null;
-    if (user && String(parsed) !== String(user.dateOfBirth)) {
+    if (!resident.userId) {
+      changes.dateOfBirth = { from: resident.dateOfBirth, to: parsed };
+      set.dateOfBirth = parsed;
+    } else if (user && String(parsed) !== String(user.dateOfBirth)) {
       changes.dateOfBirth = { from: user.dateOfBirth, to: parsed };
       await User.updateOne({ _id: user._id }, { $set: { dateOfBirth: parsed } });
       dobChanged = true;
@@ -293,25 +314,32 @@ export async function revealResidentIdNumber(residentId, actorUser, ip) {
  * - Chỉ gỡ FAMILY_MEMBER đang ở; OWNER/TENANT phải chấm dứt hợp đồng (409 STATUS_CONFLICT).
  */
 export async function removeMember(residentId, receptionistUser, ip) {
-  const resident = await findActiveMemberOr409(residentId);
-  if (resident.relationType !== RELATION_TYPES.FAMILY_MEMBER) {
-    throw new ApiError('STATUS_CONFLICT', 'Hãy chấm dứt hợp đồng để gỡ chủ sở hữu/người thuê');
-  }
+  let removed;
+  await withTransaction(async (session) => {
+    const resident = await Resident.findById(residentId).session(session);
+    if (!resident) throw ApiError.notFound('Không tìm thấy thông tin cư dân');
+    if (!resident.isActive) throw new ApiError('STATUS_CONFLICT', 'Cư dân đã rời khỏi căn hộ');
+    if (resident.relationType !== RELATION_TYPES.FAMILY_MEMBER) {
+      throw new ApiError('STATUS_CONFLICT', 'Hãy chấm dứt hợp đồng để gỡ chủ sở hữu/người thuê');
+    }
 
-  const removed = await Resident.findOneAndUpdate(
-    { _id: resident._id, isActive: true, relationType: RELATION_TYPES.FAMILY_MEMBER },
-    { $set: { isActive: false, moveOutDate: new Date() } },
-    { returnDocument: 'after' },
-  );
-  if (!removed) throw new ApiError('STATUS_CONFLICT', 'Cư dân vừa được cập nhật, vui lòng tải lại');
+    removed = await Resident.findOneAndUpdate(
+      { _id: resident._id, isActive: true, relationType: RELATION_TYPES.FAMILY_MEMBER },
+      { $set: { isActive: false, moveOutDate: new Date() } },
+      { returnDocument: 'after', session },
+    );
+    if (!removed) throw new ApiError('STATUS_CONFLICT', 'Cư dân vừa được cập nhật, vui lòng tải lại');
+    await revokeDepartedResidentServices({ apartmentId: removed.apartmentId,
+      userIds: [removed.userId], endedAt: removed.moveOutDate, session, actor: receptionistUser, ip });
 
-  await logAudit({
-    action: AUDIT_ACTIONS.RESIDENT_REMOVED,
-    user: receptionistUser,
-    targetType: AUDIT_TARGETS.RESIDENT,
-    targetId: removed._id,
-    metadata: { apartmentId: removed.apartmentId, userId: removed.userId },
-    ip,
+    await logAudit({
+      action: AUDIT_ACTIONS.RESIDENT_REMOVED,
+      user: receptionistUser,
+      targetType: AUDIT_TARGETS.RESIDENT,
+      targetId: removed._id,
+      metadata: { apartmentId: removed.apartmentId, userId: removed.userId },
+      ip,
+    }, { session });
   });
   await syncMemberCodes(removed.apartmentId);
 

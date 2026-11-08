@@ -199,7 +199,10 @@ export async function updateWorkOrderStatus(user, id, { status, note }, files = 
     const asset = await Asset.findById(done.assetId).session(session);
     if (!asset) return { title: done.title, nextDate: null };
     asset.lastMaintenanceDate = startOfVnDay(now);
-    asset.nextMaintenanceDate = computeNextMaintenance(asset.lastMaintenanceDate, asset.maintenanceCycleDays);
+    asset.nextMaintenanceDate = computeNextMaintenance(asset.lastMaintenanceDate, {
+      cycleValue: asset.cycleValue,
+      cycleUnit: asset.cycleUnit,
+    });
     await asset.save({ session });
     return { title: done.title, nextDate: asset.nextMaintenanceDate };
   });

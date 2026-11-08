@@ -41,6 +41,8 @@ export const ticketApi = {
   assignees: () => http.get('/tickets/assignees'),
   assign: (id, body) => http.patch(`/tickets/${id}/assign`, body),
   reject: (id, reason) => http.patch(`/tickets/${id}/reject`, { reason }),
+  respondComplaint: (id, body, files = []) =>
+    http.patch(`/tickets/${id}/respond-complaint`, files.length ? toForm(body, files) : body),
   /** files: ảnh kết quả, bắt buộc khi status = WAITING_CONFIRM (gửi multipart) */
   progress: (id, body, files = []) => {
     if (!files.length) return http.patch(`/tickets/${id}/progress`, body);

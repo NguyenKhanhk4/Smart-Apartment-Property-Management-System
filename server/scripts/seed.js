@@ -361,19 +361,40 @@ await M.OperatingExpense.insertMany(
   ]),
 );
 
-// ===== Tài sản & work order =====
-const assets = await M.Asset.insertMany(
-  buildings.flatMap((b) => [
-    { buildingId: b._id, name: `Thang máy số 1 ${b.name}`, category: 'ELEVATOR', location: 'Sảnh chính', maintenanceCycleDays: 30, lastMaintenanceDate: daysAgo(26), nextMaintenanceDate: daysAgo(-4) },
-    { buildingId: b._id, name: `Thang máy số 2 ${b.name}`, category: 'ELEVATOR', location: 'Sảnh phụ', maintenanceCycleDays: 30, lastMaintenanceDate: daysAgo(31), nextMaintenanceDate: daysAgo(1) },
-    { buildingId: b._id, name: `Máy bơm nước ${b.name}`, category: 'PUMP', location: 'Tầng hầm', maintenanceCycleDays: 90, lastMaintenanceDate: daysAgo(40), nextMaintenanceDate: daysAgo(-50) },
-    { buildingId: b._id, name: `Hệ thống PCCC ${b.name}`, category: 'FIRE_SYSTEM', location: 'Toàn tòa', maintenanceCycleDays: 180, lastMaintenanceDate: daysAgo(175), nextMaintenanceDate: daysAgo(-5) },
-  ]),
-);
+// ===== Thiết bị & work order (UC07: mã, chu kỳ ngày / tháng / quý, mẫu checklist) =====
+const CHECKLISTS = {
+  ELEVATOR: [
+    { label: 'Phanh và cáp tải', required: true },
+    { label: 'Điện áp tủ điều khiển', unit: 'V', minValue: 370, maxValue: 400, required: true },
+    { label: 'Đèn và nút gọi trong cabin', required: false },
+  ],
+  PUMP: [
+    { label: 'Áp lực đầu đẩy', unit: 'bar', minValue: 2, maxValue: 6, required: true },
+    { label: 'Nhiệt độ động cơ', unit: '°C', minValue: 20, maxValue: 75, required: true },
+    { label: 'Rò rỉ phớt bơm', required: true },
+  ],
+  FIRE_SYSTEM: [
+    { label: 'Áp lực bình chữa cháy', unit: 'bar', minValue: 12, maxValue: 16, required: true },
+    { label: 'Đầu báo khói phản hồi', required: true },
+  ],
+};
+const assetSeeds = buildings.flatMap((b) => [
+  { code: `TM1-${b.code}`, name: `Thang máy số 1 ${b.name}`, category: 'ELEVATOR', location: 'Sảnh chính', cycleValue: 1, cycleUnit: 'MONTH', last: 26, next: -4, manufacturer: 'Mitsubishi', warrantyDays: 20 },
+  { code: `TM2-${b.code}`, name: `Thang máy số 2 ${b.name}`, category: 'ELEVATOR', location: 'Sảnh phụ', cycleValue: 1, cycleUnit: 'MONTH', last: 31, next: 1, manufacturer: 'Mitsubishi', warrantyDays: 400 },
+  { code: `BOM-${b.code}`, name: `Máy bơm nước ${b.name}`, category: 'PUMP', location: 'Tầng hầm', cycleValue: 1, cycleUnit: 'QUARTER', last: 40, next: -50, manufacturer: 'Ebara', warrantyDays: 200 },
+  { code: `PCCC-${b.code}`, name: `Hệ thống PCCC ${b.name}`, category: 'FIRE_SYSTEM', location: 'Toàn tòa', cycleValue: 180, cycleUnit: 'DAY', last: 175, next: -5, manufacturer: null, warrantyDays: null },
+].map((a) => ({
+  buildingId: b._id, code: a.code, name: a.name, category: a.category, location: a.location, cycleValue: a.cycleValue, cycleUnit: a.cycleUnit,
+  checklist: CHECKLISTS[a.category], manufacturer: a.manufacturer, installDate: daysAgo(900),
+  warrantyEnd: a.warrantyDays == null ? null : daysAgo(-a.warrantyDays), vendorName: 'Công ty Kỹ thuật Toàn Phát', vendorPhone: '0283 999 1234',
+  lastMaintenanceDate: daysAgo(a.last), nextMaintenanceDate: daysAgo(a.next),
+})));
+const assets = await M.Asset.insertMany(assetSeeds);
+const CYCLE_DAYS = { DAY: 1, MONTH: 30, QUARTER: 91 };
 const workOrders = [];
 for (const a of assets) {
   for (let k = 1; k <= 3; k += 1) {
-    const scheduledDate = daysAgo(a.maintenanceCycleDays * k);
+    const scheduledDate = daysAgo(a.cycleValue * CYCLE_DAYS[a.cycleUnit] * k);
     if (scheduledDate < yearStart) continue;
     const late = rand() < 0.2;
     workOrders.push({
@@ -382,7 +403,7 @@ for (const a of assets) {
     });
   }
 }
-workOrders.push({ assetId: assets[1]._id, type: 'SCHEDULED', title: `Bảo trì định kỳ ${assets[1].name}`, status: 'PENDING', scheduledDate: daysAgo(1), createdAt: daysAgo(1) });
+workOrders.push({ assetId: assets[1]._id, type: 'SCHEDULED', title: `Bảo trì định kỳ ${assets[1].name}`, status: 'PENDING', scheduledDate: daysAgo(1), createdAt: daysAgo(1), checklist: assets[1].checklist.map((i) => i.toObject()) });
 await M.WorkOrder.insertMany(workOrders);
 
 // ===== Danh mục phản ánh & ticket =====

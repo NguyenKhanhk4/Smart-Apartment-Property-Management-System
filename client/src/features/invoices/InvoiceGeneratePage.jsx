@@ -141,7 +141,7 @@ export default function InvoiceGeneratePage() {
     <>
       <PageHeader
         title="Tính phí tháng"
-        subtitle="Tính phí vệ sinh, gửi xe của kỳ này và phí tiện ích kỳ trước thành thông báo phí Nháp. Nháp chưa gửi cư dân: kiểm tra, thêm khoản thu khác rồi trình Trưởng BQL duyệt & phát hành."
+        subtitle="Xem trước phí quản lý từ ngày bàn giao, phí vệ sinh, gửi xe và phí tiện ích. Kiểm tra thông báo Nháp trước khi trình duyệt."
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Tính phí' }]}
         extra={
           <Popconfirm
@@ -203,7 +203,7 @@ export default function InvoiceGeneratePage() {
           showIcon
           message={
             batchResult.summary
-              ? `Đã tạo ${batchResult.summary.created} thông báo Nháp (${formatMoney(batchResult.summary.totalAmount)}); bỏ qua ${batchResult.summary.existing} căn đã có, ${batchResult.summary.noPayer} căn chưa có HĐ mua bán.`
+              ? `Đã tạo ${batchResult.summary.created} thông báo Nháp (${formatMoney(batchResult.summary.totalAmount)}); bỏ qua ${batchResult.summary.existing} căn đã có, ${batchResult.summary.notHandedOver} căn chưa bàn giao trong kỳ và ${batchResult.summary.noPayer} căn chưa có HĐ mua bán.`
               : 'Tính phí thất bại'
           }
           description={
@@ -217,6 +217,7 @@ export default function InvoiceGeneratePage() {
       <Row gutter={[12, 12]} className="mb-4">
         {stat('Sẽ lập', summary?.new, { valueStyle: { color: '#1677ff' } })}
         {stat('Đã có hóa đơn', summary?.existing)}
+        {stat('Chưa bàn giao', summary?.notHandedOver)}
         {stat('Chưa có HĐ mua bán', summary?.noPayer)}
         {stat('Lỗi', summary?.error, summary?.error ? { valueStyle: { color: '#cf1322' } } : undefined)}
         <Col xs={24} md={16} lg={8}>

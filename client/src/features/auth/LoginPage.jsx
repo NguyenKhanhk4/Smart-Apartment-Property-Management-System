@@ -9,6 +9,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useApi } from '../../hooks/useApi';
 import { roleLabelOf } from '../../constants/enums';
 import { roleHome } from '../../routes/roleHome';
+import { ALERT_GAP } from './authStyles';
 
 // Trang đăng nhập (Module A — Vũ Việt). Gọi POST /auth/login thật.
 // Khi chạy dev, có thêm "Đăng nhập nhanh" bằng tài khoản seed để tiện kiểm thử.
@@ -20,8 +21,13 @@ export default function LoginPage() {
   const [pendingPhone, setPendingPhone] = useState(null); // tài khoản chưa kích hoạt (UC01 Step 2c)
   const [loading, setLoading] = useState(false);
 
-  const activated = location.state?.activated;
-  const passwordReset = location.state?.passwordReset;
+  // Thông báo xanh sau khi kích hoạt / đặt lại mật khẩu: tắt khi bấm đăng nhập để không chồng với lỗi đỏ
+  const [notice, setNotice] = useState(() => {
+    if (location.state?.passwordReset) return 'Mật khẩu đã được đặt lại. Vui lòng đăng nhập.';
+    if (location.state?.activated) return 'Tài khoản đã được kích hoạt. Vui lòng đăng nhập.';
+    return null;
+  });
+  const prefillPhone = location.state?.phone; // SĐT vừa kích hoạt / đặt lại mật khẩu
   const [sessionExpired] = useState(() => {
     try {
       const expired = window.sessionStorage.getItem(SESSION_EXPIRED_FLAG) === '1';
@@ -41,6 +47,7 @@ export default function LoginPage() {
 
   const submit = async (values) => {
     setError(null);
+    setNotice(null);
     setPendingPhone(null);
     setLoading(true);
     try {
@@ -64,27 +71,18 @@ export default function LoginPage() {
       <p className="m-0 mb-6 text-[13px] text-ink-2">Nhập thông tin tài khoản để truy cập hệ thống.</p>
 
       {sessionExpired && (
-        <Alert type="warning" showIcon title="Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." className="mb-4" closable />
+        <Alert type="warning" showIcon title="Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." style={ALERT_GAP} closable />
       )}
 
-      {(activated || passwordReset) && (
-        <Alert
-          type="success"
-          showIcon
-          title={passwordReset ? 'Mật khẩu đã được đặt lại. Vui lòng đăng nhập.' : 'Tài khoản đã được kích hoạt. Vui lòng đăng nhập.'}
-          className="mb-4"
-          closable
-        />
-      )}
+      {notice && <Alert type="success" showIcon title={notice} style={ALERT_GAP} closable={{ onClose: () => setNotice(null) }} />}
 
       {error && (
         <Alert
           type="error"
           showIcon
           title={error}
-          className="mb-4"
-          closable
-          onClose={() => setError(null)}
+          style={ALERT_GAP}
+          closable={{ onClose: () => setError(null) }}
           action={
             pendingPhone && (
               <Button size="small" type="primary" onClick={() => navigate('/activate', { state: { phone: pendingPhone } })}>
@@ -95,7 +93,7 @@ export default function LoginPage() {
         />
       )}
 
-      <Form layout="vertical" requiredMark={false} onFinish={submit} disabled={loading}>
+      <Form layout="vertical" requiredMark={false} onFinish={submit} disabled={loading} initialValues={prefillPhone ? { phone: prefillPhone } : undefined}>
         <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
           <Input size="large" prefix={<PhoneOutlined className="text-ink-3" />} placeholder="0912345678" autoComplete="username" />
         </Form.Item>

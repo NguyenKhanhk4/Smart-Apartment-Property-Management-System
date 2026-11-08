@@ -26,6 +26,7 @@ export const buildingsApi = {
   create: (body) => http.post('/buildings', body),
   update: (id, body) => http.put(`/buildings/${id}`, body),
   delete: (id) => http.delete(`/buildings/${id}`),
+  floorPlan: (id, params) => http.get(`/buildings/${id}/floor-plan`, { params }),
 };
 
 export const apartmentsApi = {
@@ -34,6 +35,8 @@ export const apartmentsApi = {
   create: (body) => http.post('/apartments', body),
   update: (id, body) => http.put(`/apartments/${id}`, body),
   delete: (id) => http.delete(`/apartments/${id}`),
+  setOccupancy: (id, body) => http.patch(`/apartments/${id}/occupancy-status`, body),
+  confirmMoveIn: (id) => http.patch(`/apartments/${id}/confirm-move-in`),
 };
 
 // ===== UC-A06: Hợp đồng =====
@@ -52,6 +55,14 @@ export const activationCodeApi = {
   issue: (userId) => http.post('/activation-codes', { userId }),
   /** Đổi SĐT đăng nhập tại quầy; trả lại thông tin tra cứu theo số mới */
   changePhone: (userId, phone) => http.post('/activation-codes/change-phone', { userId, phone }),
+};
+
+// UC04: ma trận phân quyền (Trưởng BQL) và quyền đang bị tắt của người đăng nhập
+export const permissionApi = {
+  me: () => http.get('/permissions/me'),
+  roles: () => http.get('/permissions/roles'),
+  matrix: (roleKey) => http.get(`/permissions/roles/${roleKey}`),
+  save: (roleKey, granted) => http.put(`/permissions/roles/${roleKey}`, { granted }),
 };
 
 export const residentsApi = {

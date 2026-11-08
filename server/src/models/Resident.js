@@ -4,7 +4,9 @@ import { ObjectId, Schema, model, schemaOptions } from './_shared.js';
 // residents — liên kết user ↔ căn hộ theo relationType
 const residentSchema = new Schema(
   {
-    userId: { type: ObjectId, ref: 'User', required: true },
+    userId: { type: ObjectId, ref: 'User', default: null },
+    fullName: { type: String, trim: true, maxlength: 100, required() { return !this.userId; } },
+    dateOfBirth: { type: Date, default: null },
     apartmentId: { type: ObjectId, ref: 'Apartment', required: true },
     relationType: { type: String, enum: values(RELATION_TYPES), required: true },
     idNumber: String, // CCCD
@@ -18,7 +20,11 @@ const residentSchema = new Schema(
   schemaOptions('residents'),
 );
 
-residentSchema.index({ userId: 1, apartmentId: 1 }, { unique: true });
+// Chỉ một đợt đang ở cho mỗi tài khoản/căn; nhiều đợt cũ và nhiều người không tài khoản được giữ riêng.
+residentSchema.index({ userId: 1, apartmentId: 1 }, {
+  name: 'uniq_active_resident', unique: true,
+  partialFilterExpression: { isActive: true, userId: { $type: 'objectId' } },
+});
 residentSchema.index({ apartmentId: 1, isActive: 1 });
 residentSchema.index({ contractId: 1 });
 residentSchema.index({ idNumberHash: 1 });

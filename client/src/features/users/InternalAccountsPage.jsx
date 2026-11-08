@@ -51,6 +51,12 @@ const ACCOUNT_STATUS = {
   LOCKED: { label: 'Đã khóa', color: 'error' },
 };
 
+/** Lỗi server có details theo trường (PHONE_EXISTS, EMAIL_EXISTS...) → báo đỏ ngay ô đó, ngoài thông báo nổi */
+const markFieldErrors = (form) => (err) => {
+  const fields = (err?.details ?? []).filter((d) => d.field);
+  if (fields.length) form.setFields(fields.map((d) => ({ name: d.field, errors: [d.message] })));
+};
+
 // Modal tạo mới tài khoản nội bộ (Trưởng BQL). Không tạo mật khẩu: nhân viên tự kích hoạt (UC11) hoặc nhận mã tại quầy (UC02)
 function CreateAccountModal({ open, onClose, onDone }) {
   const [form] = Form.useForm();
@@ -80,7 +86,7 @@ function CreateAccountModal({ open, onClose, onDone }) {
       confirmLoading={saving}
       destroyOnHidden
     >
-      <Form form={form} layout="vertical" preserve={false} onFinish={(v) => createAccount(v).catch(() => {})}>
+      <Form form={form} layout="vertical" preserve={false} onFinish={(v) => createAccount(v).catch(markFieldErrors(form))}>
         <Form.Item name="fullName" label="Họ và tên" rules={[{ required: true, message: 'Vui lòng nhập họ và tên' }]}>
           <Input placeholder="vd: Nguyễn Văn Quản" />
         </Form.Item>
@@ -157,17 +163,9 @@ function EditAccountModal({ user, open, onClose, onDone }) {
         }}
         // Tài khoản Trưởng BQL: không gửi vai trò, vì không tự đổi vai trò của mình được
         onFinish={({ role, roleTitle, boardTitle, ...v }) =>
-          updateAccount(user?.role === 'MANAGER' ? v : { ...v, role, roleTitle, boardTitle }).catch(() => {})
+          updateAccount(user?.role === 'MANAGER' ? v : { ...v, role, roleTitle, boardTitle }).catch(markFieldErrors(form))
         }
       >
-        <Form.Item
-          name="email"
-          label="Email (không bắt buộc)"
-          rules={[{ type: 'email', message: 'Email không đúng định dạng' }]}
-        >
-          <Input />
-        </Form.Item>
-
         <Form.Item
           name="fullName"
           label="Họ và tên"
@@ -180,6 +178,14 @@ function EditAccountModal({ user, open, onClose, onDone }) {
           name="phone"
           label="Số điện thoại"
           rules={PHONE_RULES}
+        >
+          <Input />
+        </Form.Item>
+
+        <Form.Item
+          name="email"
+          label="Email (không bắt buộc)"
+          rules={[{ type: 'email', message: 'Email không đúng định dạng' }]}
         >
           <Input />
         </Form.Item>
@@ -328,7 +334,7 @@ export default function InternalAccountsPage() {
                 okText="Gỡ khóa"
                 cancelText="Hủy"
               >
-                <Tooltip title="Gỡ khóa tạm do nhập sai mật khẩu">
+                <Tooltip title="Gỡ khóa tạm do nhập sai mật khẩu" placement="bottom">
                   <Button type="text" size="small" className="text-amber-600" icon={<UnlockOutlined />} />
                 </Tooltip>
               </Popconfirm>
@@ -344,7 +350,7 @@ export default function InternalAccountsPage() {
                 okButtonProps={{ danger: true }}
                 disabled={isSelf}
               >
-                <Tooltip title={isSelf ? 'Không thể tự khóa tài khoản của bạn' : 'Khóa tài khoản'}>
+                <Tooltip title={isSelf ? 'Không thể tự khóa tài khoản của bạn' : 'Khóa tài khoản'} placement="bottom">
                   <Button
                     type="text"
                     size="small"
@@ -362,7 +368,7 @@ export default function InternalAccountsPage() {
                 okText="Mở khóa"
                 cancelText="Hủy"
               >
-                <Tooltip title="Mở khóa">
+                <Tooltip title="Mở khóa" placement="bottom">
                   <Button
                     type="text"
                     size="small"

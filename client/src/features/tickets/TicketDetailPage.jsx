@@ -30,7 +30,10 @@ import {
   TICKET_TYPES,
 } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
-import { AssignModal, ConfirmModal, MergeModal, ProgressModal, QuoteDecisionModal, ReclassifyModal, RejectModal } from './TicketActionModals';
+import {
+  AssignModal, ComplaintResponseModal, ConfirmModal, MergeModal, ProgressModal,
+  QuoteDecisionModal, ReclassifyModal, RejectModal,
+} from './TicketActionModals';
 import { ticketActions } from './ticketActions';
 
 // Chi tiết phản ánh dùng chung cho cư dân (/r) và nội bộ (/app); nút thao tác hiện theo quyền
@@ -50,7 +53,10 @@ export default function TicketDetailPage() {
   }
   if (!t) return <Spin style={{ display: 'block', margin: 48 }} />;
 
-  const { canClaim, canAssign, canReject, canProgress, canQuote, canDecideQuote, canConfirm, canReclassify, canMerge } = ticketActions(t, user, hasRole);
+  const {
+    canClaim, canAssign, canReject, canProgress, canRespondComplaint, canQuote,
+    canDecideQuote, canConfirm, canReclassify, canMerge,
+  } = ticketActions(t, user, hasRole);
   const quoteList = quotes.data?.items ?? [];
   const pendingQuote = quoteList.find((q) => q.status === 'PENDING');
   const acceptedQuote = quoteList.find((q) => q.status === 'ACCEPTED');
@@ -97,9 +103,12 @@ export default function TicketDetailPage() {
               Cập nhật tiến độ
             </Button>
           )}
+          {canRespondComplaint && (
+            <Button type="primary" onClick={() => setModal('complaint')}>Xử lý phản ánh</Button>
+          )}
           {canConfirm && (
             <Button type="primary" onClick={() => setModal('confirm')}>
-              Xác nhận & đánh giá
+              {isComplaint && t.status === 'CLOSED' ? 'Đánh giá kết quả' : 'Xác nhận & đánh giá'}
             </Button>
           )}
         </Flex>
@@ -130,7 +139,9 @@ export default function TicketDetailPage() {
           <Alert type="error" showIcon title={`Phản ánh đã quá hạn xử lý (hạn ${formatDateTime(t.dueDate)})`} />
         )}
         {canConfirm && (
-          <Alert type="info" showIcon title="Kỹ thuật viên đã xử lý xong. Vui lòng xác nhận kết quả và đánh giá." />
+          <Alert type="info" showIcon title={isComplaint
+            ? 'Ban quản lý đã xử lý phản ánh. Bạn có thể đánh giá kết quả.'
+            : 'Kỹ thuật viên đã xử lý xong. Vui lòng xác nhận kết quả và đánh giá.'} />
         )}
         {canDecideQuote && (
           <Alert
@@ -245,6 +256,7 @@ export default function TicketDetailPage() {
       <ReclassifyModal {...modalProps('classify')} />
       <MergeModal {...modalProps('merge')} />
       <ProgressModal {...modalProps('progress')} />
+      <ComplaintResponseModal {...modalProps('complaint')} />
       <ConfirmModal {...modalProps('confirm')} />
       <QuoteDecisionModal {...modalProps('quote')} quote={pendingQuote} />
       <QuoteFormModal

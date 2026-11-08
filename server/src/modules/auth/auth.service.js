@@ -240,7 +240,7 @@ export async function verifyCurrentPassword(userId, password, { now = new Date()
 }
 
 /** Căn hộ đang ở của cư dân, để client biết có cần màn hình Chọn căn hộ không (UC01 bước 5) */
-async function apartmentsOf(user) {
+export async function apartmentsOf(user) {
   if (user.role !== ROLES.RESIDENT) return [];
   const residents = await Resident.find({ userId: user._id, isActive: true })
     .select('apartmentId relationType')

@@ -5,6 +5,7 @@
 // Module A — Tài khoản, tòa nhà, căn hộ, cư dân, hợp đồng, xe
 export { User } from './User.js';
 export { VerificationCode } from './VerificationCode.js';
+export { RolePermission } from './RolePermission.js';
 export { Building } from './Building.js';
 export { Apartment } from './Apartment.js';
 export { Contract } from './Contract.js';
@@ -12,6 +13,7 @@ export { Resident } from './Resident.js';
 export { Vehicle } from './Vehicle.js';
 export { GatePass } from './GatePass.js';
 export { ParkingCard } from './ParkingCard.js';
+export { ParkingSession } from './ParkingSession.js';
 
 // Module B — Phí, hóa đơn, thanh toán, công nợ
 export { FeeType } from './FeeType.js';

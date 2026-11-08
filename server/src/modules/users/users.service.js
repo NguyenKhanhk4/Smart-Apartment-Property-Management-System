@@ -211,7 +211,7 @@ export async function createInternal(managerUser, { fullName, email, phone, role
     user: managerUser,
     targetType: AUDIT_TARGETS.USER,
     targetId: newUser._id,
-    metadata: { role, roleTitle: titleForRole, boardTitle: boardForRole },
+    after: { role, roleTitle: titleForRole, boardTitle: boardForRole },
     ip,
   });
 
@@ -256,6 +256,7 @@ export async function updateInternal(managerUser, targetId, { fullName, email, p
     await assertSingleHolder({ role: newRole, boardTitle: newBoardTitle, excludeId: target._id });
   }
 
+  const roleBefore = { role: target.role, roleTitle: target.roleTitle, boardTitle: target.boardTitle };
   if (fullName !== undefined) target.fullName = fullName.trim();
   if (phone !== undefined) target.phone = phone;
   // UC03 bước 4: được sửa email; bỏ trống thì xóa email (người không có email kích hoạt bằng mã tại quầy)
@@ -288,7 +289,8 @@ export async function updateInternal(managerUser, targetId, { fullName, email, p
       user: managerUser,
       targetType: AUDIT_TARGETS.USER,
       targetId: target._id,
-      metadata: { role: newRole, roleTitle: newRoleTitle, boardTitle: newBoardTitle },
+      before: { role: roleBefore.role, roleTitle: roleBefore.roleTitle ?? null, boardTitle: roleBefore.boardTitle ?? null },
+      after: { role: newRole, roleTitle: newRoleTitle, boardTitle: newBoardTitle },
       ip,
     });
   }
@@ -315,6 +317,7 @@ export async function setStatus(managerUser, targetId, { isActive }, { ip } = {}
   if (!isActive) target.tokenVersion = (target.tokenVersion ?? 0) + 1;
   // Mở khóa thủ công cũng gỡ khóa tạm do nhập sai mật khẩu (BR-S03); audit ghi ở dưới
   if (isActive) target.set({ failedLoginCount: 0, lockedUntil: null });
+  const wasActive = target.isActive;
   target.isActive = isActive;
 
   await saveUnique(() => target.save());
@@ -324,6 +327,8 @@ export async function setStatus(managerUser, targetId, { isActive }, { ip } = {}
     user: managerUser,
     targetType: AUDIT_TARGETS.USER,
     targetId: target._id,
+    before: { isActive: wasActive },
+    after: { isActive },
     ip,
   });
 

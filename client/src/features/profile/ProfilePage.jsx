@@ -18,6 +18,8 @@ import { roleLabelOf } from '../../constants/enums';
 import PageHeader from '../../components/PageHeader';
 import ConsentTab from './ConsentTab';
 import { roleHome } from '../../routes/roleHome';
+import { useImageCheck } from '../../hooks/useImageCheck';
+import { IMAGE_ACCEPT } from '../../utils/imageUpload';
 
 // UC-A03: Trang hồ sơ cá nhân và đổi mật khẩu (/app/profile và /r/profile)
 export default function ProfilePage() {
@@ -25,6 +27,7 @@ export default function ProfilePage() {
   const [searchParams] = useSearchParams();
   const avatarLocked = isConsentLocked(user); // BR-X7: cư dân chưa đồng ý thì không tải ảnh được
   const { message } = App.useApp();
+  const checkPhoto = useImageCheck(); // UC63
 
   const [profileForm] = Form.useForm();
   // Đổi email phải nhập lại mật khẩu (email là kênh khôi phục mật khẩu)
@@ -122,9 +125,9 @@ export default function ProfilePage() {
               <Upload
                 showUploadList={false}
                 disabled={avatarLocked}
-                beforeUpload={() => false}
+                beforeUpload={checkPhoto}
                 onChange={handleAvatarUpload}
-                accept="image/png,image/jpeg"
+                accept={IMAGE_ACCEPT}
               >
                 <button
                   type="button"
@@ -149,7 +152,7 @@ export default function ProfilePage() {
                 <span className="text-xs text-ink-3 dark:text-[#94A3B8]">{user?.email || user?.phone}</span>
               </div>
               <p className="mt-2 mb-0 text-xs text-ink-3">
-                Định dạng JPG, PNG. Dung lượng tối đa 5MB.
+                Ảnh chụp hoặc ảnh có sẵn, tự thu nhỏ trước khi tải lên.
               </p>
             </div>
           </div>
