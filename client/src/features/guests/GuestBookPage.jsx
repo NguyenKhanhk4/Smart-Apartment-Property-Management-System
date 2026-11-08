@@ -311,7 +311,7 @@ export default function GuestBookPage() {
         {['checkpoint', 'tour'].includes(operation?.kind) && <Form.Item name="name" label="Tên" rules={[{ required: true }]}><Input maxLength={100} /></Form.Item>}
         {operation?.kind === 'checkpoint' && <Form.Item name="location" label="Vị trí" rules={[{ required: true }]}><Input maxLength={200} /></Form.Item>}
         {operation?.kind === 'tour' && <>
-          <Form.Item name="shiftId" label="Ca Bảo vệ (chính)" rules={[{ required: true }]}><Select loading={shifts.loading} options={(shifts.data || []).filter((s) => !s.isBackup && dayjs(s.endAt).isAfter(dayjs())).map((s) => ({ value: s._id, label: `${s.userId?.fullName} · ${formatDateTime(s.startAt)} – ${formatDateTime(s.endAt)}` }))} /></Form.Item>
+          <Form.Item name="shiftId" label="Ca Bảo vệ" rules={[{ required: true }]}><Select loading={shifts.loading} options={(shifts.data || []).filter((s) => dayjs(s.endAt).isAfter(dayjs())).map((s) => ({ value: s._id, label: `${s.userId?.fullName} · ${formatDateTime(s.startAt)} – ${formatDateTime(s.endAt)}` }))} /></Form.Item>
           <Form.Item name="startAt" label="Bắt đầu" rules={[{ required: true }]}><DatePicker showTime format="DD/MM/YYYY HH:mm" /></Form.Item>
           <Form.Item name="endAt" label="Kết thúc (trong ca)" rules={[{ required: true }]}><DatePicker showTime format="DD/MM/YYYY HH:mm" /></Form.Item>
           <Form.Item name="checkpointIds" label="Các checkpoint phải đi" rules={[{ required: true, type: 'array', min: 1 }]}><Select mode="multiple" loading={checkpoints.loading} options={(checkpoints.data || []).filter((p) => p.active).map((p) => ({ value: p._id, label: `${p.name} · ${p.location}` }))} /></Form.Item>

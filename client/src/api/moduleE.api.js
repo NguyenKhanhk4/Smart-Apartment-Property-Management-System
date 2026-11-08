@@ -148,7 +148,7 @@ export const dutyShiftApi = {
   list: (params) => http.get('/duty-shifts', { params }),
   onDuty: (roleTitle) => http.get('/duty-shifts/on-duty', { params: { roleTitle } }),
   staff: (roleTitle) => http.get('/duty-shifts/staff', { params: { roleTitle } }),
-  /** body: { roleTitle, userId, startAt, endAt, isBackup?, repeatDays?, note? } */
+  /** body: { roleTitle, userIds: [], startAt, endAt, repeatDays?, note? } — 1 ca có thể nhiều người trực */
   create: (body) => http.post('/duty-shifts', body),
   remove: (id) => http.delete(`/duty-shifts/${id}`),
 };

@@ -19,7 +19,7 @@ const window = (fromH, toH, base = Date.now()) => ({
 test('xếp ca lặp 3 ngày tạo 3 bản ghi', async () => {
   const manager = asUser(await createManager());
   const tech = await createTechnician();
-  const shifts = await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userId: tech._id, ...window(1, 9), repeatDays: 3 });
+  const shifts = await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [tech._id], ...window(1, 9), repeatDays: 3 });
   assert.equal(shifts.length, 3);
   assert.equal(await DutyShift.countDocuments(), 3);
 });
@@ -28,12 +28,12 @@ test('chặn ca trùng giờ của cùng nhân viên, cho phép ca nối tiếp'
   const manager = asUser(await createManager());
   const tech = await createTechnician();
   const base = Date.now();
-  await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userId: tech._id, ...window(1, 9, base) });
+  await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [tech._id], ...window(1, 9, base) });
   await assert.rejects(
-    service.createShifts(manager, { roleTitle: 'TECHNICIAN', userId: tech._id, ...window(8, 16, base) }),
+    service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [tech._id], ...window(8, 16, base) }),
     { errorCode: 'DUTY_SHIFT_OVERLAP' },
   );
-  await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userId: tech._id, ...window(9, 17, base) });
+  await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [tech._id], ...window(9, 17, base) });
   assert.equal(await DutyShift.countDocuments(), 2);
 });
 
@@ -41,24 +41,36 @@ test('không xếp ca cho người sai chức danh', async () => {
   const manager = asUser(await createManager());
   const guard = await createSecurity();
   await assert.rejects(
-    service.createShifts(manager, { roleTitle: 'TECHNICIAN', userId: guard._id, ...window(1, 9) }),
+    service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [guard._id], ...window(1, 9) }),
     { errorCode: 'VALIDATION_ERROR' },
   );
 });
 
-test('getOnDuty: trực chính + dự phòng đang trong ca, bỏ ca chưa tới', async () => {
+test('getOnDuty: mọi người đang trong ca (1 ca nhiều người trực), bỏ ca chưa tới', async () => {
   const manager = asUser(await createManager());
   const [a, b, c] = await Promise.all([createTechnician(), createTechnician(), createTechnician()]);
-  await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userId: a._id, ...window(-1, 7) });
-  await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userId: b._id, ...window(-1, 7), isBackup: true });
-  await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userId: c._id, ...window(7, 15) });
+  await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [a._id, b._id], ...window(-1, 7) });
+  await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [c._id], ...window(7, 15) });
 
-  const onDuty = await service.getOnDuty('TECHNICIAN');
-  assert.equal(onDuty.hasSchedule, true);
-  assert.deepEqual(onDuty.primary.map((p) => String(p._id)), [String(a._id)]);
-  assert.deepEqual(onDuty.backup.map((p) => String(p._id)), [String(b._id)]);
+  const duty = await service.getOnDuty('TECHNICIAN');
+  assert.equal(duty.hasSchedule, true);
+  assert.deepEqual(duty.onDuty.map((p) => String(p._id)).sort(), [String(a._id), String(b._id)].sort());
   assert.equal(await service.isUserOnDuty(a._id, 'TECHNICIAN'), true);
   assert.equal(await service.isUserOnDuty(c._id, 'TECHNICIAN'), false);
+});
+
+test('xếp ca nhiều người cùng lúc: 1 người trùng giờ thì không tạo ca nào', async () => {
+  const manager = asUser(await createManager());
+  const [a, b] = await Promise.all([createTechnician(), createTechnician()]);
+  const base = Date.now();
+  const shifts = await service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [a._id, b._id], ...window(1, 9, base), repeatDays: 2 });
+  assert.equal(shifts.length, 4);
+  const c = await createTechnician();
+  await assert.rejects(
+    service.createShifts(manager, { roleTitle: 'TECHNICIAN', userIds: [c._id, a._id], ...window(8, 12, base) }),
+    { errorCode: 'DUTY_SHIFT_OVERLAP' },
+  );
+  assert.equal(await DutyShift.countDocuments({ userId: c._id }), 0);
 });
 
 test('không xóa được ca đã kết thúc', async () => {
@@ -71,7 +83,7 @@ test('không xóa được ca đã kết thúc', async () => {
 test('2 request xếp ca trùng nhau gửi đồng thời: không bao giờ tạo được cả 2', async () => {
   const manager = asUser(await createManager());
   const tech = await createTechnician();
-  const body = { roleTitle: 'TECHNICIAN', userId: tech._id, ...window(1, 9) };
+  const body = { roleTitle: 'TECHNICIAN', userIds: [tech._id], ...window(1, 9) };
   const results = await Promise.allSettled([service.createShifts(manager, body), service.createShifts(manager, body)]);
   assert.ok(results.some((r) => r.status === 'rejected'));
   assert.ok((await DutyShift.countDocuments()) <= 1);

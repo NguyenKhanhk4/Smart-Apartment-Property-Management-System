@@ -1,4 +1,4 @@
-// Quy tắc lịch ca trực (Người 4 — X6): kiểm tra khung ca, trùng ca, ai đang trực, lặp ca nhiều ngày.
+// Quy tắc lịch ca trực: kiểm tra khung ca, trùng ca, ai đang trực, lặp ca nhiều ngày.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -6,7 +6,7 @@ import {
   isActiveAt,
   overlaps,
   repeatWindows,
-  splitOnDuty,
+  activeShifts,
   validateShiftWindow,
 } from '../../src/modules/dutyShifts/shift.rules.js';
 
@@ -52,27 +52,23 @@ test('isActiveAt: tính cả giờ bắt đầu, không tính giờ kết thúc'
   assert.equal(isActiveAt(s, at('2026-10-31T23:59:59Z')), false);
 });
 
-test('splitOnDuty: tách người trực chính và dự phòng đang trong ca', () => {
+test('activeShifts: mọi người đang trong ca, bỏ ca chưa tới', () => {
   const now = at('2026-11-01T05:00:00Z');
   const shifts = [
     shift('2026-11-01T00:00:00Z', '2026-11-01T08:00:00Z', { userId: 'A' }),
-    shift('2026-11-01T00:00:00Z', '2026-11-01T08:00:00Z', { userId: 'B', isBackup: true }),
+    shift('2026-11-01T00:00:00Z', '2026-11-01T08:00:00Z', { userId: 'B' }),
     shift('2026-11-01T08:00:00Z', '2026-11-01T16:00:00Z', { userId: 'C' }), // chưa tới ca
   ];
-  const { primary, backup } = splitOnDuty(shifts, now);
-  assert.deepEqual(primary.map((s) => s.userId), ['A']);
-  assert.deepEqual(backup.map((s) => s.userId), ['B']);
+  assert.deepEqual(activeShifts(shifts, now).map((s) => s.userId), ['A', 'B']);
 });
 
-test('splitOnDuty: một người có 2 dòng ca chồng nhau chỉ tính 1 lần, ưu tiên trực chính', () => {
+test('activeShifts: một người có 2 dòng ca chồng nhau chỉ tính 1 lần', () => {
   const now = at('2026-11-01T05:00:00Z');
   const shifts = [
-    shift('2026-11-01T00:00:00Z', '2026-11-01T08:00:00Z', { userId: 'A', isBackup: true }),
+    shift('2026-11-01T00:00:00Z', '2026-11-01T08:00:00Z', { userId: 'A' }),
     shift('2026-11-01T04:00:00Z', '2026-11-01T06:00:00Z', { userId: 'A' }),
   ];
-  const { primary, backup } = splitOnDuty(shifts, now);
-  assert.deepEqual(primary.map((s) => s.userId), ['A']);
-  assert.deepEqual(backup, []);
+  assert.deepEqual(activeShifts(shifts, now).map((s) => s.userId), ['A']);
 });
 
 test('repeatWindows: lặp ca qua đêm cho 3 ngày liên tiếp', () => {
