@@ -644,3 +644,6 @@ export const residentSideNav = [
   { group: 'Dịch vụ', keys: ['my-invoices', 'amenities', 'tickets', 'guests', 'gate-passes'] },
   { group: 'Của tôi', keys: ['my-code', 'my-apartment', 'my-vehicles', 'profile'] },
 ];
+
+// Thanh điều hướng ngang (web ≥768px) của khu cư dân. "Mã của tôi" là nút riêng bên phải.
+export const residentWebNav = ['home', 'my-invoices', 'amenities', 'tickets', 'guests', 'announcements'];

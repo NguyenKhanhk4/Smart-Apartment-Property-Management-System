@@ -54,9 +54,12 @@ export default function AuthLayout({ portal = 'resident' }) {
           <AuthPortalContext.Provider value={portal}>
             <Outlet />
           </AuthPortalContext.Provider>
-          <Link to={portalPath(otherPortal, '/login')} className="mt-4 block text-center text-[13px] font-semibold text-navy hover:text-gold">
-            Sang {PORTALS[otherPortal].label}
-          </Link>
+          {/* Lối tắt sang cổng kia: chỉ khi chạy dev; bản chính thức mỗi bên dùng đúng đường dẫn của mình */}
+          {import.meta.env.DEV && (
+            <Link to={portalPath(otherPortal, '/login')} className="mt-4 block text-center text-[13px] font-semibold text-navy hover:text-gold">
+              Sang {PORTALS[otherPortal].label}
+            </Link>
+          )}
         </div>
       </section>
     </div>

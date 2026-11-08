@@ -10,11 +10,9 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* Hệ A "Gọn sáng" — khu quản lý (/app) và trang đăng nhập. Giữ tên token cũ để không phải sửa từng trang:
-     navy = màu chính (xanh dương), gold = điểm nhấn (cũng là xanh dương, A không có vàng trang trí). */
+  /* Font: Inter (khu quản lý, trang đăng nhập); khu cư dân dùng Mulish (lớp .font-resident). Không dùng font serif trang trí */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
   /* Thang cỡ chữ gọn + chiều cao dòng đủ cho dấu tiếng Việt (dấu chồng không chạm dòng dưới) */
   --text-xs: 0.75rem;
   --text-xs--line-height: 1.5;
@@ -39,110 +37,58 @@
   --leading-normal: 1.55;
   --tracking-tight: 0em;
   --tracking-tighter: 0em;
-  /* Chữ đậm tối đa 600 trên toàn app: font-bold / extrabold / black đều về 600 */
+  /* Chữ đậm tối đa 600 trên toàn app */
   --font-weight-bold: 600;
-  /* Bóng của khung nổi (sidebar, thanh trên, khung nội dung ở khu quản lý) */
-  --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.05);
-  --shadow-float-r: 0 1px 2px rgba(20, 35, 26, 0.05), 0 6px 20px rgba(20, 35, 26, 0.06);
   --font-weight-extrabold: 600;
   --font-weight-black: 600;
+  /* Bóng nhẹ cho khung / thẻ nổi (dùng ở vài trang) */
+  --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.05);
+  --shadow-float-r: 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 20px rgba(0, 0, 0, 0.06);
 
-  --color-midnight: #18181b;
-  --color-navy: #2563eb;
-  --color-navy-hover: #1d4ed8;
-  --color-navy-bg: #eff4ff;
-  --color-gold: #2563eb;
-  --color-gold-bg: #eff4ff;
-  --color-gold-text: #1d4ed8;
-  --color-ink: #18181b;
-  --color-ink-2: #52525b;
-  --color-ink-3: #71717a;
-  --color-ivory: #f4f4f6; /* nền trang đậm hơn thẻ trắng một bậc để thẻ nổi lên */
-  --color-surface-alt: #f4f4f5;
-  --color-line: #e0e0e5;
-  --color-line-strong: #cdcdd3;
-  --color-side-text: #52525b;
-  --color-side-line: #e4e4e7;
-  --color-side-hover: #f4f4f5;
+  --color-midnight: #0f1b2d;
+  --color-navy: #1e3a5f;
+  --color-navy-hover: #17304f;
+  --color-navy-bg: #e8eef5;
+  --color-gold: #c9a35b;
+  --color-gold-bg: #f6eedd;
+  --color-gold-text: #8a6a2e;
+  --color-ink: #1a1f2b;
+  --color-ink-2: #5e6675;
+  --color-ink-3: #8c93a0;
+  --color-ivory: #faf8f4;
+  --color-surface-alt: #f3f0ea;
+  --color-line: #e8e2d6;
+  --color-line-strong: #d6cebf;
+  --color-side-text: #c8d1de;
+  --color-side-line: #1a293e;
+  --color-side-hover: #162842;
 
-  /* Token r-* dùng chung cho khu Lễ tân (nhân viên, theo A) và khu cư dân. Giá trị dưới đây là A;
-     khu cư dân ghi đè sang hệ B trong lớp .theme-resident (ResidentLayout). */
-  --color-r-navy: #2563eb;
-  --color-r-gold: #2563eb;
-  --color-r-gold-icon: #2563eb;
-  --color-r-bg: #f4f4f6;
+  /* Giao diện cư dân (/r) theo bản thiết kế mới — tách khỏi token admin, chỉ có bản sáng.
+     Dùng: bg-r-bg, text-r-muted, border-r-border... */
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  --color-r-navy: #1f2b47;
+  --color-r-gold: #c9a24a;
+  --color-r-gold-icon: #b8892e;
+  --color-r-bg: #f5f2ec;
   --color-r-surface: #ffffff;
-  --color-r-border: #e0e0e5;
-  --color-r-divider: #efeff1;
-  --color-r-border-control: #c4c4cc;
-  --color-r-segment: #e9e9ed;
-  --color-r-text: #18181b;
-  --color-r-muted: #52525b;
-  --color-r-subtle: #71717a;
-  --color-r-link: #1d4ed8;
-  --color-r-danger: #b91c1c;
-  --color-r-danger-text: #b91c1c;
-  --color-r-info-bg: #eff4ff;
-  --color-r-info-fg: #1d4ed8;
-  --color-r-warn-bg: #fff7ed;
-  --color-r-warn-fg: #9a4708;
-  --color-r-ok-bg: #ecfdf3;
-  --color-r-ok-fg: #15803d;
-  --color-r-neutral-bg: #f4f4f5;
-  --color-r-neutral-fg: #3f3f46;
-}
-
-/* Màu gradient của logo (BrandLogo): A xanh dương, B (khu cư dân) xanh lá */
-:root {
-  --logo-from: #3b82f6;
-  --logo-to: #1e40af;
-}
-
-/* Hệ B "Tòa nhà xanh" — chỉ trong khu cư dân (ResidentLayout gắn lớp này) */
-.theme-resident {
-  --logo-from: #22a55b;
-  --logo-to: #14532d;
-  /* Token hệ A dùng trong trang dùng chung (trang tài khoản, hồ sơ…) → đổi sang màu B khi nằm trong khu cư dân */
-  --color-navy: #15803d;
-  --color-navy-hover: #166534;
-  --color-navy-bg: #e8f3eb;
-  --color-gold: #15803d;
-  --color-gold-bg: #e8f3eb;
-  --color-gold-text: #166534;
-  --color-ink: #14231a;
-  --color-ink-2: #4b5b51;
-  --color-ink-3: #5f6e64;
-  --color-ivory: #edf3ef;
-  --color-surface-alt: #f1f6f2;
-  --color-line: #d3dfd7;
-  --color-line-strong: #b5c7bb;
-  --font-sans: 'Mulish', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --color-r-navy: #15803d;
-  --color-r-gold: #15803d;
-  --color-r-gold-icon: #15803d;
-  --color-r-bg: #edf3ef;
-  --color-r-surface: #ffffff;
-  --color-r-border: #d3dfd7;
-  --color-r-divider: #e2ebe5;
-  --color-r-border-control: #b5c7bb;
-  --color-r-segment: #dce8e0;
-  --color-r-text: #14231a;
-  --color-r-muted: #4b5b51;
-  --color-r-subtle: #5f6e64;
-  --color-r-link: #166534;
-  --color-r-danger: #b42318;
-  --color-r-danger-text: #b42318;
-  --color-r-info-bg: #e6f5f3;
-  --color-r-info-fg: #0f766e;
-  --color-r-warn-bg: #fef8e7;
-  --color-r-warn-fg: #8a5a06;
-  --color-r-ok-bg: #e8f3eb;
-  --color-r-ok-fg: #166534;
-  --color-r-neutral-bg: #f1f6f2;
-  --color-r-neutral-fg: #435249;
-  font-family: var(--font-sans);
-  font-size: 13.5px;
-  line-height: 1.6;
+  --color-r-border: #e6e0d6;
+  --color-r-divider: #ede8df;
+  --color-r-border-control: #d9d2c5;
+  --color-r-segment: #ece6db;
+  --color-r-text: #1e2330;
+  --color-r-muted: #5e6573;
+  --color-r-subtle: #6b7180;
+  --color-r-link: #1f5fa8;
+  --color-r-danger: #c2362f;
+  --color-r-danger-text: #b0302a;
+  --color-r-info-bg: #e7eef8;
+  --color-r-info-fg: #1f4f8f;
+  --color-r-warn-bg: #fbf1dc;
+  --color-r-warn-fg: #8a5a0b;
+  --color-r-ok-bg: #e5f3ea;
+  --color-r-ok-fg: #1e6b3e;
+  --color-r-neutral-bg: #edeae4;
+  --color-r-neutral-fg: #4a4f5a;
 }
 
 @layer base {
@@ -154,9 +100,6 @@
     background: var(--color-ivory);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-  }
-
-  body {
     font-size: 13px;
     line-height: 1.55;
     letter-spacing: 0.005em; /* Inter / Mulish cỡ nhỏ: thêm chút khoảng cách cho chữ có dấu dễ đọc */
@@ -164,8 +107,8 @@
   }
 
   .dark body {
-    color: #fafafa;
-    background: #09090b;
+    color: #eef1f6;
+    background: #0b1422;
   }
 }
 
@@ -173,7 +116,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Tiêu đề lớn (trang đăng nhập, số tiền lớn): A không còn font serif, dùng chữ chính đậm 600 */
+/* Tiêu đề sang trọng — chỉ dùng 2–3 chỗ (trang đăng nhập, số tiền lớn) */
 .font-serif-luxury {
   font-family: var(--font-sans);
   font-weight: 600;
@@ -186,11 +129,11 @@
   height: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d4d4d8;
+  background: #d6cebf;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1aa;
+  background: #8c93a0;
 }
 
 /* ===== Morph kiểu PowerPoint (View Transitions API) =====
@@ -233,6 +176,13 @@
   ::view-transition-new(*) {
     animation-duration: 0.01ms !important;
   }
+}
+
+/* Khu cư dân: font Mulish, chữ 13.5px (ResidentLayout gắn lớp này) */
+.font-resident {
+  font-family: 'Mulish', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.6;
 }
 
 /* ===== Responsive dùng chung (đơn vị %, vw, vh) ===== */
