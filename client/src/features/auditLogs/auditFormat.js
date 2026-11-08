@@ -1,6 +1,6 @@
 // Hiển thị giá trị cũ / mới của nhật ký hoạt động (UC06 bước 4). Thuần JS để test bằng node:test.
 import {
-  APARTMENT_OCCUPANCY, APARTMENT_STATUS, APARTMENT_TYPES, BOARD_TITLES, BOOKING_STATUS, CONTRACT_STATUS, CONTRACT_TYPES, FUND_PROPOSAL_STATUS, GATE_PASS_STATUS,
+  APARTMENT_OCCUPANCY, APARTMENT_STATUS, APARTMENT_TYPES, ASSET_CATEGORIES, BOARD_TITLES, CYCLE_UNITS, BOOKING_STATUS, CONTRACT_STATUS, CONTRACT_TYPES, FUND_PROPOSAL_STATUS, GATE_PASS_STATUS,
   INVOICE_STATUS, PARKING_CARD_STATUS, PRIORITIES, QUOTE_STATUS, ROLE_TITLES, ROLES, TICKET_STATUS, TICKET_TYPES,
   VEHICLE_STATUS, WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
@@ -19,17 +19,19 @@ const TYPE_BY_TARGET = {
   tickets: TICKET_TYPES,
 };
 const ACCOUNT_STATE = { true: { label: 'Đang hoạt động', color: 'success' }, false: { label: 'Đã khóa', color: 'error' } };
+// isActive mang nghĩa khác theo đối tượng: tài khoản (khóa / mở) và thiết bị (theo dõi / ngừng)
+const ACTIVE_BY_TARGET = { assets: { true: { label: 'Đang theo dõi', color: 'success' }, false: { label: 'Đã ngừng', color: 'default' } } };
 
 /** Trường trạng thái → { label, color } để hiện Tag; không phải trạng thái hoặc mã lạ → null */
 export function statusOf(field, value, targetType) {
-  if (field === 'isActive' && typeof value === 'boolean') return ACCOUNT_STATE[value];
+  if (field === 'isActive' && typeof value === 'boolean') return (ACTIVE_BY_TARGET[targetType] ?? ACCOUNT_STATE)[value];
   if (field === 'occupancyStatus' && typeof value === 'string') return APARTMENT_OCCUPANCY[value] ?? null;
   if (STATUS_FIELDS.has(field) && typeof value === 'string') return STATUS_BY_TARGET[targetType]?.[value] ?? null;
   return null;
 }
 
 const MONEY_FIELDS = new Set(['amount', 'balanceBefore', 'balanceAfter', 'totalAmount', 'paidAmount', 'fee', 'bookingFee']);
-const ENUM_FIELDS = { role: ROLES, roleTitle: ROLE_TITLES, boardTitle: BOARD_TITLES, priority: PRIORITIES };
+const ENUM_FIELDS = { role: ROLES, roleTitle: ROLE_TITLES, boardTitle: BOARD_TITLES, priority: PRIORITIES, cycleUnit: CYCLE_UNITS, category: ASSET_CATEGORIES };
 
 export const FIELD_LABELS = {
   value: 'Giá trị',
@@ -53,6 +55,10 @@ export const FIELD_LABELS = {
   total: 'Tổng', overdueTotal: 'Tổng quá hạn', invoices: 'Thông báo phí', credit: 'Tiền dư', reference: 'Mã tham chiếu',
   orderCode: 'Mã đơn', promisedDate: 'Ngày hẹn trả', cardNumber: 'Số thẻ', recipientCount: 'Số người nhận',
   roleLabel: 'Vai trò',
+  // Thiết bị (UC07)
+  cycleValue: 'Chu kỳ', cycleUnit: 'Đơn vị chu kỳ', checklist: 'Mẫu checklist', category: 'Loại', location: 'Vị trí',
+  manufacturer: 'Hãng sản xuất', installDate: 'Ngày lắp đặt', warrantyEnd: 'Hết bảo hành', vendorName: 'Nhà cung cấp',
+  vendorPhone: 'Liên hệ nhà cung cấp', lastMaintenanceDate: 'Bảo trì gần nhất', nextMaintenanceDate: 'Bảo trì tiếp theo', buildingId: 'Tòa nhà',
 };
 
 // Giá trị dạng mã của một số trường → chữ

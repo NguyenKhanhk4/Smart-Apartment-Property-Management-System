@@ -49,7 +49,9 @@ describe('workOrders UC-D04 — bắt đầu / hoàn thành', () => {
       buildingId: building._id,
       name: 'Máy bơm tầng hầm',
       category: 'PUMP',
-      maintenanceCycleDays: CYCLE,
+      code: 'BOM-HAM',
+      cycleValue: CYCLE,
+      cycleUnit: 'DAY',
       lastMaintenanceDate: new Date(Date.now() - 40 * DAY_MS),
       nextMaintenanceDate: new Date(Date.now() - 10 * DAY_MS),
     });
@@ -134,7 +136,7 @@ describe('workOrders UC-D04 — bắt đầu / hoàn thành', () => {
       const a = await Asset.findById(asset._id).lean();
       assert.equal(a.lastMaintenanceDate.getTime(), today.getTime());
       assert.equal(a.nextMaintenanceDate.getTime(), today.getTime() + CYCLE * DAY_MS);
-      assert.equal(a.nextMaintenanceDate.getTime(), assetsService.computeNextMaintenance(today, CYCLE).getTime());
+      assert.equal(a.nextMaintenanceDate.getTime(), assetsService.computeNextMaintenance(today, { cycleValue: CYCLE, cycleUnit: 'DAY' }).getTime());
 
       const [note] = await Notification.find({ userId: manager._id, type: 'MAINTENANCE' }).lean();
       assert.equal(note.title, 'Work order bảo trì đã hoàn thành');

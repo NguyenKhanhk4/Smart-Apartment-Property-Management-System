@@ -65,8 +65,8 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Tài sản đang có work order chưa hoàn thành',
   },
-  ASSET_NAME_EXISTS: { status: 409, message: 'Tên tài sản đã tồn tại trong tòa này' },
-  ASSET_HAS_OPEN_WORKORDER: { status: 409, message: 'Tài sản còn work order chưa hoàn thành' },
+  ASSET_CODE_EXISTS: { status: 409, message: 'Mã thiết bị đã tồn tại' }, // MSG-E01
+  ASSET_HAS_OPEN_WORKORDER: { status: 409, message: 'Thiết bị còn phiếu bảo trì đang mở, không thể ngừng theo dõi' }, // MSG-E10
   WORKORDER_INVALID_STATUS: { status: 409, message: 'Work order đã hoàn thành, không thể thao tác' },
   WORKORDER_INVALID_ASSIGNEE: {
     status: 400,

@@ -25,7 +25,9 @@ const makeAsset = (building, extra = {}) => {
     buildingId: building._id,
     name: `Tài sản ${seq}`,
     category: 'PUMP',
-    maintenanceCycleDays: 30,
+    code: `TB-${seq}`,
+    cycleValue: 30,
+    cycleUnit: 'DAY',
     nextMaintenanceDate: startOfVnDay(),
     ...extra,
   });

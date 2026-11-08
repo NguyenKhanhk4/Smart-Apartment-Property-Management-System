@@ -28,6 +28,9 @@ test('trạng thái dịch theo loại đối tượng; khóa tài khoản hiệ
   assert.equal(formatAuditValue('status', 'IN_PROGRESS', 'không-rõ'), 'IN_PROGRESS'); // không biết đối tượng thì giữ mã
   assert.equal(formatAuditValue('isActive', true), 'Đang hoạt động');
   assert.equal(formatAuditValue('isActive', false), 'Đã khóa');
+  assert.equal(formatAuditValue('isActive', false, 'assets'), 'Đã ngừng'); // thiết bị: theo dõi / ngừng, không phải khóa
+  assert.equal(formatAuditValue('cycleUnit', 'QUARTER'), 'Quý');
+  assert.equal(formatAuditValue('category', 'PUMP'), 'Máy bơm');
   assert.equal(statusOf('code', 'IN_PROGRESS', 'tickets'), null);
 });
 

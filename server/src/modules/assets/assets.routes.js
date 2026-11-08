@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { ASSET_CATEGORIES, values } from '../../constants/enums.js';
+import { ASSET_CATEGORIES, CYCLE_UNITS, values } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
@@ -9,13 +9,13 @@ import { created, ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId } from '../../utils/validators.js';
 import * as service from './assets.service.js';
 
-// Người 1 — Vũ Việt (Mô đun 10). UC-D01: Quản lý tài sản chung, chu kỳ & lịch sử bảo trì.
+// Người 1 — Vũ Việt (Mô đun 10). UC07: Quản lý thiết bị, chu kỳ, mẫu checklist, mã QR, lịch sử bảo trì.
 const router = Router();
 const VIEWERS = ['MANAGER', 'STAFF:TECHNICIAN'];
 
 const listQuery = Joi.object({
   ...paginationQuery,
-  sort: sortable('createdAt', 'name', 'nextMaintenanceDate', 'lastMaintenanceDate'),
+  sort: sortable('createdAt', 'code', 'name', 'nextMaintenanceDate', 'lastMaintenanceDate', 'warrantyEnd'),
   buildingId: objectId(),
   category: csvEnum(values(ASSET_CATEGORIES)),
   isActive: Joi.boolean(),
@@ -23,12 +23,32 @@ const listQuery = Joi.object({
   q: Joi.string().trim().max(100),
 });
 
+// Mục checklist (BR-E02): mục đo có đơn vị / khoảng cho phép; mục tick để trống các trường đó
+const checklistItem = Joi.object({
+  label: Joi.string().trim().min(1).max(200).required(),
+  unit: Joi.string().trim().max(20).allow('', null).empty('').default(null),
+  minValue: Joi.number().allow(null).default(null),
+  maxValue: Joi.number().allow(null).default(null),
+  required: Joi.boolean().default(true),
+});
+
 const fields = {
   buildingId: objectId(),
+  // Mã thiết bị: chữ, số, gạch ngang (in trên nhãn QR); lưu chữ hoa
+  code: Joi.string().trim().uppercase().pattern(/^[A-Z0-9][A-Z0-9-]{1,29}$/)
+    .messages({ 'string.pattern.base': 'Mã thiết bị gồm 2–30 ký tự chữ, số hoặc dấu gạch ngang' }),
   name: Joi.string().trim().min(2).max(150),
   category: Joi.string().valid(...values(ASSET_CATEGORIES)),
   location: Joi.string().trim().max(200).allow(''),
-  maintenanceCycleDays: Joi.number().integer().min(1).max(3650),
+  manufacturer: Joi.string().trim().max(150).allow('', null),
+  installDate: Joi.date().allow(null),
+  warrantyEnd: Joi.date().allow(null),
+  vendorName: Joi.string().trim().max(150).allow('', null),
+  vendorPhone: Joi.string().trim().max(30).pattern(/^[0-9+().\s-]*$/).allow('', null)
+    .messages({ 'string.pattern.base': 'Số điện thoại nhà cung cấp không hợp lệ' }),
+  cycleValue: Joi.number().integer().min(1).max(3650),
+  cycleUnit: Joi.string().valid(...values(CYCLE_UNITS)),
+  checklist: Joi.array().items(checklistItem).max(50),
   lastMaintenanceDate: Joi.date().allow(null),
   note: Joi.string().trim().max(1000).allow(''),
 };
@@ -36,9 +56,12 @@ const fields = {
 const createBody = Joi.object({
   ...fields,
   buildingId: fields.buildingId.required(),
+  code: fields.code.required(),
   name: fields.name.required(),
   category: fields.category.required(),
-  maintenanceCycleDays: fields.maintenanceCycleDays.required(),
+  cycleValue: fields.cycleValue.required(),
+  cycleUnit: fields.cycleUnit.required(),
+  checklist: fields.checklist.required(),
 });
 const updateBody = Joi.object(fields).min(1);
 
@@ -64,13 +87,21 @@ const updateBody = Joi.object(fields).min(1);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [buildingId, name, category, maintenanceCycleDays]
+ *             required: [buildingId, code, name, category, cycleValue, cycleUnit, checklist]
  *             properties:
  *               buildingId: { type: string }
+ *               code: { type: string, example: 'TM-A01' }
  *               name: { type: string, example: 'Thang máy số 1' }
  *               category: { type: string, enum: [ELEVATOR, PUMP, FIRE_SYSTEM, OTHER] }
  *               location: { type: string }
- *               maintenanceCycleDays: { type: integer, example: 30 }
+ *               manufacturer: { type: string }
+ *               installDate: { type: string, format: date }
+ *               warrantyEnd: { type: string, format: date }
+ *               vendorName: { type: string }
+ *               vendorPhone: { type: string }
+ *               cycleValue: { type: integer, example: 1 }
+ *               cycleUnit: { type: string, enum: [DAY, MONTH, QUARTER] }
+ *               checklist: { type: array, items: { type: object, properties: { label: { type: string }, unit: { type: string }, minValue: { type: number }, maxValue: { type: number }, required: { type: boolean } } } }
  *               lastMaintenanceDate: { type: string, format: date }
  *               note: { type: string }
  */
@@ -90,7 +121,8 @@ router.post(
   authenticate,
   authorize('MANAGER'),
   validate({ body: createBody }),
-  async (req, res) => created(res, await service.createAsset(req.user, req.body), 'Đã thêm tài sản'),
+  async (req, res) =>
+    created(res, await service.createAsset(req.user, req.body, { ip: req.ip }), 'Đã lưu thiết bị. Bạn có thể in mã QR.'), // MSG-E02
 );
 
 /**
@@ -115,7 +147,15 @@ router.post(
  *               name: { type: string }
  *               category: { type: string, enum: [ELEVATOR, PUMP, FIRE_SYSTEM, OTHER] }
  *               location: { type: string }
- *               maintenanceCycleDays: { type: integer }
+ *               code: { type: string }
+ *               cycleValue: { type: integer }
+ *               cycleUnit: { type: string, enum: [DAY, MONTH, QUARTER] }
+ *               checklist: { type: array, items: { type: object }, description: 'Đổi mẫu không ảnh hưởng phiếu đã tạo' }
+ *               manufacturer: { type: string }
+ *               installDate: { type: string, format: date }
+ *               warrantyEnd: { type: string, format: date }
+ *               vendorName: { type: string }
+ *               vendorPhone: { type: string }
  *               lastMaintenanceDate: { type: string, format: date, nullable: true }
  *               note: { type: string }
  */
@@ -132,7 +172,8 @@ router.put(
   authenticate,
   authorize('MANAGER'),
   validate({ params: idParams, body: updateBody }),
-  async (req, res) => ok(res, await service.updateAsset(req.params.id, req.body), 'Đã cập nhật tài sản'),
+  async (req, res) =>
+    ok(res, await service.updateAsset(req.params.id, req.body, { user: req.user, ip: req.ip }), 'Đã cập nhật thiết bị'),
 );
 
 /**
@@ -155,7 +196,7 @@ router.patch(
   async (req, res) =>
     ok(
       res,
-      await service.setAssetStatus(req.params.id, req.body.isActive),
+      await service.setAssetStatus(req.params.id, req.body.isActive, { user: req.user, ip: req.ip }),
       req.body.isActive ? 'Đã kích hoạt lại tài sản' : 'Đã ngừng theo dõi tài sản',
     ),
 );
