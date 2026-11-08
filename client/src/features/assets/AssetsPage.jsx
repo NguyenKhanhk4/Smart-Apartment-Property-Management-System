@@ -5,6 +5,7 @@ import { PlusOutlined, ScanOutlined } from '@ant-design/icons';
 import { assetApi, workOrderApi } from '../../api/equipment.api';
 import { lookupApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
+import AssetCode from './AssetCode';
 import AssetFormModal from './AssetFormModal';
 import { cycleText, dueText } from './assetFormat';
 import { useAuth } from '../../hooks/useAuth';
@@ -38,7 +39,7 @@ export default function AssetsPage() {
   const toggle = async (asset) => {
     try {
       await assetApi.setStatus(asset._id, !asset.isActive);
-      message.success(asset.isActive ? 'Đã ngừng theo dõi' : 'Đã kích hoạt lại');
+      message.success(asset.isActive ? 'Đã ngừng theo dõi' : 'Đã theo dõi lại');
       reload();
     } catch (e) {
       message.error(e.message);
@@ -54,7 +55,10 @@ export default function AssetsPage() {
       render: (v, r) => (
         <Flex vertical>
           <Typography.Text strong style={vtName('asset', r._id)}>{v}</Typography.Text>
-          <Typography.Text code style={{ fontSize: 13, alignSelf: 'flex-start' }}>{r.code}</Typography.Text>
+          <Flex gap={6} align='center' wrap>
+            <AssetCode code={r.code} />
+            {!r.isActive && <Tag style={{ marginInlineEnd: 0 }}>Đã ngừng</Tag>}
+          </Flex>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {r.buildingId?.name}{r.location ? ` · ${r.location}` : ''}
           </Typography.Text>
@@ -79,7 +83,6 @@ export default function AssetsPage() {
       width: 130,
       render: (w) => (w ? <EnumTag map={WORK_ORDER_STATUS} value={w.status} /> : '—'),
     },
-    { title: 'Theo dõi', dataIndex: 'isActive', width: 100, render: (v) => (v ? <Tag color="green">Đang theo dõi</Tag> : <Tag>Đã ngừng</Tag>) },
     ...(canEdit
       ? [
           {
@@ -95,7 +98,7 @@ export default function AssetsPage() {
                   okText="Đồng ý"
                   cancelText="Hủy"
                 >
-                  <Button size="small" danger={r.isActive}>{r.isActive ? 'Ngừng' : 'Kích hoạt'}</Button>
+                  <Button size="small" danger={r.isActive}>{r.isActive ? 'Ngừng' : 'Theo dõi lại'}</Button>
                 </Popconfirm>
               </Flex>
             ),
@@ -144,7 +147,7 @@ export default function AssetsPage() {
         loading={loading}
         dataSource={data}
         columns={columns}
-        scroll={{ x: 1130 }}
+        scroll={{ x: 1040 }}
         onRow={(r) => ({ onClick: () => navigate(`/app/assets/${r._id}`, { viewTransition: true, state: { name: r.name } }), style: { cursor: 'pointer' } })}
         pagination={{ current: filters.page, pageSize: filters.limit, total: pagination?.total, showSizeChanger: true, onChange: (page, limit) => setFilters((f) => ({ ...f, page, limit })) }}
       />

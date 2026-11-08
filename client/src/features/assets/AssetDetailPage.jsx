@@ -13,6 +13,7 @@ import { formatDate, formatDateTime } from '../../utils/format';
 import PageHeader from '../../components/PageHeader';
 import AssignWorkOrderModal from '../workOrders/AssignWorkOrderModal';
 import WorkOrderReportModal from '../workOrders/WorkOrderReportModal';
+import AssetCode from './AssetCode';
 import AssetFormModal from './AssetFormModal';
 import { checklistRule, cycleText, dueText, warrantyState } from './assetFormat';
 
@@ -105,7 +106,7 @@ export default function AssetDetailPage() {
         <Card title="Thông tin thiết bị" loading={asset.loading} style={{ flex: '3 1 480px', minWidth: 0 }}>
           {a && (
             <Descriptions column={{ xs: 1, md: 2 }} size="small">
-              <Descriptions.Item label="Mã"><Typography.Text code strong style={{ fontSize: 15 }}>{a.code}</Typography.Text></Descriptions.Item>
+              <Descriptions.Item label="Mã"><AssetCode code={a.code} size={15} /></Descriptions.Item>
               <Descriptions.Item label="Loại"><EnumTag map={ASSET_CATEGORIES} value={a.category} /></Descriptions.Item>
               <Descriptions.Item label="Tòa">{a.buildingId?.name}</Descriptions.Item>
               <Descriptions.Item label="Vị trí">{a.location || '—'}</Descriptions.Item>

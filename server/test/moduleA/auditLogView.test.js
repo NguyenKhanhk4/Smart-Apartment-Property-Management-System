@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
 import { AUDIT_ACTIONS, values } from '../../src/constants/enums.js';
 import { requestContext } from '../../src/middlewares/requestContext.js';
-import { AuditLog } from '../../src/models/index.js';
+import { Asset, AuditLog } from '../../src/models/index.js';
 import { LABELS } from '../../src/modules/auditLogs/auditLogs.rules.js';
 import { MAX_EXPORT_ROWS } from '../../src/modules/auditLogs/auditLogs.service.js';
 import { setStatus, updateInternal } from '../../src/modules/users/users.service.js';
@@ -94,6 +94,27 @@ test('UC06: log cũ ghi targetType theo tên model ("Resident") vẫn hiện "C�
   assert.equal(legacy.targetType, 'residents');
   assert.equal(legacy.targetLabel, 'Cư dân');
   assert.equal((await AuditLog.findOne({ action: 'RESIDENT_CHANGES_EXPORTED' }).lean()).targetType, 'Resident');
+});
+
+test('UC06: trường tham chiếu hiện tên thay vì ID (người phụ trách, thiết bị, căn hộ); ID không còn bản ghi thì giữ nguyên', async () => {
+  const manager = asUser(await createManager());
+  const tech = await createUser('STAFF', { roleTitle: 'TECHNICIAN', fullName: 'Kỹ Thuật Viên A' });
+  const apartment = await createApartment(null, { code: 'A-0901' });
+  const asset = await Asset.create({
+    buildingId: apartment.buildingId, code: 'BOM-01', name: 'Máy bơm tầng hầm', category: 'PUMP',
+    cycleValue: 1, cycleUnit: 'MONTH', nextMaintenanceDate: new Date(),
+  });
+  const ghost = new mongoose.Types.ObjectId();
+  await logAudit({ action: 'WORKORDER_ASSIGNED', targetType: 'work_orders', metadata: { from: null, to: String(tech._id), note: null, assetId: asset._id } });
+  await logAudit({ action: 'RESIDENT_REMOVED', targetType: 'residents', metadata: { apartmentId: apartment._id, userId: ghost } });
+
+  const { body } = await list(manager);
+  const assign = body.data.find((l) => l.action === 'WORKORDER_ASSIGNED');
+  assert.deepEqual(assign.changes, [{ field: 'assignee', before: null, after: 'Kỹ Thuật Viên A' }]);
+  assert.equal(assign.metadata.assetId, 'BOM-01 – Máy bơm tầng hầm');
+  const removed = body.data.find((l) => l.action === 'RESIDENT_REMOVED');
+  assert.equal(removed.metadata.apartmentId, 'Căn A-0901');
+  assert.equal(removed.metadata.userId, String(ghost)); // không tra được thì giữ ID
 });
 
 test('UC06: bản ghi hiện mã dễ đọc; bản ghi đã xóa dùng metadata.code; không tra được thì null', async () => {
