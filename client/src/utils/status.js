@@ -22,5 +22,5 @@ export const ticketStatusColor = (status) => TICKET_STATUS_HEX[status] ?? FALLBA
 export const PRIORITY_HEX = { LOW: '#8c8c8c', MEDIUM: '#1677ff', HIGH: '#fa8c16', URGENT: '#f5222d' };
 export const priorityColor = (priority) => PRIORITY_HEX[priority] ?? FALLBACK_HEX;
 
-/** { KEY: { label } } → { KEY: 'KEY' } để so sánh giá trị: const R = keysOf(PLATE_LOOKUP_RESULTS); r === R.UNKNOWN */
+/** { KEY: { label } } → { KEY: 'KEY' } để so sánh giá trị trạng thái. */
 export const keysOf = (enumMap) => Object.freeze(Object.fromEntries(Object.keys(enumMap).map((k) => [k, k])));

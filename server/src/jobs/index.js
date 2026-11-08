@@ -6,7 +6,6 @@ import { generateMaintenanceWorkOrders } from '../modules/workOrders/workOrders.
 import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from '../modules/tickets/tickets.jobs.js';
 import { billingReminders, markOverdueInvoices } from '../modules/invoices/invoices.jobs.js';
 import { completeBookings, expireBookingHolds } from '../modules/bookings/bookings.jobs.js';
-import { expireGatePasses } from '../modules/gatePasses/gatePasses.jobs.js';
 import { reconcilePayosPayments } from '../modules/payments/payments.payos.js';
 import { remindDebts } from '../modules/debts/debts.jobs.js';
 import { remindQuotes } from '../modules/repairQuotes/repairQuotes.service.js';
@@ -42,8 +41,6 @@ export const JOBS = [
   { name: CRON_JOBS.BOOKING_COMPLETE, schedule: '*/5 * * * *', handler: completeBookings },
   // Người 4 — mỗi phút hủy giữ chỗ quá hạn thanh toán (chỉ có tác dụng khi BOOKING_PAYMENT_HOLD_MINUTES > 0)
   { name: CRON_JOBS.BOOKING_HOLD_EXPIRE, schedule: '* * * * *', handler: expireBookingHolds },
-  // UC52 — mỗi 15 phút kiểm tra và chuyển đơn Gate Pass quá hạn sang EXPIRED
-  { name: CRON_JOBS.GATE_PASS_EXPIRE, schedule: '*/15 * * * *', handler: expireGatePasses },
 ];
 
 export function startJobs() {

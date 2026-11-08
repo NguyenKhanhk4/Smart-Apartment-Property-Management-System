@@ -120,9 +120,7 @@ const TicketBoardPage = lazy(() => import('../features/tickets/TicketBoardPage')
 // ===== Module C — audit (TM) =====
 const AuditLogsPage = lazy(() => import('../features/auditLogs/AuditLogsPage'));
 
-// ===== Gate Pass & Kiểm soát xe (Người 2) =====
-const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
-const ResidentGatePassesPage = lazy(() => import('../features/gatePasses/ResidentGatePassesPage'));
+// ===== Kiểm soát xe (Người 2) =====
 const SecurityGatePage = lazy(() => import('../features/security-gate/SecurityGatePage'));
 const ParkingCardsPage = lazy(() => import('../features/vehicles/ParkingCardsPage'));
 const OccupantChangesPage = lazy(() => import('../features/residents/OccupantChangesPage'));
@@ -485,16 +483,7 @@ export const adminMenu = [
     roles: ['MANAGER'],
     component: SystemDashboardPage,
   },
-  // ===== Gate Pass & Kiểm soát xe (Người 2) =====
-  {
-    key: 'gate-passes',
-    group: 'Cư dân & dịch vụ',
-    label: 'Duyệt Gate Pass',
-    icon: FileTextOutlined,
-    path: 'gate-passes',
-    roles: ['MANAGER'],
-    component: ManagerGatePassesPage,
-  },
+  // ===== Kiểm soát xe (Người 2) =====
   {
     key: 'security-gate',
     group: 'Tiện ích & khách',
@@ -610,13 +599,6 @@ export const residentMenu = [
     path: 'profile',
     component: ProfilePage,
     hideInMenu: true,
-  },
-  {
-    key: 'gate-passes',
-    label: 'Đơn chuyển đồ',
-    icon: FileTextOutlined,
-    path: 'gate-passes',
-    component: ResidentGatePassesPage,
   },
 ];
 

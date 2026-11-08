@@ -27,7 +27,6 @@ import {
   ToolOutlined,
   CoffeeOutlined,
   IdcardOutlined,
-  FileTextOutlined,
   UsergroupAddOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -372,15 +371,6 @@ export default function MyApartmentPage() {
               onClick={() => navigate('/r/guests')}
             >
               Sổ khách
-            </Button>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Button
-              block
-              icon={<FileTextOutlined className="text-cyan-600" />}
-              onClick={() => navigate('/r/gate-passes')}
-            >
-              Đơn chuyển đồ
             </Button>
           </Col>
         </Row>

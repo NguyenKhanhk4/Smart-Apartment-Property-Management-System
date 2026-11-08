@@ -7,7 +7,6 @@ import { buildDebtNotice, recordActivity } from '../../src/modules/debts/debts.c
 import { checkApartmentDebt } from '../../src/modules/debts/debts.check.js';
 import { remindDebts } from '../../src/modules/debts/debts.jobs.js';
 import { getApartmentLedger, listLedger } from '../../src/modules/debts/debts.ledger.js';
-import { getApartmentDebt } from '../../src/modules/gatePasses/debtProvider.js';
 import { recordOfflinePayment } from '../../src/modules/payments/payments.service.js';
 import { debtReport } from '../../src/modules/reports/reports.service.js';
 import { DAY_MS, toVnYmd } from '../../src/utils/time.js';
@@ -154,7 +153,7 @@ test('cron đóng hồ sơ khi khoản quá hạn không còn (vd thông báo b�
   assert.equal((await DebtFollowup.findOne({ payerId: owner._id }).lean()).status, 'RESOLVED');
 });
 
-test('UC23: nợ tách theo Người nộp phí, số dư của người này không bù nợ người khác; giữ dạng trả về của debtProvider', async () => {
+test('UC23: nợ tách theo Người nộp phí, số dư của người này không bù nợ người khác', async () => {
   const { owner, apartment, mk } = await setup();
   const tenant = await createResidentUser();
   await mk('HD-09', '2026-09', 400_000, { status: 'OVERDUE' }); // chủ hộ
@@ -170,11 +169,8 @@ test('UC23: nợ tách theo Người nộp phí, số dư của người này kh
   const ownerRow = debt.byPayer.find((p) => String(p.payerId) === String(owner._id));
   assert.equal(ownerRow.net, 400_000);
   assert.equal(ownerRow.fullName, owner.fullName);
-
-  const gp = await getApartmentDebt(apartment._id);
-  assert.equal(gp.amount, 400_000);
-  assert.equal(gp.invoiceCount, 2);
-  assert.equal(gp.available, true);
+  assert.equal(debt.invoiceCount, 2);
+  assert.equal(debt.available, true);
 });
 
 test('UC23: công nợ tại một ngày trong quá khứ dựng lại từ lịch sử thanh toán', async () => {

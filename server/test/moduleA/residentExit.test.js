@@ -1,6 +1,6 @@
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Apartment, Contract, GatePass, ParkingCard, Resident, User, Vehicle } from '../../src/models/index.js';
+import { Apartment, Contract, ParkingCard, Resident, User, Vehicle } from '../../src/models/index.js';
 import { endTenancy } from '../../src/modules/residents/residentTenancies.js';
 import { listApartmentResidents, removeMember, updateMember } from '../../src/modules/residents/residents.service.js';
 import { linkResident as linkAccount } from '../../src/modules/residents/residentAccounts.js';
@@ -9,7 +9,7 @@ import { getBillableVehicles } from '../../src/modules/vehicles/vehicles.queries
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { startApp } from '../helpers/http.js';
 import { asUser, createApartment, createHousehold, createReceptionist, createResidentUser, linkResident } from '../helpers/fixtures.js';
-import { createContract, createGatePass, createParkingCard, createVehicle } from '../helpers/fixtures.moduleA.js';
+import { createContract, createParkingCard, createVehicle } from '../helpers/fixtures.moduleA.js';
 
 let app;
 before(async () => { await connectTestDB(); app = await startApp(); });
@@ -30,8 +30,7 @@ async function leaseFixture(endDate = new Date('2099-12-31T00:00:00+07:00')) {
   for (const [person, apt] of [[owner, apartment], [tenant, apartment], [family, apartment], [tenant, otherApartment]]) {
     const vehicle = await createVehicle({ apartment: apt, registeredBy: person, status: 'APPROVED', approvedAt: new Date('2025-01-01') });
     const card = await createParkingCard({ vehicle });
-    const pass = await createGatePass({ apartment: apt, createdBy: person, status: 'APPROVED' });
-    rows.push({ vehicle, card, pass });
+    rows.push({ vehicle, card });
   }
   await Apartment.updateOne({ _id: apartment._id }, { status: 'RENTED' });
   return { owner, apartment, tenant, tenantResident, family, lease, sale, rows };
@@ -40,10 +39,9 @@ async function leaseFixture(endDate = new Date('2099-12-31T00:00:00+07:00')) {
 async function assertRevoked(row, cancelled) {
   assert.equal((await Vehicle.findById(row.vehicle.id)).status, cancelled ? 'CANCELLED' : 'APPROVED');
   assert.equal((await ParkingCard.findById(row.card.id)).status, cancelled ? 'DISABLED_TO_COLLECT' : 'ACTIVE');
-  assert.equal((await GatePass.findById(row.pass.id)).status, cancelled ? 'CANCELLED' : 'APPROVED');
 }
 
-test('kết thúc thuê: chỉ thu hồi xe/thẻ/đơn của khách thuê và người đi cùng tại đúng căn', async () => {
+test('kết thúc thuê: chỉ thu hồi xe và thẻ của khách thuê và người đi cùng tại đúng căn', async () => {
   const { owner, apartment, tenant, tenantResident, rows } = await leaseFixture();
   await endTenancy(asUser(owner), apartment.id, tenantResident.id);
   await assertRevoked(rows[0], false);

@@ -56,7 +56,7 @@ export const auditActionLabel = (action) => LABELS[action] ?? action.replaceAll(
 const TARGET_LABELS = {
   maintenance_fund: 'Quỹ bảo trì', fund_transactions: 'Giao dịch quỹ', fund_proposals: 'Đề xuất chi quỹ',
   operating_expenses: 'Chi phí vận hành', users: 'Tài khoản', buildings: 'Tòa nhà', apartments: 'Căn hộ',
-  contracts: 'Hợp đồng', residents: 'Cư dân', vehicles: 'Phương tiện', gate_passes: 'Giấy chuyển đồ',
+  contracts: 'Hợp đồng', residents: 'Cư dân', vehicles: 'Phương tiện',
   parking_cards: 'Thẻ gửi xe', fee_types: 'Bảng phí', invoices: 'Thông báo phí', payments: 'Thanh toán',
   debt_followups: 'Xử lý công nợ', repair_quotes: 'Báo giá sửa chữa', amenities: 'Tiện ích',
   amenity_passes: 'Gói tiện ích', amenity_visits: 'Lượt tiện ích', bookings: 'Đặt tiện ích',

@@ -1,27 +1,10 @@
-// Dữ liệu mẫu riêng cho test Module A / Người 2 (Gate Pass, thẻ gửi xe, hợp đồng, xe).
-import { Contract, GatePass, ParkingCard, Vehicle } from '../../src/models/index.js';
+// Dữ liệu mẫu riêng cho test Module A / Người 2 (thẻ gửi xe, hợp đồng, xe).
+import { Contract, ParkingCard, Vehicle } from '../../src/models/index.js';
 
 let seq = 0;
 const next = () => (seq += 1);
 
 const pad = (n, w) => String(n).padStart(w, '0');
-
-export function createGatePass({ apartment, createdBy, ...extra }) {
-  const n = next();
-  return GatePass.create({
-    code: `GP-20991231-${pad(n, 3)}`,
-    apartmentId: apartment._id,
-    createdBy: createdBy._id,
-    creatorRelation: 'OWNER',
-    direction: 'IN',
-    scheduledDate: new Date(Date.now() + 2 * 86_400_000),
-    timeSlot: { from: '08:00', to: '10:00' },
-    items: [{ name: 'Tủ lạnh', quantity: 1 }],
-    truckPlate: `51C${pad(n, 5)}`,
-    status: 'PENDING',
-    ...extra,
-  });
-}
 
 export function createVehicle({ apartment, registeredBy, ...extra }) {
   const n = next();

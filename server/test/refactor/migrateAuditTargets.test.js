@@ -1,4 +1,4 @@
-// audit_logs cũ ghi targetType theo tên model ('Contract', 'GatePass'...) → đổi về tên collection (AUDIT_TARGETS).
+// audit_logs cũ ghi targetType theo tên model ('Contract', 'Resident'...) → đổi về tên collection (AUDIT_TARGETS).
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AuditLog } from '../../src/models/index.js';
@@ -13,12 +13,12 @@ after(closeTestDB);
 test('đổi targetType tên model → tên collection, chạy lại không đổi gì', async () => {
   await AuditLog.collection.insertMany([
     { action: 'CONTRACT_CREATED', targetType: 'Contract' },
-    { action: 'GATEPASS_CREATED', targetType: 'GatePass' },
+    { action: 'RESIDENT_ASSIGNED', targetType: 'Resident' },
     { action: 'TICKET_ASSIGNED', targetType: 'tickets' },
   ]);
   assert.equal(await migrateAuditTargets(), 2);
   const types = (await AuditLog.find().sort({ action: 1 }).lean()).map((l) => l.targetType);
-  assert.deepEqual(types, ['contracts', 'gate_passes', 'tickets']);
+  assert.deepEqual(types, ['contracts', 'residents', 'tickets']);
   assert.equal(await migrateAuditTargets(), 0);
 });
 
