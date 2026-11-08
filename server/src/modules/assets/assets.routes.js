@@ -69,8 +69,8 @@ const updateBody = Joi.object(fields).min(1);
  * @openapi
  * /assets:
  *   get:
- *     tags: [Tài sản & bảo trì]
- *     summary: Danh sách tài sản (lọc tòa/loại/trạng thái, sắp đến hạn) — UC-D01
+ *     tags: [Thiết bị & bảo trì]
+ *     summary: Danh sách thiết bị (lọc tòa/loại/trạng thái, sắp đến hạn) — UC-D01
  *     parameters:
  *       - $ref: '#/components/parameters/page'
  *       - $ref: '#/components/parameters/limit'
@@ -80,8 +80,8 @@ const updateBody = Joi.object(fields).min(1);
  *       - { in: query, name: dueWithinDays, schema: { type: integer }, description: 'Đến hạn trong N ngày tới (0 = đến hạn/quá hạn)' }
  *       - { in: query, name: q, schema: { type: string } }
  *   post:
- *     tags: [Tài sản & bảo trì]
- *     summary: Thêm tài sản, tự tính nextMaintenanceDate (BR-O18) — UC-D01
+ *     tags: [Thiết bị & bảo trì]
+ *     summary: Thêm thiết bị, tự tính nextMaintenanceDate (BR-O18) — UC-D01
  *     requestBody:
  *       content:
  *         application/json:
@@ -129,12 +129,12 @@ router.post(
  * @openapi
  * /assets/{id}:
  *   get:
- *     tags: [Tài sản & bảo trì]
- *     summary: Chi tiết tài sản + work order đang mở + số lần đã bảo trì (UC-D01 bước 6)
+ *     tags: [Thiết bị & bảo trì]
+ *     summary: Chi tiết thiết bị + work order đang mở + số lần đã bảo trì (UC-D01 bước 6)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  *   put:
- *     tags: [Tài sản & bảo trì]
- *     summary: Sửa tài sản; đổi chu kỳ/ngày gần nhất → tính lại ngày bảo trì kế tiếp
+ *     tags: [Thiết bị & bảo trì]
+ *     summary: Sửa thiết bị; đổi chu kỳ/ngày gần nhất → tính lại ngày bảo trì kế tiếp
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  *     requestBody:
  *       content:
@@ -180,8 +180,8 @@ router.put(
  * @openapi
  * /assets/{id}/status:
  *   patch:
- *     tags: [Tài sản & bảo trì]
- *     summary: Ngừng theo dõi / kích hoạt lại tài sản (BR-O19)
+ *     tags: [Thiết bị & bảo trì]
+ *     summary: Ngừng theo dõi / kích hoạt lại thiết bị (BR-O19)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  *     requestBody:
  *       content:
@@ -197,7 +197,7 @@ router.patch(
     ok(
       res,
       await service.setAssetStatus(req.params.id, req.body.isActive, { user: req.user, ip: req.ip }),
-      req.body.isActive ? 'Đã kích hoạt lại tài sản' : 'Đã ngừng theo dõi tài sản',
+      req.body.isActive ? 'Đã kích hoạt lại thiết bị' : 'Đã ngừng theo dõi thiết bị',
     ),
 );
 
@@ -205,7 +205,7 @@ router.patch(
  * @openapi
  * /assets/{id}/history:
  *   get:
- *     tags: [Tài sản & bảo trì]
+ *     tags: [Thiết bị & bảo trì]
  *     summary: Lịch sử bảo trì — work order DONE, mới nhất trước, có cờ đúng hạn/trễ hạn
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string } }

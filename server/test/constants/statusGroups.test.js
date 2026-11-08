@@ -33,8 +33,10 @@ test('ticket: hành động lịch sử có enum', () => {
   }
 });
 
-test('work order: nhóm đang mở', () => {
-  assert.deepEqual(E.WORK_ORDER_OPEN_STATUSES, ['PENDING', 'IN_PROGRESS']);
+test('work order: nhóm đang làm / chưa hoàn thành', () => {
+  assert.deepEqual(E.WORK_ORDER_ACTIVE_STATUSES, ['PENDING', 'IN_PROGRESS', 'AWAITING_REPAIR_APPROVAL', 'UNDER_REPAIR', 'AWAITING_ACCEPTANCE']);
+  // Phiếu tạm hoãn sửa chưa hoàn thành (chặn ngừng theo dõi) nhưng không chặn job tạo phiếu kiểm tra (UC10, Q8)
+  assert.deepEqual(E.WORK_ORDER_OPEN_STATUSES, [...E.WORK_ORDER_ACTIVE_STATUSES, 'REPAIR_POSTPONED']);
 });
 
 test('booking: nhóm giữ chỗ / tính phí / dữ liệu cũ', () => {

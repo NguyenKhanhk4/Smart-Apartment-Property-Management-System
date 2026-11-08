@@ -23,6 +23,7 @@ import {
   PieChartOutlined,
   SafetyCertificateOutlined,
   ScheduleOutlined,
+  FileProtectOutlined,
   SettingOutlined,
   TeamOutlined,
   ToolOutlined,
@@ -89,6 +90,7 @@ const FundProposalPage = lazy(() => import('../features/fund/FundProposalPage'))
 const AssetsPage = lazy(() => import('../features/assets/AssetsPage'));
 const AssetDetailPage = lazy(() => import('../features/assets/AssetDetailPage'));
 const WorkOrdersPage = lazy(() => import('../features/workOrders/WorkOrdersPage'));
+const MajorRepairApprovalPage = lazy(() => import('../features/workOrders/MajorRepairApprovalPage'));
 
 // ===== Module D (Thanh Bình) =====
 const AmenitiesPage = lazy(() => import('../features/amenities/AmenitiesPage'));
@@ -122,6 +124,7 @@ const TicketBoardPage = lazy(() => import('../features/tickets/TicketBoardPage')
 // ===== Module C — audit (TM) =====
 const AuditLogsPage = lazy(() => import('../features/auditLogs/AuditLogsPage'));
 const PermissionMatrixPage = lazy(() => import('../features/permissions/PermissionMatrixPage'));
+const BuildingSettingsPage = lazy(() => import('../features/settings/BuildingSettingsPage'));
 
 // ===== Gate Pass & Kiểm soát xe (Người 2) =====
 const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
@@ -161,11 +164,11 @@ export const adminMenu = [
     roles: ['MANAGER'],
     component: ComplaintSettingsPage,
   },
-  // Tài sản & bảo trì (UC-D01)
+  // Thiết bị & bảo trì (UC07)
   {
     key: 'assets',
     group: 'Kỹ thuật & vận hành',
-    label: 'Tài sản',
+    label: 'Thiết bị',
     icon: ClusterOutlined,
     path: 'assets',
     roles: ['MANAGER', 'STAFF:TECHNICIAN'],
@@ -173,7 +176,7 @@ export const adminMenu = [
   },
   {
     key: 'asset-detail',
-    label: 'Chi tiết tài sản',
+    label: 'Chi tiết thiết bị',
     path: 'assets/:id',
     roles: ['MANAGER', 'STAFF:TECHNICIAN'],
     component: AssetDetailPage,
@@ -183,17 +186,27 @@ export const adminMenu = [
   {
     key: 'work-orders',
     group: 'Kỹ thuật & vận hành',
-    label: 'Work order',
+    label: 'Phiếu bảo trì',
     icon: ScheduleOutlined,
     path: 'work-orders',
     roles: ['MANAGER'],
     component: WorkOrdersPage,
   },
+  // UC10: duyệt sửa chữa lớn, phiếu tạm hoãn
+  {
+    key: 'repair-approvals',
+    group: 'Kỹ thuật & vận hành',
+    label: 'Duyệt sửa chữa',
+    icon: FileProtectOutlined,
+    path: 'repair-approvals',
+    roles: ['MANAGER'],
+    component: MajorRepairApprovalPage,
+  },
   // Work order của tôi: KTV bắt đầu / hoàn thành (UC-D04) — dùng lại WorkOrdersPage ở chế độ KTV
   {
     key: 'my-work-orders',
     group: 'Kỹ thuật & vận hành',
-    label: 'Work order của tôi',
+    label: 'Bảo trì thiết bị',
     icon: CheckSquareOutlined,
     path: 'my-work-orders',
     roles: ['STAFF:TECHNICIAN'],
@@ -318,7 +331,7 @@ export const adminMenu = [
     label: 'Thống kê tiện ích',
     icon: PieChartOutlined,
     path: 'report-amenity',
-    roles: ['MANAGER', 'ACCOUNTANT'],
+    roles: ['MANAGER'], // SRS 2.3: Dashboard & Reports chỉ Trưởng BQL
     component: AmenityUsagePage,
   },
 
@@ -434,6 +447,15 @@ export const adminMenu = [
     path: 'vehicle-requests',
     roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
     component: VehicleRequestsPage,
+  },
+  {
+    key: 'building-settings',
+    group: 'Cấu hình',
+    label: 'Tòa nhà & biểu phí',
+    icon: SettingOutlined,
+    path: 'building-settings',
+    roles: ['MANAGER'],
+    component: BuildingSettingsPage,
   },
   {
     key: 'buildings',
