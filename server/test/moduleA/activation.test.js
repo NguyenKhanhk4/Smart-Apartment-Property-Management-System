@@ -328,3 +328,32 @@ test('BR-X7 qua API: cư dân từ chối thì bị khóa đăng ký xe và tả
   assert.equal(passed, true);
   assert.equal((await call('PATCH', '/users/me/avatar', staff)).status, 400);
 });
+
+test('điều khoản đổi phiên bản: đồng ý bản cũ thì bị khóa và consentOutdated = true; đồng ý lại bản mới thì mở (BR-X7)', async () => {
+  const { user, request } = await readyToConfirm();
+  await confirmActivation({ ...request, consent: 'ACCEPTED' });
+  // Giả lập: cư dân đồng ý bản 0.9, sau đó điều khoản được cập nhật lên bản hiện hành
+  await User.updateOne({ _id: user._id }, { $set: { 'consents.0.policyVersion': '0.9' } });
+  const actor = asUser(await User.findById(user._id));
+
+  await assert.rejects(requireConsent({ user: actor }, {}, () => {}), { errorCode: 'CONSENT_REQUIRED' });
+  const me = await app.request('GET', '/users/me', { user: actor });
+  assert.equal(me.body.data.consentStatus, 'ACCEPTED');
+  assert.equal(me.body.data.consentOutdated, true);
+  assert.equal(me.body.data.consentPolicyVersion, '0.9');
+  assert.equal(me.body.data.currentPolicyVersion, '1.0');
+
+  const accepted = await app.request('PATCH', '/users/me/consent', { user: actor, body: { action: 'ACCEPTED' } });
+  assert.equal(accepted.status, 200);
+  assert.equal(accepted.body.data.consentOutdated, false);
+  let passed = false;
+  await requireConsent({ user: actor }, {}, () => {
+    passed = true;
+  });
+  assert.equal(passed, true);
+
+  const saved = await User.findById(user._id).lean();
+  assert.deepEqual(saved.consents.map((c) => c.policyVersion), ['0.9', '1.0']);
+  const audit = await AuditLog.findOne({ action: 'CONSENT_CHANGED', targetId: user._id }).lean();
+  assert.equal(audit.metadata.previousPolicyVersion, '0.9');
+});

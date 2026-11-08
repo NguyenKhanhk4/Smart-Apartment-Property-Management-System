@@ -316,7 +316,7 @@ function TariffModal({ open, utility, onClose, onDone }) {
       onCancel={onClose}
       onOk={() => form.submit()}
       confirmLoading={creating}
-      width={720}
+      width="min(720px, 94vw)"
       destroyOnHidden
     >
       <Form

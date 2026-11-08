@@ -18,7 +18,7 @@ export default function WorkOrderReportModal({ workOrder, open, onClose }) {
   const checklist = workOrder.checklist ?? [];
   const results = workOrder.results ?? [];
   return (
-    <Modal title="Kết quả kiểm tra" open={open} onCancel={onClose} footer={null} width={720} destroyOnHidden>
+    <Modal title="Kết quả kiểm tra" open={open} onCancel={onClose} footer={null} width="min(720px, 94vw)" destroyOnHidden>
       <Typography.Paragraph type="secondary">{workOrder.title}</Typography.Paragraph>
       <Descriptions column={1} size="small" bordered>
         <Descriptions.Item label="Kỹ thuật viên">{workOrder.assignedTo?.fullName ?? '—'}</Descriptions.Item>

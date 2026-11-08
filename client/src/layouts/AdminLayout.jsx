@@ -20,7 +20,6 @@ import { springConfig } from '../motion/presets';
 const WIDE = 248;
 const WIDE_RECEPTION = 260;
 const NARROW = 72;
-const RECEPTION_NAVY = '#1A2440';
 
 /** Gom mục menu được phép xem theo nhóm, giữ thứ tự MENU_GROUPS */
 function useGroupedMenu() {
@@ -42,7 +41,7 @@ function SidebarNav({ collapsed, onNavigate }) {
       {groups.map(({ group, items }) => (
         <div key={group} className="space-y-1">
           {!collapsed && (
-            <div className="px-2.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-gold/70 select-none">
+            <div className="px-2.5 py-1 text-[11px] font-medium tracking-wider uppercase text-ink-3 dark:text-[#8B8B94] select-none">
               {group}
             </div>
           )}
@@ -60,11 +59,11 @@ function SidebarNav({ collapsed, onNavigate }) {
               >
                 <span
                   className={`relative z-10 flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${
-                    active ? 'text-white' : 'text-side-text hover:text-white hover:bg-side-hover'
+                    active ? 'text-ink dark:text-white' : 'text-ink-2 hover:text-ink hover:bg-surface-alt dark:text-[#A1A1AA] dark:hover:text-white dark:hover:bg-[#27272A]'
                   } ${collapsed ? 'justify-center' : ''}`}
                 >
                   {item.icon && (
-                    <span className={`text-base shrink-0 ${active ? 'text-gold' : 'text-ink-3'}`}>
+                    <span className={`text-base shrink-0 ${active ? 'text-navy dark:text-[#60A5FA]' : 'text-ink-3'}`}>
                       {createElement(item.icon)}
                     </span>
                   )}
@@ -73,7 +72,7 @@ function SidebarNav({ collapsed, onNavigate }) {
                 {active && (
                   <SlidingIndicator
                     layoutId="sidebar-active"
-                    className="absolute inset-0 z-0 rounded-md border-l-[3px] border-gold bg-[rgba(201,163,91,0.12)]"
+                    className="absolute inset-0 z-0 rounded-md border-l-2 border-navy bg-surface-alt dark:bg-[#27272A] dark:border-[#60A5FA]"
                   />
                 )}
               </Link>
@@ -98,8 +97,8 @@ function SidebarBrand({ collapsed }) {
       <BrandLogo size={32} />
       {!collapsed && (
         <span className="vt-brand-title whitespace-nowrap">
-          <span className="block text-sm font-bold tracking-tight text-white leading-none">SAPMS</span>
-          <span className="block text-[10px] text-gold tracking-wider uppercase font-medium mt-1">
+          <span className="block text-sm font-semibold tracking-tight text-ink dark:text-white leading-none">SAPMS</span>
+          <span className="block text-[10px] text-ink-3 tracking-wider uppercase font-medium mt-1">
             Quản lý chung cư
           </span>
         </span>
@@ -108,7 +107,8 @@ function SidebarBrand({ collapsed }) {
   );
 }
 
-// Layout nội bộ (STAFF / ACCOUNTANT / MANAGER / BOARD) — phong cách "Midnight & Champagne".
+// Layout nội bộ (STAFF / ACCOUNTANT / MANAGER / BOARD) — hệ giao diện A "Gọn sáng", kiểu khung nổi tách rời:
+// sidebar, thanh trên và nội dung là 3 khung trắng bo góc cách nhau 12px trên nền xám. Sidebar thu gọn được còn cột icon.
 // Menu sinh từ config/menu.js (lọc theo quyền, gom theo group); đổi trang có morph (view transition).
 export default function AdminLayout() {
   const screens = Grid.useBreakpoint();
@@ -138,37 +138,46 @@ export default function AdminLayout() {
 
   const sidebarInner = (narrow) => (
     <>
-      <div className={`${isReception ? "h-[68px]" : "h-16"} flex items-center justify-between px-4 border-b border-side-line shrink-0`}>
+      <div className={`h-14 flex items-center px-4 border-b border-line dark:border-[#2E2E33] shrink-0 ${narrow ? 'justify-center px-0' : ''}`}>
         <SidebarBrand collapsed={narrow} />
-        {!isMobile && (
-          <button
-            type="button"
-            onClick={() => setCollapsed((c) => !c)}
-            className="w-7 h-7 rounded flex items-center justify-center text-ink-3 hover:text-white hover:bg-side-line transition-colors cursor-pointer"
-            aria-label={collapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
-          >
-            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          </button>
-        )}
       </div>
       {isReception ? (
         <ReceptionSidebarNav collapsed={narrow} onNavigate={() => setDrawerOpen(false)} />
       ) : (
         <SidebarNav collapsed={narrow} onNavigate={() => setDrawerOpen(false)} />
       )}
+      {/* Nút thu gọn / mở rộng ở đáy sidebar: thu gọn còn cột icon để nhường chỗ cho bảng rộng */}
+      {!isMobile && (
+        <div className="shrink-0 border-t border-line dark:border-[#2E2E33] p-2">
+          <Tooltip title={narrow ? 'Mở rộng menu' : undefined} placement="right">
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              className={`w-full h-9 rounded-md flex items-center gap-2.5 px-3 border-0 bg-transparent text-[13px] font-medium text-ink-2 hover:text-ink hover:bg-surface-alt dark:text-[#A1A1AA] dark:hover:text-white dark:hover:bg-[#27272A] transition-colors cursor-pointer ${
+                narrow ? 'justify-center px-0' : ''
+              }`}
+              aria-label={collapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
+              aria-expanded={!collapsed}
+            >
+              {collapsed ? <MenuUnfoldOutlined className="text-base" /> : <MenuFoldOutlined className="text-base" />}
+              {!narrow && <span>Thu gọn menu</span>}
+            </button>
+          </Tooltip>
+        </div>
+      )}
     </>
   );
 
   return (
-    <div className={`min-h-screen flex dark:bg-[#0B1422] ${isReception ? 'bg-r-bg' : 'bg-ivory'}`}>
+    <div className={`min-h-screen flex gap-3 p-2 lg:p-3 dark:bg-[#09090B] ${isReception ? 'bg-r-bg' : 'bg-ivory'}`}>
       {isMobile ? (
         <Drawer
           placement="left"
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
-          size={wide}
+          size={`min(${wide}px, 85vw)`}
           closable={false}
-          styles={{ body: { padding: 0, background: isReception ? RECEPTION_NAVY : '#0F1B2D', display: 'flex', flexDirection: 'column' } }}
+          styles={{ body: { padding: 0, background: isDark ? '#111113' : '#FFFFFF', display: 'flex', flexDirection: 'column' } }}
         >
           {sidebarInner(false)}
         </Drawer>
@@ -176,17 +185,18 @@ export default function AdminLayout() {
         <motion.aside
           animate={{ width: collapsed ? NARROW : wide }}
           transition={springConfig}
-          style={isReception ? { background: RECEPTION_NAVY } : undefined}
-          className={`h-screen sticky top-0 flex flex-col border-r border-side-line shrink-0 select-none z-30 ${isReception ? '' : 'bg-midnight'}`}
+          className="h-[calc(100vh-24px)] sticky top-3 flex flex-col overflow-hidden rounded-2xl border border-line shadow-float shrink-0 select-none z-30 bg-white dark:bg-[#18181B] dark:border-[#2E2E33]"
         >
           {sidebarInner(collapsed)}
         </motion.aside>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col gap-2 lg:gap-3 min-w-0">
+        {/* Lớp nền phía sau thanh trên: nội dung cuộn lên không lộ ra trong khe 12px phía trên khung */}
+        <div className={`sticky top-0 z-20 -mt-2 pt-2 lg:-mt-3 lg:pt-3 dark:bg-[#09090B] ${isReception ? 'bg-r-bg' : 'bg-ivory'}`}>
         <header
-          className={`sticky top-0 z-20 border-b px-4 md:px-8 flex items-center justify-between gap-3 bg-white/95 dark:bg-[#121E31]/95 dark:border-[#24344D] backdrop-blur-sm ${
-            isReception ? 'h-[68px] border-r-border' : 'h-16 border-line md:px-6'
+          className={`rounded-2xl border shadow-float px-3 md:px-4 flex items-center justify-between gap-3 bg-white/95 dark:bg-[#18181B]/95 dark:border-[#2E2E33] backdrop-blur-sm ${
+            isReception ? 'h-16 border-r-border' : 'h-14 border-line'
           }`}
         >
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -204,7 +214,7 @@ export default function AdminLayout() {
               type="button"
               onClick={() => setPaletteOpen(true)}
               aria-label={isReception ? 'Tìm chức năng, cư dân, căn hộ' : 'Tìm chức năng'}
-              className={`flex items-center gap-2.5 px-3 border cursor-pointer transition-colors dark:bg-[#18263D] dark:border-[#24344D] dark:text-[#A7B0BF] ${
+              className={`flex items-center gap-2.5 px-3 border cursor-pointer transition-colors dark:bg-[#27272A] dark:border-[#2E2E33] dark:text-[#A1A1AA] ${
                 isReception
                   ? 'h-11 w-full max-w-[620px] rounded-[10px] text-sm bg-white border-r-border-control text-r-subtle hover:border-r-muted'
                   : 'py-1.5 rounded-md text-xs bg-ivory border-line text-ink-2 hover:bg-surface-alt'
@@ -225,21 +235,22 @@ export default function AdminLayout() {
               <button
                 type="button"
                 onClick={toggle}
-                className="w-8 h-8 rounded-md flex items-center justify-center text-ink-2 hover:bg-surface-alt dark:text-[#A7B0BF] dark:hover:bg-[#18263D] cursor-pointer"
+                className="w-8 h-8 rounded-md flex items-center justify-center text-ink-2 hover:bg-surface-alt dark:text-[#A1A1AA] dark:hover:bg-[#27272A] cursor-pointer"
                 aria-label="Đổi chế độ sáng/tối"
               >
                 {isDark ? <SunOutlined className="text-gold" /> : <MoonOutlined />}
               </button>
             </Tooltip>
             <NotificationBell area="app" variant={isReception ? 'resident' : undefined} />
-            <span className="h-5 w-px bg-line dark:bg-[#24344D]" />
+            <span className="h-5 w-px bg-line dark:bg-[#2E2E33]" />
             <UserMenu compact={isMobile} variant={isReception ? 'reception' : undefined} />
           </div>
         </header>
+        </div>
 
-        <main className="flex-1 p-4 md:p-8 w-full max-w-[1400px] mx-auto">
+        <main className="flex-1 w-full min-w-0 rounded-2xl border border-line shadow-float bg-white dark:bg-[#18181B] dark:border-[#2E2E33] px-[clamp(12px,2.2vw,28px)] py-[clamp(12px,2.5vh,24px)]">
           <Suspense fallback={<PageLoader />}>
-            <PageTransition key={pathname}>
+            <PageTransition key={pathname} className="page-stack">
               <Outlet />
             </PageTransition>
           </Suspense>

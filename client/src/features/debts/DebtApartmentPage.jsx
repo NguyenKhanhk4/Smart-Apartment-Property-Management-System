@@ -20,7 +20,7 @@ export default function DebtApartmentPage() {
   const navigate = useNavigate();
   const { message } = App.useApp();
   const { hasRole } = useAuth();
-  const isManager = hasRole('MANAGER');
+  const canRecord = hasRole('ACCOUNTANT'); // UC31: Kế toán ghi kết quả xử lý nợ, Trưởng BQL chỉ xem
   const [recording, setRecording] = useState(null); // { caseId, payerName }
   const [downloading, setDownloading] = useState(null);
   const { data, loading, reload } = useApi(() => debtApi.apartment(id), [id]);
@@ -114,7 +114,7 @@ export default function DebtApartmentPage() {
               extra={
                 openCase && (
                   <Flex gap={8} wrap>
-                    {isManager && (
+                    {canRecord && (
                       <Button icon={<EditOutlined />} onClick={() => setRecording({ caseId: openCase._id, payerName: p.fullName })}>
                         Ghi kết quả xử lý
                       </Button>

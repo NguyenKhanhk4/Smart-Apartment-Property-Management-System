@@ -56,9 +56,9 @@ function PaletteDialog({ onClose }) {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: -8 }}
         transition={springConfig}
-        className="relative w-full max-w-xl overflow-hidden rounded-[14px] border border-line-strong bg-white shadow-2xl dark:bg-[#121E31] dark:border-[#24344D]"
+        className="relative w-full max-w-xl overflow-hidden rounded-[14px] border border-line-strong bg-white shadow-2xl dark:bg-[#18181B] dark:border-[#2E2E33]"
       >
-        <div className="flex items-center gap-2 border-b border-line px-4 py-3 dark:border-[#24344D]">
+        <div className="flex items-center gap-2 border-b border-line px-4 py-3 dark:border-[#2E2E33]">
           <SearchOutlined className="text-ink-3" />
           <input
             autoFocus
@@ -69,7 +69,7 @@ function PaletteDialog({ onClose }) {
             }}
             onKeyDown={onKeyDown}
             placeholder="Gõ tên chức năng, vd: thiết bị, phản ánh…"
-            className="w-full border-none bg-transparent text-sm text-ink outline-none placeholder:text-ink-3 dark:text-[#EEF1F6]"
+            className="w-full border-none bg-transparent text-sm text-ink outline-none placeholder:text-ink-3 dark:text-[#FAFAFA]"
           />
           <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[11px] text-ink-2">ESC</kbd>
         </div>
@@ -82,13 +82,13 @@ function PaletteDialog({ onClose }) {
               onClick={() => go(item)}
               onMouseEnter={() => setCursor(i)}
               className={`flex w-full cursor-pointer items-center justify-between rounded-lg border-0 px-3 py-2.5 text-left transition-colors ${
-                i === cursor ? 'bg-ivory dark:bg-[#18263D]' : 'bg-transparent'
+                i === cursor ? 'bg-ivory dark:bg-[#27272A]' : 'bg-transparent'
               }`}
             >
               <span className="flex items-center gap-3">
                 <span className="text-base text-navy dark:text-gold">{item.icon && createElement(item.icon)}</span>
                 <span>
-                  <span className="block text-[13px] font-semibold text-ink dark:text-[#EEF1F6]">{item.label}</span>
+                  <span className="block text-[13px] font-semibold text-ink dark:text-[#FAFAFA]">{item.label}</span>
                   <span className="block text-[11px] text-ink-3">{item.group ?? 'Tổng quan'}</span>
                 </span>
               </span>

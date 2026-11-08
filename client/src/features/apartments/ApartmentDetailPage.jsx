@@ -210,7 +210,7 @@ export default function ApartmentDetailPage() {
               </Tag>
             )}
           </Space>
-          <div className="text-xs text-gray-400">{r.email}</div>
+          <div className="text-xs text-ink-3">{r.email}</div>
         </div>
       ),
     },
@@ -334,14 +334,14 @@ export default function ApartmentDetailPage() {
             <span className="font-medium text-gray-800 dark:text-gray-100">
               {c.ownerId?.fullName || '—'}
             </span>
-            <div className="text-xs text-gray-400">Chủ sở hữu • {c.ownerId?.email}</div>
+            <div className="text-xs text-ink-3">Chủ sở hữu • {c.ownerId?.email}</div>
           </div>
         ) : (
           <div>
             <span className="font-medium text-gray-800 dark:text-gray-100">
               {c.tenantId?.fullName || '—'}
             </span>
-            <div className="text-xs text-gray-400">
+            <div className="text-xs text-ink-3">
               Người thuê • {c.tenantId?.email}
               {c.tenantPaysFees && (
                 <Tag color="orange" className="ml-1 text-[10px]">
@@ -379,7 +379,7 @@ export default function ApartmentDetailPage() {
       width: 150,
       render: (val, r) => (
         <span className="font-semibold text-gray-800 dark:text-gray-100">
-          {val || (r.type === 'BICYCLE' ? <i className="text-gray-400 font-normal">Không biển số</i> : '—')}
+          {val || (r.type === 'BICYCLE' ? <i className="text-ink-3 font-normal">Không biển số</i> : '—')}
         </span>
       ),
     },
@@ -453,7 +453,7 @@ export default function ApartmentDetailPage() {
       </div>
 
       {/* Thông tin tổng quan căn hộ */}
-      <Card loading={loadingApt} className="mb-6 shadow-sm border border-gray-100 dark:border-gray-800">
+      <Card loading={loadingApt} className="mb-6 shadow-sm border border-line dark:border-gray-800">
         <Row gutter={[24, 16]} align="middle">
           <Col xs={24} sm={12} md={5}>
             <Statistic
@@ -500,7 +500,7 @@ export default function ApartmentDetailPage() {
       </Card>
 
       {/* Tabs Thành viên / Hợp đồng / Phương tiện */}
-      <Card className="shadow-sm border border-gray-100 dark:border-gray-800">
+      <Card className="shadow-sm border border-line dark:border-gray-800">
         <Tabs
           defaultActiveKey="residents"
           items={[

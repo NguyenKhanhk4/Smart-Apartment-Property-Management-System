@@ -132,7 +132,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <span className="font-semibold text-primary">{r.apartmentId?.code || '—'}</span>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-ink-3">
             {r.apartmentId?.buildingId?.name || r.apartmentId?.buildingId?.code || ''}
           </div>
         </div>
@@ -152,7 +152,7 @@ export default function VehicleRequestsPage() {
       width: 150,
       render: (val, r) => (
         <span className="font-bold text-gray-800 dark:text-gray-100">
-          {val || (r.type === 'BICYCLE' ? <i className="text-gray-400 font-normal">Không biển số</i> : '—')}
+          {val || (r.type === 'BICYCLE' ? <i className="text-ink-3 font-normal">Không biển số</i> : '—')}
         </span>
       ),
     },
@@ -168,7 +168,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <div className="font-medium text-gray-800 dark:text-gray-200">{r.registeredBy?.fullName || '—'}</div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-ink-3">
             {r.registeredBy?.phone || r.registeredBy?.email || ''}
           </div>
         </div>
@@ -222,7 +222,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <span className="font-semibold text-primary">{r.apartmentId?.code || '—'}</span>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-ink-3">
             {r.apartmentId?.buildingId?.name || r.apartmentId?.buildingId?.code || ''}
           </div>
         </div>
@@ -250,7 +250,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <div className="font-medium text-gray-800 dark:text-gray-200">{r.registeredBy?.fullName || '—'}</div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-ink-3">
             {r.registeredBy?.phone || r.registeredBy?.email || ''}
           </div>
         </div>
@@ -306,7 +306,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <span className="font-semibold text-primary">{r.apartmentId?.code || '—'}</span>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-ink-3">
             {r.apartmentId?.buildingId?.name || r.apartmentId?.buildingId?.code || ''}
           </div>
         </div>
@@ -326,7 +326,7 @@ export default function VehicleRequestsPage() {
       width: 150,
       render: (val, r) => (
         <span className="font-bold text-gray-800 dark:text-gray-100">
-          {val || (r.type === 'BICYCLE' ? <i className="text-gray-400 font-normal">Không biển số</i> : '—')}
+          {val || (r.type === 'BICYCLE' ? <i className="text-ink-3 font-normal">Không biển số</i> : '—')}
         </span>
       ),
     },
@@ -343,7 +343,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <div className="font-medium text-gray-800 dark:text-gray-200">{r.registeredBy?.fullName || '—'}</div>
-          <div className="text-xs text-gray-400">{r.registeredBy?.email}</div>
+          <div className="text-xs text-ink-3">{r.registeredBy?.email}</div>
         </div>
       ),
     },
@@ -392,7 +392,7 @@ export default function VehicleRequestsPage() {
       </div>
 
       {/* Tabs */}
-      <Card className="shadow-sm border border-gray-100 dark:border-gray-800">
+      <Card className="shadow-sm border border-line dark:border-gray-800">
         <Tabs
           activeKey={activeTab}
           onChange={(key) => setActiveTab(key)}

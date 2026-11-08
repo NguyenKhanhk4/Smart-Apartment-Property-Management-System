@@ -41,14 +41,14 @@ export default function ReceptionHomePage() {
           <button
             type="button"
             onClick={() => navigate('/app/announcements?new=1', { viewTransition: true })}
-            className="h-11 px-5 rounded-[10px] border border-r-border-control bg-white text-r-text font-medium text-sm cursor-pointer inline-flex items-center gap-2 dark:bg-[#18263D] dark:text-[#EEF1F6] dark:border-[#24344D]"
+            className="h-11 px-5 rounded-[10px] border border-r-border-control bg-white text-r-text font-medium text-sm cursor-pointer inline-flex items-center gap-2 dark:bg-[#27272A] dark:text-[#FAFAFA] dark:border-[#2E2E33]"
           >
             <SoundOutlined /> Đăng bảng tin
           </button>
           <button
             type="button"
             onClick={() => navigate('/app/guests', { viewTransition: true })}
-            className="h-11 px-5 rounded-[10px] border-0 bg-[#1A2440] text-white font-semibold text-sm cursor-pointer inline-flex items-center gap-2"
+            className="h-11 px-5 rounded-[10px] border-0 bg-navy hover:bg-navy-hover text-white font-semibold text-sm cursor-pointer inline-flex items-center gap-2"
           >
             <PlusOutlined /> Đăng ký khách
           </button>

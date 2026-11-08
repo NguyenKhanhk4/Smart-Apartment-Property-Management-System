@@ -47,7 +47,8 @@ const { NEW, ASSIGNED, WAITING_QUOTE_APPROVAL, IN_PROGRESS, WAITING_PARTS, WAITI
 const { COMMON_AREA } = TICKET_SCOPES;
 const { INCIDENT, COMPLAINT } = TICKET_TYPES;
 const TECHNICIAN = ROLE_TITLES.TECHNICIAN;
-const DISPATCHERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
+// Xem toàn bộ phiếu: Trưởng BQL + Lễ tân. Điều phối (giao, từ chối, gộp) và nhận báo phiếu mới chỉ Trưởng BQL (SRS 2.3, UC41–42).
+const DESK = ['MANAGER', 'STAFF:RECEPTIONIST'];
 
 /**
  * Quy tắc SLA hoàn thành (dueDate) — một nguồn cho mỗi thời điểm:
@@ -95,7 +96,7 @@ const LIST_POPULATE = [
 ];
 
 const isTechnician = (user) => isRole(user, 'STAFF:TECHNICIAN');
-const isDispatcher = (user) => isRole(user, ...DISPATCHERS);
+const isDesk = (user) => isRole(user, ...DESK);
 
 const ticketLink = (ticket, forResident) =>
   forResident ? `/r/tickets/${ticket._id}` : `/app/tickets/${ticket._id}`;
@@ -113,7 +114,7 @@ async function findTicketOr404(id) {
 
 /** Kiểm tra người dùng có được xem ticket không (RESIDENT: căn của mình; TECHNICIAN: được giao) */
 async function assertCanView(user, ticket) {
-  if (isDispatcher(user)) return;
+  if (isDesk(user)) return;
   if (isTechnician(user) && String(ticket.assignedTo?._id ?? ticket.assignedTo) === user.id) return;
   // KTV xem được sự cố đang chờ nhận trong hàng chờ (đọc mô tả trước khi bấm Nhận)
   if (isTechnician(user) && ticket.type === INCIDENT && ticket.status === NEW && !ticket.assignedTo) return;
@@ -190,7 +191,7 @@ async function placeTicket({ apartment, reporterId, staff = null, body, files })
     refId: ticket._id,
     link: ticketLink(ticket, false),
   };
-  await notifyRoles(DISPATCHERS, payload);
+  await notifyRoles(['MANAGER'], payload);
   if (type === INCIDENT && ackFrom.getTime() === now.getTime()) {
     await notify(await technicianRecipients(now), { ...payload, title: `Sự cố mới cần nhận ${ticket.code}` });
   }
@@ -218,7 +219,7 @@ export async function listTickets(user, query) {
     filter.apartmentId = { $in: await getActiveApartmentIds(user.id) };
   } else if (isTechnician(user)) {
     filter.assignedTo = user.id;
-  } else if (!isDispatcher(user)) {
+  } else if (!isDesk(user)) {
     throw ApiError.forbidden();
   }
 
@@ -229,7 +230,7 @@ export async function listTickets(user, query) {
   if (query.scope) filter.scope = query.scope;
   if (query.buildingId) filter.buildingId = query.buildingId;
   if (query.apartmentId && user.role !== ROLES.RESIDENT) filter.apartmentId = query.apartmentId;
-  if (query.assignedTo && isDispatcher(user)) filter.assignedTo = query.assignedTo;
+  if (query.assignedTo && isDesk(user)) filter.assignedTo = query.assignedTo;
   const and = [];
   if (query.overdue) {
     delete filter.status;
@@ -708,7 +709,7 @@ const SCOPE_LABEL = { [COMMON_AREA]: 'Khu vực chung', [TICKET_SCOPES.IN_APARTM
 export async function reclassifyTicket(user, id, { type, scope, reason }, { now = new Date() } = {}) {
   const ticket = await findTicketOr404(id);
   const prevTech = ticket.assignedTo ? String(ticket.assignedTo) : null;
-  if (!isDispatcher(user) && !(isTechnician(user) && prevTech === user.id)) {
+  if (!isDesk(user) && !(isTechnician(user) && prevTech === user.id)) {
     throw ApiError.forbidden('Chỉ Trưởng BQL, Lễ tân hoặc kỹ thuật viên được giao mới đổi phân loại phiếu');
   }
   assertNotFinal(ticket);

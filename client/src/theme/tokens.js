@@ -1,109 +1,121 @@
 /**
  * @file tokens.js
- * @description Design tokens phong cách LUXURY "Midnight & Champagne" cho SAPMS.
- * Tinh thần: Sảnh khách sạn 5 sao / Tòa nhà hạng A — sang trọng, tiết chế, dễ đọc.
- * Màu vàng champagne (#C9A35B) chỉ là điểm nhấn ≤ 10% diện tích; phần lớn giao diện là nền ngà + chữ đậm.
+ * @description Design tokens của SAPMS, 2 hệ giao diện:
+ *  - A "Gọn sáng" (khu quản lý /app, trang đăng nhập): Inter, xám kẽm trung tính, viền mảnh, xanh dương chỉ ở hành động chính.
+ *  - B "Tòa nhà xanh" (khu cư dân /r): Mulish, nền trắng ngả xanh lá nhẹ, xanh lá đậm làm màu chính, bóng rất mềm.
+ * Chữ thường 13–14px, nhãn 500, tiêu đề tối đa 600 (không dùng 700).
+ * Giá trị Tailwind tương ứng nằm ở src/index.css (@theme và lớp .theme-resident) — sửa màu thì sửa cả hai nơi.
  */
 
+// ===== A — khu quản lý =====
 export const colors = {
-  // Midnight (Đêm sâu thẳm - Sảnh hạng A)
-  midnight: '#0F1B2D',
-  midnightHover: '#162842',
-  midnightLight: 'rgba(15, 27, 45, 0.06)',
+  primary: '#2563EB',
+  primaryHover: '#1D4ED8',
+  primaryActive: '#1E40AF',
+  primaryBg: '#EFF4FF',
+  primaryBorder: '#BFD3FE',
 
-  // Primary (Xanh biển thẫm quý phái)
-  primary: '#1E3A5F',
-  primaryHover: '#17304F',
-  primaryActive: '#12263F',
-  primaryBg: '#E8EEF5',
-  primaryBorder: '#C2D3E8',
-
-  // Champagne Gold (Điểm nhấn hoàng gia ≤ 10%)
-  gold: '#C9A35B',
-  goldHover: '#B89248',
-  goldBg: '#F6EEDD',
-  goldBorder: '#E6D7BD',
-  goldText: '#8A6A2E', // Dùng khi CẦN chữ vàng trên nền sáng để đạt độ tương phản WCAG AA
-
-  // Ink (Hệ chữ)
-  ink: '#1A1F2B',
-  inkSecondary: '#5E6675',
-  inkMuted: '#8C93A0',
+  ink: '#18181B',
+  inkSecondary: '#52525B',
+  inkMuted: '#71717A',
   inkInverse: '#FFFFFF',
 
-  // Bề mặt & Viền (Trắng ngà ấm & đá cẩm thạch)
-  bg: '#FAF8F4',
+  bg: '#F4F4F6',
   surface: '#FFFFFF',
-  surfaceAlt: '#F3F0EA', // Header bảng, hàng hover, khối phụ
-  border: '#E8E2D6',
-  borderStrong: '#D6CEBF',
-  divider: '#EFEBE2',
+  surfaceAlt: '#F4F4F5',
+  border: '#E0E0E5',
+  borderStrong: '#CDCDD3',
+  divider: '#EFEFF1',
 
-  // Bảng dữ liệu
-  tableHeaderBg: '#F3F0EA',
-  tableRowHover: '#F7F5F0',
+  tableHeaderBg: '#F4F4F5',
+  tableRowHover: '#F8F8F9',
 
-  // Trạng thái ngữ nghĩa (kèm nền nhạt ~8%)
-  success: '#2E7D5B',
-  successLight: '#EBF5F0',
-  successBorder: '#BDE3D1',
-
+  success: '#15803D',
+  successLight: '#ECFDF3',
+  successBorder: '#BBE5CB',
   warning: '#B45309',
-  warningLight: '#FBF2E9',
-  warningBorder: '#F5DCBE',
+  warningLight: '#FFF7ED',
+  warningBorder: '#F8D9B5',
+  error: '#B91C1C',
+  errorLight: '#FEF2F2',
+  errorBorder: '#F5C2C2',
+  info: '#1D4ED8',
+  infoLight: '#EFF4FF',
+  infoBorder: '#BFD3FE',
 
-  error: '#B42318',
-  errorLight: '#FBEEEE',
-  errorBorder: '#F5BDB9',
+  // Giữ key cũ cho chỗ còn dùng; A không có màu vàng trang trí, điểm nhấn là xanh dương
+  gold: '#2563EB',
+  goldText: '#1D4ED8',
 
-  info: '#1D5FA8',
-  infoLight: '#EBF2FA',
-  infoBorder: '#BAD2EE',
-
-  // Sidebar Midnight Luxury
-  sidebarBg: '#0F1B2D',
-  sidebarText: '#C8D1DE',
-  sidebarTextActive: '#FFFFFF',
-  sidebarActiveBg: 'rgba(201, 163, 91, 0.12)',
-  sidebarIndicator: '#C9A35B',
-  sidebarBorder: '#1A293E',
-
-  // Dark Mode Luxury
   dark: {
-    bg: '#0B1422',
-    surface: '#121E31',
-    surfaceAlt: '#18263D',
-    border: '#24344D',
-    borderStrong: '#364B6B',
-    ink: '#EEF1F6',
-    inkSecondary: '#A7B0BF',
-    inkMuted: '#748194',
-    primary: '#7FA6D6',
-    gold: '#C9A35B',
-    sidebarBg: '#080E18',
-    tableHeaderBg: '#18263D',
-    tableRowHover: '#1B2C47',
+    bg: '#09090B',
+    surface: '#18181B',
+    surfaceAlt: '#27272A',
+    border: '#2E2E33',
+    borderStrong: '#3F3F46',
+    ink: '#FAFAFA',
+    inkSecondary: '#A1A1AA',
+    inkMuted: '#8B8B94',
+    primary: '#60A5FA',
+    gold: '#60A5FA',
+    sidebarBg: '#111113',
+    tableHeaderBg: '#1F1F23',
+    tableRowHover: '#232327',
   },
 };
 
+// ===== B — khu cư dân =====
+export const residentColors = {
+  primary: '#15803D',
+  primaryHover: '#166534',
+  primaryActive: '#14532D',
+  primaryBg: '#E8F3EB',
+  ink: '#14231A',
+  inkSecondary: '#4B5B51',
+  inkMuted: '#6B7A70',
+  bg: '#EDF3EF',
+  surface: '#FFFFFF',
+  surfaceAlt: '#F1F6F2',
+  border: '#D3DFD7',
+  borderStrong: '#B5C7BB',
+  success: '#15803D',
+  successLight: '#E8F3EB',
+  warning: '#A16207',
+  warningLight: '#FEF8E7',
+  error: '#B42318',
+  errorLight: '#FDEEEC',
+  info: '#0F766E',
+  infoLight: '#E6F5F3',
+};
+
 export const typography = {
-  fontSans: "'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-  fontSerif: "'Playfair Display', Georgia, 'Times New Roman', serif",
+  fontSans: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  fontResident: "'Mulish', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  fontMono: "'JetBrains Mono', ui-monospace, Menlo, monospace",
+  // Không còn font serif trang trí — giữ key để code cũ không vỡ
+  fontSerif: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   fontSizes: {
     xs: '11px',
     sm: '12px',
-    base: '14px',
-    md: '16px',
-    lg: '20px',
-    xl: '24px',
-    xxl: '32px',
+    base: '13px',
+    md: '14px',
+    lg: '16px',
+    xl: '18px',
+    xxl: '22px',
   },
 };
 
 export const radius = {
   sm: 6,
   md: 8,
-  card: 10,
-  modal: 14,
+  card: 8,
+  modal: 12,
   full: 9999,
+};
+
+export const residentRadius = {
+  sm: 8,
+  md: 10,
+  card: 12,
+  modal: 16,
 };

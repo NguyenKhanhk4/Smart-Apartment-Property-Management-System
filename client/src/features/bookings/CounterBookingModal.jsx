@@ -74,7 +74,7 @@ export default function CounterBookingModal({ initialDate, onClose, onDone }) {
       open
       title="Đặt hộ tại quầy"
       onCancel={onClose}
-      width={640}
+      width="min(640px, 94vw)"
       destroyOnHidden
       footer={[
         <Button key="close" onClick={onClose}>

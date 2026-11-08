@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Empty, Flex, Popconfirm, Segmented, Skeleton, Tag, Typography } from 'antd';
+import { Button, Card, Flex, Popconfirm, Segmented, Skeleton, Tag, Typography } from 'antd';
 import { DeleteOutlined, LeftOutlined, PhoneOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { dutyShiftApi } from '../../api/moduleE.api';
@@ -32,11 +32,20 @@ function OnDutyCard({ roleTitle }) {
     </Flex>
   );
   return (
-    <Card size="small" title={`${DUTY_ROLE_TITLES[roleTitle].label} đang trực`} className="mb-4">
+    <Card
+      size="small"
+      className="mb-4"
+      title={
+        <span className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full ${data?.onDuty?.length ? 'bg-emerald-500' : 'bg-amber-500'}`} aria-hidden />
+          {DUTY_ROLE_TITLES[roleTitle].label} đang trực
+        </span>
+      }
+    >
       {loading ? (
         <Skeleton active paragraph={{ rows: 1 }} title={false} />
       ) : data?.hasSchedule ? (
-        <Flex vertical gap={6}>
+        <Flex gap={24} wrap>
           {data.onDuty.map(person)}
         </Flex>
       ) : (
@@ -101,11 +110,13 @@ export default function DutyShiftsPage() {
               key={day.valueOf()}
               size="small"
               loading={loading}
+              className={`h-full ${isToday(day) ? 'border-navy! ring-2 ring-navy/15' : ''}`}
+              styles={{ body: { minHeight: 120 } }}
               title={
-                <Typography.Text strong type={isToday(day) ? 'warning' : undefined}>
-                  {day.format('dd DD/MM')}
-                  {isToday(day) && ' · Hôm nay'}
-                </Typography.Text>
+                <span className="flex items-center gap-2">
+                  <span className={isToday(day) ? 'text-navy font-semibold' : 'font-semibold'}>{day.format('dd DD/MM')}</span>
+                  {isToday(day) && <Tag color="blue" className="m-0">Hôm nay</Tag>}
+                </span>
               }
               extra={
                 isManager &&
@@ -115,7 +126,9 @@ export default function DutyShiftsPage() {
               }
             >
               {items.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa xếp ca" />
+                <div className="h-full min-h-[96px] flex items-center justify-center rounded-md border border-dashed border-line text-xs text-ink-3">
+                  Chưa xếp ca
+                </div>
               ) : (
                 <Flex vertical gap={8}>
                   {items.map((s) => {
@@ -126,13 +139,13 @@ export default function DutyShiftsPage() {
                         justify="space-between"
                         align="start"
                         gap={4}
-                        className={`rounded-md px-2 py-1.5 ${mine ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-black/[0.03] dark:bg-white/[0.04]'}`}
+                        className={`rounded-md px-2.5 py-2 border ${mine ? 'bg-navy-bg border-navy/30 dark:bg-blue-900/20' : 'bg-surface-alt border-line dark:bg-white/[0.04] dark:border-[#2E2E33]'}`}
                       >
                         <Flex vertical className="min-w-0">
                           <Typography.Text strong>{shiftTime(s)}</Typography.Text>
                           <Typography.Text ellipsis>{s.userId?.fullName ?? '—'}</Typography.Text>
                           <Flex gap={4} wrap>
-                            {mine && <Tag color="gold">Ca của tôi</Tag>}
+                            {mine && <Tag color="blue">Ca của tôi</Tag>}
                           </Flex>
                           {s.note && (
                             <Typography.Text type="secondary" style={{ fontSize: 12 }}>

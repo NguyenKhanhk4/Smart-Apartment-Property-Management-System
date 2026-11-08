@@ -134,7 +134,7 @@ export default function ParkingCardsPage() {
         return (
           <div>
             <div>{u.fullName}</div>
-            <div className="text-xs text-gray-400">{u.phone || u.email || ''}</div>
+            <div className="text-xs text-ink-3">{u.phone || u.email || ''}</div>
           </div>
         );
       },
@@ -167,7 +167,7 @@ export default function ParkingCardsPage() {
       key: 'actions',
       render: (_, r) => {
         if (r.status !== 'DISABLED_TO_COLLECT') {
-          return <span className="text-xs text-gray-400">—</span>;
+          return <span className="text-xs text-ink-3">—</span>;
         }
         if (!isReceptionist) {
           return <Tag>Chỉ Lễ tân thao tác</Tag>;

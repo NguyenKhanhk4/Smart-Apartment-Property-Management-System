@@ -12,6 +12,7 @@ import { Apartment, Resident, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { sendMail } from '../../services/mail.service.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { consentState } from '../../utils/consent.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { findUserByPhone } from '../users/userLookup.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from './auth.tokens.js';
@@ -35,6 +36,10 @@ export function toPublicUser(user) {
     boardTitle: user.boardTitle ?? null,
     isActive: user.isActive,
     consentStatus: user.consents?.at(-1)?.action ?? null, // BR-X7
+    // Đã đồng ý nhưng là bản điều khoản cũ → client hiện modal bắt buộc đồng ý lại
+    consentOutdated: consentState(user.consents).outdated,
+    consentPolicyVersion: user.consents?.at(-1)?.policyVersion ?? null,
+    currentPolicyVersion: CONSENT_POLICY_VERSION,
     // UC03: Chờ kích hoạt / Hoạt động / Đã khóa
     accountStatus: user.isActive === false ? 'LOCKED' : user.activatedAt ? 'ACTIVE' : 'PENDING',
   };

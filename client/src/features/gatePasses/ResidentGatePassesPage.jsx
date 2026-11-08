@@ -342,7 +342,7 @@ export default function ResidentGatePassesPage() {
                     <EnumTag map={GATE_PASS_STATUS} value={item.status} />
                     <Tag icon={<CarOutlined />}>{item.truckPlate}</Tag>
                   </Space>
-                  <div className="text-sm text-gray-600 dark:text-gray-300">
+                  <div className="text-sm text-ink-2 dark:text-gray-300">
                     Ngày: <b>{formatDate(item.scheduledDate)}</b> · Khung giờ:{' '}
                     <b>
                       {item.timeSlot?.from} – {item.timeSlot?.to}
@@ -416,7 +416,7 @@ export default function ResidentGatePassesPage() {
         confirmLoading={creating}
         okText="Gửi đơn"
         cancelText="Hủy"
-        width={640}
+        width="min(640px, 94vw)"
       >
         <Form form={createForm} layout="vertical">
           <Row gutter={12}>

@@ -59,7 +59,7 @@ export default function InspectionModal({ workOrder, open, onClose, onDone }) {
       okButtonProps={{ danger: result === 'FAULTY' }}
       confirmLoading={saving}
       destroyOnHidden
-      width={720}
+      width="min(720px, 94vw)"
     >
       <Typography.Paragraph style={{ marginBottom: 12 }}>
         <Typography.Text strong>{asset?.code} – {asset?.name}</Typography.Text>

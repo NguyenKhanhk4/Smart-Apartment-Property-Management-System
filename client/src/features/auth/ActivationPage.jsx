@@ -4,6 +4,7 @@ import { Alert, Button, Form, Input, Steps } from 'antd';
 import { ArrowRightOutlined, HomeOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons';
 import { authApi } from '../../api/auth.api';
 import { ALERT_GAP } from './authStyles';
+import { portalPath, useAuthPortal } from './authPortal';
 import { PHONE_RULES } from '../../utils/phone';
 import PersonalDataTerms from './PersonalDataTerms';
 
@@ -20,6 +21,7 @@ const PASSWORD_RULES = [
 
 // UC11: nhập thông tin → nhập mã và đặt mật khẩu → đồng ý hoặc từ chối điều khoản. Mã in tại quầy vào thẳng bước 2.
 export default function ActivationPage() {
+  const portal = useAuthPortal(); // cổng cư dân / Ban quản lý: link quay lại đúng cổng
   const navigate = useNavigate();
   const prefillPhone = useLocation().state?.phone; // từ trang đăng nhập khi tài khoản chưa kích hoạt
   const [step, setStep] = useState(0);
@@ -65,7 +67,7 @@ export default function ActivationPage() {
       // Mã đặt lại mật khẩu in tại quầy cũng nhập ở đây (UC02 bước 7)
       const mode = res.data?.mode;
       const done = mode === 'PASSWORD_RESET' ? { passwordReset: true } : { activated: true };
-      navigate('/login', { replace: true, state: { ...done, phone } }); // trang đăng nhập điền sẵn SĐT
+      navigate(portalPath(portal, '/login'), { replace: true, state: { ...done, phone } }); // trang đăng nhập điền sẵn SĐT
     } else {
       // Mã sai hoặc hết hạn thì phải quay lại nhập mã
       setStep(1);
@@ -74,9 +76,8 @@ export default function ActivationPage() {
 
   return (
     <>
-      <h2 className="m-0 text-2xl font-semibold tracking-tight text-ink">Kích hoạt tài khoản</h2>
-      <div className="w-8 h-0.5 bg-gold mt-2 mb-2" />
-      <p className="m-0 mb-5 text-[13px] text-ink-2">
+      <h2 className="m-0 text-[22px] font-semibold tracking-tight text-ink">Kích hoạt tài khoản</h2>
+      <p className="mt-1 mb-5 text-[13px] text-ink-2">
         {step === 0 && 'Nhập số điện thoại, mã căn hộ và email đã đăng ký với Ban quản lý.'}
         {step === 1 && (identity ? 'Nhập mã đã gửi tới email và tự đặt mật khẩu.' : 'Nhập mã in tại quầy lễ tân và tự đặt mật khẩu.')}
         {step === 2 && 'Đọc điều khoản dữ liệu cá nhân rồi chọn đồng ý hoặc không đồng ý.'}
@@ -222,7 +223,7 @@ export default function ActivationPage() {
 
       <div className="mt-4 text-center text-[13px] text-ink-2">
         Đã kích hoạt?{' '}
-        <Link to="/login" className="font-semibold text-navy hover:text-gold transition-colors">
+        <Link to={portalPath(portal, '/login')} className="font-medium text-navy hover:text-navy-hover">
           Đăng nhập
         </Link>
       </div>

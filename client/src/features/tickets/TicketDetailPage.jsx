@@ -68,7 +68,7 @@ export default function TicketDetailPage() {
       <Flex vertical gap={12}>
         <Flex align="center" gap={8} wrap>
           <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} />
-          <Typography.Title level={4} style={{ margin: 0, flex: 1, minWidth: 200 }}>
+          <Typography.Title level={3} style={{ margin: 0, flex: 1, minWidth: 200 }}>
             {t.title}
           </Typography.Title>
           {canClaim && (
