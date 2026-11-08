@@ -8,7 +8,7 @@ import { validate } from '../../middlewares/validate.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { paginationQuery } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
-import { idParams, ymd } from '../../utils/validators.js';
+import { idParams, objectId, ymd } from '../../utils/validators.js';
 import * as service from './parkingGate.service.js';
 
 const router = Router();
@@ -38,7 +38,7 @@ router.get('/lookup', authorize(security, ROLES.MANAGER), validate({ query: Joi.
 });
 
 router.post('/resident', authorize(security), validate({ body: Joi.object({
-  ...vehicleIdentity, direction: Joi.string().valid('IN', 'OUT').required(),
+  ...vehicleIdentity, direction: Joi.string().valid('IN', 'OUT').required(), vehicleId: objectId(),
 }) }), async (req, res) => {
   return ok(res, await service.recordResidentPassage(req.validated.body, req.user));
 });

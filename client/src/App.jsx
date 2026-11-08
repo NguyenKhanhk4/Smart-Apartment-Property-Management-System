@@ -1,5 +1,4 @@
 import { App as AntApp, ConfigProvider } from 'antd';
-import { StyleProvider } from '@ant-design/cssinjs';
 import viVN from 'antd/locale/vi_VN';
 import { AuthProvider } from './contexts/AuthProvider';
 import { ThemeModeProvider } from './contexts/ThemeModeProvider';
@@ -21,13 +20,10 @@ function ThemedApp() {
   );
 }
 
-// StyleProvider layer: CSS của antd nằm trong @layer antd (xếp dưới utilities Tailwind, xem index.css)
 export default function App() {
   return (
-    <StyleProvider layer>
-      <ThemeModeProvider>
-        <ThemedApp />
-      </ThemeModeProvider>
-    </StyleProvider>
+    <ThemeModeProvider>
+      <ThemedApp />
+    </ThemeModeProvider>
   );
 }

@@ -11,7 +11,7 @@ export default function MyCodePage() {
 
   return (
     <div className="max-w-[440px] mx-auto flex flex-col gap-4">
-      <h1 className="hidden md:block m-0 text-[clamp(20px,2.2vw,26px)] font-semibold">Mã của tôi</h1>
+      <h1 className="hidden md:block m-0 text-[28px] font-semibold">Mã của tôi</h1>
 
       {cards.length > 1 && (
         <Segmented
@@ -51,7 +51,7 @@ export default function MyCodePage() {
               className="flex items-center justify-between px-4 py-3.5 bg-white border border-r-border rounded-[14px] text-r-text! text-[15px] no-underline"
             >
               <span>Cập nhật ảnh đại diện</span>
-              <RightOutlined className="text-r-subtle" style={{ fontSize: 14 }} />
+              <RightOutlined style={{ fontSize: 14, color: '#8A8F99' }} />
             </Link>
           </div>
         ) : (

@@ -59,7 +59,6 @@ export const FEATURES = [
   { code: 'ACTIVATION_CODES', label: 'Cấp mã kích hoạt, đổi SĐT tại quầy', group: 'Cư dân', prefixes: ['/activation-codes'], menuKeys: ['activation-codes'] },
   { code: 'VEHICLES', label: 'Đăng ký xe', group: 'Cư dân', prefixes: ['/vehicles'], menuKeys: ['vehicle-requests', 'my-vehicles'] },
   { code: 'PARKING_CARDS', label: 'Thẻ gửi xe', group: 'Cư dân', prefixes: ['/parking-cards'], menuKeys: ['parking-cards'] },
-  { code: 'GATE_PASSES', label: 'Giấy chuyển đồ', group: 'Cư dân', prefixes: ['/gate-passes'], menuKeys: ['gate-passes'] },
   // Vận hành
   { code: 'TICKETS', label: 'Sự cố và phản ánh', group: 'Vận hành', prefixes: ['/tickets'], menuKeys: ['tickets', 'ticket-detail', 'ticket-board'] },
   { code: 'REPAIR_QUOTES', label: 'Báo giá sửa chữa', group: 'Vận hành', prefixes: ['/repair-quotes'], menuKeys: [] },
@@ -93,7 +92,7 @@ export const CORE_PERMISSIONS = {
   TECHNICIAN: ['TICKETS:VIEW', 'TICKETS:UPDATE', 'WORK_ORDERS:VIEW', 'WORK_ORDERS:UPDATE', 'ASSETS:VIEW'],
   SECURITY: ['BOOKINGS:VIEW', 'BOOKINGS:UPDATE', 'PARKING_GATE:VIEW', 'PARKING_GATE:CREATE', 'PARKING_GATE:UPDATE', 'GUESTS:VIEW', 'GUESTS:CREATE', 'GUESTS:UPDATE'],
   ACCOUNTANT: ['INVOICES:VIEW', 'INVOICES:CREATE', 'INVOICES:UPDATE', 'PAYMENTS:VIEW', 'PAYMENTS:CREATE'],
-  RECEPTIONIST: ['RESIDENTS:VIEW', 'RESIDENTS:UPDATE', 'VEHICLES:VIEW', 'VEHICLES:APPROVE', 'ACTIVATION_CODES:VIEW', 'ACTIVATION_CODES:CREATE'],
+  RECEPTIONIST: ['RESIDENTS:VIEW', 'RESIDENTS:UPDATE', 'VEHICLES:VIEW', 'VEHICLES:UPDATE', 'ACTIVATION_CODES:VIEW', 'ACTIVATION_CODES:CREATE'],
   BOARD: ['FUND:VIEW', 'FUND:APPROVE', 'REPORTS:VIEW'],
   RESIDENT: ['INVOICES:VIEW', 'PAYMENTS:VIEW', 'PAYMENTS:CREATE', 'TICKETS:VIEW', 'TICKETS:CREATE', 'TICKETS:UPDATE'],
   MANAGER: [],

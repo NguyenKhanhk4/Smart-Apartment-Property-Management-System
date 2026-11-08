@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import dayjs from 'dayjs';
 import {
   Card,
   Segmented,
@@ -14,6 +15,10 @@ import {
   Avatar,
   Badge,
   Spin,
+  DatePicker,
+  Form,
+  Input,
+  Modal,
 } from 'antd';
 import {
   HomeOutlined,
@@ -22,7 +27,6 @@ import {
   ToolOutlined,
   CoffeeOutlined,
   IdcardOutlined,
-  FileTextOutlined,
   UsergroupAddOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -31,9 +35,10 @@ import EnumTag from '../../components/EnumTag';
 import { APARTMENT_STATUS, RELATION_TYPES } from '../../constants/enums';
 import { formatDate } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
-import { useApi } from '../../hooks/useApi';
+import { useAction, useApi } from '../../hooks/useApi';
 import { useResident } from '../../hooks/useResident';
 import { residentsApi } from '../../api/moduleA.api';
+import ResidentTenancyCard from './ResidentTenancyCard';
 
 export default function MyApartmentPage() {
   const navigate = useNavigate();
@@ -47,8 +52,10 @@ export default function MyApartmentPage() {
   } = useApi(residentsApi.myApartments, []);
 
   const [selectedAptId, setSelectedAptId] = useState(null);
+  const [declaringApartment, setDeclaringApartment] = useState(null);
+  const [familyForm] = Form.useForm();
   // Căn đang chọn đồng bộ với ô chọn căn trên header (useResident): mặc định theo header, đổi ở đây thì header đổi theo
-  const { apartmentId: headerAptId, setApartmentId: setHeaderAptId } = useResident();
+  const { apartmentId: headerAptId, setApartmentId: setHeaderAptId, reloadResidency } = useResident();
   const pickApartment = (id) => {
     setSelectedAptId(id);
     setHeaderAptId(id);
@@ -62,15 +69,34 @@ export default function MyApartmentPage() {
 
   // Căn hộ hiện tại đang chọn
   const currentApartment = apartments.find((a) => a.apartmentId === activeAptId);
+  const canDeclareFamily = currentApartment?.canDeclareFamily;
 
-  // Load danh sách thành viên trong căn hộ đang chọn
   const {
-    data: members = [],
+    data: residentRecords = [],
     loading: loadingMembers,
+    reload: reloadMembers,
   } = useApi(
     () => (activeAptId ? residentsApi.listByApartment(activeAptId) : Promise.resolve({ data: [] })),
     [activeAptId],
     { enabled: Boolean(activeAptId) },
+  );
+  const occupants = residentRecords.filter((resident) => resident.occupancyRole)
+    .sort((a, b) => Number(b.occupancyRole === 'HEAD') - Number(a.occupancyRole === 'HEAD'));
+
+  const [declareMember, declaringMember] = useAction(
+    ({ fullName, dateOfBirth }) => residentsApi.declareFamilyMember({
+      apartmentId: declaringApartment.apartmentId,
+      fullName: fullName.trim(),
+      dateOfBirth: dateOfBirth?.format('YYYY-MM-DD'),
+    }),
+    {
+      success: 'Đã khai báo thành viên ở cùng',
+      onDone: () => {
+        setDeclaringApartment(null);
+        reloadMembers();
+        reloadResidency();
+      },
+    },
   );
 
   if (loadingApts) {
@@ -84,7 +110,7 @@ export default function MyApartmentPage() {
   if (!apartments || apartments.length === 0) {
     return (
       <div className="p-4 md:p-6 max-w-xl mx-auto text-center py-12">
-        <Card className="shadow-sm border-line dark:border-gray-800">
+        <Card className="shadow-sm border-gray-100 dark:border-gray-800">
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
@@ -92,7 +118,7 @@ export default function MyApartmentPage() {
                 <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">
                   Chưa gắn căn hộ
                 </h3>
-                <p className="text-sm text-ink-3">
+                <p className="text-sm text-gray-400">
                   Bạn chưa được gắn vào căn hộ nào trong tòa nhà. Vui lòng liên hệ Lễ tân để được hỗ trợ.
                 </p>
               </div>
@@ -138,14 +164,14 @@ export default function MyApartmentPage() {
       {/* Thẻ thông tin chi tiết căn hộ */}
       {currentApartment && (
         <Card
-          className="shadow-sm border-line dark:border-gray-800 overflow-hidden"
+          className="shadow-sm border-gray-100 dark:border-gray-800 overflow-hidden"
           title={
             <div className="flex items-center justify-between">
               <Space align="center">
                 <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
                   {currentApartment.code}
                 </span>
-                <span className="text-xs text-ink-3 font-normal">
+                <span className="text-xs text-gray-400 font-normal">
                   {currentApartment.building?.name || ''}
                 </span>
               </Space>
@@ -177,8 +203,8 @@ export default function MyApartmentPage() {
             </Col>
             <Col xs={12} sm={6}>
               <Statistic
-                title="Số nhân khẩu"
-                value={members.length}
+                title="Số người đang ở"
+                value={occupants.length}
                 prefix={<TeamOutlined className="text-emerald-500 mr-1" />}
                 suffix="người"
               />
@@ -195,7 +221,7 @@ export default function MyApartmentPage() {
             </Col>
           </Row>
 
-          <div className="mt-4 pt-3 border-t border-line dark:border-gray-800 text-xs text-ink-3 flex flex-wrap justify-between gap-2">
+          <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-400 flex flex-wrap justify-between gap-2">
             <span>
               Địa chỉ: <b>{currentApartment.building?.address || 'Khu chung cư SAPMS'}</b>
             </span>
@@ -206,21 +232,35 @@ export default function MyApartmentPage() {
         </Card>
       )}
 
-      {/* Danh sách thành viên trong căn hộ */}
+      {currentApartment?.relationType === 'OWNER' && (
+        <ResidentTenancyCard key={activeAptId} apartment={currentApartment}
+          onChanged={() => {
+            setSelectedAptId(activeAptId);
+            reloadApts();
+            reloadMembers();
+            reloadResidency();
+          }} />
+      )}
+
       <Card
-        className="shadow-sm border-line dark:border-gray-800"
+        className="shadow-sm border-gray-100 dark:border-gray-800"
         title={
           <div className="flex items-center gap-2">
             <TeamOutlined className="text-blue-500" />
-            <span>Danh sách thành viên ({members.length})</span>
+            <span>Người đang ở ({occupants.length})</span>
           </div>
         }
+        extra={canDeclareFamily && (
+          <Button type="primary" onClick={() => setDeclaringApartment(currentApartment)}>
+            Khai báo thành viên ở cùng
+          </Button>
+        )}
       >
         <List
           loading={loadingMembers}
           itemLayout="horizontal"
-          dataSource={members}
-          locale={{ emptyText: 'Chưa có thông tin thành viên' }}
+          dataSource={occupants}
+          locale={{ emptyText: 'Chưa có người đang ở' }}
           renderItem={(m) => (
             <List.Item className="border-b border-gray-50 dark:border-gray-800/60 last:border-0 py-3">
               <List.Item.Meta
@@ -237,19 +277,19 @@ export default function MyApartmentPage() {
                     <span className="font-semibold text-gray-800 dark:text-gray-100">
                       {m.fullName}
                     </span>
-                    {m.isHead && (
+                    {m.occupancyRole === 'HEAD' && (
                       <Tag color="gold" icon={<CrownOutlined />}>
                         Chủ hộ
                       </Tag>
                     )}
                     <EnumTag map={RELATION_TYPES} value={m.relationType} />
                     {String(m.userId) === String(user?._id || user?.id) && (
-                      <Badge status="processing" text={<span className="text-xs text-ink-3">(Bạn)</span>} />
+                      <Badge status="processing" text={<span className="text-xs text-gray-400">(Bạn)</span>} />
                     )}
                   </Space>
                 }
                 description={
-                  <div className="text-xs text-ink-3 space-x-3 mt-0.5">
+                  <div className="text-xs text-gray-400 space-x-3 mt-0.5">
                     {m.phone && <span>SĐT: {m.phone}</span>}
                     {m.idNumber && <span>CCCD: {m.idNumber}</span>}
                     {m.dateOfBirth && <span>Ngày sinh: {formatDate(m.dateOfBirth)}</span>}
@@ -262,12 +302,30 @@ export default function MyApartmentPage() {
         />
       </Card>
 
+      <Modal title={`Khai báo thành viên gia đình${declaringApartment ? ` · Căn ${declaringApartment.code}` : ''}`}
+        open={Boolean(declaringApartment)} destroyOnHidden okText="Lưu" cancelText="Hủy"
+        confirmLoading={declaringMember} cancelButtonProps={{ disabled: declaringMember }}
+        onCancel={() => { if (!declaringMember) setDeclaringApartment(null); }}
+        onOk={() => familyForm.submit()}>
+        <Form form={familyForm} preserve={false} layout="vertical" disabled={declaringMember}
+          onFinish={(values) => declareMember(values).catch(() => {})}>
+          <Form.Item name="fullName" label="Họ và tên" rules={[{
+            required: true, min: 2, transform: (value) => value?.trim(), message: 'Nhập họ và tên có ít nhất 2 ký tự',
+          }]}>
+            <Input maxLength={100} autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="dateOfBirth" label="Ngày sinh">
+            <DatePicker className="w-full" format="DD/MM/YYYY" minDate={dayjs('1900-01-01')} maxDate={dayjs()} placeholder="" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
       {/* Lối tắt tiện ích nhanh cho cư dân */}
       <Card
         size="small"
-        className="border-line-strong bg-surface-alt dark:border-[#2E2E33] dark:bg-[#27272A]"
+        className="shadow-sm border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50"
       >
-        <div className="text-xs font-semibold uppercase tracking-wider text-ink-3 mb-2">
+        <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
           Dịch vụ & Tiện ích căn hộ
         </div>
         <Row gutter={[12, 12]}>
@@ -317,15 +375,6 @@ export default function MyApartmentPage() {
               onClick={() => navigate('/r/guests')}
             >
               Sổ khách
-            </Button>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Button
-              block
-              icon={<FileTextOutlined className="text-cyan-600" />}
-              onClick={() => navigate('/r/gate-passes')}
-            >
-              Đơn chuyển đồ
             </Button>
           </Col>
         </Row>

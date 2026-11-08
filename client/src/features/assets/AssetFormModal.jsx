@@ -68,7 +68,7 @@ export default function AssetFormModal({ asset, buildings, open, onClose, onDone
       cancelText="Hủy"
       confirmLoading={saving}
       destroyOnHidden
-      width="min(760px, 94vw)"
+      width={760}
     >
       <Form
         form={form}

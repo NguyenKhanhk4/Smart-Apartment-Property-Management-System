@@ -34,6 +34,7 @@ export default function VehicleRequestsPage() {
   const { message } = App.useApp();
   const { hasRole } = useAuth();
   const isReceptionist = hasRole('STAFF:RECEPTIONIST');
+  const isManager = hasRole('MANAGER');
 
   const [activeTab, setActiveTab] = useState('pending');
 
@@ -102,7 +103,7 @@ export default function VehicleRequestsPage() {
     ? allData
     : allData?.items || [];
 
-  // Đang duyệt (cấp thẻ) / từ chối
+  // Đang duyệt / từ chối
   const [approvingItem, setApprovingItem] = useState(null);
   const [rejectingItem, setRejectingItem] = useState(null);
 
@@ -132,7 +133,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <span className="font-semibold text-primary">{r.apartmentId?.code || '—'}</span>
-          <div className="text-xs text-ink-3">
+          <div className="text-xs text-gray-400">
             {r.apartmentId?.buildingId?.name || r.apartmentId?.buildingId?.code || ''}
           </div>
         </div>
@@ -152,7 +153,7 @@ export default function VehicleRequestsPage() {
       width: 150,
       render: (val, r) => (
         <span className="font-bold text-gray-800 dark:text-gray-100">
-          {val || (r.type === 'BICYCLE' ? <i className="text-ink-3 font-normal">Không biển số</i> : '—')}
+          {val || (r.type === 'BICYCLE' ? <i className="text-gray-400 font-normal">Không biển số</i> : '—')}
         </span>
       ),
     },
@@ -168,7 +169,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <div className="font-medium text-gray-800 dark:text-gray-200">{r.registeredBy?.fullName || '—'}</div>
-          <div className="text-xs text-ink-3">
+          <div className="text-xs text-gray-400">
             {r.registeredBy?.phone || r.registeredBy?.email || ''}
           </div>
         </div>
@@ -184,10 +185,10 @@ export default function VehicleRequestsPage() {
     {
       title: 'Thao tác',
       key: 'action',
-      width: 240,
+      width: 180,
       fixed: 'right',
       render: (_, r) =>
-        isReceptionist ? (
+        isManager ? (
           <Space>
             <Button
               type="primary"
@@ -195,7 +196,7 @@ export default function VehicleRequestsPage() {
               icon={<CheckOutlined />}
               onClick={() => setApprovingItem(r)}
             >
-              Duyệt & Cấp thẻ
+              Duyệt
             </Button>
 
             <Button
@@ -222,7 +223,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <span className="font-semibold text-primary">{r.apartmentId?.code || '—'}</span>
-          <div className="text-xs text-ink-3">
+          <div className="text-xs text-gray-400">
             {r.apartmentId?.buildingId?.name || r.apartmentId?.buildingId?.code || ''}
           </div>
         </div>
@@ -250,7 +251,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <div className="font-medium text-gray-800 dark:text-gray-200">{r.registeredBy?.fullName || '—'}</div>
-          <div className="text-xs text-ink-3">
+          <div className="text-xs text-gray-400">
             {r.registeredBy?.phone || r.registeredBy?.email || ''}
           </div>
         </div>
@@ -281,7 +282,7 @@ export default function VehicleRequestsPage() {
         isReceptionist ? (
           <Popconfirm
             title="Xác nhận hủy vé gửi xe"
-            description="Sau khi xác nhận hủy, phương tiện sẽ chuyển sang trạng thái Đã hủy."
+            description="Xe phải ra khỏi bãi trước khi xác nhận. Sau khi hủy, thẻ mất quyền gửi của phương tiện này."
             okText="Xác nhận hủy"
             cancelText="Đóng"
             okButtonProps={{ danger: true, loading: actionLoadingId === r._id }}
@@ -306,7 +307,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <span className="font-semibold text-primary">{r.apartmentId?.code || '—'}</span>
-          <div className="text-xs text-ink-3">
+          <div className="text-xs text-gray-400">
             {r.apartmentId?.buildingId?.name || r.apartmentId?.buildingId?.code || ''}
           </div>
         </div>
@@ -326,7 +327,7 @@ export default function VehicleRequestsPage() {
       width: 150,
       render: (val, r) => (
         <span className="font-bold text-gray-800 dark:text-gray-100">
-          {val || (r.type === 'BICYCLE' ? <i className="text-ink-3 font-normal">Không biển số</i> : '—')}
+          {val || (r.type === 'BICYCLE' ? <i className="text-gray-400 font-normal">Không biển số</i> : '—')}
         </span>
       ),
     },
@@ -343,7 +344,7 @@ export default function VehicleRequestsPage() {
       render: (_, r) => (
         <div>
           <div className="font-medium text-gray-800 dark:text-gray-200">{r.registeredBy?.fullName || '—'}</div>
-          <div className="text-xs text-ink-3">{r.registeredBy?.email}</div>
+          <div className="text-xs text-gray-400">{r.registeredBy?.email}</div>
         </div>
       ),
     },
@@ -392,7 +393,7 @@ export default function VehicleRequestsPage() {
       </div>
 
       {/* Tabs */}
-      <Card className="shadow-sm border border-line dark:border-gray-800">
+      <Card className="shadow-sm border border-gray-100 dark:border-gray-800">
         <Tabs
           activeKey={activeTab}
           onChange={(key) => setActiveTab(key)}

@@ -2,7 +2,6 @@ import { Link } from 'react-router';
 import { Skeleton } from 'antd';
 import {
   CalendarOutlined,
-  DollarOutlined,
   PushpinOutlined,
   RightOutlined,
   ToolOutlined,
@@ -18,36 +17,12 @@ import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useResident } from '../../hooks/useResident';
-import { dayLabel, formatDate } from '../../utils/format';
+import { dayLabel, formatDate, givenName } from '../../utils/format';
 import ResidentAside from './ResidentAside';
 
 // Phản ánh còn dang dở (cư dân đang chờ BQL hoặc cần xác nhận kết quả)
 // Phản ánh còn cần theo dõi: đang xử lý + chờ cư dân nghiệm thu
 const OPEN_TICKET_STATUS = [...TICKET_OPEN_STATUSES, 'WAITING_CONFIRM'].join(',');
-
-// Thao tác nhanh ở đầu trang chủ (máy tính)
-const QUICK_ACTIONS = [
-  { to: '/r/invoices', icon: <DollarOutlined />, title: 'Thanh toán phí', desc: 'Xem và trả phí dịch vụ' },
-  { to: '/r/amenities', icon: <CalendarOutlined />, title: 'Đặt tiện ích', desc: 'Hồ bơi, gym, BBQ…' },
-  { to: '/r/tickets', icon: <ToolOutlined />, title: 'Gửi phản ánh', desc: 'Báo sự cố, theo dõi xử lý' },
-  { to: '/r/guests', icon: <UserAddOutlined />, title: 'Đăng ký khách', desc: 'Báo trước cho bảo vệ' },
-];
-
-function QuickActions() {
-  return (
-    <section aria-label="Thao tác nhanh" className="grid gap-3 grid-cols-2 xl:grid-cols-4">
-      {QUICK_ACTIONS.map((a) => (
-        <SurfaceCard key={a.to} as={Link} to={a.to} viewTransition className="flex items-center gap-3.5 px-4 py-3.5 text-r-text! no-underline hover:border-r-navy">
-          <span className="w-11 h-11 shrink-0 rounded-xl bg-r-navy text-white flex items-center justify-center text-xl">{a.icon}</span>
-          <span className="min-w-0">
-            <span className="block text-[14.5px] font-semibold">{a.title}</span>
-            <span className="block text-[12.5px] text-r-muted truncate">{a.desc}</span>
-          </span>
-        </SurfaceCard>
-      ))}
-    </section>
-  );
-}
 
 const TONE_ICON = {
   info: 'bg-r-info-bg text-r-info-fg',
@@ -83,7 +58,7 @@ function TodoCard({ to, tone, icon, label, title, subtitle, badge, wide }) {
         <span className="block text-[15px] font-medium truncate">{title}</span>
         <span className="block text-[13px] text-r-muted truncate">{subtitle}</span>
       </span>
-      {badge ?? <RightOutlined className="text-r-subtle" style={{ fontSize: 14 }} />}
+      {badge ?? <RightOutlined style={{ fontSize: 14, color: '#8A8F99' }} />}
     </SurfaceCard>
   );
 }
@@ -97,7 +72,7 @@ function NewsRow({ item, last, wide }) {
     >
       <span className="flex-1 min-w-0">
         <span className={`flex items-center gap-1.5 font-medium text-[15px]`}>
-          {item.isPinned && <PushpinOutlined className="text-r-navy" style={{ fontSize: 16 }} aria-label="Đã ghim" />}
+          {item.isPinned && <PushpinOutlined style={{ color: '#B8892E', fontSize: 16 }} aria-label="Đã ghim" />}
           <span className="truncate">{item.title}</span>
         </span>
         <span className={`block text-r-muted truncate ${wide ? 'text-sm mt-1' : 'text-[13px] mt-0.5'}`}>{item.content}</span>
@@ -111,8 +86,8 @@ function NewsRow({ item, last, wide }) {
 // Lối tắt chức năng đã bỏ vì trùng với thanh điều hướng, menu avatar và chuông.
 export default function ResidentHomePage() {
   const wide = useMediaQuery('(min-width: 768px)');
-  const { canSee } = useAuth();
-  const showNews = canSee({ key: 'announcements' }); // UC04: bị tắt quyền Xem Bảng tin thì ẩn khung
+  const { user, canSee } = useAuth();
+  const showNews = canSee({ key: 'announcements' });
   const { apartment, apartmentId } = useResident();
   const enabled = Boolean(apartmentId);
 
@@ -206,26 +181,24 @@ export default function ResidentHomePage() {
 
   return (
     <div className="flex flex-col gap-6 md:gap-7">
-      {/* Máy tính: lời chào nằm ở thanh trên; trang chủ = thao tác nhanh + 2 cột (việc cần làm, bảng tin | thẻ cư dân, căn hộ) */}
+      {wide && (
+        <div>
+          <h1 className="m-0 text-[28px] font-semibold">Chào {givenName(user.fullName)}</h1>
+          <p className="mt-1 mb-0 text-[15px] text-r-muted">
+            {apartment ? `Căn ${apartment.code}${apartment.building?.name ? ` · ${apartment.building.name}` : ''} · ` : ''}
+            {dayjs().format('dddd, DD/MM/YYYY').replace(/^./, (c) => c.toUpperCase())}
+          </p>
+        </div>
+      )}
+
       {wide ? (
-        <>
-          <div>
-            <h1 className="m-0 text-[clamp(18px,1.6vw,22px)] font-semibold">Tổng quan</h1>
-            <p className="mt-0.5 mb-0 text-[13px] text-r-muted">
-              {apartment ? `Căn ${apartment.code}${apartment.building?.name ? ` · ${apartment.building.name}` : ''}` : 'Chưa có căn hộ'}
-            </p>
+        <div className="flex flex-wrap gap-6 items-start">
+          <div className="flex-[999_1_560px] min-w-0 flex flex-col gap-6">
+            {todo}
+            {newsCard}
           </div>
-          <QuickActions />
-          <div className="grid gap-6 items-start lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
-            <div className="min-w-0 flex flex-col gap-6">
-              {todo}
-              {newsCard}
-            </div>
-            <div className="lg:sticky lg:top-[84px] flex flex-col">
-              <ResidentAside />
-            </div>
-          </div>
-        </>
+          <ResidentAside />
+        </div>
       ) : (
         <>
           {todo}

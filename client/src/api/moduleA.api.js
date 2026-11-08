@@ -37,6 +37,7 @@ export const apartmentsApi = {
   delete: (id) => http.delete(`/apartments/${id}`),
   setOccupancy: (id, body) => http.patch(`/apartments/${id}/occupancy-status`, body),
   confirmMoveIn: (id) => http.patch(`/apartments/${id}/confirm-move-in`),
+  issueOwnerAccount: (id, body) => http.post(`/apartments/${id}/owner-account`, body),
 };
 
 // ===== UC-A06: Hợp đồng =====
@@ -46,6 +47,14 @@ export const contractsApi = {
   create: (body) => http.post('/contracts', body),
   update: (id, body) => http.patch(`/contracts/${id}`, body),
   terminate: (id) => http.patch(`/contracts/${id}/terminate`),
+  transferOwner: (id, body) => http.post(`/contracts/apartments/${id}/ownership-transfer`, body),
+  transferDebtReview: (id) => http.get(`/contracts/apartments/${id}/ownership-transfer/debt-review`),
+  requestTransferDebtReview: (id, contractId) => http.post(
+    `/contracts/apartments/${id}/ownership-transfer/debt-review`, { contractId },
+  ),
+  acknowledgeTransferDebt: (id, contractId) => http.patch(
+    `/contracts/apartments/${id}/ownership-transfer/debt-review`, { contractId },
+  ),
 };
 
 // ===== UC-A07 & UC-A08: Cư dân & Căn hộ của tôi =====
@@ -72,15 +81,21 @@ export const residentsApi = {
   updateMember: (id, body) => http.patch(`/residents/${id}`, body),
   removeMember: (id) => http.patch(`/residents/${id}/remove`),
   myApartments: () => http.get('/residents/me/apartments'),
+  declareFamilyMember: (body) => http.post('/residents/me/family', body),
+  tenancy: (apartmentId) => http.get(`/residents/me/tenancies/${apartmentId}`),
+  lookupTenant: (apartmentId, phone) => http.get(`/residents/me/tenancies/${apartmentId}/lookup`, { params: { phone } }),
+  startTenancy: (apartmentId, body) => http.post(`/residents/me/tenancies/${apartmentId}`, body),
+  endTenancy: (apartmentId, residentId) => http.patch(`/residents/me/tenancies/${apartmentId}/${residentId}/end`),
   revealIdNumber: (id) => http.get(`/residents/${id}/id-number`),
-  listChanges: (params) => http.get('/residents/changes', { params }),
-  exportChanges: async (params) => {
-    const res = await apiClient.get('/residents/changes/export', {
+  listOccupancy: () => http.get('/residents/occupancy'),
+  previewOccupancyExcel: (params) => http.get('/residents/occupancy/preview', { params }),
+  exportOccupancy: async (params) => {
+    const res = await apiClient.get('/residents/occupancy/export', {
       params,
       responseType: 'blob',
     });
     const match = /filename="?([^"]+)"?/.exec(res.headers['content-disposition'] ?? '');
-    const filename = match?.[1] ?? 'bien-dong-nhan-khau.xlsx';
+    const filename = match?.[1] ?? 'thong-tin-cu-tru.xlsx';
     const url = URL.createObjectURL(res.data);
     const a = Object.assign(document.createElement('a'), { href: url, download: filename });
     document.body.appendChild(a);
@@ -97,14 +112,16 @@ export const vehicleApi = {
   register: (body) => http.post('/vehicles', body),
   requestCancel: (id) => http.patch(`/vehicles/${id}/cancel-request`),
   list: (params) => http.get('/vehicles', { params }),
-  approve: (id, body) => http.patch(`/vehicles/${id}/approve`, body),
+  approve: (id) => http.patch(`/vehicles/${id}/approve`),
   reject: (id, body) => http.patch(`/vehicles/${id}/reject`, body),
   confirmCancel: (id) => http.patch(`/vehicles/${id}/confirm-cancel`),
 };
 
-// ===== UC66: Thẻ gửi xe =====
+// ===== UC66: Thẻ cư dân =====
 export const parkingCardsApi = {
   list: (params) => http.get('/parking-cards', { params }),
+  issue: (body) => http.post('/parking-cards', body),
+  handOver: (id) => http.patch(`/parking-cards/${id}/handover`),
   collect: (id, body) => http.patch(`/parking-cards/${id}/collect`, body),
   lost: (id, body) => http.patch(`/parking-cards/${id}/lost`, body),
   updateStatus: (id, body) => http.patch(`/parking-cards/${id}/status`, body),

@@ -70,6 +70,10 @@ router.get('/my', authenticate, authorize('RESIDENT'), validate({ query: myQuery
   return paginated(res, items, pagination, { summary });
 });
 
+router.get('/my/departed-tenancies', authenticate, authorize('RESIDENT'), async (req, res) =>
+  ok(res, await queries.departedTenantDebtApartments(req.user.id)),
+);
+
 /**
  * @openapi
  * /invoices/preview:

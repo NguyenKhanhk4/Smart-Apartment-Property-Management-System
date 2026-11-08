@@ -24,7 +24,6 @@ import EnumTag from '../../components/EnumTag';
 import { GUEST_STATUS } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
 import { useResident } from '../../hooks/useResident';
-import ResidentPageTitle from '../../components/resident/ResidentPageTitle';
 
 // UC-E07 — Cư dân đăng ký khách trước để bảo vệ đối chiếu
 export default function ResidentGuestsPage() {
@@ -46,17 +45,16 @@ export default function ResidentGuestsPage() {
 
   return (
     <Flex vertical gap={12}>
-      <ResidentPageTitle
-        title="Khách & bưu kiện"
-        subtitle="Đăng ký trước khách đến thăm để bảo vệ đón tiếp; theo dõi bưu kiện đang giữ tại quầy lễ tân."
-        extra={tab === 'guests' && (
-          <Button disabled={!apartmentId} type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-            Đăng ký khách
-          </Button>
-        )}
-      />
-      <Tabs className="-mt-3" activeKey={tab} onChange={(v) => { setTab(v); setPage(1); }} items={[{ key: 'guests', label: 'Khách đến thăm' }, { key: 'parcels', label: 'Bưu kiện của căn' }]} />
+      <Tabs activeKey={tab} onChange={(v) => { setTab(v); setPage(1); }} items={[{ key: 'guests', label: 'Khách đến thăm' }, { key: 'parcels', label: 'Bưu kiện của căn' }]} />
       {error && <Alert type="error" title={error.message} />}
+      <Flex justify="space-between" align="center">
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          {tab === 'guests' ? 'Khách đến thăm' : 'Bưu kiện của căn'}
+        </Typography.Title>
+        {tab === 'guests' && <Button disabled={!apartmentId} type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+          Đăng ký khách
+        </Button>}
+      </Flex>
       <Spin spinning={loading}>
         <Flex vertical gap={8}>
           {!loading && !data.length && <Empty description={tab === 'guests' ? 'Chưa có khách nào' : 'Chưa có bưu kiện'} />}

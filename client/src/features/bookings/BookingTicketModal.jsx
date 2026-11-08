@@ -5,7 +5,7 @@ import { formatDate } from '../../utils/format';
 // Vé QR đặt tiện ích (Người 4): cư dân đưa mã cho Lễ tân / Bảo vệ quét để check-in
 export default function BookingTicketModal({ booking, onClose }) {
   return (
-    <Modal title="Vé đặt tiện ích" open={Boolean(booking)} onCancel={onClose} footer={null} destroyOnHidden width="min(360px, 94vw)" centered>
+    <Modal title="Vé đặt tiện ích" open={Boolean(booking)} onCancel={onClose} footer={null} destroyOnHidden width={360} centered>
       {booking && (
         <Flex vertical align="center" gap={12}>
           <div className="rounded-xl bg-white p-3">

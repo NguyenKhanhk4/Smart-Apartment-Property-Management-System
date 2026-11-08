@@ -3,13 +3,14 @@ import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AuditLog, Contract, Notification, Resident, User } from '../../src/models/index.js';
 import * as contracts from '../../src/modules/contracts/contracts.service.js';
-import { remindExpiringLeases } from '../../src/modules/contracts/contracts.jobs.js';
+import { JOBS } from '../../src/jobs/index.js';
 import { getPayer } from '../../src/modules/contracts/contracts.queries.js';
 import * as residents from '../../src/modules/residents/residents.service.js';
 import { periodStart } from '../../src/utils/time.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
-import { asUser, createApartment, createManager, createReceptionist, createResidentUser, linkResident } from '../helpers/fixtures.js';
+import { asUser, createApartment, createBuilding, createManager, createReceptionist, createResidentUser, linkResident } from '../helpers/fixtures.js';
 import { createContract } from '../helpers/fixtures.moduleA.js';
+import { startApp, tokenFor, USERS } from '../helpers/http.js';
 
 before(connectTestDB);
 afterEach(clearTestDB);
@@ -24,6 +25,54 @@ async function saleWithOwner() {
   await linkResident(owner, apartment, { relationType: 'OWNER', contractId: contract._id });
   return { apartment, owner, contract };
 }
+
+test('hồ sơ sở hữu: Ban quản lý ghi nhận giấy tờ và lọc theo tòa, tầng trước khi phân trang', async (t) => {
+  const app = await startApp();
+  t.after(app.close);
+  const manager = asUser(await createManager());
+  const firstBuilding = await createBuilding();
+  const secondBuilding = await createBuilding();
+  const firstFloor = await createApartment(firstBuilding, { floor: 1, status: 'VACANT' });
+  const secondFloor = await createApartment(firstBuilding, { floor: 2 });
+  const otherBuilding = await createApartment(secondBuilding, { floor: 1 });
+  const owner = await createResidentUser();
+  await createContract({ apartment: secondFloor, owner });
+  await createContract({ apartment: otherBuilding, owner });
+  const lease = await createContract({ apartment: firstFloor, owner, type: 'LEASE' });
+
+  const body = {
+    apartmentId: firstFloor.id, type: 'SALE', startDate: '2025-01-01',
+    owner: { phone: '0912000010', fullName: 'Chủ sở hữu mới' },
+    ownershipDocumentType: 'DEVELOPER_SALE_CONTRACT', ownershipDocumentNumber: 'HĐMB-01',
+  };
+  assert.equal((await app.request('POST', '/contracts', { user: USERS.receptionist, body })).status, 403);
+  const form = new FormData();
+  for (const [key, value] of Object.entries(body)) {
+    form.append(key, key === 'owner' ? JSON.stringify(value) : value);
+  }
+  const result = await fetch(`${app.base}/contracts`, {
+    method: 'POST', headers: { authorization: `Bearer ${tokenFor(manager)}` }, body: form,
+  });
+  const saved = await result.json();
+  assert.equal(result.status, 201, JSON.stringify(saved));
+  const contractId = saved.data.contract._id;
+
+  const list = await app.request('GET', `/contracts?buildingId=${firstBuilding.id}&floor=1&type=SALE&limit=1`, { user: manager });
+  assert.equal(list.status, 200, JSON.stringify(list.body));
+  assert.equal(list.body.pagination.total, 1);
+  assert.deepEqual(list.body.data.map((record) => record._id), [contractId]);
+  assert.equal(list.body.data[0].ownershipDocumentNumber, 'HĐMB-01');
+
+  const allFirstFloors = await app.request('GET', '/contracts?floor=1&type=SALE', { user: manager });
+  assert.equal(allFirstFloors.body.pagination.total, 2);
+  const legacy = await app.request('GET', `/contracts?buildingId=${firstBuilding.id}&floor=1&type=LEASE`, { user: manager });
+  assert.deepEqual(legacy.body.data.map((record) => record._id), [lease.id]);
+  assert.equal((await app.request('GET', '/contracts?floor=0', { user: manager })).status, 400);
+
+  const detail = await app.request('GET', `/contracts/${contractId}`, { user: manager });
+  assert.equal(detail.body.data.createdBy._id, manager.id);
+  assert.equal(detail.body.data.ownershipDocumentType, 'DEVELOPER_SALE_CONTRACT');
+});
 
 test('createContract: ngày "YYYY-MM-DD" lưu 00:00 giờ VN → hóa đơn tháng bắt đầu ngày 1 tìm được người nộp', async () => {
   const receptionist = asUser(await createReceptionist());
@@ -235,29 +284,10 @@ test('removeMember: gỡ thành viên đang ở', async () => {
   assert.ok(after.moveOutDate);
 });
 
-test('remindExpiringLeases: nhắc mọi hợp đồng hết hạn trong 15 ngày chưa nhắc (kể cả khi cron lỡ 1 ngày), đúng 1 lần', async () => {
-  const { apartment, owner } = await saleWithOwner();
-  const tenant = await createResidentUser();
-  const lease = await createContract({
-    apartment,
-    owner,
-    type: 'LEASE',
-    tenantId: tenant._id,
-    endDate: new Date(Date.now() + 10 * DAY), // cron đã lỡ mốc đúng 15 ngày
-  });
-  const far = await createContract({
-    apartment: await createApartment(),
-    owner,
-    type: 'LEASE',
-    tenantId: tenant._id,
-    endDate: new Date(Date.now() + 40 * DAY),
-  });
-
-  assert.equal(await remindExpiringLeases(), 1);
-  assert.ok((await Contract.findById(lease._id)).remindedAt);
-  assert.equal((await Contract.findById(far._id)).remindedAt, null);
-  assert.equal(await remindExpiringLeases(), 0, 'không nhắc lần 2');
-  assert.ok(await User.exists({ _id: tenant._id }));
+test('UC17: lịch vận hành không chạy các tác vụ nhắc hoặc hết hạn thuê của luồng hợp đồng cũ', () => {
+  const names = JOBS.map(({ name }) => name);
+  assert.ok(!names.includes('CONTRACT_EXPIRE'));
+  assert.ok(!names.includes('CONTRACT_EXPIRY_REMIND'));
 });
 
 test('terminateContract: hợp đồng không còn hiệu lực / còn hợp đồng thuê → 409 STATUS_CONFLICT', async () => {

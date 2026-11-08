@@ -253,7 +253,7 @@ function ProposalModal({ open, available, onClose, onDone }) {
     onDone: async (res) => (onClose(), await onDone?.(res)),
   });
   return (
-    <Modal open={open} title="Lập đề xuất chi quỹ" okText="Gửi Ban quản trị" width="min(640px, 94vw)" confirmLoading={loading} onCancel={onClose} onOk={() => form.submit()} destroyOnHidden>
+    <Modal open={open} title="Lập đề xuất chi quỹ" okText="Gửi Ban quản trị" width={640} confirmLoading={loading} onCancel={onClose} onOk={() => form.submit()} destroyOnHidden>
       {available != null && <Alert className="mb-3" type="info" showIcon message={`Còn có thể đề xuất chi tối đa ${formatMoney(available)}`} />}
       <Form form={form} layout="vertical" preserve={false} initialValues={{ planType: 'ANNUAL_PLAN', largeRepair: false }} onFinish={(v) => run(v).catch(() => {})}>
         <Form.Item name="title" label="Hạng mục" rules={[{ required: true, min: 3, message: 'Nhập hạng mục' }]}>

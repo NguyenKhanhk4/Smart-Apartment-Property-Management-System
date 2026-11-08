@@ -95,13 +95,13 @@ export default function LookupCard() {
             aria-label="Mã cư dân"
             autoComplete="off"
             maxLength={40}
-            className="flex-1 min-w-0 h-[52px] px-4 rounded-[10px] border border-r-border-control bg-white text-[22px] tracking-wider text-r-text dark:bg-[#27272A] dark:text-[#FAFAFA] dark:border-[#2E2E33]"
+            className="flex-1 min-w-0 h-[52px] px-4 rounded-[10px] border border-r-border-control bg-white text-[22px] tracking-wider text-r-text dark:bg-[#18263D] dark:text-[#EEF1F6] dark:border-[#24344D]"
             style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}
           />
           <button
             type="submit"
             disabled={!text.trim() || state.status === 'loading'}
-            className="h-[52px] px-6 rounded-[10px] border-0 bg-navy hover:bg-navy-hover text-white font-semibold text-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            className="h-[52px] px-6 rounded-[10px] border-0 bg-[#1A2440] text-white font-semibold text-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Tra cứu
           </button>
@@ -110,7 +110,7 @@ export default function LookupCard() {
           Cư dân đọc mã trên thẻ &quot;Mã của tôi&quot;. Đối chiếu ảnh trước khi cho vào tiện ích.
         </p>
       </div>
-      <div className="flex-1 basis-[360px] min-w-0 rounded-xl p-4 bg-r-bg dark:bg-[#27272A] flex items-center" aria-live="polite">
+      <div className="flex-1 basis-[360px] min-w-0 rounded-xl p-4 bg-r-bg dark:bg-[#18263D] flex items-center" aria-live="polite">
         <div className="w-full">
           <Result state={state} onConfirm={(code) => navigate(`/app/booking-schedule?q=${encodeURIComponent(code)}`)} />
         </div>

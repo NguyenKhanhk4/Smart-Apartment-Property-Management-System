@@ -12,7 +12,7 @@ export function Block({ title, extra, loading, error, onRetry, className = '', c
       {loading ? (
         <div className="px-6 pb-6 space-y-3" aria-busy="true">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-12 rounded-lg bg-r-segment/60 dark:bg-[#27272A] animate-pulse" />
+            <div key={i} className="h-12 rounded-lg bg-r-segment/60 dark:bg-[#18263D] animate-pulse" />
           ))}
         </div>
       ) : error ? (

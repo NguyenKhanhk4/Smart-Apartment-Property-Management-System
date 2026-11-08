@@ -66,10 +66,10 @@ export default function ServicesTab() {
             key={a._id}
             to={`/r/amenities/${a._id}${apartmentId ? `?apartmentId=${apartmentId}` : ''}`}
             viewTransition
-            className="flex flex-col gap-2.5 md:gap-3.5 p-4 md:p-5 text-r-text! no-underline hover:border-r-navy"
+            className="flex flex-col gap-2.5 md:gap-3.5 p-4 md:p-5 text-r-text! no-underline hover:border-r-border-control"
           >
             <div className="flex justify-between items-start">
-              <span className="w-10 h-10 md:w-11 md:h-11 rounded-[10px] md:rounded-xl bg-r-ok-bg border border-r-border text-r-navy flex items-center justify-center">
+              <span className="w-10 h-10 md:w-11 md:h-11 rounded-[10px] md:rounded-xl bg-[#F0ECE4] text-r-navy flex items-center justify-center">
                 <AmenityIcon name={a.name} />
               </span>
             </div>

@@ -72,7 +72,7 @@ export default function TicketBoardPage() {
             <Card
               key={col.status}
               size="small"
-              className="shrink-0 w-[min(280px,82vw)]"
+              className="shrink-0 w-[280px]"
               styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
               title={
                 <Flex justify="space-between" align="center">

@@ -7,11 +7,8 @@ import { runTrackedJob } from './cronRunner.js';
 import { generateMaintenanceWorkOrders, warnEquipment } from '../modules/workOrders/workOrders.jobs.js';
 import { remindPostponedRepairs } from '../modules/workOrders/workOrders.decision.js';
 import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from '../modules/tickets/tickets.jobs.js';
-import { expireLeases } from '../modules/contracts/contracts.jobs.js';
 import { billingReminders, markOverdueInvoices } from '../modules/invoices/invoices.jobs.js';
 import { completeBookings, expireBookingHolds } from '../modules/bookings/bookings.jobs.js';
-import { expireGatePasses } from '../modules/gatePasses/gatePasses.jobs.js';
-import { remindExpiringLeases } from '../modules/contracts/contracts.jobs.js';
 import { reconcilePayosPayments } from '../modules/payments/payments.payos.js';
 import { remindDebts } from '../modules/debts/debts.jobs.js';
 import { remindQuotes } from '../modules/repairQuotes/repairQuotes.service.js';
@@ -30,15 +27,12 @@ export const JOBS = [
   { name: CRON_JOBS.TICKET_SLA_ALERT, schedule: '* * * * *', handler: alertSlaBreaches },
   // BR-O9 — 01:00 hằng ngày tự đóng ticket chờ xác nhận quá hạn
   { name: CRON_JOBS.TICKET_AUTO_CLOSE, schedule: '0 1 * * *', handler: autoCloseTickets },
-  // UC-D02 / BR-O6 — 02:00 hằng ngày tạo work order bảo trì định kỳ cho tài sản đến hạn
   // UC07, BR-E03: 01:00 tạo phiếu bảo trì đến hạn (kèm bản sao checklist), báo khi cả ngày không có ca kỹ thuật
   { name: CRON_JOBS.WORK_ORDER_GENERATE, schedule: '0 1 * * *', handler: generateMaintenanceWorkOrders },
   // UC07, BR-E07: 07:00 cảnh báo phiếu bảo trì quá hạn, thiết bị sắp hết bảo hành (MSG-E08)
   { name: CRON_JOBS.EQUIPMENT_WARNING, schedule: '0 7 * * *', handler: warnEquipment },
   // UC10: 07:05 nhắc Trưởng BQL xem lại phiếu tạm hoãn sửa đã tới ngày, lặp mỗi N ngày (MSG-E12)
   { name: CRON_JOBS.REPAIR_REVIEW, schedule: '5 7 * * *', handler: remindPostponedRepairs },
-  // UC-A06 / BR-O2 — 00:00 hằng ngày kiểm tra và chuyển hợp đồng thuê hết hạn
-  { name: CRON_JOBS.CONTRACT_EXPIRE, schedule: '0 0 * * *', handler: expireLeases },
   // Mô đun 4 — 08:00 hằng ngày: đến ngày cấu hình thì nhắc Kế toán tính phí; nhắc Trưởng BQL thông báo chờ duyệt quá N ngày (không tự duyệt)
   { name: CRON_JOBS.BILLING_REMIND, schedule: '0 8 * * *', handler: billingReminders },
   // BR-F8 — 00:15 hằng ngày chuyển hóa đơn quá hạn thanh toán sang OVERDUE
@@ -55,10 +49,6 @@ export const JOBS = [
   { name: CRON_JOBS.BOOKING_COMPLETE, schedule: '*/5 * * * *', handler: completeBookings },
   // Người 4 — mỗi phút hủy giữ chỗ quá hạn thanh toán (chỉ có tác dụng khi BOOKING_PAYMENT_HOLD_MINUTES > 0)
   { name: CRON_JOBS.BOOKING_HOLD_EXPIRE, schedule: '* * * * *', handler: expireBookingHolds },
-  // UC52 — mỗi 15 phút kiểm tra và chuyển đơn Gate Pass quá hạn sang EXPIRED
-  { name: CRON_JOBS.GATE_PASS_EXPIRE, schedule: '*/15 * * * *', handler: expireGatePasses },
-  // UC19 — 00:30 hằng ngày nhắc trước 15 ngày hợp đồng thuê sắp hết hạn
-  { name: CRON_JOBS.CONTRACT_EXPIRY_REMIND, schedule: '30 0 * * *', handler: remindExpiringLeases },
 ];
 
 export function startJobs() {

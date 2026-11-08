@@ -45,18 +45,6 @@ const mineQuerySchema = Joi.object({
   status: Joi.string().valid(...values(VEHICLE_STATUS)),
 });
 
-const approveBodySchema = Joi.object({
-  cardNumber: Joi.string()
-    .trim()
-    .min(1)
-    .max(50)
-    .required()
-    .messages({
-      'string.empty': 'Số thẻ gửi xe là bắt buộc khi duyệt phương tiện',
-      'any.required': 'Số thẻ gửi xe là bắt buộc khi duyệt phương tiện',
-    }),
-});
-
 const rejectBodySchema = Joi.object({
   reason: Joi.string()
     .trim()
@@ -185,7 +173,7 @@ router.get(
  * /vehicles/{id}/approve:
  *   patch:
  *     tags: [Phương tiện]
- *     summary: Lễ tân duyệt đăng ký gửi xe — UC-A10
+ *     summary: Ban quản lý duyệt đăng ký gửi xe
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string } }
  *     responses:
@@ -195,10 +183,10 @@ router.get(
 router.patch(
   '/:id/approve',
   authenticate,
-  authorize(...RECEPTIONIST_ONLY),
-  validate({ params: idParams, body: approveBodySchema }),
+  authorize(ROLES.MANAGER),
+  validate({ params: idParams }),
   async (req, res) => {
-    const data = await service.approve(req.params.id, req.user, req.validated.body, req.ip);
+    const data = await service.approve(req.params.id, req.user, req.ip);
     ok(res, data);
   },
 );
@@ -208,7 +196,7 @@ router.patch(
  * /vehicles/{id}/reject:
  *   patch:
  *     tags: [Phương tiện]
- *     summary: Lễ tân từ chối đăng ký gửi xe — UC-A10
+ *     summary: Ban quản lý từ chối đăng ký gửi xe
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string } }
  *     requestBody:
@@ -227,7 +215,7 @@ router.patch(
 router.patch(
   '/:id/reject',
   authenticate,
-  authorize(...RECEPTIONIST_ONLY),
+  authorize(ROLES.MANAGER),
   validate({ params: idParams, body: rejectBodySchema }),
   async (req, res) => {
     const data = await service.reject(req.params.id, req.user, req.validated.body);
@@ -246,6 +234,8 @@ router.patch(
  *     responses:
  *       200:
  *         description: Xác nhận hủy thành công
+ *       409:
+ *         description: Xe còn trong bãi hoặc yêu cầu đã thay đổi
  */
 router.patch(
   '/:id/confirm-cancel',

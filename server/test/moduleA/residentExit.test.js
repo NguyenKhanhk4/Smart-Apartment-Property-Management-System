@@ -1,17 +1,14 @@
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Apartment, Contract, GatePass, ParkingCard, Resident, User, Vehicle } from '../../src/models/index.js';
-import { terminateContract } from '../../src/modules/contracts/contracts.service.js';
-import { expireLeases } from '../../src/modules/contracts/contracts.jobs.js';
+import { Apartment, Contract, ParkingCard, Resident, User, Vehicle } from '../../src/models/index.js';
+import { endTenancy } from '../../src/modules/residents/residentTenancies.js';
 import { listApartmentResidents, removeMember, updateMember } from '../../src/modules/residents/residents.service.js';
 import { linkResident as linkAccount } from '../../src/modules/residents/residentAccounts.js';
-import { listResidentChanges, exportResidentChangesExcel } from '../../src/modules/occupantReports/occupantReports.service.js';
 import { getBillableVehicles } from '../../src/modules/vehicles/vehicles.queries.js';
-import { endOfVnDay, startOfVnDay } from '../../src/utils/time.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { startApp } from '../helpers/http.js';
 import { asUser, createApartment, createHousehold, createReceptionist, createResidentUser, linkResident } from '../helpers/fixtures.js';
-import { createContract, createGatePass, createParkingCard, createVehicle } from '../helpers/fixtures.moduleA.js';
+import { createContract, createParkingCard, createVehicle } from '../helpers/fixtures.moduleA.js';
 
 let app;
 before(async () => { await connectTestDB(); app = await startApp(); });
@@ -23,7 +20,7 @@ async function leaseFixture(endDate = new Date('2099-12-31T00:00:00+07:00')) {
   const sale = await createContract({ apartment, owner });
   const tenant = await createResidentUser();
   const lease = await createContract({ apartment, owner, type: 'LEASE', tenantId: tenant._id, endDate });
-  await linkResident(tenant, apartment, { relationType: 'TENANT', contractId: lease._id });
+  const tenantResident = await linkResident(tenant, apartment, { relationType: 'TENANT', contractId: lease._id });
   const family = await createResidentUser();
   await linkResident(family, apartment, { contractId: lease._id });
   const otherApartment = await createApartment();
@@ -32,22 +29,20 @@ async function leaseFixture(endDate = new Date('2099-12-31T00:00:00+07:00')) {
   for (const [person, apt] of [[owner, apartment], [tenant, apartment], [family, apartment], [tenant, otherApartment]]) {
     const vehicle = await createVehicle({ apartment: apt, registeredBy: person, status: 'APPROVED', approvedAt: new Date('2025-01-01') });
     const card = await createParkingCard({ vehicle });
-    const pass = await createGatePass({ apartment: apt, createdBy: person, status: 'APPROVED' });
-    rows.push({ vehicle, card, pass });
+    rows.push({ vehicle, card });
   }
   await Apartment.updateOne({ _id: apartment._id }, { status: 'RENTED' });
-  return { owner, apartment, tenant, family, lease, sale, rows };
+  return { owner, apartment, tenant, tenantResident, family, lease, sale, rows };
 }
 
 async function assertRevoked(row, cancelled) {
   assert.equal((await Vehicle.findById(row.vehicle.id)).status, cancelled ? 'CANCELLED' : 'APPROVED');
   assert.equal((await ParkingCard.findById(row.card.id)).status, cancelled ? 'DISABLED_TO_COLLECT' : 'ACTIVE');
-  assert.equal((await GatePass.findById(row.pass.id)).status, cancelled ? 'CANCELLED' : 'APPROVED');
 }
 
-test('kết thúc thuê: chỉ thu hồi xe/thẻ/đơn của khách thuê và người đi cùng tại đúng căn', async () => {
-  const { lease, apartment, tenant, rows } = await leaseFixture();
-  await terminateContract(lease.id, asUser(await createReceptionist()));
+test('kết thúc thuê: chỉ thu hồi xe và thẻ của khách thuê và người đi cùng tại đúng căn', async () => {
+  const { owner, apartment, tenant, tenantResident, rows } = await leaseFixture();
+  await endTenancy(asUser(owner), apartment.id, tenantResident.id);
   await assertRevoked(rows[0], false);
   await assertRevoked(rows[1], true);
   await assertRevoked(rows[2], true);
@@ -58,24 +53,25 @@ test('kết thúc thuê: chỉ thu hồi xe/thẻ/đơn của khách thuê và n
 });
 
 test('lỗi giữa chừng khi thu hồi: rollback hợp đồng, cư trú và xe cùng transaction', async (t) => {
-  const { lease, tenant, rows } = await leaseFixture();
+  const { lease, owner, apartment, tenant, tenantResident, rows } = await leaseFixture();
   t.mock.method(ParkingCard, 'updateMany', () => { throw new Error('Lỗi lưu thẻ giả lập'); });
-  await assert.rejects(terminateContract(lease.id, asUser(await createReceptionist())), /Lỗi lưu thẻ giả lập/);
+  await assert.rejects(endTenancy(asUser(owner), apartment.id, tenantResident.id), /Lỗi lưu thẻ giả lập/);
   assert.equal((await Contract.findById(lease.id)).status, 'ACTIVE');
   assert.equal((await Resident.findOne({ userId: tenant._id, contractId: lease._id })).isActive, true);
   await assertRevoked(rows[1], false);
 });
 
-test('cron hết hạn: dùng hết ngày kết thúc hợp đồng, chạy lại không thay ngày hủy', async () => {
-  const endDate = startOfVnDay(new Date(Date.now() - 5 * 86400000));
-  const { lease, tenant, rows } = await leaseFixture(endDate);
-  assert.equal(await expireLeases(), 1);
+test('chủ sở hữu kết thúc lượt thuê cũ theo ngày rời thực tế, gửi lại giữ nguyên ngày hủy', async () => {
+  const endDate = new Date(Date.now() - 5 * 86400000);
+  const { owner, apartment, tenantResident, lease, rows } = await leaseFixture(endDate);
+  await endTenancy(asUser(owner), apartment.id, tenantResident.id);
   await assertRevoked(rows[0], false);
   await assertRevoked(rows[1], true);
-  const ended = endOfVnDay(endDate).getTime();
-  assert.equal((await Resident.findOne({ userId: tenant._id, contractId: lease._id })).moveOutDate.getTime(), ended);
+  const ended = (await Contract.findById(lease.id)).terminatedAt.getTime();
+  assert.ok(ended > endDate.getTime());
+  assert.equal((await Resident.findById(tenantResident.id)).moveOutDate.getTime(), ended);
   assert.equal((await Vehicle.findById(rows[1].vehicle.id)).cancelledAt.getTime(), ended);
-  assert.equal(await expireLeases(), 0);
+  await assert.rejects(endTenancy(asUser(owner), apartment.id, tenantResident.id), { status: 409 });
   assert.equal((await Vehicle.findById(rows[1].vehicle.id)).cancelledAt.getTime(), ended);
 });
 
@@ -88,7 +84,7 @@ test('gỡ thành viên: thu hồi đúng dịch vụ và giữ lịch sử, kh�
   assert.equal((await Resident.findById(row.id)).isActive, false);
 });
 
-test('nhân khẩu không tài khoản: API thêm nhiều người cùng căn, sửa, xuất Excel và chuyển đi', async () => {
+test('nhân khẩu không tài khoản: API thêm nhiều người cùng căn, sửa và chuyển đi', async () => {
   const { user: owner, apartment } = await createHousehold();
   await createContract({ apartment, owner });
   const actor = asUser(await createReceptionist());
@@ -108,11 +104,11 @@ test('nhân khẩu không tài khoản: API thêm nhiều người cùng căn, s
   await updateMember(child._id, { dateOfBirth: '2020-02-04' }, actor);
   assert.equal((await Resident.findById(child._id)).dateOfBirth.toISOString().slice(0, 10), '2020-02-03');
   // parseDateOfBirth lưu 00:00 VN, tương ứng chiều ngày trước theo UTC.
-  const exported = await exportResidentChangesExcel({}, actor);
-  assert.ok(exported.buffer.byteLength > 0);
-  assert.equal((await listResidentChanges({})).filter((r) => r.fullName.startsWith('Nguyễn Bé')).length, 2);
+  assert.equal(members.filter((r) => r.fullName.startsWith('Nguyễn Bé')).length, 2);
   await removeMember(child._id, actor);
-  assert.equal((await listResidentChanges({})).filter((r) => String(r.residentId) === String(child._id)).length, 2);
+  const departed = await Resident.findById(child._id).lean();
+  assert.equal(departed.isActive, false);
+  assert.ok(departed.moveOutDate);
 });
 
 test('quay lại cùng căn: tạo đợt mới, giữ nguyên ngày vào/ra của đợt cũ và chặn hai đợt active', async () => {
@@ -127,7 +123,6 @@ test('quay lại cùng căn: tạo đợt mới, giữ nguyên ngày vào/ra c�
   assert.equal(old.moveInDate.getTime(), entered.getTime());
   assert.equal(old.moveOutDate.getTime(), left.getTime());
   assert.equal(old.isActive, false);
-  assert.equal((await listResidentChanges({})).filter((r) => String(r.residentId) === previous.id).length, 2);
   await assert.rejects(linkResident(member, apartment), { code: 11000 });
   assert.equal((await listApartmentResidents(apartment.id, asUser(user))).filter((r) => String(r.userId) === member.id).length, 1);
 });

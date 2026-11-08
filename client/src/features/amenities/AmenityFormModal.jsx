@@ -163,7 +163,7 @@ export default function AmenityFormModal({ amenity, buildings, reception, open, 
       okText={isEdit ? 'Lưu' : 'Thêm'}
       cancelText="Hủy"
       confirmLoading={saving}
-      width="min(680px, 94vw)"
+      width={680}
       destroyOnHidden
     >
       {isEdit && (

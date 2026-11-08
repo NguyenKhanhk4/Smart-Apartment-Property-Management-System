@@ -1,20 +1,44 @@
 import { PARKING_CARD_STATUS, VEHICLE_STATUS, VEHICLE_TYPES } from '../../constants/enums.js';
 import { ParkingCard } from '../../models/ParkingCard.js';
 import { PARKING_KINDS, ParkingSession } from '../../models/ParkingSession.js';
+import { Resident } from '../../models/Resident.js';
 import { Vehicle } from '../../models/Vehicle.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { paginate } from '../../utils/pagination.js';
 import { DAY_MS, vnDayStart } from '../../utils/time.js';
+import { withTransaction } from '../../utils/transaction.js';
 import { normalizePlate } from '../vehicles/vehicles.service.js';
 import { calculateGuestFee } from './parkingFees.js';
 
-async function openSession(data) {
+async function openSession(data, session = null) {
   try {
-    return await ParkingSession.create(data);
+    const [opened] = await ParkingSession.create([data], { session });
+    return opened;
   } catch (error) {
     if (error.code !== 11000) throw error;
     throw new ApiError('STATUS_CONFLICT', 'Xe hoặc mã thẻ đã có lượt gửi đang mở');
   }
+}
+
+function openResidentSession(data) {
+  return withTransaction(async (session) => {
+    const opened = await openSession(data, session);
+    try {
+      const result = await Vehicle.updateOne(
+        { _id: data.vehicleId, status: VEHICLE_STATUS.APPROVED },
+        { $inc: { parkingEntryVersion: 1 } },
+        { session, timestamps: false },
+      );
+      if (!result.modifiedCount) {
+        throw new ApiError('STATUS_CONFLICT', 'Xe không còn quyền gửi. Vui lòng kiểm tra lại.');
+      }
+    } catch (error) {
+      // MongoDB standalone không rollback tự động khi quyền gửi thay đổi trong lúc ghi lượt vào.
+      if (!session) await ParkingSession.deleteOne({ _id: opened._id });
+      throw error;
+    }
+    return opened;
+  });
 }
 
 async function closeSession(id, fields) {
@@ -27,20 +51,50 @@ async function closeSession(id, fields) {
   return result;
 }
 
+async function findVehicleForCard(card, rawPlate, vehicleId) {
+  const eligible = { apartmentId: card.apartmentId, status: VEHICLE_STATUS.APPROVED };
+  if (!card.residentId) {
+    const vehicle = await Vehicle.findOne({ ...eligible, _id: card.vehicleId }).lean();
+    if (!vehicle || (vehicleId && String(vehicle._id) !== vehicleId)) {
+      throw ApiError.badRequest('Thẻ không liên kết với xe đã được duyệt');
+    }
+    if (normalizePlate(rawPlate, vehicle.type) !== (vehicle.plateNumber ?? null)) {
+      throw ApiError.badRequest('Biển số không khớp với thẻ cư dân');
+    }
+    return vehicle;
+  }
+
+  const resident = card.handedOverAt && await Resident.findOne({
+    _id: card.residentId, isActive: true, parkingCardId: card._id, apartmentId: card.apartmentId,
+  }).select('userId').lean();
+  if (!resident?.userId) throw ApiError.badRequest('Thẻ chưa bàn giao hoặc đã mất hiệu lực');
+
+  const plateNumber = normalizePlate(rawPlate, VEHICLE_TYPES.BICYCLE);
+  const vehicles = await Vehicle.find({
+    ...eligible,
+    registeredBy: resident.userId,
+    plateNumber,
+    ...(plateNumber ? {} : { type: VEHICLE_TYPES.BICYCLE }),
+    ...(vehicleId ? { _id: vehicleId } : {}),
+  }).select('apartmentId type plateNumber brand color').lean();
+  if (vehicles.length === 0) throw ApiError.badRequest('Không có xe đã duyệt khớp với thông tin nhập');
+  if (vehicles.length > 1) {
+    const candidates = vehicles.map(({ _id, brand, color }) => ({ _id, brand, color }));
+    const message = 'Chọn xe đạp cần ghi nhận sau khi đối chiếu tại cổng';
+    throw ApiError.badRequest(message, [{ field: 'vehicleId', message, candidates }]);
+  }
+  return vehicles[0];
+}
+
 export async function recordResidentPassage(body, actor, now = new Date()) {
   const card = await ParkingCard.findOne({ cardNumber: body.cardNumber, status: PARKING_CARD_STATUS.ACTIVE }).lean();
-  if (!card) throw ApiError.badRequest('Thẻ cư dân không có quyền gửi xe hoặc đã mất hiệu lực');
+  if (!card) throw ApiError.badRequest('Thẻ cư dân đã mất hiệu lực hoặc không tồn tại');
 
-  const vehicle = await Vehicle.findOne({
-    _id: card.vehicleId, apartmentId: card.apartmentId, status: VEHICLE_STATUS.APPROVED,
-  }).lean();
-  if (!vehicle) throw ApiError.badRequest('Thẻ không liên kết với xe đã được duyệt');
-
-  const plateNumber = normalizePlate(body.plateNumber, vehicle.type);
-  if (plateNumber !== (vehicle.plateNumber ?? null)) throw ApiError.badRequest('Biển số không khớp với thẻ cư dân');
+  const vehicle = await findVehicleForCard(card, body.plateNumber, body.vehicleId);
+  const plateNumber = vehicle.plateNumber ?? null;
 
   if (body.direction === 'IN') {
-    return openSession({
+    return openResidentSession({
       kind: PARKING_KINDS.RESIDENT,
       vehicleId: vehicle._id,
       vehicleType: vehicle.type,

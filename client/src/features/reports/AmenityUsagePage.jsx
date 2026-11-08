@@ -55,7 +55,7 @@ export default function AmenityUsagePage() {
               <Bar dataKey="completed" name="Hoàn thành" stackId="s" fill="#52c41a" />
               <Bar dataKey="approved" name="Đã xác nhận" stackId="s" fill="#1677ff" />
               <Bar dataKey="noShow" name="Không đến" stackId="s" fill="#fa8c16" />
-              <Bar dataKey="cancelled" name="Hủy" stackId="s" fill="#A1A1AA" />
+              <Bar dataKey="cancelled" name="Hủy" stackId="s" fill="#bfbfbf" />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>

@@ -1,14 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { App, Button, Tooltip } from 'antd';
-import { vehicleApi } from '../../../api/moduleA.api';
 import { bookingApi } from '../../../api/moduleD.api';
 import { AssignModal } from '../../tickets/TicketActionModals';
 import { Block } from './Block';
 import { refreshReceptionDashboard, useReceptionDashboard } from './receptionDashboard';
 import { DIVIDER, LINK, MUTED, TEXT } from './styles';
 import ReasonModal from '../../../components/ReasonModal';
-import ApproveVehicleModal from '../../vehicles/ApproveVehicleModal';
 import { TODO_KINDS, buildTodos } from './todos';
 
 const COLLAPSED_ROWS = 6;
@@ -35,7 +33,7 @@ export default function TodoList() {
   const [done, setDone] = useState({}); // key → { item, index, text, tone }
   const [busy, setBusy] = useState(null);
   const [expanded, setExpanded] = useState(false);
-  const [modal, setModal] = useState(null); // { type: 'assign' | 'approve' | 'reject' | 'cancel', item }
+  const [modal, setModal] = useState(null); // { type: 'assign' | 'cancel', item }
 
   // Dòng đã xử lý giữ nguyên vị trí cho tới khi người dùng tải lại trang
   const rows = useMemo(() => {
@@ -106,14 +104,9 @@ export default function TodoList() {
       }
       case 'vehicle':
         return (
-          <>
-            <Button size="large" onClick={() => setModal({ type: 'reject', item })}>
-              Từ chối
-            </Button>
-            <Button size="large" type="primary" onClick={() => setModal({ type: 'approve', item })}>
-              Duyệt
-            </Button>
-          </>
+          <Button size="large" onClick={() => navigate('/app/vehicle-requests', { viewTransition: true })}>
+            Xem yêu cầu
+          </Button>
         );
       default:
         return null;
@@ -169,9 +162,6 @@ export default function TodoList() {
         )}
       </Block>
 
-      {modal?.type === 'approve' && (
-        <ApproveVehicleModal vehicle={item.raw} open onClose={close} onDone={() => markDone(item, 'Đã duyệt')} />
-      )}
       {modal?.type === 'assign' && (
         <AssignModal
           ticket={item.raw}
@@ -180,19 +170,6 @@ export default function TodoList() {
           onDone={() => markDone(item, 'Đã phân công')}
         />
       )}
-      <ReasonModal
-        open={modal?.type === 'reject'}
-        title="Từ chối đăng ký phương tiện"
-        hint={item && `${item.title} · ${item.sub}. Lý do sẽ được gửi cho cư dân.`}
-        okText="Xác nhận từ chối"
-        action={(reason) => vehicleApi.reject(item.raw._id, { reason })}
-        onClose={close}
-        onDone={() => {
-          message.success('Đã từ chối đăng ký xe');
-          markDone(item, 'Đã từ chối', 'muted');
-          close();
-        }}
-      />
       <ReasonModal
         open={modal?.type === 'cancel'}
         title="Hủy booking"

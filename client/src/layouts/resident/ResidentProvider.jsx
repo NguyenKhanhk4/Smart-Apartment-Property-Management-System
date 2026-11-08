@@ -31,7 +31,7 @@ const readPicked = (userId) => {
 
 export function ResidentProvider({ children }) {
   const userId = useAuth().user?.id;
-  const { data: cards = [], loading } = useApi(() => memberCodeApi.mine(), []);
+  const { data: cards = [], loading, reload: reloadCards } = useApi(() => memberCodeApi.mine(), []);
   const [pickedId, setPickedId] = useState(() => readPicked(userId));
   const pick = useCallback(
     (id) => {
@@ -49,7 +49,13 @@ export function ResidentProvider({ children }) {
   const apartmentId = card?.apartment._id ?? null;
 
   const enabled = Boolean(apartmentId);
-  const members = useApi(() => residentsApi.listByApartment(apartmentId), [apartmentId], { enabled });
+  const { data: members, reload: reloadMembers } = useApi(
+    () => residentsApi.listByApartment(apartmentId), [apartmentId], { enabled },
+  );
+  const reloadResidency = useCallback(async () => {
+    const [cardsResult] = await Promise.all([reloadCards(), enabled && reloadMembers()]);
+    return cardsResult;
+  }, [enabled, reloadCards, reloadMembers]);
   const vehicles = useApi(() => vehicleApi.listMine({ apartmentId }), [apartmentId], { enabled });
 
   const value = useMemo(
@@ -60,14 +66,15 @@ export function ResidentProvider({ children }) {
       apartment: card?.apartment ?? null,
       apartmentId,
       setApartmentId: pick,
+      reloadResidency,
       isHead: Boolean(card?.isHead),
       code: card?.code ?? null,
-      memberCount: enabled ? members.data?.length : undefined,
+      memberCount: enabled ? members?.filter((resident) => resident.occupancyRole).length : undefined,
       vehicleCount: enabled
         ? vehicles.data?.filter((v) => COUNTED_VEHICLE_STATUS.includes(v.status)).length
         : undefined,
     }),
-    [loading, cards, card, apartmentId, pick, enabled, members.data, vehicles.data],
+    [loading, cards, card, apartmentId, pick, reloadResidency, enabled, members, vehicles.data],
   );
 
   return <ResidentContext.Provider value={value}>{children}</ResidentContext.Provider>;

@@ -48,7 +48,7 @@ export default function FamilyPage() {
           aria-label="Quay lại"
           onClick={() => navigate('/r/my-code', { viewTransition: true })}
         />
-        <Typography.Title level={3} style={{ margin: 0, ...vtName('my-code-title') }}>
+        <Typography.Title level={4} style={{ margin: 0, ...vtName('my-code-title') }}>
           Gia đình
         </Typography.Title>
       </Flex>
@@ -139,7 +139,7 @@ export default function FamilyPage() {
         )}
       </Spin>
 
-      <Modal open={Boolean(showing)} onCancel={() => setShowing(null)} footer={null} destroyOnHidden title="Thẻ thành viên" width="min(420px, 94vw)">
+      <Modal open={Boolean(showing)} onCancel={() => setShowing(null)} footer={null} destroyOnHidden title="Thẻ thành viên" width={420}>
         {showing && (
           <MemberCard person={{ ...showing, apartment: data?.apartment }} />
         )}

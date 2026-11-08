@@ -81,7 +81,7 @@ function PublishModal({ open, onClose, onDone }) {
       onOk={() => form.submit()}
       okText="Đăng"
       confirmLoading={publishing}
-      width="min(640px, 94vw)"
+      width={640}
       destroyOnHidden
     >
       <Form

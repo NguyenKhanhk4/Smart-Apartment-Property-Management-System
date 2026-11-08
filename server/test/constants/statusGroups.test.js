@@ -52,16 +52,15 @@ test('booking: nhóm giữ chỗ / tính phí / dữ liệu cũ', () => {
   }
 });
 
-test('enum gom từ service về constants: trạng thái đơn giá, xem trước hóa đơn, biến động nhân khẩu', () => {
+test('enum gom từ service về constants: trạng thái đơn giá và xem trước hóa đơn', () => {
   assert.deepEqual(values(E.FEE_TYPE_STATES), ['ACTIVE', 'UPCOMING', 'ENDED']);
   assert.ok(E.INVOICE_PREVIEW_STATUS.NEW && E.INVOICE_PREVIEW_STATUS.EXISTS);
-  assert.deepEqual(values(E.OCCUPANT_CHANGE_TYPES), ['MOVE_IN', 'MOVE_OUT']);
 });
 
 test('audit: targetType thống nhất là tên collection', () => {
   for (const t of values(E.AUDIT_TARGETS)) assert.match(t, /^[a-z_]+$/, `"${t}" phải là tên collection snake_case`);
   assert.equal(E.AUDIT_TARGETS.CONTRACT, 'contracts');
-  assert.equal(E.AUDIT_TARGETS.GATE_PASS, 'gate_passes');
+  assert.equal(E.AUDIT_TARGETS.PARKING_CARD, 'parking_cards');
 });
 
 test('cron: kiểu kích hoạt có enum; tham số mặc định dùng CONFIG_SCOPES', () => {

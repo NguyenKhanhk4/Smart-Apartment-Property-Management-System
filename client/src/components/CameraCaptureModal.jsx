@@ -129,7 +129,7 @@ function CameraView({ onClose, onCapture, remaining }) {
  */
 export default function CameraCaptureModal({ open, onClose, onCapture, remaining }) {
   return (
-    <Modal title="Chụp ảnh kết quả" open={open} onCancel={onClose} footer={null} width="min(720px, 94vw)" destroyOnHidden>
+    <Modal title="Chụp ảnh kết quả" open={open} onCancel={onClose} footer={null} width={720} destroyOnHidden>
       <CameraView onClose={onClose} onCapture={onCapture} remaining={remaining} />
     </Modal>
   );

@@ -1,4 +1,4 @@
-// Mô đun 4 — UC23 Kiểm tra công nợ căn hộ (dùng chung: duyệt Gate Pass chuyển đồ ra, chuyển nhượng, sổ công nợ).
+// Mô đun 4 — UC23 Kiểm tra công nợ căn hộ (dùng chung cho chuyển nhượng và sổ công nợ).
 // Công nợ tách theo từng Người nộp phí (X1): nợ ròng của 1 người = max(0, còn nợ − Số dư trả trước của chính người đó);
 // số dư của người này không bù nợ của người khác. Tổng nợ căn = tổng nợ ròng các Người nộp phí.
 import mongoose from 'mongoose';

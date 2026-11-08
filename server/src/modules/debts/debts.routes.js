@@ -66,7 +66,7 @@ router.get('/apartments/:id', STAFF, validate({ params: idParams }), async (req,
  * /debts/apartments/{id}/check:
  *   get:
  *     tags: [Công nợ]
- *     summary: UC23 — tổng nợ của căn tại một thời điểm (mặc định hiện tại), tách theo Người nộp phí; nợ ròng = còn nợ − Số dư trả trước của chính người đó. Dùng cho Gate Pass chuyển đồ ra, chuyển nhượng
+ *     summary: UC23 — tổng nợ của căn tại một thời điểm (mặc định hiện tại), tách theo Người nộp phí; nợ ròng = còn nợ − Số dư trả trước của chính người đó. Dùng cho chuyển nhượng và sổ công nợ
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string } }
  *       - { in: query, name: at, schema: { type: string, format: date-time } }
