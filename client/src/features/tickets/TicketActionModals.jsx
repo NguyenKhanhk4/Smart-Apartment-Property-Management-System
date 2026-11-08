@@ -174,8 +174,8 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
       okText="Gửi"
       success={(res) => (res.data.status === TS.CLOSED ? 'Cảm ơn bạn đã đánh giá' : 'Đã gửi lại cho kỹ thuật viên')}
       initialValues={{ accepted: true, rating: 5 }}
-      action={({ accepted, rating, comment, reason }) =>
-        ticketApi.confirm(ticket._id, accepted ? { accepted, rating, comment } : { accepted, reason })
+      action={({ accepted, rating, comment, reason, images }) =>
+        ticketApi.confirm(ticket._id, accepted ? { accepted, rating, comment } : { accepted, reason }, accepted ? [] : toFiles(images))
       }
     >
       <Form.Item name="accepted" label="Kết quả xử lý" hidden={ratingOnly}>
@@ -198,9 +198,13 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
               </Form.Item>
             </>
           ) : (
-            <Form.Item name="reason" label="Lý do chưa đạt" rules={[{ required: true, min: 5, message: 'Nhập lý do (tối thiểu 5 ký tự)' }]}>
-              <Input.TextArea rows={3} maxLength={500} />
-            </Form.Item>
+            <>
+              <Form.Item name="reason" label="Lý do chưa đạt" rules={[{ required: true, min: 5, message: 'Nhập lý do (tối thiểu 5 ký tự)' }]}>
+                <Input.TextArea rows={3} maxLength={500} />
+              </Form.Item>
+              {/* UC49: ảnh minh chứng kết quả chưa đạt (tùy chọn) */}
+              <EvidencePhotosField name="images" label="Ảnh minh chứng (nếu có)" required={false} />
+            </>
           )
         }
       </Form.Item>

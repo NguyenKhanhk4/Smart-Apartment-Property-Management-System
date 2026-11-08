@@ -33,10 +33,12 @@ import paymentRoutes from './modules/payments/payments.routes.js';
 import debtRoutes from './modules/debts/debts.routes.js';
 import repairQuoteRoutes from './modules/repairQuotes/repairQuotes.routes.js';
 import fundRoutes from './modules/fund/fund.routes.js';
-import gatePassRoutes, { platesRouter } from './modules/gatePasses/gatePasses.routes.js';
 import parkingCardRoutes from './modules/parkingCards/parkingCards.routes.js';
 import parkingGateRoutes from './modules/parkingGate/parkingGate.routes.js';
 import dutyShiftRoutes from './modules/dutyShifts/dutyShifts.routes.js';
+import buildingProfileRoutes from './modules/buildingSettings/buildingProfile.routes.js';
+import utilityTariffRoutes from './modules/buildingSettings/utilityTariffs.routes.js';
+import collectionSettingRoutes from './modules/buildingSettings/collectionSettings.routes.js';
 
 import auditLogRoutes from './modules/auditLogs/auditLogs.routes.js';
 
@@ -94,12 +96,13 @@ router.use('/contracts', contractRoutes);
 router.use('/residents', residentRoutes);
 router.use('/vehicles', vehicleRoutes);
 router.use('/system-dashboard', systemDashboardRoutes);
-router.use('/gate-passes', gatePassRoutes);
-router.use('/plates', platesRouter);
 router.use('/parking-cards', parkingCardRoutes);
 router.use('/parking-gate', parkingGateRoutes);
 
 // Module B — Phí, Hóa đơn, Thanh toán, Công nợ
+router.use('/building-profile', buildingProfileRoutes); // UC05
+router.use('/utility-tariffs', utilityTariffRoutes);     // UC05
+router.use('/collection-settings', collectionSettingRoutes); // UC05
 router.use('/fee-types', feeTypeRoutes);
 router.use('/invoices', invoiceRoutes);
 router.use('/payments', paymentRoutes);

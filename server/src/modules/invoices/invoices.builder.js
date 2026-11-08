@@ -2,16 +2,14 @@
 // Phí vệ sinh, gửi xe tính cho chính kỳ P (thu trước); phí tiện ích phát sinh trong kỳ P−1 (thu sau);
 // chi phí sửa chữa trong căn của phiếu đã nghiệm thu trước đầu kỳ P mà chưa tính (UC48).
 import {
-  AMENITY_PASS_STATUS,
   APARTMENT_OCCUPANCY,
   BOOKING_BILLABLE_STATUSES,
   FEE_CALC_METHODS,
   FEE_CATEGORIES,
   QUOTE_STATUS,
   TICKET_STATUS,
-  VISIT_STATUS,
 } from '../../constants/enums.js';
-import { AmenityPass, AmenityVisit, Booking, RepairQuote } from '../../models/index.js';
+import { Booking, RepairQuote } from '../../models/index.js';
 import { getPayer } from '../contracts/contracts.queries.js';
 import { getBillableVehicles } from '../vehicles/vehicles.queries.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -20,8 +18,6 @@ import { DAY_MS, fmtDateVn, periodEnd, periodLabel, periodStart, shiftPeriod, st
 
 // feeCode cho dòng tiện ích — phân biệt nguồn khi truy vết refId
 export const AMENITY_FEE_CODES = Object.freeze({
-  PASS: 'AMENITY_PASS',
-  VISIT: 'AMENITY_VISIT',
   BOOKING: 'AMENITY_BOOKING',
 });
 
@@ -32,8 +28,6 @@ export const baseInvoiceCode = (period, buildingCode, apartmentCode) =>
   `HD-${period.replace('-', '')}-${buildingCode}-${apartmentCode}`;
 
 const amenityName = (doc) => doc.amenityId?.name ?? 'Tiện ích';
-const personName = (doc, path = 'userId') => doc[path]?.fullName;
-const withPerson = (text, name) => (name ? `${text} – ${name}` : text);
 
 const item = (feeCategory, feeCode, description, quantity, unitPrice, refId = null) => ({
   feeCategory,
@@ -84,24 +78,14 @@ async function parkingItems(apartment, period, prices) {
 }
 
 /**
- * Phí tiện ích phát sinh trong kỳ `prev` chưa gộp hóa đơn (invoiceId null) do Module D ghi:
- * gói tháng (month = prev), vé lẻ (billingMonth = prev), booking có phí (ngày đặt thuộc prev).
+ * Phí tiện ích phát sinh trong kỳ `prev` chưa gộp hóa đơn (invoiceId null): booking có phí chưa trả online
+ * (Lễ tân đặt hộ tại quầy, hoặc lúc chưa cấu hình payOS) có ngày đặt thuộc kỳ prev. Booking đã trả qua payOS có paidAt nên không tính lại.
  * Trả về các dòng + id bản ghi để gắn invoiceId khi lưu.
  * `invoiceId`: khi tính lại 1 thông báo Nháp, lấy cả bản ghi đã gắn vào chính thông báo đó.
  */
 export async function collectAmenityCharges(apartmentId, prev, { invoiceId = null } = {}) {
   const unbilled = { apartmentId, fee: { $gt: 0 }, invoiceId: invoiceId ? { $in: [null, invoiceId] } : null };
-  const [passes, visits, bookings] = await Promise.all([
-    AmenityPass.find({ ...unbilled, month: prev, status: AMENITY_PASS_STATUS.ACTIVE })
-      .populate('amenityId', 'name')
-      .populate('userId', 'fullName')
-      .sort({ createdAt: 1 })
-      .lean(),
-    AmenityVisit.find({ ...unbilled, billingMonth: prev, status: VISIT_STATUS.VALID })
-      .populate('amenityId', 'name')
-      .populate('userId', 'fullName')
-      .sort({ visitedAt: 1 })
-      .lean(),
+  const [bookings] = await Promise.all([
     Booking.find({
       ...unbilled,
       status: { $in: BOOKING_BILLABLE_STATUSES },
@@ -114,26 +98,6 @@ export async function collectAmenityCharges(apartmentId, prev, { invoiceId = nul
   ]);
 
   const items = [
-    ...passes.map((p) =>
-      item(
-        FEE_CATEGORIES.AMENITY,
-        AMENITY_FEE_CODES.PASS,
-        withPerson(`Gói tháng ${amenityName(p)} ${periodLabel(prev)}`, personName(p)),
-        1,
-        p.fee,
-        p._id,
-      ),
-    ),
-    ...visits.map((v) =>
-      item(
-        FEE_CATEGORIES.AMENITY,
-        AMENITY_FEE_CODES.VISIT,
-        withPerson(`Vé lẻ ${amenityName(v)} ${dayLabel(v.visitedAt)}`, personName(v)),
-        1,
-        v.fee,
-        v._id,
-      ),
-    ),
     ...bookings.map((b) =>
       item(
         FEE_CATEGORIES.AMENITY,
@@ -147,8 +111,6 @@ export async function collectAmenityCharges(apartmentId, prev, { invoiceId = nul
   ];
   return {
     items,
-    passIds: passes.map((p) => p._id),
-    visitIds: visits.map((v) => v._id),
     bookingIds: bookings.map((b) => b._id),
   };
 }
@@ -231,8 +193,6 @@ export async function buildInvoiceDraft(apartment, period, prices, { invoiceId =
     items,
     totalAmount: items.reduce((s, i) => s + i.amount, 0),
     charges: {
-      passIds: charges.passIds,
-      visitIds: charges.visitIds,
       bookingIds: charges.bookingIds,
       repairQuoteIds: repairs.repairQuoteIds,
     },

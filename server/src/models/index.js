@@ -11,7 +11,6 @@ export { Apartment } from './Apartment.js';
 export { Contract } from './Contract.js';
 export { Resident } from './Resident.js';
 export { Vehicle } from './Vehicle.js';
-export { GatePass } from './GatePass.js';
 export { ParkingCard } from './ParkingCard.js';
 export { ParkingSession } from './ParkingSession.js';
 
@@ -39,8 +38,6 @@ export { WorkOrder } from './WorkOrder.js';
 // Module D — Tiện ích
 export { Amenity } from './Amenity.js';
 export { Booking } from './Booking.js';
-export { AmenityPass } from './AmenityPass.js'; // dữ liệu cũ (gói tháng) — chỉ phần tính phí đọc, chờ Người 3 gỡ
-export { AmenityVisit } from './AmenityVisit.js'; // dữ liệu cũ (lượt vào cửa) — như trên
 export { MemberCode } from './MemberCode.js';
 export { DutyShift } from './DutyShift.js';
 
@@ -54,3 +51,8 @@ export { SystemConfig } from './SystemConfig.js';
 
 // Hệ thống
 export { CronRun } from './CronRun.js';
+
+// UC05 — Cấu hình tòa nhà & biểu phí (Vũ Việt)
+export { BuildingProfile } from './BuildingProfile.js';
+export { UtilityTariff } from './UtilityTariff.js';
+export { CollectionSetting } from './CollectionSetting.js';

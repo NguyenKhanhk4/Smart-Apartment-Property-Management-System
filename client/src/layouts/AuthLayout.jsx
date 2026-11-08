@@ -1,6 +1,7 @@
-import { Outlet } from 'react-router';
+import { Link, Outlet } from 'react-router';
 import { CheckCircleFilled } from '@ant-design/icons';
 import BrandLogo from '../components/BrandLogo';
+import { AuthPortalContext, PORTALS, portalPath } from '../features/auth/authPortal';
 
 const HIGHLIGHTS = [
   'Hóa đơn, quỹ bảo trì minh bạch cho cư dân và Ban quản trị',
@@ -10,7 +11,8 @@ const HIGHLIGHTS = [
 
 // Khung trang đăng nhập / đăng ký: cột trái thương hiệu (nền midnight), cột phải là form (Outlet).
 // Logo có view-transition-name "brand-logo" → đăng nhập xong logo bay lên góc sidebar.
-export default function AuthLayout() {
+export default function AuthLayout({ portal = 'resident' }) {
+  const otherPortal = PORTALS[portal].other;
   return (
     <div
       className="min-h-screen flex flex-col md:flex-row"
@@ -49,7 +51,15 @@ export default function AuthLayout() {
 
       <section className="flex-1 flex items-center justify-center p-6 md:p-14">
         <div className="w-full max-w-md rounded-[14px] border border-line bg-white p-8 md:p-10 shadow-[0_8px_24px_rgba(15,27,45,0.12)]">
-          <Outlet />
+          <AuthPortalContext.Provider value={portal}>
+            <Outlet />
+          </AuthPortalContext.Provider>
+          {/* Lối tắt sang cổng kia: chỉ khi chạy dev; bản chính thức mỗi bên dùng đúng đường dẫn của mình */}
+          {import.meta.env.DEV && (
+            <Link to={portalPath(otherPortal, '/login')} className="mt-4 block text-center text-[13px] font-semibold text-navy hover:text-gold">
+              Sang {PORTALS[otherPortal].label}
+            </Link>
+          )}
         </div>
       </section>
     </div>

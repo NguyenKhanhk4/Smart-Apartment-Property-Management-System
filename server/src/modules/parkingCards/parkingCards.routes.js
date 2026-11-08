@@ -21,7 +21,7 @@ const RECEPTIONIST_ONLY = [`STAFF:${ROLE_TITLES.RECEPTIONIST}`];
 
 const listQuerySchema = Joi.object({
   ...paginationQuery,
-  status: Joi.string().valid(...values(PARKING_CARD_STATUS)),
+  status: Joi.string().valid(...values(PARKING_CARD_STATUS), 'PENDING_HANDOVER'),
   apartmentId: objectId(),
   vehicleId: objectId(),
   q: Joi.string().trim().max(50).allow(''),
@@ -49,6 +49,33 @@ router.get(
   async (req, res) => {
     const { items, pagination } = await service.listParkingCards(req.validated.query);
     return paginated(res, items, pagination);
+  },
+);
+
+router.post(
+  '/',
+  authenticate,
+  authorize(ROLES.MANAGER),
+  validate({ body: Joi.object({
+    residentId: objectId().required(),
+    replacesId: objectId(),
+    cardNumber: Joi.string().trim().uppercase().max(50).pattern(/^[A-Z0-9]+(?:[-_][A-Z0-9]+)*$/).required()
+      .messages({ 'string.pattern.base': 'Mã thẻ chỉ gồm chữ, số, dấu gạch ngang hoặc gạch dưới' }),
+  }) }),
+  async (req, res) => {
+    const data = await service.issueResidentCard(req.validated.body, req.user, req.ip);
+    return ok(res, data, 'Đã cấp thẻ cư dân, chờ lễ tân bàn giao');
+  },
+);
+
+router.patch(
+  '/:id/handover',
+  authenticate,
+  authorize(...RECEPTIONIST_ONLY),
+  validate({ params: idParams }),
+  async (req, res) => {
+    const data = await service.handOverResidentCard(req.validated.params.id, req.user, req.ip);
+    return ok(res, data, 'Đã xác nhận bàn giao thẻ cư dân');
   },
 );
 

@@ -1,4 +1,4 @@
-import { CONTRACT_STATUS, CONTRACT_TYPES, values } from '../constants/enums.js';
+import { CONTRACT_STATUS, CONTRACT_TYPES, OWNERSHIP_DOCUMENT_TYPES, values } from '../constants/enums.js';
 import { ObjectId, Schema, model, schemaOptions } from './_shared.js';
 
 // contracts — hợp đồng mua bán (SALE) / cho thuê (LEASE)
@@ -7,6 +7,16 @@ const contractSchema = new Schema(
     apartmentId: { type: ObjectId, ref: 'Apartment', required: true },
     type: { type: String, enum: values(CONTRACT_TYPES), required: true },
     ownerId: { type: ObjectId, ref: 'User', required: true },
+    ownerIdNumberEnc: { type: String, select: false },
+    ownershipDocumentType: { type: String, enum: values(OWNERSHIP_DOCUMENT_TYPES) },
+    ownershipDocumentNumber: { type: String, trim: true, maxlength: 100 },
+    ownerAccountPending: Boolean,
+    ownerAccountIssuedAt: Date,
+    ownerAccountIssuedBy: { type: ObjectId, ref: 'User' },
+    transferredToContractId: { type: ObjectId, ref: 'Contract' },
+    transferDebtRequestedAt: Date,
+    transferDebtAcknowledgedAt: Date,
+    transferDebtAcknowledgedBy: { type: ObjectId, ref: 'User' },
     tenantId: { type: ObjectId, ref: 'User', default: null },
     tenantPaysFees: { type: Boolean, default: false }, // BR-F7
     startDate: { type: Date, required: true },

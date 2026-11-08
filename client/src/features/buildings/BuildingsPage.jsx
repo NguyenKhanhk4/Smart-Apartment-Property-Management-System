@@ -19,6 +19,7 @@ import {
   Statistic,
   Descriptions,
   App,
+  Tooltip,
 } from 'antd';
 import {
   BankOutlined,
@@ -308,7 +309,7 @@ export default function BuildingsPage() {
       title: 'Địa chỉ',
       dataIndex: 'address',
       key: 'address',
-      render: (addr) => addr || <span className="text-gray-400 italic">Chưa có</span>,
+      render: (addr) => addr || <span className="text-ink-3 italic">Chưa có</span>,
     },
     {
       title: 'Tổng số tầng',
@@ -340,22 +341,27 @@ export default function BuildingsPage() {
                 >
                   Sửa
                 </Button>
-                <Popconfirm
-                  title="Xóa tòa nhà"
-                  description={
-                    record.apartmentCount > 0
-                      ? 'Tòa nhà đã có căn hộ, không thể xóa!'
-                      : `Bạn có chắc chắn muốn xóa tòa ${record.name}?`
-                  }
-                  okText="Xóa"
-                  cancelText="Hủy"
-                  okButtonProps={{ danger: true, disabled: record.apartmentCount > 0 }}
-                  onConfirm={() => deleteBuilding(record._id).catch(() => {})}
-                >
-                  <Button size="small" type="text" danger icon={<DeleteOutlined />}>
-                    Xóa
-                  </Button>
-                </Popconfirm>
+                <Tooltip title={record.apartmentCount > 0 ? 'Tòa nhà đã có căn hộ, không thể xóa' : undefined}>
+                  <Popconfirm
+                    title="Xóa tòa nhà"
+                    description={`Bạn có chắc chắn muốn xóa tòa ${record.name}?`}
+                    okText="Xóa"
+                    cancelText="Hủy"
+                    okButtonProps={{ danger: true }}
+                    disabled={record.apartmentCount > 0}
+                    onConfirm={() => deleteBuilding(record._id).catch(() => {})}
+                  >
+                    <Button
+                      size="small"
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      disabled={record.apartmentCount > 0}
+                    >
+                      Xóa
+                    </Button>
+                  </Popconfirm>
+                </Tooltip>
               </Space>
             ),
           },
@@ -566,7 +572,7 @@ export default function BuildingsPage() {
               children: (
                 <div>
                   {/* Filters Bar */}
-                  <div className="flex flex-wrap gap-3 items-center mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                  <div className="flex flex-wrap gap-3 items-center mb-4 p-3 bg-surface-alt border border-line rounded-lg dark:bg-[#27272A] dark:border-[#2E2E33]">
                     <Select
                       placeholder="Lọc theo tòa"
                       allowClear
@@ -866,13 +872,13 @@ export default function BuildingsPage() {
             Đóng
           </Button>,
         ]}
-        width={680}
+        width="min(680px, 94vw)"
       >
         {selectedApartment ? (
           <div>
             <Descriptions bordered column={2} size="small" className="mb-4">
               <Descriptions.Item label="Mã căn">
-                <span className="font-bold text-blue-600">{selectedApartment.code}</span>
+                <span className="font-semibold text-navy">{selectedApartment.code}</span>
               </Descriptions.Item>
               <Descriptions.Item label="Trạng thái căn hộ">
                 <ApartmentOccupancyTag status={selectedApartment.occupancyStatus} />
@@ -923,7 +929,7 @@ export default function BuildingsPage() {
             {selectedApartment.activeContracts && selectedApartment.activeContracts.length > 0 ? (
               <div className="space-y-2">
                 {selectedApartment.activeContracts.map((c) => (
-                  <Card key={c._id} size="small" className="border-gray-200 dark:border-gray-700">
+                  <Card key={c._id} size="small" className="border-line dark:border-gray-700">
                     <div className="flex justify-between items-center mb-1">
                       <Space>
                         <EnumTag map={CONTRACT_TYPES} value={c.type} />
@@ -944,7 +950,7 @@ export default function BuildingsPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-gray-400 italic">Chưa có hợp đồng nào đang hiệu lực</p>
+              <p className="text-xs text-ink-3 italic">Chưa có hợp đồng nào đang hiệu lực</p>
             )}
           </div>
         ) : (

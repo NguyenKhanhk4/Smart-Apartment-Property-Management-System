@@ -1,4 +1,4 @@
-// Quy tắc lịch ca trực (Người 4 — X6), chỉ là logic thuần để test không cần DB.
+// Quy tắc lịch ca trực — logic thuần để test không cần DB.
 // Ca là khoảng nửa mở [startAt, endAt): ca 06:00–14:00 và 14:00–22:00 nối tiếp, không trùng.
 import { DAY_MS, HOUR_MS } from '../../utils/time.js';
 
@@ -18,24 +18,16 @@ export const overlaps = (a, b) => time(a.startAt) < time(b.endAt) && time(b.star
 
 export const isActiveAt = (shift, at) => time(shift.startAt) <= time(at) && time(at) < time(shift.endAt);
 
-/**
- * Ca đang diễn ra lúc `at`, tách người trực chính / dự phòng. Một người có nhiều dòng ca chồng nhau
- * chỉ tính 1 lần; đã là trực chính ở dòng nào thì không xếp vào dự phòng.
- */
-export function splitOnDuty(shifts, at = new Date()) {
-  const active = shifts.filter((s) => isActiveAt(s, at));
-  const userKey = (s) => String(s.userId?._id ?? s.userId);
-  const primaryIds = new Set(active.filter((s) => !s.isBackup).map(userKey));
+/** Ca đang diễn ra lúc `at` (1 ca có thể nhiều người trực). Một người có nhiều dòng ca chồng nhau chỉ tính 1 lần */
+export function activeShifts(shifts, at = new Date()) {
   const seen = new Set();
-  const pick = (s) => {
-    const key = userKey(s);
+  return shifts.filter((s) => {
+    if (!isActiveAt(s, at)) return false;
+    const key = String(s.userId?._id ?? s.userId);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  };
-  const primary = active.filter((s) => !s.isBackup).filter(pick);
-  const backup = active.filter((s) => s.isBackup && !primaryIds.has(userKey(s))).filter(pick);
-  return { primary, backup };
+  });
 }
 
 /** Cùng khung giờ lặp lại `days` ngày liên tiếp (xếp lịch cả tuần một lần) */

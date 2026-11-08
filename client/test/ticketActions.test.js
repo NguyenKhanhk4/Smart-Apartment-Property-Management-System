@@ -83,11 +83,20 @@ test('M5-5 đổi phân loại: điều phối hoặc KTV được giao, chỉ k
   assert.equal(ticketActions(base, me, can('RESIDENT')).canReclassify, false);
 });
 
-test('M5-6 gộp phiếu: điều phối, sự cố khu vực chung chưa bắt đầu; phiếu đã gộp không phân công được', () => {
-  const dispatcher = can('STAFF:RECEPTIONIST');
+test('M5-6 gộp phiếu: chỉ Trưởng BQL, sự cố khu vực chung chưa bắt đầu; phiếu đã gộp không phân công được', () => {
+  const dispatcher = can('MANAGER');
   assert.equal(ticketActions(base, me, dispatcher).canMerge, true);
   assert.equal(ticketActions({ ...base, scope: 'IN_APARTMENT' }, me, dispatcher).canMerge, false);
   assert.equal(ticketActions({ ...base, status: 'IN_PROGRESS' }, me, dispatcher).canMerge, false);
   assert.equal(ticketActions(base, me, can('STAFF:TECHNICIAN')).canMerge, false);
   assert.equal(ticketActions({ ...base, status: 'MERGED' }, me, dispatcher).canAssign, false);
+});
+
+test('lễ tân: không phân công / từ chối / gộp (SRS 2.3, UC41–42), vẫn đổi phân loại được', () => {
+  const desk = can('STAFF:RECEPTIONIST');
+  const actions = ticketActions(base, me, desk);
+  assert.equal(actions.canAssign, false);
+  assert.equal(actions.canReject, false);
+  assert.equal(actions.canMerge, false);
+  assert.equal(actions.canReclassify, true);
 });

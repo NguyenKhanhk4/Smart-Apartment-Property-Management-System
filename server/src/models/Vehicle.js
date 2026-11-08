@@ -16,6 +16,7 @@ const vehicleSchema = new Schema(
       required: true,
       default: VEHICLE_STATUS.PENDING,
     },
+    parkingEntryVersion: { type: Number, select: false },
     cancelRequestedAt: { type: Date, default: null }, // BR-A7: thời điểm cư dân yêu cầu hủy
     reviewedBy: { type: ObjectId, ref: 'User' },
     reviewNote: String,

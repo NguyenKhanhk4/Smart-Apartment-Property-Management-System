@@ -10,8 +10,13 @@ export const FINANCIAL_ACTIONS = [
   'PAYMENT_CONFIRMED', 'PREPAID_REFUNDED', 'DEBT_FOLLOWUP_RECORDED', 'DEBT_NOTICE_EXPORTED',
   'FUND_INCOME_RECORDED', 'FUND_VOTED', 'FUND_PROPOSAL_APPROVED', 'FUND_PROPOSAL_REJECTED',
   'FUND_PROPOSAL_CREATED', 'FUND_PROPOSAL_CANCELLED', 'FUND_WORK_ACCEPTED', 'FUND_EXPENSE_RECORDED',
+  // UC05 – Cấu hình tòa nhà & biểu phí (Vũ Việt)
+  'BUILDING_PROFILE_UPDATED', 'UTILITY_TARIFF_CREATED', 'UTILITY_TARIFF_DELETED', 'COLLECTION_SETTING_CHANGED',
 ];
-export const FINANCIAL_CONFIG_KEYS = [CONFIG_KEYS.FUND_APPROVAL_RATIO, CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, CONFIG_KEYS.FUND_APPROVAL_REMIND_DAYS];
+export const FINANCIAL_CONFIG_KEYS = [
+  CONFIG_KEYS.FUND_APPROVAL_RATIO, CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, CONFIG_KEYS.FUND_APPROVAL_REMIND_DAYS,
+  CONFIG_KEYS.PAYMENT_TERM_DAYS, CONFIG_KEYS.BILLING_REMIND_DAY,
+];
 export const financialAuditFilter = () => ({
   $or: [
     { action: { $in: FINANCIAL_ACTIONS } },
@@ -53,6 +58,8 @@ export const LABELS = {
   // Tòa, căn, hợp đồng, cư dân
   BUILDING_CHANGED: 'Thay đổi tòa nhà',
   APARTMENT_CHANGED: 'Thay đổi căn hộ',
+  OWNER_ACCOUNT_ISSUED: 'Cấp tài khoản chủ sở hữu',
+  APARTMENT_OWNER_CHANGED: 'Đổi chủ sở hữu căn hộ',
   CONTRACT_CREATED: 'Tạo hợp đồng',
   CONTRACT_UPDATED: 'Sửa hợp đồng',
   CONTRACT_TERMINATED: 'Chấm dứt hợp đồng',
@@ -61,11 +68,13 @@ export const LABELS = {
   RESIDENT_REMOVED: 'Cho cư dân rời căn',
   RESIDENT_UPDATED: 'Sửa thông tin cư dân',
   RESIDENT_CHANGES_EXPORTED: 'Xuất báo cáo biến động nhân khẩu',
+  RESIDENT_OCCUPANCY_EXPORTED: 'Xuất báo cáo cư trú',
   RESIDENT_ID_VIEWED: 'Xem số CCCD',
   VEHICLE_APPROVED: 'Duyệt đăng ký xe',
   VEHICLE_REJECTED: 'Từ chối đăng ký xe',
   VEHICLE_CANCELLED: 'Hủy đăng ký xe',
   PARKING_CARD_ISSUED: 'Cấp thẻ gửi xe',
+  PARKING_CARD_HANDED_OVER: 'Bàn giao thẻ gửi xe',
   PARKING_CARD_DISABLED: 'Khóa thẻ gửi xe',
   PARKING_CARD_RETURNED: 'Trả thẻ gửi xe',
   PARKING_CARD_LOST: 'Báo mất thẻ gửi xe',
@@ -116,11 +125,28 @@ export const LABELS = {
   WORKORDER_ASSIGNED: 'Phân công phiếu bảo trì',
   ASSET_CREATED: 'Thêm thiết bị',
   ASSET_UPDATED: 'Sửa thiết bị',
+  WORKORDER_INSPECTED: 'Nộp kết quả kiểm tra thiết bị',
+  WORKORDER_FAULT_REPORTED: 'Báo cáo hư hỏng thiết bị',
+  WORKORDER_REPAIR_APPROVED: 'Duyệt sửa chữa thiết bị',
+  WORKORDER_ACCEPTANCE_UPLOADED: 'Tải biên bản nghiệm thu sửa chữa',
+  WORKORDER_REPAIR_ACCEPTED: 'Nghiệm thu sửa chữa thiết bị',
+  WORKORDER_REPAIR_RETURNED: 'Yêu cầu sửa lại thiết bị',
+  WORKORDER_FUND_REQUESTED: 'Duyệt sửa chữa bằng Quỹ bảo trì',
+  WORKORDER_FUND_DECIDED: 'Kết quả đề xuất chi quỹ cho sửa chữa',
+  WORKORDER_REPAIR_POSTPONED: 'Tạm hoãn sửa chữa thiết bị',
+  WORKORDER_REPAIR_REQUESTED: 'Gửi yêu cầu sửa lại thiết bị đang hoãn',
+  WORKORDER_REPAIR_RETIRED: 'Ngừng sử dụng thiết bị hư hỏng',
   ASSET_DEACTIVATED: 'Ngừng theo dõi thiết bị',
   ASSET_REACTIVATED: 'Theo dõi lại thiết bị',
   COMPLAINT_CATEGORY_CHANGED: 'Thay đổi danh mục phản ánh',
   DUTY_SHIFT_CREATED: 'Tạo ca trực',
   DUTY_SHIFT_DELETED: 'Xóa ca trực',
+  DUTY_SHIFT_UPDATED: 'Sửa ca trực',
+  // UC05 – Cấu hình tòa nhà & biểu phí (Vũ Việt)
+  BUILDING_PROFILE_UPDATED: 'Cập nhật thông tin tòa nhà',
+  UTILITY_TARIFF_CREATED: 'Thêm biểu giá điện/nước',
+  UTILITY_TARIFF_DELETED: 'Xóa biểu giá điện/nước',
+  COLLECTION_SETTING_CHANGED: 'Thay đổi công tắc thu hộ',
   // Tiện ích, bảng tin
   BOOKING_CANCELLED_BY_STAFF: 'Nhân viên hủy đặt tiện ích',
   AMENITY_VISIT_CANCELLED: 'Hủy lượt vào tiện ích',
@@ -131,13 +157,14 @@ export const auditActionLabel = (action) => LABELS[action] ?? action.replaceAll(
 const TARGET_LABELS = {
   maintenance_fund: 'Quỹ bảo trì', fund_transactions: 'Giao dịch quỹ', fund_proposals: 'Đề xuất chi quỹ',
   operating_expenses: 'Chi phí vận hành', users: 'Tài khoản', buildings: 'Tòa nhà', apartments: 'Căn hộ',
-  contracts: 'Hợp đồng', residents: 'Cư dân', vehicles: 'Phương tiện', gate_passes: 'Giấy chuyển đồ',
-  parking_cards: 'Thẻ gửi xe', fee_types: 'Bảng phí', invoices: 'Thông báo phí', payments: 'Thanh toán',
+  contracts: 'Hợp đồng', residents: 'Cư dân', vehicles: 'Phương tiện',
+  gate_passes: 'Giấy chuyển đồ', parking_cards: 'Thẻ gửi xe', fee_types: 'Bảng phí', invoices: 'Thông báo phí', payments: 'Thanh toán',
   debt_followups: 'Xử lý công nợ', repair_quotes: 'Báo giá sửa chữa', amenities: 'Tiện ích',
   amenity_passes: 'Gói tiện ích', amenity_visits: 'Lượt tiện ích', bookings: 'Đặt tiện ích',
   work_orders: 'Lệnh bảo trì', tickets: 'Sự cố và phản ánh', complaint_categories: 'Danh mục phản ánh',
   announcements: 'Bảng tin', system_configs: 'Cấu hình hệ thống', duty_shifts: 'Ca trực',
   audit_logs: 'Nhật ký hoạt động', assets: 'Thiết bị', role_permissions: 'Phân quyền',
+  building_profile: 'Thông tin tòa nhà', utility_tariffs: 'Biểu giá điện/nước', collection_settings: 'Công tắc thu hộ',
 };
 // Log cũ ghi targetType theo tên model ('Resident', 'Contract'...). Không sửa dữ liệu trên DB dùng chung:
 // đọc theo tên mới, và khi lọc theo đối tượng thì gồm cả tên cũ (giống bảng của scripts/migrateAuditTargets.js)
@@ -148,7 +175,7 @@ export const LEGACY_TARGETS = {
   Contract: AUDIT_TARGETS.CONTRACT,
   Resident: AUDIT_TARGETS.RESIDENT,
   Vehicle: AUDIT_TARGETS.VEHICLE,
-  GatePass: AUDIT_TARGETS.GATE_PASS,
+  GatePass: 'gate_passes',
   ParkingCard: AUDIT_TARGETS.PARKING_CARD,
 };
 /** Tên đối tượng mới → [tên mới, các tên cũ] để lọc */
@@ -163,7 +190,8 @@ export function auditOptions(isBoard) {
   const targets = isBoard
     ? [AUDIT_TARGETS.MAINTENANCE_FUND, AUDIT_TARGETS.FUND_TRANSACTION, AUDIT_TARGETS.FUND_PROPOSAL,
       AUDIT_TARGETS.FEE_TYPE, AUDIT_TARGETS.INVOICE, AUDIT_TARGETS.PAYMENT,
-      AUDIT_TARGETS.DEBT_FOLLOWUP, AUDIT_TARGETS.AMENITY, AUDIT_TARGETS.SYSTEM_CONFIG]
+      AUDIT_TARGETS.DEBT_FOLLOWUP, AUDIT_TARGETS.AMENITY, AUDIT_TARGETS.SYSTEM_CONFIG,
+      AUDIT_TARGETS.BUILDING_PROFILE, AUDIT_TARGETS.UTILITY_TARIFF, AUDIT_TARGETS.COLLECTION_SETTING]
     : values(AUDIT_TARGETS);
   return {
     actions: actions.map((value) => ({ value, label: auditActionLabel(value) })),

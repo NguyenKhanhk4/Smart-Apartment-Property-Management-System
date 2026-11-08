@@ -51,7 +51,7 @@ export const FEATURES = [
   // Tài sản
   { code: 'APARTMENTS', label: 'Tòa nhà và căn hộ', group: 'Tài sản', prefixes: ['/buildings', '/apartments'], menuKeys: ['buildings', 'apartment-detail', 'my-apartment'] },
   { code: 'ASSETS', label: 'Thiết bị', group: 'Tài sản', prefixes: ['/assets'], menuKeys: ['assets', 'asset-detail'] },
-  { code: 'WORK_ORDERS', label: 'Phiếu bảo trì', group: 'Tài sản', prefixes: ['/work-orders'], menuKeys: ['work-orders', 'my-work-orders'] },
+  { code: 'WORK_ORDERS', label: 'Phiếu bảo trì', group: 'Tài sản', prefixes: ['/work-orders'], menuKeys: ['work-orders', 'my-work-orders', 'repair-approvals'] },
   // Cư dân
   { code: 'CONTRACTS', label: 'Hợp đồng', group: 'Cư dân', prefixes: ['/contracts'], menuKeys: ['contracts'] },
   { code: 'RESIDENTS', label: 'Cư dân và nhân khẩu', group: 'Cư dân', prefixes: ['/residents'], menuKeys: ['resident-changes'] },
@@ -59,7 +59,6 @@ export const FEATURES = [
   { code: 'ACTIVATION_CODES', label: 'Cấp mã kích hoạt, đổi SĐT tại quầy', group: 'Cư dân', prefixes: ['/activation-codes'], menuKeys: ['activation-codes'] },
   { code: 'VEHICLES', label: 'Đăng ký xe', group: 'Cư dân', prefixes: ['/vehicles'], menuKeys: ['vehicle-requests', 'my-vehicles'] },
   { code: 'PARKING_CARDS', label: 'Thẻ gửi xe', group: 'Cư dân', prefixes: ['/parking-cards'], menuKeys: ['parking-cards'] },
-  { code: 'GATE_PASSES', label: 'Giấy chuyển đồ', group: 'Cư dân', prefixes: ['/gate-passes'], menuKeys: ['gate-passes'] },
   // Vận hành
   { code: 'TICKETS', label: 'Sự cố và phản ánh', group: 'Vận hành', prefixes: ['/tickets'], menuKeys: ['tickets', 'ticket-detail', 'ticket-board'] },
   { code: 'REPAIR_QUOTES', label: 'Báo giá sửa chữa', group: 'Vận hành', prefixes: ['/repair-quotes'], menuKeys: [] },
@@ -82,6 +81,7 @@ export const FEATURES = [
   { code: 'SYSTEM_CONFIGS', label: 'Cấu hình hệ thống', group: 'Hệ thống', prefixes: ['/system-configs'], menuKeys: [] },
   { code: 'AUDIT_LOGS', label: 'Nhật ký hoạt động', group: 'Hệ thống', prefixes: ['/audit-logs'], menuKeys: ['audit-logs'] },
   { code: 'SYSTEM_DASHBOARD', label: 'Dashboard hệ thống', group: 'Hệ thống', prefixes: ['/system-dashboard'], menuKeys: ['system-dashboard'] },
+  { code: 'BUILDING_SETTINGS', label: 'Cấu hình tòa nhà & biểu phí', group: 'Hệ thống', prefixes: ['/building-profile', '/utility-tariffs', '/collection-settings'], menuKeys: ['building-settings'] },
 ];
 
 /** Đường dẫn không thuộc ma trận: đăng nhập, hồ sơ của chính mình, thông báo, tra cứu dùng chung, trang phân quyền */
@@ -92,7 +92,7 @@ export const CORE_PERMISSIONS = {
   TECHNICIAN: ['TICKETS:VIEW', 'TICKETS:UPDATE', 'WORK_ORDERS:VIEW', 'WORK_ORDERS:UPDATE', 'ASSETS:VIEW'],
   SECURITY: ['BOOKINGS:VIEW', 'BOOKINGS:UPDATE', 'PARKING_GATE:VIEW', 'PARKING_GATE:CREATE', 'PARKING_GATE:UPDATE', 'GUESTS:VIEW', 'GUESTS:CREATE', 'GUESTS:UPDATE'],
   ACCOUNTANT: ['INVOICES:VIEW', 'INVOICES:CREATE', 'INVOICES:UPDATE', 'PAYMENTS:VIEW', 'PAYMENTS:CREATE'],
-  RECEPTIONIST: ['RESIDENTS:VIEW', 'RESIDENTS:UPDATE', 'VEHICLES:VIEW', 'VEHICLES:APPROVE', 'ACTIVATION_CODES:VIEW', 'ACTIVATION_CODES:CREATE'],
+  RECEPTIONIST: ['RESIDENTS:VIEW', 'RESIDENTS:UPDATE', 'VEHICLES:VIEW', 'VEHICLES:UPDATE', 'ACTIVATION_CODES:VIEW', 'ACTIVATION_CODES:CREATE'],
   BOARD: ['FUND:VIEW', 'FUND:APPROVE', 'REPORTS:VIEW'],
   RESIDENT: ['INVOICES:VIEW', 'PAYMENTS:VIEW', 'PAYMENTS:CREATE', 'TICKETS:VIEW', 'TICKETS:CREATE', 'TICKETS:UPDATE'],
   MANAGER: [],
@@ -100,7 +100,10 @@ export const CORE_PERMISSIONS = {
 
 // ===== Suy ra hành động từ phương thức HTTP + đường dẫn =====
 /** Đoạn cuối của đường dẫn mang nghĩa phê duyệt / quyết định */
-const APPROVE_WORDS = new Set(['approve', 'reject', 'publish', 'return', 'review', 'owner-decision', 'quote-decision', 'votes', 'accept-work']);
+const APPROVE_WORDS = new Set([
+  'approve', 'reject', 'publish', 'return', 'review', 'owner-decision', 'quote-decision', 'votes', 'accept-work',
+  'repair-decision', 'accept', 'return-repair', // UC09, UC10: quyết định sửa chữa, nghiệm thu / yêu cầu sửa lại
+]);
 /** Ngoại lệ: đường dẫn mà quy tắc chung đoán sai (khóa: 'PHƯƠNG_THỨC /chức-năng/đường/dẫn' với tham số là :id) */
 const ACTION_OVERRIDES = {
   'POST /bookings/check-in-by-qr': 'UPDATE', // Bảo vệ quét vé vào cửa: là cập nhật lượt đặt, không tạo mới

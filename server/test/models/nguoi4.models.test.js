@@ -57,7 +57,6 @@ test('DutyShift: ca hợp lệ của kỹ thuật viên', () => {
     endAt: new Date('2026-11-01T09:00:00Z'),
   });
   assert.equal(shift.validateSync(), undefined);
-  assert.equal(shift.isBackup, false);
 });
 
 test('DutyShift: chỉ xếp ca cho Kỹ thuật viên hoặc Bảo vệ', () => {

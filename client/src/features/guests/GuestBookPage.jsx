@@ -302,7 +302,7 @@ export default function GuestBookPage() {
         {operation?.kind === 'handover' && <>
           <Form.Item name="recipientId" label="Thành viên nhận hàng" rules={[{ required: true }]}><Select loading={recipients.loading} options={(recipients.data || []).map((p) => ({ value: p._id, label: p.fullName }))} /></Form.Item>
           <Typography.Paragraph>Người nhận ký tay vào vùng dưới đây:</Typography.Paragraph>
-          <canvas ref={canvasRef} width={420} height={180} aria-label="Vùng ký nhận bưu kiện" style={{ width: '100%', height: 180, border: '1px solid #d9d9d9', touchAction: 'none' }}
+          <canvas ref={canvasRef} width={420} height={180} aria-label="Vùng ký nhận bưu kiện" style={{ width: '100%', height: 180, border: '1px dashed #A1A1AA', touchAction: 'none' }}
             onPointerDown={(e) => { drawingRef.current = true; e.currentTarget.setPointerCapture(e.pointerId); const r = e.currentTarget.getBoundingClientRect(); const ctx = e.currentTarget.getContext('2d'); ctx.beginPath(); ctx.moveTo((e.clientX - r.left) * 420 / r.width, e.clientY - r.top); }}
             onPointerMove={(e) => { if (!drawingRef.current) return; const r = e.currentTarget.getBoundingClientRect(); const ctx = e.currentTarget.getContext('2d'); ctx.lineWidth = 2; ctx.lineTo((e.clientX - r.left) * 420 / r.width, e.clientY - r.top); ctx.stroke(); signedRef.current = true; }}
             onPointerUp={() => { drawingRef.current = false; }} onPointerCancel={() => { drawingRef.current = false; }} />
@@ -311,7 +311,7 @@ export default function GuestBookPage() {
         {['checkpoint', 'tour'].includes(operation?.kind) && <Form.Item name="name" label="Tên" rules={[{ required: true }]}><Input maxLength={100} /></Form.Item>}
         {operation?.kind === 'checkpoint' && <Form.Item name="location" label="Vị trí" rules={[{ required: true }]}><Input maxLength={200} /></Form.Item>}
         {operation?.kind === 'tour' && <>
-          <Form.Item name="shiftId" label="Ca Bảo vệ (chính)" rules={[{ required: true }]}><Select loading={shifts.loading} options={(shifts.data || []).filter((s) => !s.isBackup && dayjs(s.endAt).isAfter(dayjs())).map((s) => ({ value: s._id, label: `${s.userId?.fullName} · ${formatDateTime(s.startAt)} – ${formatDateTime(s.endAt)}` }))} /></Form.Item>
+          <Form.Item name="shiftId" label="Ca Bảo vệ" rules={[{ required: true }]}><Select loading={shifts.loading} options={(shifts.data || []).filter((s) => dayjs(s.endAt).isAfter(dayjs())).map((s) => ({ value: s._id, label: `${s.userId?.fullName} · ${formatDateTime(s.startAt)} – ${formatDateTime(s.endAt)}` }))} /></Form.Item>
           <Form.Item name="startAt" label="Bắt đầu" rules={[{ required: true }]}><DatePicker showTime format="DD/MM/YYYY HH:mm" /></Form.Item>
           <Form.Item name="endAt" label="Kết thúc (trong ca)" rules={[{ required: true }]}><DatePicker showTime format="DD/MM/YYYY HH:mm" /></Form.Item>
           <Form.Item name="checkpointIds" label="Các checkpoint phải đi" rules={[{ required: true, type: 'array', min: 1 }]}><Select mode="multiple" loading={checkpoints.loading} options={(checkpoints.data || []).filter((p) => p.active).map((p) => ({ value: p._id, label: `${p.name} · ${p.location}` }))} /></Form.Item>

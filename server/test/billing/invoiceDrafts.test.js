@@ -74,11 +74,11 @@ test('UC13: phí quản lý lấy diện tích thông thủy, đúng loại căn
     name: 'Phí quản lý căn ở', feeCategory: 'MANAGEMENT', calcMethod: 'PER_M2',
     unitPrice: 12_000, effectiveFrom: PERIOD,
   };
-  await assert.rejects(createFeeType(user, { ...managementRate, code: 'MANAGEMENT_OTHER' }, { now: NOW }), /mã phí tương ứng/);
-  await createFeeType(user, { ...managementRate, code: 'MANAGEMENT_RESIDENTIAL' }, { now: NOW });
+  await assert.rejects(createFeeType(user, { ...managementRate, code: 'MANAGEMENT_OTHER' }, { now: new Date('2026-09-15T00:00:00Z') }), /mã phí tương ứng/);
+  await createFeeType(user, { ...managementRate, code: 'MANAGEMENT_RESIDENTIAL' }, { now: new Date('2026-09-15T00:00:00Z') });
   await createFeeType(user, {
     ...managementRate, code: 'MANAGEMENT_COMMERCIAL', name: 'Phí quản lý căn kinh doanh', unitPrice: 20_000,
-  }, { now: NOW });
+  }, { now: new Date('2026-09-15T00:00:00Z') });
 
   const beforeHandover = await previewInvoices({ period: '2026-09', apartmentId: apartment._id });
   assert.equal(beforeHandover.rows[0].status, 'NOT_HANDED_OVER');

@@ -17,7 +17,7 @@ export default function ReceptionSidebarNav({ collapsed, onNavigate }) {
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="Menu chính">
       {receptionNav.map(({ group, items }, gi) => {
-        const visible = items.map((i) => ({ ...i, menu: byKey[i.key] })).filter((i) => canSee(i.menu));
+        const visible = items.map((i) => ({ ...i, menu: byKey[i.key] })).filter((i) => i.menu && canSee(i.menu));
         if (!visible.length) return null;
         return (
           <div key={group ?? gi} className="space-y-1">

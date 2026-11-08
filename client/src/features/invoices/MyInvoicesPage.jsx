@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Empty, Pagination, Skeleton } from 'antd';
+import { Empty, Pagination, Select, Skeleton } from 'antd';
 import { RightOutlined } from '@ant-design/icons';
 import { invoiceApi } from '../../api/moduleB.api';
 import PageHeader from '../../components/PageHeader';
@@ -32,7 +32,14 @@ function SummaryTile({ label, value, tone }) {
 }
 
 export default function MyInvoicesPage() {
-  const { apartmentId } = useResident();
+  const { apartmentId: selectedApartmentId } = useResident();
+  const { data: formerApartments = [], loading: loadingFormer } = useApi(invoiceApi.departedTenancies, []);
+  const [selectedFormerId, setSelectedFormerId] = useState(null);
+  const currentApartmentId = formerApartments.some((apartment) => apartment._id === selectedApartmentId)
+    ? null : selectedApartmentId;
+  const formerId = formerApartments.find((apartment) => apartment._id === selectedFormerId)?._id
+    ?? (currentApartmentId ? null : formerApartments[0]?._id);
+  const apartmentId = formerId ?? currentApartmentId;
   const [filter, setFilter] = useState('unpaid');
   const [page, setPage] = useState(1);
   const status = FILTERS.find((f) => f.value === filter).status;
@@ -48,6 +55,18 @@ export default function MyInvoicesPage() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader className="mb-0" title="Phí dịch vụ" subtitle="Thông báo phí hằng tháng của căn hộ đang chọn" />
+
+      {formerApartments.length > 0 && (
+        <Select aria-label="Căn hộ xem phí dịch vụ" className="w-full max-w-md" value={formerId ?? 'current'}
+          options={[
+            ...(currentApartmentId ? [{ value: 'current', label: 'Căn hộ đang ở' }] : []),
+            ...formerApartments.map((apartment) => ({
+              value: apartment._id,
+              label: `${apartment.code}${apartment.buildingId?.name ? ` · ${apartment.buildingId.name}` : ''} — Đã rời, còn nợ`,
+            })),
+          ]}
+          onChange={(value) => { setSelectedFormerId(value === 'current' ? null : value); setPage(1); }} />
+      )}
 
       {summary?.isPayer && (
         <div className="flex gap-3 flex-wrap">
@@ -70,7 +89,7 @@ export default function MyInvoicesPage() {
         className="max-w-sm"
       />
 
-      {res.loading && !items.length ? (
+      {(res.loading || (loadingFormer && !apartmentId)) && !items.length ? (
         <Skeleton active />
       ) : items.length === 0 ? (
         <SurfaceCard className="py-10">
@@ -90,7 +109,7 @@ export default function MyInvoicesPage() {
               >
                 <span className="flex-1 min-w-0">
                   <span className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[15px] font-semibold">Tháng {periodLabel(inv.period)}</span>
+                    <span className="text-[14px] font-semibold">Tháng {periodLabel(inv.period)}</span>
                     <StatusBadge tone={INVOICE_TONE[inv.status]}>{INVOICE_STATUS[inv.status]?.label}</StatusBadge>
                   </span>
                   <span className="block text-[13px] text-r-muted truncate">
@@ -98,7 +117,7 @@ export default function MyInvoicesPage() {
                   </span>
                 </span>
                 <span className="text-right shrink-0">
-                  <span className="block text-[15px] font-semibold">{formatMoney(due ? outstandingOf(inv) : inv.totalAmount)}</span>
+                  <span className="block text-[14px] font-semibold">{formatMoney(due ? outstandingOf(inv) : inv.totalAmount)}</span>
                   <span className="block text-[12px] text-r-muted">{due ? 'còn phải trả' : 'tổng tiền'}</span>
                 </span>
                 <RightOutlined className="text-r-muted" />

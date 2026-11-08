@@ -79,7 +79,7 @@ export async function createPayosPayment(user, { invoiceIds }, { now = new Date(
   const notDue = invoices.find((i) => !INVOICE_OUTSTANDING_STATUSES.includes(i.status));
   if (notDue) throw ApiError.badRequest(`Thông báo ${notDue.code} không còn nợ`);
 
-  const planned = invoices.map((i) => ({ invoiceId: i._id, amount: i.totalAmount - i.paidAmount }));
+  const planned = invoices.map((i) => ({ invoiceId: i._id, amount: i.totalAmount - (i.paidAmount ?? 0) }));
   const amount = planned.reduce((s, a) => s + a.amount, 0);
   const ids = planned.map((a) => String(a.invoiceId)).sort();
 
@@ -121,7 +121,7 @@ export async function createPayosPayment(user, { invoiceIds }, { now = new Date(
         amount,
         description: descriptionOf(apartment, invoices),
         expiredAt,
-        items: invoices.map((i) => ({ name: `Phi ${shortPeriod(i.period)}`, quantity: 1, price: i.totalAmount - i.paidAmount })),
+        items: invoices.map((i) => ({ name: `Phi ${shortPeriod(i.period)}`, quantity: 1, price: i.totalAmount - (i.paidAmount ?? 0) })),
       });
       const saved = await Payment.findByIdAndUpdate(
         payment._id,

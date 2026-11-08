@@ -1,9 +1,9 @@
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AuditLog, Contract } from '../../src/models/index.js';
-import { expireLeases } from '../../src/modules/contracts/contracts.jobs.js';
+import { endTenancy } from '../../src/modules/residents/residentTenancies.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
-import { asUser, createApartment, createBuilding, createManager, createReceptionist, createResidentUser } from '../helpers/fixtures.js';
+import { asUser, createApartment, createBuilding, createManager, createReceptionist, createResidentUser, linkResident } from '../helpers/fixtures.js';
 import { startApp } from '../helpers/http.js';
 
 let app;
@@ -131,17 +131,19 @@ test('UC13: Lễ tân xác nhận vào ở, trạng thái tự động thắng �
   assert.equal(tenantResult.body.data.occupancyStatus, 'RENTED');
 });
 
-test('UC13: khi hết hạn thuê, màu cập nhật theo sự kiện và quyền sở hữu vẫn giữ', async () => {
+test('UC13: chủ sở hữu kết thúc lượt thuê cũ và cập nhật màu căn hộ', async () => {
   const apartment = await createApartment(null, {
     handoverDate: new Date('2025-01-01'), status: 'RENTED', occupancyStatus: 'UNDER_REPAIR',
   });
   const owner = await createResidentUser();
   const tenant = await createResidentUser();
   const base = { apartmentId: apartment._id, ownerId: owner._id, startDate: new Date('2025-01-01'), status: 'ACTIVE' };
-  await Contract.create({ ...base, type: 'SALE' });
-  await Contract.create({ ...base, type: 'LEASE', tenantId: tenant._id, endDate: new Date('2025-03-01') });
+  const sale = await Contract.create({ ...base, type: 'SALE' });
+  const lease = await Contract.create({ ...base, type: 'LEASE', tenantId: tenant._id, endDate: new Date('2025-03-01') });
+  await linkResident(owner, apartment, { relationType: 'OWNER', contractId: sale._id });
 
-  assert.equal(await expireLeases(), 1);
+  // Một số hợp đồng cũ chưa có bản ghi Resident tương ứng.
+  await endTenancy(asUser(owner), apartment.id, lease.id);
   const updated = await apartment.constructor.findById(apartment._id);
   assert.equal(updated.occupancyStatus, 'VACANT');
   assert.equal(updated.status, 'OWNED');

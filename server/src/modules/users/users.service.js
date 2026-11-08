@@ -3,6 +3,7 @@ import { env } from '../../config/env.js';
 import { AUDIT_ACTIONS, AUDIT_TARGETS, BOARD_TITLES, CONSENT_ACTIONS, CONSENT_POLICY_VERSION, ROLES } from '../../constants/enums.js';
 import { Resident, User } from '../../models/index.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { consentState } from '../../utils/consent.js';
 import { assertPhoneAndEmailFree, uniqueConflictError } from './userLookup.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { logAudit } from '../../services/auditLog.service.js';
@@ -13,6 +14,7 @@ import { toPublicUser, verifyCurrentPassword } from '../auth/auth.service.js';
 import { voidAllCodes } from '../auth/verification.service.js';
 import { recordContactChange } from './contactChanges.js';
 import { signAccessToken, signRefreshToken } from '../auth/auth.tokens.js';
+import { releaseShiftsOf } from '../dutyShifts/dutyShifts.service.js';
 
 /**
  * UC-A03: Xem hồ sơ cá nhân
@@ -56,7 +58,8 @@ export async function updateMe(userId, { fullName, email, currentPassword, dateO
 
 /**
  * BR-X7: đồng ý hoặc rút lại đồng ý trong hồ sơ. Giữ toàn bộ lịch sử, ghi audit log.
- * Đồng ý lại khi đang đồng ý thì không ghi thêm; chưa đồng ý thì không có gì để rút.
+ * Đồng ý lại khi đang đồng ý đúng bản hiện hành thì không ghi thêm; đồng ý bản cũ thì ghi lần đồng ý bản mới.
+ * Chưa đồng ý thì không có gì để rút.
  */
 export async function updateConsent(userId, { action }, { ip } = {}) {
   const user = await User.findById(userId);
@@ -65,7 +68,7 @@ export async function updateConsent(userId, { action }, { ip } = {}) {
   if (action === CONSENT_ACTIONS.WITHDRAWN && current !== CONSENT_ACTIONS.ACCEPTED) {
     throw new ApiError('STATUS_CONFLICT', 'Bạn chưa đồng ý với điều khoản nên không có gì để rút lại');
   }
-  if (action === current) return toPublicUser(user);
+  if (action === current && !consentState(user.consents).outdated) return toPublicUser(user);
 
   const entry = { action, policyVersion: CONSENT_POLICY_VERSION, createdAt: new Date() };
   await User.updateOne({ _id: userId }, { $push: { consents: entry } });
@@ -74,7 +77,7 @@ export async function updateConsent(userId, { action }, { ip } = {}) {
     user: { id: userId },
     targetType: AUDIT_TARGETS.USER,
     targetId: userId,
-    metadata: { action, policyVersion: CONSENT_POLICY_VERSION },
+    metadata: { action, policyVersion: CONSENT_POLICY_VERSION, previousPolicyVersion: user.consents.at(-1)?.policyVersion ?? null },
     ip,
   });
   return toPublicUser(await User.findById(userId));
@@ -331,6 +334,9 @@ export async function setStatus(managerUser, targetId, { isActive }, { ip } = {}
     after: { isActive },
     ip,
   });
+
+  // UC37 Alt 3b: khóa nhân viên kỹ thuật / bảo vệ → gỡ khỏi các ca trực sắp tới (ca đang diễn ra kết thúc ngay)
+  if (!isActive && wasActive && target.role === ROLES.STAFF) await releaseShiftsOf(target._id);
 
   // Tài khoản cư dân: đồng bộ mã cư dân của các căn
   if (target.role === ROLES.RESIDENT) {

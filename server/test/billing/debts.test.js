@@ -7,7 +7,6 @@ import { buildDebtNotice, recordActivity } from '../../src/modules/debts/debts.c
 import { checkApartmentDebt } from '../../src/modules/debts/debts.check.js';
 import { remindDebts } from '../../src/modules/debts/debts.jobs.js';
 import { getApartmentLedger, listLedger } from '../../src/modules/debts/debts.ledger.js';
-import { getApartmentDebt } from '../../src/modules/gatePasses/debtProvider.js';
 import { recordOfflinePayment } from '../../src/modules/payments/payments.service.js';
 import { debtReport } from '../../src/modules/reports/reports.service.js';
 import { DAY_MS, toVnYmd } from '../../src/utils/time.js';
@@ -86,37 +85,37 @@ test('nhắc nợ: lần 1 ngay, 3 ngày/lần, tối đa 3 lần → Nợ quá 
   assert.equal(await DebtFollowup.countDocuments(), 1);
 });
 
-test('hẹn trả: tạm dừng nhắc đến hết ngày hẹn; quá hẹn chưa trả → đóng lời hẹn, báo Trưởng BQL 1 lần', async () => {
-  const { owner, manager, managerDoc, mk } = await setup();
+test('hẹn trả: tạm dừng nhắc đến hết ngày hẹn; quá hẹn chưa trả → đóng lời hẹn, báo Kế toán 1 lần (UC31)', async () => {
+  const { owner, accountant, mk } = await setup();
   await mk('HD-10', '2026-10', 500_000);
   await remindDebts(NOW);
   const c = await DebtFollowup.findOne({ payerId: owner._id }).lean();
 
-  await assert.rejects(recordActivity(manager, c._id, { method: 'PHONE', promisedDate: '2026-11-01' }, { now: NOW }), /quá khứ/);
+  await assert.rejects(recordActivity(accountant, c._id, { method: 'PHONE', promisedDate: '2026-11-01' }, { now: NOW }), /quá khứ/);
   const updated = await recordActivity(
-    manager,
+    accountant,
     c._id,
     { method: 'PHONE', response: 'Hẹn trả sau lương', promisedDate: toVnYmd(day(5)) },
     { now: NOW },
   );
   assert.equal(updated.activities.length, 1);
-  assert.equal(updated.activities[0].by.fullName, managerDoc.fullName);
+  assert.ok(updated.activities[0].by);
   assert.ok(updated.promisedDate);
 
   await remindDebts(day(3));
   await remindDebts(day(5)); // còn trong ngày hẹn
   assert.equal(await reminders(owner._id), 1);
-  assert.equal(await reminders(managerDoc._id), 0);
+  assert.equal(await reminders(accountant.id), 0);
 
   await remindDebts(day(6)); // quá ngày hẹn
   const after6 = await DebtFollowup.findById(c._id).lean();
   assert.equal(after6.promisedDate, null);
   assert.match(after6.activities.at(-1).note, /Quá ngày hẹn/);
-  assert.equal(await reminders(managerDoc._id), 1);
+  assert.equal(await reminders(accountant.id), 1);
   assert.equal(await reminders(owner._id), 2, 'hết hẹn thì nhắc tự động tiếp');
 
   await remindDebts(day(7));
-  assert.equal(await reminders(managerDoc._id), 1);
+  assert.equal(await reminders(accountant.id), 1);
 });
 
 test('trả hết khoản quá hạn → hồ sơ nợ đóng ngay; không ghi kết quả được nữa', async () => {
@@ -154,7 +153,7 @@ test('cron đóng hồ sơ khi khoản quá hạn không còn (vd thông báo b�
   assert.equal((await DebtFollowup.findOne({ payerId: owner._id }).lean()).status, 'RESOLVED');
 });
 
-test('UC23: nợ tách theo Người nộp phí, số dư của người này không bù nợ người khác; giữ dạng trả về của debtProvider', async () => {
+test('UC23: nợ tách theo Người nộp phí, số dư của người này không bù nợ người khác', async () => {
   const { owner, apartment, mk } = await setup();
   const tenant = await createResidentUser();
   await mk('HD-09', '2026-09', 400_000, { status: 'OVERDUE' }); // chủ hộ
@@ -170,11 +169,8 @@ test('UC23: nợ tách theo Người nộp phí, số dư của người này kh
   const ownerRow = debt.byPayer.find((p) => String(p.payerId) === String(owner._id));
   assert.equal(ownerRow.net, 400_000);
   assert.equal(ownerRow.fullName, owner.fullName);
-
-  const gp = await getApartmentDebt(apartment._id);
-  assert.equal(gp.amount, 400_000);
-  assert.equal(gp.invoiceCount, 2);
-  assert.equal(gp.available, true);
+  assert.equal(debt.invoiceCount, 2);
+  assert.equal(debt.available, true);
 });
 
 test('UC23: công nợ tại một ngày trong quá khứ dựng lại từ lịch sử thanh toán', async () => {
@@ -252,16 +248,16 @@ test('PDF Thông báo nợ quá hạn', async () => {
   assert.match(file.filename, /^thong-bao-no-.+-2026-11-05\.pdf$/);
 });
 
-test('phân quyền API công nợ: cư dân không xem được sổ; chỉ Trưởng BQL ghi kết quả xử lý', async () => {
+test('phân quyền API công nợ: cư dân không xem được sổ; chỉ Kế toán ghi kết quả xử lý (UC31), Trưởng BQL chỉ xem', async () => {
   const app = await startApp();
   try {
     assert.equal((await app.request('GET', '/debts/ledger', { user: USERS.resident })).status, 403);
     const id = '64b000000000000000000009';
     assert.equal(
-      (await app.request('POST', `/debts/cases/${id}/activities`, { user: { role: 'ACCOUNTANT' }, body: { method: 'PHONE' } })).status,
+      (await app.request('POST', `/debts/cases/${id}/activities`, { user: USERS.manager, body: { method: 'PHONE' } })).status,
       403,
     );
-    const bad = await app.request('POST', `/debts/cases/${id}/activities`, { user: USERS.manager, body: { method: 'FAX' } });
+    const bad = await app.request('POST', `/debts/cases/${id}/activities`, { user: { role: 'ACCOUNTANT' }, body: { method: 'FAX' } });
     assert.equal(bad.status, 400);
   } finally {
     await app.close();

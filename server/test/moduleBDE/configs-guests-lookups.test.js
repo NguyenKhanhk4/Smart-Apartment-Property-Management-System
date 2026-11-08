@@ -112,12 +112,12 @@ test('Module 7: cron nhắc bưu kiện 3 ngày một lần duy nhất, quá 14 
   await assert.rejects(guests.handOverParcel(receptionist, parcel._id, { returned: true }));
 });
 
-test('Module 7: cảnh báo khẩn nhắc sau 15 phút, chỉ dự phòng/manager tiếp nhận và dừng nhắc', async () => {
+test('Module 7: cảnh báo khẩn nhắc sau 15 phút, chỉ người đang trực/manager tiếp nhận và dừng nhắc', async () => {
   const manager = asUser(await createManager());
   const guard = asUser(await createSecurity());
-  const backup = asUser(await createSecurity());
+  const onDuty = asUser(await createSecurity());
   const now = new Date();
-  await DutyShift.create({ roleTitle: 'SECURITY', userId: backup.id, isBackup: true, startAt: new Date(+now - 60000), endAt: new Date(+now + 3600000) });
+  await DutyShift.create({ roleTitle: 'SECURITY', userId: onDuty.id, startAt: new Date(+now - 60000), endAt: new Date(+now + 3600000) });
   const incident = await guests.reportIncident(guard, { requestId: randomUUID(), type: 'FIRE', location: 'Tầng 1', description: 'Khói bất thường ở hành lang' });
   assert.equal(await Notification.countDocuments({ refId: incident._id }), 2);
   await guests.runOperationsJobs(new Date(+now + 5 * 60000));
@@ -125,7 +125,7 @@ test('Module 7: cảnh báo khẩn nhắc sau 15 phút, chỉ dự phòng/manage
   await guests.runOperationsJobs(new Date(+now + 16 * 60000));
   assert.equal(await Notification.countDocuments({ refId: incident._id }), 4);
   await assert.rejects(guests.acknowledgeIncident(guard, incident._id), { status: 403 });
-  assert.equal((await guests.activeAlerts(backup))[0].canAcknowledge, true);
+  assert.equal((await guests.activeAlerts(onDuty))[0].canAcknowledge, true);
   await guests.acknowledgeIncident(manager, incident._id);
   await guests.runOperationsJobs(new Date(+now + 32 * 60000));
   assert.equal(await Notification.countDocuments({ refId: incident._id }), 4);

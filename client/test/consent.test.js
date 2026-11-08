@@ -9,6 +9,11 @@ test('cư dân chưa đồng ý, từ chối hoặc đã rút lại thì bị kh
   }
 });
 
+test('cư dân mới đồng ý bản điều khoản cũ thì bị khóa cho tới khi đồng ý lại', () => {
+  assert.equal(isConsentLocked({ role: 'RESIDENT', consentStatus: 'ACCEPTED', consentOutdated: true }), true);
+  assert.equal(isConsentLocked({ role: 'RESIDENT', consentStatus: 'ACCEPTED', consentOutdated: false }), false);
+});
+
 test('cư dân đã đồng ý, nhân viên, chưa đăng nhập thì không bị khóa', () => {
   assert.equal(isConsentLocked({ role: 'RESIDENT', consentStatus: 'ACCEPTED' }), false);
   assert.equal(isConsentLocked({ role: 'STAFF', consentStatus: null }), false);

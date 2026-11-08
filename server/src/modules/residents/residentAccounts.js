@@ -102,7 +102,10 @@ export async function linkResident({ userId, apartmentId, relationType, contract
  * @returns {boolean|null} đã gửi được email hay chưa (không có email thì false); null nếu không tạo tài khoản mới
  */
 export async function inviteNewResident({ user, created }) {
-  if (!created) return null;
+  return created ? sendActivationInvite(user) : null;
+}
+
+export async function sendActivationInvite(user) {
   if (!user.email) return false;
   const link = `${env.clientUrls[0]}/activate`;
   return sendMail({

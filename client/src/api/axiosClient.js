@@ -17,6 +17,7 @@ import { authStorage } from '../utils/authStorage';
 import { notifyPermissionsChanged } from '../utils/permissionEvents';
 import { prepareFormData } from '../utils/imageUpload';
 import { readErrorPayload } from './errorPayload';
+import { notifyDataChanged } from '../hooks/dataSync';
 import {
   DEFAULT_ERROR_MESSAGE,
   ERROR_MESSAGES,
@@ -111,8 +112,13 @@ export function toApiError(error) {
   });
 }
 
+// Ghi dữ liệu thành công (POST/PUT/PATCH/DELETE, trừ đăng nhập / làm mới phiên) → báo các danh sách đang mở tải lại
+const isWrite = (config) => !['get', 'head', 'options'].includes((config?.method ?? 'get').toLowerCase());
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (isWrite(response.config) && !NO_REFRESH_PATHS.some((path) => response.config.url?.includes(path))) notifyDataChanged();
+    return response;
+  },
   async (error) => {
     // Request tải file (responseType 'blob') nhận body lỗi dạng Blob → đọc lại để lấy message của server
     if (error.response?.data instanceof Blob) error.response.data = await readErrorPayload(error.response.data);

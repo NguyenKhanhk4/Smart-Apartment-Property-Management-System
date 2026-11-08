@@ -4,7 +4,7 @@ import { APARTMENT_TYPES, AUDIT_ACTIONS, FEE_CALC_METHODS, FEE_CATEGORIES, FEE_T
 import { FeeType } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { periodStart, vnPeriod } from '../../utils/time.js';
+import { periodLabel, periodStart, shiftPeriod, vnPeriod } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { billedPeriodsByCode, endPeriodOf, fromPeriodOf, getPriceTable, isBilled } from './feeTypes.queries.js';
 
@@ -54,7 +54,9 @@ async function assertNoOverlap(code, from, to, { excludeId } = {}) {
     ...(to && { effectiveFrom: { $lt: to } }),
     ...(excludeId && { _id: { $ne: excludeId } }),
   };
-  if (await FeeType.exists(filter)) throw new ApiError('FEE_TYPE_OVERLAP');
+  if (await FeeType.exists(filter)) {
+    throw ApiError.field('effectiveFrom', 'Ngày hiệu lực trùng với mức giá đã có của mục này');
+  }
 }
 
 async function findOrThrow(id) {
@@ -92,8 +94,19 @@ export async function getCurrentPrices({ now = new Date() } = {}) {
  * - Mã đã có (đổi giá): chỉ cần unitPrice + effectiveFrom; mức giá đang mở bắt đầu trước kỳ mới được tự đóng lại.
  */
 export async function createFeeType(user, body, { now = new Date() } = {}) {
-  const { code, unitPrice, effectiveFrom: fromPeriod } = body;
-  if (fromPeriod < vnPeriod(now)) throw ApiError.badRequest('Chỉ áp dụng giá từ kỳ hiện tại trở đi');
+  const { code, unitPrice } = body;
+  let fromPeriod = body.effectiveFrom;
+  const currentPeriod = vnPeriod(now);
+  const nextPeriod = shiftPeriod(currentPeriod, 1);
+  let movedTo = null;
+  let message = 'Đã lưu mức giá';
+
+  // Rule 4b: Ngày hiệu lực ≤ kỳ hiện tại thì tự dời sang kỳ sau
+  if (fromPeriod <= currentPeriod) {
+    movedTo = nextPeriod;
+    fromPeriod = nextPeriod;
+    message = `Ngày hiệu lực trong kỳ đang mở đã được tự động dời sang kỳ sau (${periodLabel(nextPeriod)}).`;
+  }
 
   const latest = await FeeType.findOne({ code }).sort({ effectiveFrom: -1 }).lean();
   let shape;
@@ -143,7 +156,12 @@ export async function createFeeType(user, body, { now = new Date() } = {}) {
       { op: latest ? 'CHANGE_PRICE' : 'CREATE', code, fromPeriod, unitPrice, previous: open && { id: open._id, unitPrice: open.unitPrice } },
       { session },
     );
-    return fee.toObject();
+    const result = fee.toObject();
+    if (movedTo) {
+      result.movedTo = movedTo;
+      result.message = message;
+    }
+    return result;
   });
 }
 

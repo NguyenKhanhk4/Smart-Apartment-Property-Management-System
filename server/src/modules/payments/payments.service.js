@@ -73,7 +73,7 @@ export function allocate(invoices, amount) {
   const allocations = [];
   for (const inv of invoices) {
     if (left <= 0) break;
-    const owed = inv.totalAmount - inv.paidAmount;
+    const owed = inv.totalAmount - (inv.paidAmount ?? 0);
     if (owed <= 0) continue;
     const take = Math.min(owed, left);
     allocations.push({ invoice: inv, amount: take });
@@ -280,7 +280,7 @@ export async function getReceipt(user, id) {
         code: a.invoiceId.code,
         period: a.invoiceId.period,
         status: a.invoiceId.status,
-        outstanding: Math.max(0, a.invoiceId.totalAmount - a.invoiceId.paidAmount),
+        outstanding: Math.max(0, a.invoiceId.totalAmount - (a.invoiceId.paidAmount ?? 0)),
       },
     })),
     currentOutstanding: debt?.outstanding ?? 0,

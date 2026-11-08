@@ -1,4 +1,4 @@
-import { APARTMENT_OCCUPANCY, APARTMENT_STATUS, AUDIT_ACTIONS, AUDIT_TARGETS, CONTRACT_STATUS, CONTRACT_TYPES, VEHICLE_STATUS } from '../../constants/enums.js';
+import { APARTMENT_OCCUPANCY, APARTMENT_STATUS, AUDIT_ACTIONS, AUDIT_TARGETS, CONTRACT_STATUS, CONTRACT_TYPES, RELATION_TYPES, VEHICLE_STATUS } from '../../constants/enums.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
@@ -65,7 +65,8 @@ export async function getApartmentById(id) {
 
   const [activeContracts, activeResidentsCount, approvedVehiclesCount] = await Promise.all([
     Contract.find({ apartmentId: id, status: CONTRACT_STATUS.ACTIVE })
-      .populate('ownerId', 'fullName email phone')
+      .populate('ownerId', 'fullName email phone activatedAt isActive')
+      .populate('ownerAccountIssuedBy', 'fullName')
       .populate('tenantId', 'fullName email phone')
       .lean(),
     Resident.countDocuments({ apartmentId: id, isActive: true }),
@@ -226,7 +227,6 @@ export async function updateApartment(id, data, managerUser, ip) {
           type: CONTRACT_TYPES.LEASE,
           status: CONTRACT_STATUS.ACTIVE,
           startDate: { $lte: new Date() },
-          endDate: { $gte: startOfVnDay() },
         });
         const status = activeLease ? APARTMENT_OCCUPANCY.RENTED : APARTMENT_OCCUPANCY.VACANT;
         changes.occupancyStatus = { from: apartment.occupancyStatus, to: status };
@@ -287,16 +287,24 @@ export function confirmMoveIn(id, receptionist, ip) {
     const contracts = await Contract.find({
       apartmentId: id,
       status: CONTRACT_STATUS.ACTIVE,
-      startDate: { $lte: today },
-    }).select('type endDate').session(session).lean();
+      $or: [
+        { type: CONTRACT_TYPES.SALE, startDate: { $lte: new Date() } },
+        { type: CONTRACT_TYPES.LEASE, startDate: { $lte: today } },
+      ],
+    }).select('type ownerAccountPending').session(session).lean();
     const owner = contracts.find((contract) => contract.type === CONTRACT_TYPES.SALE);
     if (!owner) {
       throw new ApiError('STATUS_CONFLICT', 'Cần hợp đồng mua bán đang hiệu lực để xác nhận vào ở');
     }
-    const lease = contracts.find((contract) => contract.type === CONTRACT_TYPES.LEASE && contract.endDate >= today);
+    if (owner.ownerAccountPending) {
+      throw new ApiError('STATUS_CONFLICT', 'Ban quản lý cần cấp tài khoản chủ sở hữu trước khi xác nhận vào ở');
+    }
+    const lease = contracts.find((contract) => contract.type === CONTRACT_TYPES.LEASE);
+    const currentTenant = await Resident.exists({ apartmentId: id, relationType: RELATION_TYPES.TENANT,
+      isActive: true, contractId: null, tenantPaysFees: { $type: 'bool' } }).session(session);
     return {
       action: 'CONFIRM_MOVE_IN',
-      status: lease ? APARTMENT_OCCUPANCY.RENTED : APARTMENT_OCCUPANCY.OWNER_OCCUPIED,
+      status: lease || currentTenant ? APARTMENT_OCCUPANCY.RENTED : APARTMENT_OCCUPANCY.OWNER_OCCUPIED,
       contractId: (lease ?? owner)._id,
     };
   }, receptionist, ip);

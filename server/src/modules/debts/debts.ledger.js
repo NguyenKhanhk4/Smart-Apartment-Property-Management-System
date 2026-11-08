@@ -234,7 +234,7 @@ export async function getApartmentLedger(apartmentId, { now = new Date() } = {})
       caseStatus: openCase?.status ?? null,
       invoices: mine.map((i) => ({
         ...i,
-        outstanding: Math.max(0, i.totalAmount - i.paidAmount),
+        outstanding: Math.max(0, i.totalAmount - (i.paidAmount ?? 0)),
         overdue: i.status === INVOICE_STATUS.OVERDUE || (i.paidAmount < i.totalAmount && Boolean(i.dueDate && i.dueDate < today)),
       })),
     };

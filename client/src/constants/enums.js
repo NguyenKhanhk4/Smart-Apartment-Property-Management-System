@@ -45,6 +45,12 @@ export const CONTRACT_TYPES = {
   LEASE: { label: 'Cho thuê', color: 'green' },
 };
 
+export const OWNERSHIP_DOCUMENT_TYPES = {
+  DEVELOPER_SALE_CONTRACT: { label: 'Hợp đồng mua bán với chủ đầu tư', color: 'blue' },
+  OWNERSHIP_CERTIFICATE: { label: 'Giấy chứng nhận quyền sở hữu', color: 'purple' },
+  TRANSFER_DOCUMENT: { label: 'Giấy tờ xác nhận chuyển nhượng', color: 'blue' },
+};
+
 export const CONTRACT_STATUS = {
   ACTIVE: { label: 'Đang hiệu lực', color: 'green' },
   EXPIRED: { label: 'Hết hạn', color: 'default' },
@@ -111,6 +117,7 @@ export const TICKET_HISTORY_ACTIONS = {
   REJECTED: { label: 'Từ chối', color: 'gray' },
   RECLASSIFIED: { label: 'Đổi phân loại', color: 'purple' },
   MERGED: { label: 'Gộp phiếu trùng', color: 'gray' },
+  EMERGENCY_ACKED: { label: 'Đã tiếp nhận cảnh báo khẩn', color: 'red' },
 };
 
 // ===== Sự cố & tiện ích (Người 4) =====
@@ -281,12 +288,29 @@ export const PREPAID_TX_TYPES = {
 };
 
 export const WORK_ORDER_STATUS = {
-  PENDING: { label: 'Chờ xử lý', color: 'blue' },
-  IN_PROGRESS: { label: 'Đang xử lý', color: 'processing' },
+  PENDING: { label: 'Đến hạn', color: 'blue' }, // BR-E05: Due
+  IN_PROGRESS: { label: 'Đang kiểm tra', color: 'processing' }, // Inspecting
+  AWAITING_REPAIR_APPROVAL: { label: 'Chờ duyệt sửa', color: 'orange' },
+  UNDER_REPAIR: { label: 'Đang sửa', color: 'volcano' },
+  AWAITING_ACCEPTANCE: { label: 'Chờ nghiệm thu', color: 'gold' },
+  REPAIR_POSTPONED: { label: 'Tạm hoãn sửa', color: 'purple' }, // UC10 (Q5)
   DONE: { label: 'Hoàn thành', color: 'success' },
+  CLOSED: { label: 'Đã đóng', color: 'default' }, // UC10: thiết bị ngừng sử dụng
 };
 
-export const WORK_ORDER_OPEN_STATUSES = ['PENDING', 'IN_PROGRESS'];
+// UC10: quyết định với báo cáo hư hỏng
+export const REPAIR_DECISIONS = {
+  APPROVE: { label: 'Duyệt sửa', color: 'green' },
+  POSTPONE: { label: 'Tạm hoãn', color: 'purple' },
+  RETIRE: { label: 'Ngừng sử dụng thiết bị', color: 'red' },
+};
+
+export const REPAIR_COST_SOURCES = {
+  OPERATING: { label: 'Chi phí vận hành', color: 'blue' },
+  FUND: { label: 'Quỹ bảo trì', color: 'purple' },
+};
+
+export const WORK_ORDER_OPEN_STATUSES = ['PENDING', 'IN_PROGRESS', 'AWAITING_REPAIR_APPROVAL', 'UNDER_REPAIR', 'AWAITING_ACCEPTANCE', 'REPAIR_POSTPONED'];
 
 export const WORK_ORDER_TYPES = {
   SCHEDULED: { label: 'Bảo trì định kỳ', color: 'geekblue' },
@@ -295,6 +319,12 @@ export const WORK_ORDER_TYPES = {
 
 // ===== Module D =====
 // PENDING, REJECTED: dữ liệu luồng duyệt cũ (không còn tạo mới — BR-O12). `tone` dùng cho StatusBadge ở giao diện cư dân
+// Cách trả phí tiện ích có phí (cư dân chọn khi đặt)
+export const BOOKING_PAYMENT_METHODS = {
+  ONLINE: { label: 'Thanh toán online', color: 'blue' },
+  INVOICE: { label: 'Cộng vào phí tháng', color: 'purple' },
+};
+
 export const BOOKING_STATUS = {
   PENDING_PAYMENT: { label: 'Chờ thanh toán', color: 'gold', tone: 'warn' },
   APPROVED: { label: 'Đã xác nhận', color: 'blue', tone: 'ok' },
@@ -334,6 +364,12 @@ export const RELATION_TYPES = {
   FAMILY_MEMBER: { label: 'Thành viên', color: 'default' },
 };
 
+// UC08: kết quả kiểm tra định kỳ
+export const WORK_ORDER_RESULTS = {
+  PASSED: { label: 'Đạt', color: 'success' },
+  FAULTY: { label: 'Có sự cố', color: 'error' },
+};
+
 // UC07: đơn vị chu kỳ bảo trì
 export const CYCLE_UNITS = {
   DAY: { label: 'Ngày', color: 'default' },
@@ -348,38 +384,13 @@ export const ASSET_CATEGORIES = {
   OTHER: { label: 'Khác', color: 'default' },
 };
 
-// ===== Gate Pass, thẻ gửi xe, biến động nhân khẩu (Người 2) =====
-export const GATE_PASS_DIRECTIONS = {
-  IN: { label: 'Chuyển đồ vào (IN)', color: 'blue' },
-  OUT: { label: 'Chuyển đồ ra (OUT)', color: 'volcano' },
-};
-
-export const GATE_PASS_STATUS = {
-  AWAITING_OWNER: { label: 'Chờ chủ hộ xác nhận', color: 'gold' },
-  PENDING: { label: 'Chờ BQL duyệt', color: 'processing' },
-  APPROVED: { label: 'Đã duyệt', color: 'success' },
-  USED: { label: 'Đã qua cổng', color: 'cyan' },
-  REJECTED: { label: 'Từ chối', color: 'error' },
-  EXPIRED: { label: 'Hết hạn', color: 'default' },
-  CANCELLED: { label: 'Đã hủy', color: 'default' },
-};
-
-export const PLATE_LOOKUP_RESULTS = {
-  REGISTERED_VEHICLE: { label: 'Xe đã đăng ký', color: 'success' },
-  MATCHES_GATE_PASS: { label: 'Khớp Gate Pass hôm nay', color: 'processing' },
-  UNKNOWN: { label: 'Không có trong hệ thống', color: 'error' },
-};
-
+// ===== Thẻ cư dân và biến động nhân khẩu (Người 2) =====
 export const PARKING_CARD_STATUS = {
+  PENDING_HANDOVER: { label: 'Chờ bàn giao', color: 'processing' },
   ACTIVE: { label: 'Đang hoạt động', color: 'success' },
   DISABLED_TO_COLLECT: { label: 'Cần thu hồi', color: 'warning' },
   RETURNED: { label: 'Đã thu hồi', color: 'default' },
   LOST: { label: 'Mất thẻ', color: 'error' },
-};
-
-export const OCCUPANT_CHANGE_TYPES = {
-  MOVE_IN: { label: 'Vào ở', color: 'green' },
-  MOVE_OUT: { label: 'Chuyển đi', color: 'volcano' },
 };
 
 // ===== Hệ thống =====
@@ -395,11 +406,11 @@ export const CRON_JOBS = {
   BOOKING_COMPLETE: { label: 'Hoàn tất / không đến booking tiện ích', color: 'cyan' },
   WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
   EQUIPMENT_WARNING: { label: 'Cảnh báo bảo trì quá hạn, sắp hết bảo hành', color: 'orange' },
+  REPAIR_REVIEW: { label: 'Nhắc xem lại sửa chữa tạm hoãn', color: 'purple' },
   TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },
   TICKET_AUTO_CLOSE: { label: 'Tự đóng phản ánh chờ nghiệm thu', color: 'default' },
   CONTRACT_EXPIRE: { label: 'Quét hợp đồng thuê hết hạn', color: 'purple' },
   FUND_LOW_BALANCE: { label: 'Cảnh báo số dư quỹ thấp', color: 'gold' },
-  GATE_PASS_EXPIRE: { label: 'Hết hạn Gate Pass', color: 'default' },
   CONTRACT_EXPIRY_REMIND: { label: 'Nhắc hợp đồng thuê sắp hết hạn', color: 'purple' },
   TICKET_SLA_ALERT: { label: 'Cảnh báo SLA sự cố / phản ánh', color: 'red' },
   BOOKING_HOLD_EXPIRE: { label: 'Hủy giữ chỗ quá hạn thanh toán', color: 'default' },

@@ -1,11 +1,22 @@
 // Hiển thị giá trị cũ / mới của nhật ký hoạt động (UC06 bước 4). Thuần JS để test bằng node:test.
 import {
-  APARTMENT_OCCUPANCY, APARTMENT_STATUS, APARTMENT_TYPES, ASSET_CATEGORIES, BOARD_TITLES, CYCLE_UNITS, BOOKING_STATUS, CONTRACT_STATUS, CONTRACT_TYPES, FUND_PROPOSAL_STATUS, GATE_PASS_STATUS,
+  APARTMENT_OCCUPANCY, APARTMENT_STATUS, APARTMENT_TYPES, ASSET_CATEGORIES, BOARD_TITLES, CYCLE_UNITS, BOOKING_STATUS, CONTRACT_STATUS, CONTRACT_TYPES, FUND_PROPOSAL_STATUS,
   INVOICE_STATUS, PARKING_CARD_STATUS, PRIORITIES, QUOTE_STATUS, ROLE_TITLES, ROLES, TICKET_STATUS, TICKET_TYPES,
   VEHICLE_STATUS, WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
 
 // Trạng thái phụ thuộc loại đối tượng: cùng mã 'ACTIVE' nhưng hợp đồng và thẻ xe có nhãn khác nhau
+// Nhật ký cũ vẫn có trạng thái của giấy chuyển đồ.
+const GATE_PASS_STATUS = {
+  AWAITING_OWNER: { label: 'Chờ chủ hộ xác nhận', color: 'gold' },
+  PENDING: { label: 'Chờ BQL duyệt', color: 'processing' },
+  APPROVED: { label: 'Đã duyệt', color: 'success' },
+  USED: { label: 'Đã qua cổng', color: 'cyan' },
+  REJECTED: { label: 'Từ chối', color: 'error' },
+  EXPIRED: { label: 'Hết hạn', color: 'default' },
+  CANCELLED: { label: 'Đã hủy', color: 'default' },
+};
+
 const STATUS_BY_TARGET = {
   tickets: TICKET_STATUS, invoices: INVOICE_STATUS, contracts: CONTRACT_STATUS, vehicles: VEHICLE_STATUS,
   gate_passes: GATE_PASS_STATUS, parking_cards: PARKING_CARD_STATUS, work_orders: WORK_ORDER_STATUS,
@@ -59,6 +70,10 @@ export const FIELD_LABELS = {
   cycleValue: 'Chu kỳ', cycleUnit: 'Đơn vị chu kỳ', checklist: 'Mẫu checklist', category: 'Loại', location: 'Vị trí',
   manufacturer: 'Hãng sản xuất', installDate: 'Ngày lắp đặt', warrantyEnd: 'Hết bảo hành', vendorName: 'Nhà cung cấp',
   vendorPhone: 'Liên hệ nhà cung cấp', lastMaintenanceDate: 'Bảo trì gần nhất', nextMaintenanceDate: 'Bảo trì tiếp theo', buildingId: 'Tòa nhà',
+  // Phiếu bảo trì, sửa chữa (UC08–UC10)
+  result: 'Kết quả', failing: 'Số mục không đạt', estimatedCost: 'Chi phí dự kiến', costSource: 'Nguồn chi phí',
+  reviewDate: 'Ngày xem lại', knownFaultOrderId: 'Phiếu sửa chữa liên quan', closedOthers: 'Số phiếu kiểm tra đã đóng',
+  financial: 'Liên quan tài chính', workOrderId: 'Phiếu bảo trì',
 };
 
 // Giá trị dạng mã của một số trường → chữ
@@ -68,6 +83,9 @@ const VALUE_LABELS = {
   op: OPERATIONS,
   generatedBy: { MANUAL: 'Kế toán lập tay', CRON: 'Hệ thống tự lập' },
   method: { CASH: 'Tiền mặt', BANK_TRANSFER: 'Chuyển khoản', PAYOS: 'PayOS' },
+  result: { PASSED: 'Đạt', FAULTY: 'Có sự cố' },
+  costSource: { OPERATING: 'Chi phí vận hành', FUND: 'Quỹ bảo trì' },
+  decision: { APPROVED: 'Duyệt', REJECTED: 'Từ chối', CANCELLED: 'Rút đề xuất' },
 };
 const PERIOD = /^(\d{4})-(\d{2})$/; // kỳ phí '2026-11' → '11/2026'
 
