@@ -282,7 +282,7 @@ export default function VehicleRequestsPage() {
         isReceptionist ? (
           <Popconfirm
             title="Xác nhận hủy vé gửi xe"
-            description="Sau khi xác nhận hủy, phương tiện sẽ chuyển sang trạng thái Đã hủy."
+            description="Xe phải ra khỏi bãi trước khi xác nhận. Sau khi hủy, thẻ mất quyền gửi của phương tiện này."
             okText="Xác nhận hủy"
             cancelText="Đóng"
             okButtonProps={{ danger: true, loading: actionLoadingId === r._id }}

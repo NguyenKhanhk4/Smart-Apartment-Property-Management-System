@@ -10,6 +10,7 @@ import {
   VEHICLE_TYPES,
 } from '../../constants/enums.js';
 import { Resident, Vehicle } from '../../models/index.js';
+import { PARKING_KINDS, ParkingSession } from '../../models/ParkingSession.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
 import { getActiveApartmentIds, resolveResidentApartment } from '../../services/residency.service.js';
@@ -178,12 +179,15 @@ export async function requestCancel(vehicleId, viewer) {
   if (!aptIds.includes(String(vehicle.apartmentId))) {
     throw ApiError.forbidden('Bạn không thuộc căn hộ của phương tiện này');
   }
+  if (String(vehicle.registeredBy) !== String(viewer.id)) {
+    throw ApiError.forbidden('Chỉ người đăng ký phương tiện mới được yêu cầu hủy');
+  }
 
   const conflict = (message = 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại') =>
     new ApiError('STATUS_CONFLICT', message);
   const now = new Date();
 
-  // Ghi có điều kiện theo trạng thái vừa đọc: lễ tân duyệt / hủy song song thì request này nhận 409, không ghi đè
+  // Nếu yêu cầu được duyệt trong lúc cư dân rút đơn thì trả xung đột trạng thái.
   if (vehicle.status === VEHICLE_STATUS.PENDING) {
     const cancelled = await Vehicle.findOneAndUpdate(
       { _id: vehicle._id, status: VEHICLE_STATUS.PENDING },
@@ -415,16 +419,33 @@ export async function confirmCancel(vehicleId, staffUser, ip) {
       _id: vehicle._id,
       status: VEHICLE_STATUS.APPROVED,
       cancelRequestedAt: { $ne: null },
-    }).session(session);
+    }).select('+parkingEntryVersion').session(session).lean();
 
     if (!current) {
       throw new ApiError('STATUS_CONFLICT', 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại');
     }
 
-    current.status = VEHICLE_STATUS.CANCELLED;
-    current.cancelledAt = new Date();
-    current.reviewedBy = staffId;
-    await current.save({ session });
+    const inside = await ParkingSession.exists({
+      kind: PARKING_KINDS.RESIDENT, vehicleId: current._id, exitedAt: null,
+    }).session(session);
+    if (inside) {
+      throw new ApiError('STATUS_CONFLICT', 'Xe còn trong bãi. Bảo vệ cần ghi nhận xe ra trước khi xác nhận hủy.');
+    }
+
+    // Mỗi lượt vào mới đổi phiên bản để thao tác hủy không ghi đè khi hai yêu cầu chạy cùng lúc.
+    const cancelled = await Vehicle.updateOne(
+      {
+        _id: current._id,
+        status: VEHICLE_STATUS.APPROVED,
+        cancelRequestedAt: current.cancelRequestedAt,
+        parkingEntryVersion: current.parkingEntryVersion ?? { $exists: false },
+      },
+      { $set: { status: VEHICLE_STATUS.CANCELLED, cancelledAt: new Date(), reviewedBy: staffId } },
+      { session },
+    );
+    if (!cancelled.modifiedCount) {
+      throw new ApiError('STATUS_CONFLICT', 'Trạng thái xe hoặc lượt gửi đã thay đổi. Vui lòng kiểm tra lại.');
+    }
 
     const disabledCount = await disableActiveCardsByVehicle(current._id, session, staffUser);
 
@@ -454,7 +475,7 @@ export async function confirmCancel(vehicleId, staffUser, ip) {
     await notify(updated.registeredBy._id || updated.registeredBy, {
       type: NOTIFICATION_TYPES.SYSTEM,
       title: 'Đã xác nhận hủy vé gửi xe',
-      content: `Phương tiện ${updated.plateNumber || updated.type} đã được hủy vé gửi xe.` +
+      content: `Phương tiện ${updated.plateNumber || updated.type} đã ngừng quyền gửi xe.` +
         (disabledCount ? ' Vui lòng hoàn trả thẻ gửi xe cũ tại quầy lễ tân.' : ''),
       link: '/r/my-vehicles',
       refId: updated._id,

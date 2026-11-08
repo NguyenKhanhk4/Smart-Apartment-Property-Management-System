@@ -113,8 +113,8 @@ export default function MyVehiclesPage() {
   const handleCancelRequest = async (vehicleId) => {
     setCancellingId(vehicleId);
     try {
-      await vehicleApi.requestCancel(vehicleId);
-      message.success('Đã gửi yêu cầu xử lý hủy vé gửi xe thành công');
+      const { data } = await vehicleApi.requestCancel(vehicleId);
+      message.success(data.status === 'CANCELLED' ? 'Đã rút yêu cầu đăng ký xe' : 'Đã gửi yêu cầu hủy vé gửi xe');
       reloadVehicles();
     } catch (err) {
       message.error(err?.message || 'Thao tác không thành công');
@@ -277,6 +277,7 @@ export default function MyVehiclesPage() {
             const isRejected = v.status === 'REJECTED';
             const isCancelled = v.status === 'CANCELLED';
             const hasCancelRequest = Boolean(v.cancelRequestedAt);
+            const isRegistrant = v.registeredBy?._id != null && v.registeredBy._id === (user?._id ?? user?.id);
 
             return (
               <Col xs={24} md={12} key={v._id}>
@@ -334,7 +335,7 @@ export default function MyVehiclesPage() {
 
                   {/* Nút hành động */}
                   <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-end">
-                    {isPending && (
+                    {isRegistrant && isPending && (
                       <Popconfirm
                         title="Rút yêu cầu đăng ký xe"
                         description="Bạn có chắc muốn hủy yêu cầu đăng ký phương tiện này?"
@@ -349,16 +350,16 @@ export default function MyVehiclesPage() {
                       </Popconfirm>
                     )}
 
-                    {isApproved && !hasCancelRequest && (
+                    {isRegistrant && isApproved && !hasCancelRequest && (
                       <Popconfirm
                         title="Yêu cầu hủy vé gửi xe"
                         description={
                           <div className="max-w-xs">
                             <p className="m-0 mb-1">
-                              Sau khi hủy, xe vẫn được gửi và <b>tính phí đến hết tháng hiện tại</b>.
+                              Nếu xe còn trong bãi, bảo vệ cần ghi nhận xe ra trước. Quyền gửi xe kết thúc khi lễ tân xác nhận hủy.
                             </p>
                             <p className="m-0 text-xs text-gray-400">
-                              Lễ tân sẽ xác nhận yêu cầu hủy vé của bạn.
+                              Phí gửi xe được tính riêng theo kỳ hóa đơn.
                             </p>
                           </div>
                         }

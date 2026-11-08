@@ -6,16 +6,39 @@ import { Vehicle } from '../../models/Vehicle.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { paginate } from '../../utils/pagination.js';
 import { DAY_MS, vnDayStart } from '../../utils/time.js';
+import { withTransaction } from '../../utils/transaction.js';
 import { normalizePlate } from '../vehicles/vehicles.service.js';
 import { calculateGuestFee } from './parkingFees.js';
 
-async function openSession(data) {
+async function openSession(data, session = null) {
   try {
-    return await ParkingSession.create(data);
+    const [opened] = await ParkingSession.create([data], { session });
+    return opened;
   } catch (error) {
     if (error.code !== 11000) throw error;
     throw new ApiError('STATUS_CONFLICT', 'Xe hoặc mã thẻ đã có lượt gửi đang mở');
   }
+}
+
+function openResidentSession(data) {
+  return withTransaction(async (session) => {
+    const opened = await openSession(data, session);
+    try {
+      const result = await Vehicle.updateOne(
+        { _id: data.vehicleId, status: VEHICLE_STATUS.APPROVED },
+        { $inc: { parkingEntryVersion: 1 } },
+        { session, timestamps: false },
+      );
+      if (!result.modifiedCount) {
+        throw new ApiError('STATUS_CONFLICT', 'Xe không còn quyền gửi. Vui lòng kiểm tra lại.');
+      }
+    } catch (error) {
+      // MongoDB standalone không rollback tự động khi quyền gửi thay đổi trong lúc ghi lượt vào.
+      if (!session) await ParkingSession.deleteOne({ _id: opened._id });
+      throw error;
+    }
+    return opened;
+  });
 }
 
 async function closeSession(id, fields) {
@@ -71,7 +94,7 @@ export async function recordResidentPassage(body, actor, now = new Date()) {
   const plateNumber = vehicle.plateNumber ?? null;
 
   if (body.direction === 'IN') {
-    return openSession({
+    return openResidentSession({
       kind: PARKING_KINDS.RESIDENT,
       vehicleId: vehicle._id,
       vehicleType: vehicle.type,

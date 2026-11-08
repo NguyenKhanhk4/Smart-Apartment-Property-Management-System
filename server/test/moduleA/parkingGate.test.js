@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
 import { ParkingCard, ParkingSession, Resident, Vehicle } from '../../src/models/index.js';
 import { calculateGuestFee } from '../../src/modules/parkingGate/parkingFees.js';
-import { admitGuest, completeGuestExit, quoteGuestExit } from '../../src/modules/parkingGate/parkingGate.service.js';
+import { admitGuest, completeGuestExit, quoteGuestExit, recordResidentPassage } from '../../src/modules/parkingGate/parkingGate.service.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
-import { asUser, createHousehold, createSecurity } from '../helpers/fixtures.js';
+import { asUser, createHousehold, createReceptionist, createSecurity } from '../helpers/fixtures.js';
 import { revokeDepartedResidentServices } from '../../src/modules/residents/residentExit.service.js';
+import { confirmCancel } from '../../src/modules/vehicles/vehicles.service.js';
 import { createParkingCard, createVehicle } from '../helpers/fixtures.moduleA.js';
 import { startApp, USERS } from '../helpers/http.js';
 
@@ -142,6 +143,61 @@ test('thẻ cư dân cấp độc lập, dùng cùng mã cho xe đã duyệt và
   await revokeDepartedResidentServices({ apartmentId: apartment._id, userIds: [user._id], endedAt: new Date() });
   assert.equal((await ParkingCard.findById(replacement.body.data._id)).status, 'DISABLED_TO_COLLECT');
   assert.equal((await swipe('CD-02')).status, 400);
+});
+
+test('hủy vé sau khi xe ra bãi chỉ gỡ quyền gửi của phương tiện đó trên thẻ cư dân', async (t) => {
+  const app = await startApp();
+  t.after(app.close);
+  const { user, apartment } = await createHousehold();
+  const guard = asUser(await createSecurity());
+  const resident = await Resident.findOne({ userId: user._id, apartmentId: apartment._id });
+  const target = await createVehicle({ apartment, registeredBy: user, status: 'APPROVED' });
+  const retained = await createVehicle({ apartment, registeredBy: user, status: 'APPROVED' });
+  const card = await ParkingCard.create({
+    apartmentId: apartment._id, residentId: resident._id, cardNumber: 'CD-CANCEL', handedOverAt: new Date(),
+  });
+  await Resident.updateOne({ _id: resident._id }, { parkingCardId: card._id });
+
+  const swipe = (vehicle, direction) => app.request('POST', '/parking-gate/resident', {
+    user: guard, body: { cardNumber: card.cardNumber, plateNumber: vehicle.plateNumber, direction },
+  });
+  const confirm = (actor = USERS.receptionist) => app.request('PATCH', '/vehicles/' + target.id + '/confirm-cancel', { user: actor });
+
+  assert.equal((await swipe(target, 'IN')).status, 200);
+  const requested = await app.request('PATCH', '/vehicles/' + target.id + '/cancel-request', { user: asUser(user) });
+  assert.equal(requested.status, 200);
+  assert.equal((await confirm(USERS.manager)).status, 403);
+  const blocked = await confirm();
+  assert.equal(blocked.status, 409);
+  assert.match(blocked.body.message, /Xe còn trong bãi/);
+  assert.equal((await Vehicle.findById(target._id)).status, 'APPROVED');
+  assert.equal((await swipe(target, 'OUT')).status, 200);
+  assert.equal((await confirm()).status, 200);
+  assert.equal((await swipe(target, 'IN')).status, 400);
+  assert.equal((await swipe(retained, 'IN')).status, 200);
+
+  const list = await app.request('GET', '/parking-cards?status=ACTIVE', { user: USERS.manager });
+  assert.equal(list.body.data[0].elevatorAllowed, true);
+  assert.equal(list.body.data[0].parkingVehicleCount, 1);
+});
+
+test('lượt vào và xác nhận hủy đồng thời không thể cùng thành công', async () => {
+  const { user, apartment } = await createHousehold();
+  const vehicle = await createVehicle({
+    apartment, registeredBy: user, status: 'APPROVED', cancelRequestedAt: new Date(),
+  });
+  const card = await createParkingCard({ vehicle });
+  const guard = asUser(await createSecurity());
+  const receptionist = asUser(await createReceptionist());
+  const [entry, cancel] = await Promise.allSettled([
+    recordResidentPassage({ cardNumber: card.cardNumber, plateNumber: vehicle.plateNumber, direction: 'IN' }, guard),
+    confirmCancel(vehicle.id, receptionist),
+  ]);
+  assert.equal([entry, cancel].filter((result) => result.status === 'fulfilled').length, 1);
+  const current = await Vehicle.findById(vehicle._id);
+  const open = await ParkingSession.countDocuments({ vehicleId: vehicle._id, exitedAt: null });
+  assert.equal(open, entry.status === 'fulfilled' ? 1 : 0);
+  assert.equal(current.status, cancel.status === 'fulfilled' ? 'CANCELLED' : 'APPROVED');
 });
 
 test('khách gửi xe không thể trùng thẻ hoặc thu tiền hai lần, thẻ được dùng lại sau khi đóng lượt', async () => {

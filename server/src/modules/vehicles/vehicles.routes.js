@@ -234,6 +234,8 @@ router.patch(
  *     responses:
  *       200:
  *         description: Xác nhận hủy thành công
+ *       409:
+ *         description: Xe còn trong bãi hoặc yêu cầu đã thay đổi
  */
 router.patch(
   '/:id/confirm-cancel',
