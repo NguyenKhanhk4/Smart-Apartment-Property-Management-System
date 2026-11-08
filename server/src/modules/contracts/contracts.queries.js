@@ -4,7 +4,7 @@ import { startOfVnDay } from '../../utils/time.js';
 
 /**
  * BR-F7: Xác định người chịu trách nhiệm thanh toán của căn hộ tại thời điểm `at`.
- * - Căn không có hợp đồng SALE ACTIVE tại thời điểm `at` → trả về null.
+ * - Tra hồ sơ sở hữu đang có hiệu lực hoặc hồ sơ cũ trước thời điểm đổi chủ.
  * - Lượt cư trú UC17 xác định người nộp phí theo thời gian ở và lựa chọn của chủ sở hữu.
  * - Với hồ sơ LEASE cũ, giữ người nộp phí đến hết ngày kết thúc cư trú thực tế.
  * - Còn lại → trả về chủ sở hữu (OWNER).
@@ -20,9 +20,12 @@ export async function getPayer(apartmentId, at = new Date()) {
   const saleContract = await Contract.findOne({
     apartmentId,
     type: CONTRACT_TYPES.SALE,
-    status: CONTRACT_STATUS.ACTIVE,
     startDate: { $lte: checkTime },
-  }).lean();
+    $or: [
+      { status: CONTRACT_STATUS.ACTIVE },
+      { transferredToContractId: { $type: 'objectId' }, terminatedAt: { $gt: checkTime } },
+    ],
+  }).sort({ startDate: -1 }).lean();
 
   if (!saleContract) {
     return null;

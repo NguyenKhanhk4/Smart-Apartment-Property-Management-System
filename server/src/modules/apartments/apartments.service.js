@@ -287,7 +287,10 @@ export function confirmMoveIn(id, receptionist, ip) {
     const contracts = await Contract.find({
       apartmentId: id,
       status: CONTRACT_STATUS.ACTIVE,
-      startDate: { $lte: today },
+      $or: [
+        { type: CONTRACT_TYPES.SALE, startDate: { $lte: new Date() } },
+        { type: CONTRACT_TYPES.LEASE, startDate: { $lte: today } },
+      ],
     }).select('type ownerAccountPending').session(session).lean();
     const owner = contracts.find((contract) => contract.type === CONTRACT_TYPES.SALE);
     if (!owner) {

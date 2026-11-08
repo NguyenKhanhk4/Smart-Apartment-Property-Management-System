@@ -19,7 +19,7 @@ export function occupyingHeadRelation(occupancy) {
   return null;
 }
 
-export async function findLegacyDeclarations(residents) {
+export async function findLegacyDeclarations(residents, session = null) {
   const ids = residents
     .filter((resident) => resident.relationType === FAMILY_MEMBER && !resident.declaredByResidenceId)
     .map((resident) => resident._id);
@@ -29,18 +29,18 @@ export async function findLegacyDeclarations(residents) {
     action: AUDIT_ACTIONS.RESIDENT_ASSIGNED,
     targetType: AUDIT_TARGETS.RESIDENT,
     targetId: { $in: ids },
-  }).select('targetId performedBy createdAt').sort({ createdAt: 1, _id: 1 }).lean();
+  }).select('targetId performedBy createdAt').sort({ createdAt: 1, _id: 1 }).session(session).lean();
   return new Map(logs.map((entry) => [String(entry.targetId), entry]));
 }
 
-function isDeclaredBy(member, head, legacyDeclarations) {
+export function isDeclaredBy(member, head, legacyDeclarations) {
   if (member.declaredByResidenceId) return String(member.declaredByResidenceId) === String(head._id);
 
   // Các khai báo tự phục vụ trước khi có liên kết lượt ở được nhận diện qua người ghi nhật ký.
   const declaration = legacyDeclarations.get(String(member._id));
   const residenceStart = head.createdAt ?? head.moveInDate;
   return Boolean(declaration?.performedBy && residenceStart
-    && String(declaration.performedBy) === String(head.userId._id)
+    && String(declaration.performedBy) === String(head.userId?._id ?? head.userId)
     && declaration.createdAt >= residenceStart);
 }
 

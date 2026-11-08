@@ -194,10 +194,10 @@ export default function ContractsPage() {
         ...(check.isExisting
           ? { userId: check.userId }
           : {
-              fullName: values.ownerFullName,
-              email: values.ownerEmail,
-              dateOfBirth: dob ? dob.format('YYYY-MM-DD') : null,
-            }),
+            fullName: values.ownerFullName,
+            email: values.ownerEmail,
+            dateOfBirth: dob ? dob.format('YYYY-MM-DD') : null,
+          }),
       };
       formData.append('owner', JSON.stringify(partyData));
 
@@ -340,7 +340,7 @@ export default function ContractsPage() {
               okText="Chấm dứt"
               cancelText="Hủy"
               okButtonProps={{ danger: true }}
-              onConfirm={() => terminateContract(record._id).catch(() => {})}
+              onConfirm={() => terminateContract(record._id).catch(() => { })}
             >
               <Button size="small" type="text" danger icon={<StopOutlined />}>
                 Chấm dứt

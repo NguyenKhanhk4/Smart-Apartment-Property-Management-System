@@ -81,6 +81,44 @@ router.get('/', authenticate, authorize(...VIEWERS), validate({ query: listQuery
   paginated(res, items, pagination);
 });
 
+/** UC20 — Một hồ sơ hiện tại làm mốc cho việc ghi nhận công nợ và đổi chủ. */
+const transferDebtPath = '/apartments/:id/ownership-transfer/debt-review';
+const transferDebtBody = Joi.object({ contractId: objectId().required() });
+
+router.get(transferDebtPath, authenticate, authorize('ACCOUNTANT', 'MANAGER'),
+  validate({ params: idParams }), async (req, res) => {
+    ok(res, await service.getTransferDebtReview(req.validated.params.id));
+  });
+
+router.post(transferDebtPath, authenticate, authorize('MANAGER'),
+  validate({ params: idParams, body: transferDebtBody }), async (req, res) => {
+    const { params, body } = req.validated;
+    ok(res, await service.requestTransferDebtReview(params.id, body.contractId));
+  });
+
+router.patch(transferDebtPath, authenticate, authorize('ACCOUNTANT'),
+  validate({ params: idParams, body: transferDebtBody }), async (req, res) => {
+    const { params, body } = req.validated;
+    ok(res, await service.acknowledgeTransferDebt(params.id, body.contractId, req.user));
+  });
+
+router.post('/apartments/:id/ownership-transfer', authenticate, authorize('MANAGER'),
+  validate({
+    params: idParams,
+    body: Joi.object({
+      contractId: objectId().required(),
+      owner: personSchema.keys({ phone: phoneVn().required() }).required(),
+      ownershipDocumentType: Joi.string().valid(
+        OWNERSHIP_DOCUMENT_TYPES.TRANSFER_DOCUMENT, OWNERSHIP_DOCUMENT_TYPES.OWNERSHIP_CERTIFICATE,
+      ).required(),
+      ownershipDocumentNumber: Joi.string().trim().max(100).required(),
+      identityVerified: Joi.boolean().valid(true).required(),
+    }),
+  }), async (req, res) => {
+    const { params, body } = req.validated;
+    ok(res, await service.transferApartmentOwner(params.id, body, req.user, req.ip));
+  });
+
 /**
  * @openapi
  * /contracts/{id}:

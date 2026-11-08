@@ -13,6 +13,10 @@ const contractSchema = new Schema(
     ownerAccountPending: Boolean,
     ownerAccountIssuedAt: Date,
     ownerAccountIssuedBy: { type: ObjectId, ref: 'User' },
+    transferredToContractId: { type: ObjectId, ref: 'Contract' },
+    transferDebtRequestedAt: Date,
+    transferDebtAcknowledgedAt: Date,
+    transferDebtAcknowledgedBy: { type: ObjectId, ref: 'User' },
     tenantId: { type: ObjectId, ref: 'User', default: null },
     tenantPaysFees: { type: Boolean, default: false }, // BR-F7
     startDate: { type: Date, required: true },

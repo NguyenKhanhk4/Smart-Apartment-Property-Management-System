@@ -11,7 +11,7 @@ import {
 } from '../../constants/enums.js';
 import { Apartment, Contract, Resident, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
-import { notify } from '../../services/notification.service.js';
+import { notify, notifyRoles } from '../../services/notification.service.js';
 import { uploadToCloudinary } from '../../services/upload.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { paginate } from '../../utils/pagination.js';
@@ -20,6 +20,8 @@ import { withTransaction } from '../../utils/transaction.js';
 import { normalizePhone } from '../../utils/validators.js';
 import { recordOccupancy } from '../apartments/apartmentOccupancy.js';
 import { ensureCodes } from '../memberCodes/memberCodes.service.js';
+import { checkApartmentDebt } from '../debts/debts.check.js';
+import { findLegacyDeclarations, isDeclaredBy } from '../residents/residentOccupancy.js';
 import { revokeDepartedResidentServices } from '../residents/residentExit.service.js';
 import { decryptIdNumber, encryptIdNumber } from '../residents/idCrypto.js';
 import { findOrCreateResidentUser, linkResident, sendActivationInvite } from '../residents/residentAccounts.js';
@@ -270,6 +272,168 @@ export async function issueOwnerAccount(apartmentId, { contractId, phone, email 
     console.error('[UC22] Đồng bộ quyền căn hộ', apartmentId, err.message);
   }
   return { activationInviteSent };
+}
+
+const TRANSFER_DEBT_WAIT = 2 * DAY_MS;
+
+function currentSaleFilter(apartmentId) {
+  return { apartmentId, type: CONTRACT_TYPES.SALE, status: CONTRACT_STATUS.ACTIVE };
+}
+
+export async function getTransferDebtReview(apartmentId) {
+  return Contract.findOne({
+    ...currentSaleFilter(apartmentId),
+    transferDebtRequestedAt: { $type: 'date' },
+  }).select('transferDebtRequestedAt transferDebtAcknowledgedAt').lean();
+}
+
+export async function requestTransferDebtReview(apartmentId, contractId) {
+  if ((await checkApartmentDebt(apartmentId)).amount <= 0) {
+    throw new ApiError('STATUS_CONFLICT', 'Căn hộ hiện không có công nợ cần ghi nhận');
+  }
+  const contract = await Contract.findOneAndUpdate({
+    ...currentSaleFilter(apartmentId), _id: contractId, transferDebtRequestedAt: null,
+  }, {
+    $set: { transferDebtRequestedAt: new Date() },
+  }, { returnDocument: 'after' });
+  if (contract) {
+    await notifyRoles(['ACCOUNTANT'], {
+      type: NOTIFICATION_TYPES.SYSTEM,
+      title: 'Cần ghi nhận công nợ khi đổi chủ căn hộ',
+      content: 'Ban quản lý đã gửi yêu cầu ghi nhận công nợ để cập nhật chủ sở hữu.',
+      refId: apartmentId,
+      link: `/app/debts/apartments/${apartmentId}`,
+    }).catch((error) => console.error('[UC20] notify debt review', error.message));
+  }
+  const current = contract ?? await Contract.findOne({ ...currentSaleFilter(apartmentId), _id: contractId });
+  if (!current) throw new ApiError('STATUS_CONFLICT', 'Hồ sơ chủ sở hữu đã thay đổi. Vui lòng làm mới');
+  return { requestedAt: current.transferDebtRequestedAt };
+}
+
+export async function acknowledgeTransferDebt(apartmentId, contractId, actor) {
+  const contract = await Contract.findOneAndUpdate({
+    ...currentSaleFilter(apartmentId), _id: contractId,
+    transferDebtRequestedAt: { $type: 'date' }, transferDebtAcknowledgedAt: null,
+  }, {
+    $set: { transferDebtAcknowledgedAt: new Date(), transferDebtAcknowledgedBy: actor.id },
+  }, { returnDocument: 'after' });
+  if (!contract) throw new ApiError('STATUS_CONFLICT', 'Yêu cầu công nợ đã được xử lý hoặc hồ sơ đã thay đổi');
+  return { acknowledgedAt: contract.transferDebtAcknowledgedAt };
+}
+
+/** UC20 — Chuyển quyền quản lý căn tại thời điểm Ban quản lý xác nhận. */
+export async function transferApartmentOwner(apartmentId, data, actor, ip) {
+  const { contractId, owner, ownershipDocumentType, ownershipDocumentNumber } = data;
+  const { newOwner, previousOwnerId, keptTenancy, debtReviewOverdue } = await withTransaction(async (session) => {
+    if (!session) throw new ApiError('STATUS_CONFLICT', 'Cần kết nối MongoDB có hỗ trợ giao dịch để đổi chủ an toàn');
+    const apartment = await Apartment.findById(apartmentId).session(session);
+    if (!apartment) throw ApiError.notFound('Căn hộ không tồn tại');
+    const now = new Date();
+    const oldContract = await Contract.findOne({
+      ...currentSaleFilter(apartmentId), _id: contractId, startDate: { $lte: now },
+    }).session(session);
+    if (!oldContract) throw new ApiError('STATUS_CONFLICT', 'Hồ sơ chủ sở hữu đã thay đổi hoặc chưa có hiệu lực');
+
+    const debt = await checkApartmentDebt(apartmentId);
+    const bypass = debt.amount > 0 && !oldContract.transferDebtAcknowledgedAt;
+    if (bypass && (!oldContract.transferDebtRequestedAt || now - oldContract.transferDebtRequestedAt < TRANSFER_DEBT_WAIT)) {
+      throw new ApiError('STATUS_CONFLICT', 'Cần kế toán ghi nhận công nợ hoặc chờ đủ 2 ngày từ khi gửi yêu cầu');
+    }
+
+    const { user } = await findOrCreateResidentUser(owner, session);
+    if (!user.isActive || String(user._id) === String(oldContract.ownerId)) {
+      throw ApiError.field('phone', 'Chủ mới phải là tài khoản cư dân đang hoạt động và khác chủ hiện tại');
+    }
+
+    const residents = await Resident.find({ apartmentId, isActive: true }).session(session).lean();
+    const oldResidence = residents.find((resident) => resident.relationType === RELATION_TYPES.OWNER);
+    if (oldResidence && String(oldResidence.userId) !== String(oldContract.ownerId)) {
+      throw new ApiError('STATUS_CONFLICT', 'Hồ sơ sở hữu và hồ sơ cư dân đang lệch. Hãy đối chiếu trước khi đổi chủ');
+    }
+    if (residents.some((resident) => String(resident.userId) === String(user._id))) {
+      throw new ApiError('STATUS_CONFLICT', 'Chủ mới đang có vai trò cư trú tại căn. Hãy đối chiếu hồ sơ trước khi đổi chủ');
+    }
+
+    const legacyLease = await findActiveContract(apartmentId, CONTRACT_TYPES.LEASE, session);
+    const retainedTenancy = Boolean(legacyLease || residents.some((resident) => resident.relationType === RELATION_TYPES.TENANT));
+    const declarations = await findLegacyDeclarations(residents, session);
+    const departing = residents.filter((resident) => resident === oldResidence ||
+      (resident.relationType === RELATION_TYPES.FAMILY_MEMBER && (
+        !retainedTenancy ||
+        (oldResidence && isDeclaredBy(resident, oldResidence, declarations)) ||
+        (!resident.declaredByResidenceId && !declarations.has(String(resident._id)) &&
+          String(resident.contractId) === String(oldContract._id))
+      )));
+
+    const [newContract] = await Contract.create([{
+      apartmentId, type: CONTRACT_TYPES.SALE, ownerId: user._id, startDate: now,
+      ownershipDocumentType, ownershipDocumentNumber,
+      ownerAccountPending: false, ownerAccountIssuedAt: now, ownerAccountIssuedBy: actor.id, createdBy: actor.id,
+    }], { session });
+    oldContract.status = CONTRACT_STATUS.TERMINATED;
+    oldContract.terminatedAt = now;
+    oldContract.transferredToContractId = newContract._id;
+    await oldContract.save({ session });
+
+    await Resident.updateMany({ _id: { $in: departing.map((resident) => resident._id) } }, {
+      $set: { isActive: false, moveOutDate: now },
+    }, { session });
+    await linkResident({
+      apartmentId, userId: user._id, relationType: RELATION_TYPES.OWNER, contractId: newContract._id,
+      moveInDate: now, idNumber: owner.idNumber,
+    }, session);
+
+    apartment.status = retainedTenancy ? APARTMENT_STATUS.RENTED : APARTMENT_STATUS.OWNED;
+    apartment.occupancyStatus = retainedTenancy ? APARTMENT_OCCUPANCY.RENTED
+      : apartment.handoverDate ? APARTMENT_OCCUPANCY.VACANT : APARTMENT_OCCUPANCY.NOT_HANDED_OVER;
+    apartment.markModified('status');
+    await apartment.save({ session });
+
+    await revokeDepartedResidentServices({
+      apartmentId, userIds: [oldContract.ownerId, ...departing.map((resident) => resident.userId)],
+      endedAt: now, actor, ip, session,
+    });
+    await logAudit({
+      action: AUDIT_ACTIONS.APARTMENT_OWNER_CHANGED,
+      user: actor,
+      targetType: AUDIT_TARGETS.APARTMENT,
+      targetId: apartmentId,
+      metadata: {
+        previousOwnerId: oldContract.ownerId, newOwnerId: user._id, oldContractId: oldContract._id,
+        newContractId: newContract._id, keptTenancy: retainedTenancy, outstanding: debt.amount, debtReviewOverdue: bypass,
+      },
+      ip,
+    }, { session });
+    return { newOwner: user, previousOwnerId: oldContract.ownerId, keptTenancy: retainedTenancy, debtReviewOverdue: bypass };
+  }).catch((error) => {
+    if (error?.code === 11000) throw new ApiError('STATUS_CONFLICT', 'Hồ sơ vừa thay đổi. Vui lòng làm mới');
+    throw error;
+  });
+
+  const activationInviteSent = newOwner.activatedAt ? null : await sendActivationInvite(newOwner);
+  const updates = [
+    ensureCodes(apartmentId),
+    notify([newOwner._id, previousOwnerId], {
+      type: NOTIFICATION_TYPES.SYSTEM,
+      title: 'Đã cập nhật chủ sở hữu căn hộ',
+      content: 'Ban quản lý đã ghi nhận đổi chủ và cập nhật quyền tại căn hộ.',
+      refId: apartmentId,
+      link: '/r/my-apartment',
+    }),
+  ];
+  if (debtReviewOverdue) {
+    updates.push(notifyRoles(['MANAGER'], {
+      type: NOTIFICATION_TYPES.SYSTEM,
+      title: 'Đã đổi chủ sau thời hạn ghi nhận công nợ',
+      content: 'Căn hộ còn nợ và đã quá 2 ngày chờ kế toán ghi nhận. Kiểm tra sổ công nợ để theo dõi tiếp.',
+      refId: apartmentId,
+      link: `/app/debts/apartments/${apartmentId}`,
+    }));
+  }
+  for (const update of await Promise.allSettled(updates)) {
+    if (update.status === 'rejected') console.error('[UC20] đồng bộ sau chuyển nhượng', update.reason);
+  }
+  return { keptTenancy, activationInviteSent };
 }
 
 /**

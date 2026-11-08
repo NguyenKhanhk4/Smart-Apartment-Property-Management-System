@@ -137,7 +137,7 @@ export async function getInvoice(user, id) {
 // ---------------------------------------------------------------------------
 export async function departedTenantDebtApartments(userId) {
   const [departed, active] = await Promise.all([
-    Resident.distinct('apartmentId', { userId, relationType: RELATION_TYPES.TENANT, isActive: false, moveOutDate: { $type: 'date' } }),
+    Resident.distinct('apartmentId', { userId, relationType: { $in: [RELATION_TYPES.OWNER, RELATION_TYPES.TENANT] }, isActive: false, moveOutDate: { $type: 'date' } }),
     Resident.distinct('apartmentId', { userId, isActive: true }),
   ]);
   const activeIds = new Set(active.map(String));

@@ -99,7 +99,7 @@ export function parseEnv(source) {
       user: value.SMTP_USER,
       pass: value.SMTP_PASS,
       from: value.MAIL_FROM || value.SMTP_USER,
-      enabled: Boolean(value.SMTP_USER && value.SMTP_PASS),
+      enabled: !isTest && Boolean(value.SMTP_USER && value.SMTP_PASS),
     },
     payos: (() => {
       const resultUrl = `${value.CLIENT_URL.split(',')[0].trim()}/r/payments/result`;

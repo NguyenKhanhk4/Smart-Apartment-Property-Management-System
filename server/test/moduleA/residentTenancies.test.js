@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
 import nodemailer from 'nodemailer';
 import { env } from '../../src/config/env.js';
-import { Apartment, Contract, Invoice, ParkingCard, Resident, User, Vehicle } from '../../src/models/index.js';
+import { Apartment, AuditLog, Contract, Invoice, ParkingCard, Resident, User, Vehicle } from '../../src/models/index.js';
 import { confirmActivation, login, startActivation } from '../../src/modules/auth/auth.service.js';
 import { getPayer } from '../../src/modules/contracts/contracts.queries.js';
 import { terminateContract } from '../../src/modules/contracts/contracts.service.js';
@@ -152,6 +152,102 @@ test('UC17 liên kết tài khoản, xử lý phí, rời căn và giữ quyền
   assert.equal(payment.checkoutUrl, checkoutUrl);
   await Invoice.updateOne({ _id: invoice._id }, { $set: { paidAmount: invoice.totalAmount, status: 'PAID' } });
   assert.deepEqual((await app.request('GET', debtPath, { user: asUser(tenant) })).body.data, []);
+});
+
+test('UC20 giữ lượt thuê, người ở cùng và thẻ của khách khi chuyển quyền quản lý sang chủ mới', async (t) => {
+  const app = await startApp();
+  t.after(app.close);
+  const { owner, apartment, sale, path } = await ownedApartment();
+  const newOwner = await createResidentUser({ activatedAt: new Date() });
+  const tenant = await createResidentUser();
+  const another = await createApartment();
+  await linkResident(owner, another, { relationType: 'OWNER' });
+
+  const start = await app.request('POST', path, {
+    user: asUser(owner), body: { phone: tenant.phone, userId: tenant.id, tenantPaysFees: false },
+  });
+  assert.equal(start.status, 201, JSON.stringify(start.body));
+  const tenantResidence = start.body.data.residentId;
+  const declared = await app.request('POST', '/residents/me/family', {
+    user: asUser(tenant), body: { apartmentId: apartment.id, fullName: 'Người ở cùng khách thuê' },
+  });
+  assert.equal(declared.status, 201);
+  const tenantVehicle = await createVehicle({ apartment, registeredBy: tenant, status: 'APPROVED' });
+  const tenantCard = await createParkingCard({ vehicle: tenantVehicle });
+  const ownerVehicle = await createVehicle({ apartment, registeredBy: owner, status: 'APPROVED' });
+  const ownerCard = await createParkingCard({ vehicle: ownerVehicle });
+  const invoice = await createInvoice({ apartment, payerId: owner._id });
+
+  const transferPath = `/contracts/apartments/${apartment.id}/ownership-transfer`;
+  const debtPath = `${transferPath}/debt-review`;
+  const body = {
+    contractId: sale.id, owner: { userId: newOwner.id, phone: newOwner.phone },
+    ownershipDocumentType: 'TRANSFER_DOCUMENT', ownershipDocumentNumber: 'CN-01', identityVerified: true,
+  };
+  const transfer = (user) => app.request('POST', transferPath, { user, body });
+  assert.equal((await transfer(asUser(owner))).status, 403);
+  assert.equal((await transfer(USERS.manager)).status, 409);
+  assert.equal((await app.request('POST', debtPath, {
+    user: USERS.manager, body: { contractId: sale.id },
+  })).status, 200);
+  assert.equal((await transfer(USERS.manager)).status, 409);
+  const accountant = { role: 'ACCOUNTANT' };
+  assert.equal((await app.request('GET', debtPath, { user: accountant })).body.data._id, sale.id);
+  assert.equal((await app.request('PATCH', debtPath, {
+    user: accountant, body: { contractId: sale.id },
+  })).status, 200);
+
+  const results = await Promise.all([transfer(USERS.manager), transfer(USERS.manager)]);
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
+  assert.equal(results.find((result) => result.status === 200).body.data.keptTenancy, true);
+  assert.equal((await app.request('GET', path, { user: asUser(owner) })).status, 403);
+  const current = await app.request('GET', path, { user: asUser(newOwner) });
+  assert.equal(current.body.data._id, tenantResidence);
+  assert.equal(current.body.data.userId._id, tenant.id);
+  assert.equal((await ParkingCard.findById(tenantCard.id)).status, 'ACTIVE');
+  assert.equal((await Vehicle.findById(tenantVehicle.id)).status, 'APPROVED');
+  assert.equal((await ParkingCard.findById(ownerCard.id)).status, 'DISABLED_TO_COLLECT');
+  assert.equal((await Apartment.findById(apartment.id)).occupancyStatus, 'RENTED');
+  assert.equal(await Resident.countDocuments({ apartmentId: another.id, userId: owner.id, isActive: true }), 1);
+
+  const report = await app.request('GET', '/residents/occupancy', { user: USERS.manager });
+  const occupants = report.body.data.flatMap((building) => building.apartments).find((row) => row._id === apartment.id);
+  assert.deepEqual(occupants.residents.map((row) => row._id), [tenantResidence, declared.body.data._id]);
+  const oldContract = await Contract.findById(sale.id);
+  assert.ok(oldContract.transferredToContractId);
+  assert.equal(String((await getPayer(apartment.id, oldContract.terminatedAt)).userId), newOwner.id);
+  assert.equal(String((await getPayer(apartment.id, new Date(oldContract.terminatedAt.getTime() - 1))).userId), owner.id);
+  assert.equal(String((await Invoice.findById(invoice.id)).payerId), owner.id);
+  const former = await app.request('GET', '/invoices/my/departed-tenancies', { user: asUser(owner) });
+  assert.deepEqual(former.body.data.map((row) => row._id), [apartment.id]);
+
+  const ended = await app.request('PATCH', `${path}/${tenantResidence}/end`, { user: asUser(newOwner) });
+  assert.equal(ended.status, 200, JSON.stringify(ended.body));
+});
+
+test('UC20 có thể xác nhận sau 2 ngày chờ và căn trống cho đến khi xác nhận vào ở', async (t) => {
+  const app = await startApp();
+  t.after(app.close);
+  const { owner, apartment, sale } = await ownedApartment();
+  await createInvoice({ apartment, payerId: owner.id });
+  await Contract.updateOne({ _id: sale.id }, { transferDebtRequestedAt: new Date(Date.now() - 3 * DAY_MS) });
+  const result = await app.request('POST', `/contracts/apartments/${apartment.id}/ownership-transfer`, {
+    user: USERS.manager, body: {
+      contractId: sale.id, owner: { phone: '0912000040', fullName: 'Chủ mới UC20' },
+      ownershipDocumentType: 'OWNERSHIP_CERTIFICATE', ownershipDocumentNumber: 'GCN-02', identityVerified: true,
+    },
+  });
+  assert.equal(result.status, 200, JSON.stringify(result.body));
+  assert.equal((await Apartment.findById(apartment.id)).occupancyStatus, 'VACANT');
+  const user = await User.findOne({ phone: '0912000040' }).select('+passwordHash');
+  assert.equal(user.activatedAt, null);
+  assert.equal(user.passwordHash, undefined);
+  assert.equal(await AuditLog.countDocuments({
+    action: 'APARTMENT_OWNER_CHANGED', targetId: apartment.id, 'metadata.debtReviewOverdue': true,
+  }), 1);
+  const movedIn = await app.request('PATCH', `/apartments/${apartment.id}/confirm-move-in`, { user: USERS.receptionist });
+  assert.equal(movedIn.status, 200, JSON.stringify(movedIn.body));
+  assert.equal(movedIn.body.data.occupancyStatus, 'OWNER_OCCUPIED');
 });
 
 test('UC17 cho chủ sở hữu kết thúc lượt thuê cũ, màn hợp đồng chỉ tra cứu', async (t) => {

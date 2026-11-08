@@ -47,6 +47,14 @@ export const contractsApi = {
   create: (body) => http.post('/contracts', body),
   update: (id, body) => http.patch(`/contracts/${id}`, body),
   terminate: (id) => http.patch(`/contracts/${id}/terminate`),
+  transferOwner: (id, body) => http.post(`/contracts/apartments/${id}/ownership-transfer`, body),
+  transferDebtReview: (id) => http.get(`/contracts/apartments/${id}/ownership-transfer/debt-review`),
+  requestTransferDebtReview: (id, contractId) => http.post(
+    `/contracts/apartments/${id}/ownership-transfer/debt-review`, { contractId },
+  ),
+  acknowledgeTransferDebt: (id, contractId) => http.patch(
+    `/contracts/apartments/${id}/ownership-transfer/debt-review`, { contractId },
+  ),
 };
 
 // ===== UC-A07 & UC-A08: Cư dân & Căn hộ của tôi =====

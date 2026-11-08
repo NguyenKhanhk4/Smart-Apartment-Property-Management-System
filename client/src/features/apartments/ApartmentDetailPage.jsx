@@ -21,6 +21,7 @@ import {
   Checkbox,
 } from 'antd';
 import PhoneAccountNotice from '../../components/PhoneAccountNotice';
+import TransferOwnerModal from './TransferOwnerModal';
 import { usePhoneAccount } from '../../hooks/usePhoneAccount';
 import { PHONE_RULES } from '../../utils/phone';
 import {
@@ -105,6 +106,7 @@ export default function ApartmentDetailPage() {
   const canConfirmMoveIn = isReceptionist && apartment?.handoverDate && activeSale && !activeSale.ownerAccountPending;
   const canIssueOwner = isManager && owner?.isActive && !loadingApt && !loadingResidents && !ownerResidence;
   const [ownerModalOpen, setOwnerModalOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [ownerForm] = Form.useForm();
   const [issueOwner, issuingOwner] = useAction(
     (values) => apartmentsApi.issueOwnerAccount(id, { contractId: activeSale._id, ...values }),
@@ -459,6 +461,9 @@ export default function ApartmentDetailPage() {
                   Cấp tài khoản chủ sở hữu
                 </Button>
               )}
+              {isManager && owner && (
+                <Button onClick={() => setTransferOpen(true)}>Cập nhật chủ sở hữu</Button>
+              )}
               {canConfirmMoveIn && (
                 <Popconfirm
                   title="Xác nhận cư dân đã vào ở?"
@@ -552,6 +557,16 @@ export default function ApartmentDetailPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {transferOpen && activeSale && (
+        <TransferOwnerModal
+          apartment={apartment}
+          sale={activeSale}
+          onClose={() => setTransferOpen(false)}
+          reloadApartment={reloadApt}
+          onTransferred={() => Promise.all([reloadApt(), reloadResidents(), reloadContracts(), reloadVehicles()])}
+        />
+      )}
 
       {/* Thông tin tổng quan căn hộ */}
       <Card loading={loadingApt} className="mb-6 shadow-sm border border-gray-100 dark:border-gray-800">

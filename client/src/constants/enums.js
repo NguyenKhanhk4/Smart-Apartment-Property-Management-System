@@ -48,6 +48,7 @@ export const CONTRACT_TYPES = {
 export const OWNERSHIP_DOCUMENT_TYPES = {
   DEVELOPER_SALE_CONTRACT: { label: 'Hợp đồng mua bán với chủ đầu tư', color: 'blue' },
   OWNERSHIP_CERTIFICATE: { label: 'Giấy chứng nhận quyền sở hữu', color: 'purple' },
+  TRANSFER_DOCUMENT: { label: 'Giấy tờ xác nhận chuyển nhượng', color: 'blue' },
 };
 
 export const CONTRACT_STATUS = {
