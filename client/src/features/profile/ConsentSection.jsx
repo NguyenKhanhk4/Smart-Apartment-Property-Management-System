@@ -1,19 +1,13 @@
 import { useState } from 'react';
-import { Button, Popconfirm, Tag } from 'antd';
-import { usersApi } from '../../api/moduleA.api';
-import { useAction } from '../../hooks/useApi';
+import { Button, Tag } from 'antd';
 import { useAuth } from '../../hooks/useAuth';
 import ConsentModal from '../../components/resident/ConsentModal';
 import { isConsentLocked } from '../../utils/consent';
 
-// BR-X7: một dòng trong hồ sơ cư dân — trạng thái đồng ý, mở điều khoản để đồng ý, hoặc rút lại đồng ý bất cứ lúc nào
+// BR-X7: hiển thị trạng thái đồng ý và cho phép mở điều khoản trong hồ sơ cư dân.
 export default function ConsentSection() {
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [withdraw, withdrawing] = useAction(() => usersApi.updateConsent('WITHDRAWN'), {
-    success: 'Bạn đã rút lại đồng ý. Khai báo nhân khẩu, đăng ký xe và tải ảnh đã bị khóa.',
-    onDone: (res) => updateUser(res.data),
-  });
   const accepted = !isConsentLocked(user);
 
   return (
@@ -31,19 +25,6 @@ export default function ConsentSection() {
         <Button size="small" onClick={() => setOpen(true)}>
           Xem điều khoản
         </Button>
-        {accepted && (
-          <Popconfirm
-            title="Rút lại đồng ý?"
-            description="Khai báo nhân khẩu, đăng ký xe và tải ảnh sẽ bị khóa."
-            okText="Rút lại"
-            cancelText="Hủy"
-            onConfirm={() => withdraw().catch(() => {})}
-          >
-            <Button size="small" danger loading={withdrawing}>
-              Rút lại đồng ý
-            </Button>
-          </Popconfirm>
-        )}
       </div>
       <ConsentModal open={open} readOnly={accepted} onClose={() => setOpen(false)} />
     </div>
