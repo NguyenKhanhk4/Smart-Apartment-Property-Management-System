@@ -13,6 +13,7 @@ import { vtName } from '../../motion/viewTransition';
 import AssignWorkOrderModal from './AssignWorkOrderModal';
 import ShiftChecklist from './ShiftChecklist';
 import WorkOrderReportModal from './WorkOrderReportModal';
+import { AcceptanceReviewModal, RepairApprovalModal } from './RepairModals';
 
 const UNASSIGNED = 'UNASSIGNED';
 // KTV, tab Đã xong: việc mình đã hoàn thành, mới nhất lên trước
@@ -27,6 +28,7 @@ export default function WorkOrdersPage() {
   const [filters, setFilters] = useState({ page: 1, limit: 20, ...(isTech ? DONE_FILTER : {}) });
   const [assigning, setAssigning] = useState(null);
   const [viewing, setViewing] = useState(null); // báo cáo hoàn thành (ghi chú + ảnh)
+  const [reviewing, setReviewing] = useState(null); // { mode: 'approve' | 'accept', wo }
   const set = (patch) => setFilters((f) => ({ ...f, page: 1, ...patch }));
 
   const showTable = !isTech || tab === 'done';
@@ -91,16 +93,23 @@ export default function WorkOrdersPage() {
     },
     {
       title: '',
-      width: 120,
+      width: 130,
       fixed: 'right',
-      render: (_, r) =>
-        r.status === 'DONE' || r.result ? (
-          <Button size="small" onClick={() => setViewing(r)}>Xem kết quả</Button>
-        ) : (
+      render: (_, r) => {
+        // UC10 (tối thiểu): duyệt sửa; Q12: nghiệm thu
+        if (r.status === 'AWAITING_REPAIR_APPROVAL') {
+          return <Button size="small" type="primary" danger onClick={() => setReviewing({ mode: 'approve', wo: r })}>Duyệt sửa</Button>;
+        }
+        if (r.status === 'AWAITING_ACCEPTANCE') {
+          return <Button size="small" type="primary" onClick={() => setReviewing({ mode: 'accept', wo: r })}>Nghiệm thu</Button>;
+        }
+        if (r.status === 'DONE' || r.result) return <Button size="small" onClick={() => setViewing(r)}>Xem kết quả</Button>;
+        return (
           <Button size="small" type={r.assignedTo ? 'default' : 'primary'} onClick={() => setAssigning(r)}>
             {r.assignedTo ? 'Giao lại' : 'Phân công'}
           </Button>
-        ),
+        );
+      },
     },
   ];
 
@@ -205,6 +214,12 @@ export default function WorkOrdersPage() {
         </>
         )}
         {viewing && <WorkOrderReportModal workOrder={viewing} open onClose={() => setViewing(null)} />}
+        {reviewing?.mode === 'approve' && (
+          <RepairApprovalModal workOrder={reviewing.wo} open onClose={() => setReviewing(null)} onDone={reload} />
+        )}
+        {reviewing?.mode === 'accept' && (
+          <AcceptanceReviewModal workOrder={reviewing.wo} open onClose={() => setReviewing(null)} onDone={reload} />
+        )}
       </Card>
     </>
   );

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { CRON_JOBS, WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES, values } from '../../constants/enums.js';
+import { CRON_JOBS, REPAIR_COST_SOURCES, WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES, values } from '../../constants/enums.js';
 import { runTrackedJob } from '../../jobs/cronRunner.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
@@ -12,6 +12,7 @@ import { ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId } from '../../utils/validators.js';
 import { generateMaintenanceWorkOrders } from './workOrders.jobs.js';
 import * as inspection from './workOrders.inspection.js';
+import * as repair from './workOrders.repair.js';
 import * as service from './workOrders.service.js';
 
 // Người 1 — Vũ Việt (Mô đun 10). Job tạo phiếu; danh sách, phân công / giao lại; UC08: checklist ca, quét QR, nộp kết quả.
@@ -226,6 +227,94 @@ router.post(
     const wo = await inspection.submitInspection(req.user, req.params.id, { ...req.body, results }, req.files);
     ok(res, wo, req.body.result === WORK_ORDER_RESULTS.PASSED ? 'Đã nộp kết quả kiểm tra: Đạt.' : 'Đã ghi nhận sự cố. Phiếu chờ báo cáo hư hỏng.'); // MSG-E04
   },
+);
+
+/**
+ * @openapi
+ * /work-orders/{id}/fault-report:
+ *   post:
+ *     tags: [Tài sản & bảo trì]
+ *     summary: KTV báo cáo hư hỏng sau khi kiểm tra Có sự cố (UC09 bước 1–3, MSG-E06)
+ *     description: multipart. Bắt buộc mô tả, phương án, chi phí dự kiến, ≥ 1 ảnh. Phiếu → Chờ duyệt sửa.
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+const faultBody = Joi.object({
+  faultDesc: Joi.string().trim().min(10).max(2000).required(),
+  vendorName: Joi.string().trim().max(150).allow('').default(''),
+  vendorProposal: Joi.string().trim().min(5).max(2000).required(),
+  estimatedCost: Joi.number().integer().min(1).max(1e12).required(),
+});
+router.post(
+  '/:id/fault-report',
+  authenticate,
+  authorize('STAFF:TECHNICIAN'),
+  uploadImages('images', 5),
+  validate({ params: idParams, body: faultBody }),
+  async (req, res) => ok(res, await repair.reportFault(req.user, req.params.id, req.body, req.files), 'Đã gửi báo cáo hư hỏng cho Trưởng BQL'),
+);
+
+/**
+ * @openapi
+ * /work-orders/{id}/approve-repair:
+ *   post:
+ *     tags: [Tài sản & bảo trì]
+ *     summary: Trưởng BQL duyệt sửa chữa (UC10, hiện chỉ nguồn chi phí vận hành; MSG-E07)
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.post(
+  '/:id/approve-repair',
+  authenticate,
+  authorize('MANAGER'),
+  validate({
+    params: idParams,
+    body: Joi.object({ costSource: Joi.string().valid(...values(REPAIR_COST_SOURCES)).required(), note: Joi.string().trim().max(1000).allow('') }),
+  }),
+  async (req, res) => ok(res, await repair.approveRepair(req.user, req.params.id, req.body), 'Đã duyệt sửa chữa'),
+);
+
+/**
+ * @openapi
+ * /work-orders/{id}/acceptance:
+ *   post:
+ *     tags: [Tài sản & bảo trì]
+ *     summary: KTV tải biên bản nghiệm thu của nhà thầu (UC09 bước 4–6) → Chờ nghiệm thu (MSG-E13)
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.post(
+  '/:id/acceptance',
+  authenticate,
+  authorize('STAFF:TECHNICIAN'),
+  uploadImages('images', 5),
+  validate({ params: idParams, body: Joi.object({ note: Joi.string().trim().max(1000).allow('').default('') }) }),
+  async (req, res) => ok(res, await repair.uploadAcceptance(req.user, req.params.id, req.body, req.files), 'Đã gửi biên bản, chờ Trưởng BQL nghiệm thu'),
+);
+
+/**
+ * @openapi
+ * /work-orders/{id}/accept:
+ *   post:
+ *     tags: [Tài sản & bảo trì]
+ *     summary: Trưởng BQL xác nhận nghiệm thu sửa chữa (Q12, MSG-E11) → Hoàn thành
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.post('/:id/accept', authenticate, authorize('MANAGER'), validate({ params: idParams }), async (req, res) =>
+  ok(res, await repair.acceptRepair(req.user, req.params.id), 'Đã nghiệm thu. Thiết bị hoạt động lại.'), // MSG-E11
+);
+
+/**
+ * @openapi
+ * /work-orders/{id}/return-repair:
+ *   post:
+ *     tags: [Tài sản & bảo trì]
+ *     summary: Trưởng BQL yêu cầu sửa lại (bắt buộc lý do) → Đang sửa; biên bản cũ giữ trong lịch sử
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.post(
+  '/:id/return-repair',
+  authenticate,
+  authorize('MANAGER'),
+  validate({ params: idParams, body: Joi.object({ comment: Joi.string().trim().min(5).max(1000).required() }) }),
+  async (req, res) => ok(res, await repair.returnRepair(req.user, req.params.id, req.body), 'Đã yêu cầu sửa lại'),
 );
 
 export default router;

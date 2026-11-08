@@ -71,6 +71,7 @@ export const ERROR_CODES = Object.freeze({
   WORKORDER_NOT_ON_DUTY: { status: 403, message: 'Bạn không trong ca trực kỹ thuật lúc này nên không nhận được phiếu' },
   WORKORDER_TAKEN: { status: 409, message: 'Phiếu bảo trì đã có kỹ thuật viên khác nhận' },
   WORKORDER_NOT_SCANNED: { status: 409, message: 'Cần quét mã QR trên thiết bị trước khi nộp kết quả kiểm tra' },
+  WORKORDER_COST_SOURCE_UNSUPPORTED: { status: 400, message: 'Nguồn quỹ bảo trì chưa hỗ trợ, hãy chọn chi phí vận hành' },
   WORKORDER_RESULT_CONFLICT: { status: 400, message: 'Có mục không đạt, kết quả phải là Có sự cố' },
   ASSET_HAS_OPEN_WORKORDER: { status: 409, message: 'Thiết bị còn phiếu bảo trì đang mở, không thể ngừng theo dõi' }, // MSG-E10
   WORKORDER_INVALID_STATUS: { status: 409, message: 'Work order đã hoàn thành, không thể thao tác' },

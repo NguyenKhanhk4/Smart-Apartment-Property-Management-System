@@ -53,6 +53,7 @@ export const ERROR_MESSAGES = {
   WORKORDER_NOT_ON_DUTY: 'Bạn không trong ca trực kỹ thuật lúc này nên không nhận được phiếu.',
   WORKORDER_TAKEN: 'Phiếu bảo trì đã có kỹ thuật viên khác nhận.',
   WORKORDER_NOT_SCANNED: 'Cần quét mã QR trên thiết bị trước khi nộp kết quả kiểm tra.',
+  WORKORDER_COST_SOURCE_UNSUPPORTED: 'Nguồn quỹ bảo trì chưa hỗ trợ, hãy chọn chi phí vận hành.',
   WORKORDER_RESULT_CONFLICT: 'Có mục không đạt, kết quả phải là Có sự cố.',
   ASSET_HAS_OPEN_WORKORDER: 'Thiết bị còn phiếu bảo trì đang mở, không thể ngừng theo dõi.',
   BOOKING_LIMIT_EXCEEDED: 'Căn hộ đã đạt số lượng booking chưa dùng tối đa.',

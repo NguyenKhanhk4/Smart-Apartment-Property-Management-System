@@ -100,7 +100,10 @@ export const CORE_PERMISSIONS = {
 
 // ===== Suy ra hành động từ phương thức HTTP + đường dẫn =====
 /** Đoạn cuối của đường dẫn mang nghĩa phê duyệt / quyết định */
-const APPROVE_WORDS = new Set(['approve', 'reject', 'publish', 'return', 'review', 'owner-decision', 'quote-decision', 'votes', 'accept-work']);
+const APPROVE_WORDS = new Set([
+  'approve', 'reject', 'publish', 'return', 'review', 'owner-decision', 'quote-decision', 'votes', 'accept-work',
+  'approve-repair', 'accept', 'return-repair', // UC09, UC10: duyệt sửa chữa, nghiệm thu / yêu cầu sửa lại
+]);
 /** Ngoại lệ: đường dẫn mà quy tắc chung đoán sai (khóa: 'PHƯƠNG_THỨC /chức-năng/đường/dẫn' với tham số là :id) */
 const ACTION_OVERRIDES = {
   'POST /bookings/check-in-by-qr': 'UPDATE', // Bảo vệ quét vé vào cửa: là cập nhật lượt đặt, không tạo mới

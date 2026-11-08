@@ -37,9 +37,10 @@ export default function InspectionModal({ workOrder, open, onClose, onDone }) {
     ),
     {
       success: (res) => res.message, // MSG-E04 hoặc "Đã ghi nhận sự cố…"
-      onDone: () => {
+      // Trả phiếu sau khi nộp: Có sự cố thì nơi gọi mở tiếp form báo hư hỏng (UC09)
+      onDone: (res) => {
         onClose();
-        onDone?.();
+        onDone?.(res.data);
       },
     },
   );

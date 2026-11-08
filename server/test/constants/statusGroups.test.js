@@ -34,7 +34,7 @@ test('ticket: hành động lịch sử có enum', () => {
 });
 
 test('work order: nhóm đang mở', () => {
-  assert.deepEqual(E.WORK_ORDER_OPEN_STATUSES, ['PENDING', 'IN_PROGRESS']);
+  assert.deepEqual(E.WORK_ORDER_OPEN_STATUSES, ['PENDING', 'IN_PROGRESS', 'AWAITING_REPAIR_APPROVAL', 'UNDER_REPAIR', 'AWAITING_ACCEPTANCE']);
 });
 
 test('booking: nhóm giữ chỗ / tính phí / dữ liệu cũ', () => {

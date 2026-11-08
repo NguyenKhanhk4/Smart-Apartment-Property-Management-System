@@ -4,6 +4,7 @@ import EvidencePhotos from '../../components/EvidencePhotos';
 import { WORK_ORDER_RESULTS } from '../../constants/enums';
 import { formatDate, formatDateTime } from '../../utils/format';
 import { isMeasured, rangeText } from './inspectionForm';
+import { RepairInfo } from './RepairModals';
 
 const resultCell = (r, item) => {
   if (item && isMeasured(item)) return r.value == null ? '—' : `${r.value}${item.unit ? ` ${item.unit}` : ''}`;
@@ -61,6 +62,12 @@ export default function WorkOrderReportModal({ workOrder, open, onClose }) {
             },
           ]}
         />
+      )}
+      {workOrder.repair && (
+        <>
+          <Typography.Title level={5} style={{ marginTop: 20 }}>Sửa chữa</Typography.Title>
+          <RepairInfo workOrder={workOrder} />
+        </>
       )}
     </Modal>
   );

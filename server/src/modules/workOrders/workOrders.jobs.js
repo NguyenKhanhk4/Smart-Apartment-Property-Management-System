@@ -1,14 +1,24 @@
-import { NOTIFICATION_TYPES, ROLE_TITLES, WORK_ORDER_STATUS, WORK_ORDER_TYPES } from '../../constants/enums.js';
+import {
+  CONFIG_KEYS, NOTIFICATION_TYPES, ROLE_TITLES, WORK_ORDER_INSPECTING_STATUSES, WORK_ORDER_OPEN_STATUSES, WORK_ORDER_STATUS, WORK_ORDER_TYPES,
+} from '../../constants/enums.js';
 import { Asset, WorkOrder } from '../../models/index.js';
 import { notifyRoles } from '../../services/notification.service.js';
+import { getConfig } from '../../services/systemConfig.service.js';
 import { DAY_MS, endOfVnDay, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { listShifts } from '../dutyShifts/dutyShifts.service.js';
 
 export const WARRANTY_WARNING_DAYS = 30; // BR-E07, MSG-E08
 
+// Thiết bị còn phiếu định kỳ chưa xong (đang kiểm tra hoặc đang sửa chữa) thì không tạo phiếu mới
 const OPEN_SCHEDULED = {
   type: WORK_ORDER_TYPES.SCHEDULED,
-  status: { $in: [WORK_ORDER_STATUS.PENDING, WORK_ORDER_STATUS.IN_PROGRESS] },
+  status: { $in: [...WORK_ORDER_OPEN_STATUSES] },
+};
+// Quá hạn kiểm tra: chỉ phiếu chưa nộp kết quả. Phiếu đang sửa chữa / chờ nghiệm thu là việc của bước khác
+const AWAITING_INSPECTION = {
+  type: WORK_ORDER_TYPES.SCHEDULED,
+  status: { $in: [...WORK_ORDER_INSPECTING_STATUSES] },
+  result: null,
 };
 
 /**
@@ -121,19 +131,34 @@ export async function generateMaintenanceWorkOrders(now = new Date()) {
  */
 export async function warnEquipment(now = new Date()) {
   const today = startOfVnDay(now);
-  const [overdue, expiring] = await Promise.all([
-    WorkOrder.countDocuments({ ...OPEN_SCHEDULED, scheduledDate: { $lt: today } }),
+  const remindDays = Number(await getConfig(CONFIG_KEYS.REPAIR_ACCEPTANCE_REMIND_DAYS)) || 3;
+  const [overdue, expiring, waitingAcceptance] = await Promise.all([
+    WorkOrder.countDocuments({ ...AWAITING_INSPECTION, scheduledDate: { $lt: today } }),
     Asset.countDocuments({
       isActive: true,
       warrantyEnd: { $gte: today, $lte: endOfVnDay(new Date(today.getTime() + WARRANTY_WARNING_DAYS * DAY_MS)) },
     }),
+    // UC09, BR-X8: biên bản đã tải quá N ngày mà Trưởng BQL chưa nghiệm thu (nhắc, không tự nghiệm thu)
+    WorkOrder.countDocuments({
+      status: WORK_ORDER_STATUS.AWAITING_ACCEPTANCE,
+      'repair.acceptanceUploadedAt': { $lte: new Date(now.getTime() - remindDays * DAY_MS) },
+    }),
   ]);
-  if (!overdue && !expiring) return 0;
-  await notifyRoles(['MANAGER'], {
-    type: NOTIFICATION_TYPES.MAINTENANCE,
-    title: 'Cảnh báo bảo trì thiết bị',
-    content: `${overdue} phiếu bảo trì quá hạn; ${expiring} thiết bị hết bảo hành trong ${WARRANTY_WARNING_DAYS} ngày tới.`,
-    link: '/app/assets',
-  });
-  return overdue + expiring;
+  if (overdue || expiring) {
+    await notifyRoles(['MANAGER'], {
+      type: NOTIFICATION_TYPES.MAINTENANCE,
+      title: 'Cảnh báo bảo trì thiết bị',
+      content: `${overdue} phiếu bảo trì quá hạn; ${expiring} thiết bị hết bảo hành trong ${WARRANTY_WARNING_DAYS} ngày tới.`,
+      link: '/app/assets',
+    });
+  }
+  if (waitingAcceptance) {
+    await notifyRoles(['MANAGER'], {
+      type: NOTIFICATION_TYPES.MAINTENANCE,
+      title: 'Sửa chữa chờ nghiệm thu',
+      content: `${waitingAcceptance} phiếu sửa chữa đã có biên bản của nhà thầu hơn ${remindDays} ngày, đang chờ bạn nghiệm thu.`,
+      link: '/app/work-orders',
+    });
+  }
+  return overdue + expiring + waitingAcceptance;
 }

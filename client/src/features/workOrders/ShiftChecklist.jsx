@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, App, Button, Card, Empty, Flex, List, Tag, Typography } from 'antd';
-import { QrcodeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { FileProtectOutlined, QrcodeOutlined, ReloadOutlined, WarningOutlined } from '@ant-design/icons';
 import { workOrderApi } from '../../api/equipment.api';
 import EnumTag from '../../components/EnumTag';
 import QrScanModal from '../../components/QrScanModal';
@@ -9,13 +9,16 @@ import { useApi } from '../../hooks/useApi';
 import { formatDate } from '../../utils/format';
 import AssetCode from '../assets/AssetCode';
 import InspectionModal from './InspectionModal';
+import { AcceptanceUploadModal, FaultReportModal } from './RepairModals';
 
-// UC08 bước 1–4 (KTV): checklist ca → bấm "Quét QR" → quét mã dán trên thiết bị → đúng thiết bị thì mở checklist
+// UC08 (KTV): checklist ca → "Quét QR" → đúng thiết bị thì mở checklist. UC09: Có sự cố → báo hư hỏng; Đang sửa → tải biên bản
 export default function ShiftChecklist() {
   const { message } = App.useApp();
   const shift = useApi(() => workOrderApi.shiftChecklist(), []);
   const [scanning, setScanning] = useState(null); // phiếu đang quét QR
   const [inspecting, setInspecting] = useState(null); // phiếu đã quét đúng, đang nhập checklist
+  const [reporting, setReporting] = useState(null); // UC09: báo hư hỏng
+  const [uploading, setUploading] = useState(null); // UC09: tải biên bản nghiệm thu
   const data = shift.data;
 
   // Lỗi (sai thiết bị MSG-E03, người khác đã nhận...) báo rồi cho quét tiếp; không ném ra ngoài
@@ -35,7 +38,14 @@ export default function ShiftChecklist() {
   };
 
   const action = (wo) => {
-    if (wo.result === 'FAULTY') return <Tag color="error">Có sự cố – chờ báo cáo hư hỏng</Tag>;
+    if (wo.status === 'IN_PROGRESS' && wo.result === 'FAULTY') {
+      return <Button danger icon={<WarningOutlined />} onClick={() => setReporting(wo)}>Báo cáo hư hỏng</Button>;
+    }
+    if (wo.status === 'AWAITING_REPAIR_APPROVAL') return <Tag color="orange">Chờ Trưởng BQL duyệt sửa</Tag>;
+    if (wo.status === 'UNDER_REPAIR') {
+      return <Button type="primary" icon={<FileProtectOutlined />} onClick={() => setUploading(wo)}>Tải biên bản nghiệm thu</Button>;
+    }
+    if (wo.status === 'AWAITING_ACCEPTANCE') return <Tag color="gold">Chờ Trưởng BQL nghiệm thu</Tag>;
     const blocked = !wo.mine && !data?.canClaim;
     return (
       <Button type="primary" icon={<QrcodeOutlined />} disabled={blocked} onClick={() => setScanning(wo)}>
@@ -100,7 +110,19 @@ export default function ShiftChecklist() {
         onResult={onScan}
       />
       {inspecting && (
-        <InspectionModal workOrder={inspecting} open onClose={() => setInspecting(null)} onDone={shift.reload} />
+        <InspectionModal
+          workOrder={inspecting}
+          open
+          onClose={() => setInspecting(null)}
+          onDone={(wo) => {
+            shift.reload();
+            if (wo?.result === 'FAULTY') setReporting(wo); // UC09 bước 1: mở ngay form báo hư hỏng
+          }}
+        />
+      )}
+      {reporting && <FaultReportModal workOrder={reporting} open onClose={() => setReporting(null)} onDone={shift.reload} />}
+      {uploading && (
+        <AcceptanceUploadModal workOrder={uploading} open onClose={() => setUploading(null)} onDone={shift.reload} />
       )}
     </Flex>
   );

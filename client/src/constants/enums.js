@@ -283,10 +283,18 @@ export const PREPAID_TX_TYPES = {
 export const WORK_ORDER_STATUS = {
   PENDING: { label: 'Đến hạn', color: 'blue' }, // BR-E05: Due
   IN_PROGRESS: { label: 'Đang kiểm tra', color: 'processing' }, // Inspecting
+  AWAITING_REPAIR_APPROVAL: { label: 'Chờ duyệt sửa', color: 'orange' },
+  UNDER_REPAIR: { label: 'Đang sửa', color: 'volcano' },
+  AWAITING_ACCEPTANCE: { label: 'Chờ nghiệm thu', color: 'gold' },
   DONE: { label: 'Hoàn thành', color: 'success' },
 };
 
-export const WORK_ORDER_OPEN_STATUSES = ['PENDING', 'IN_PROGRESS'];
+export const REPAIR_COST_SOURCES = {
+  OPERATING: { label: 'Chi phí vận hành', color: 'blue' },
+  FUND: { label: 'Quỹ bảo trì', color: 'purple' },
+};
+
+export const WORK_ORDER_OPEN_STATUSES = ['PENDING', 'IN_PROGRESS', 'AWAITING_REPAIR_APPROVAL', 'UNDER_REPAIR', 'AWAITING_ACCEPTANCE'];
 
 export const WORK_ORDER_TYPES = {
   SCHEDULED: { label: 'Bảo trì định kỳ', color: 'geekblue' },

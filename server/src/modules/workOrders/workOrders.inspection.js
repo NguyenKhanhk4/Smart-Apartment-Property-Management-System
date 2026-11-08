@@ -1,6 +1,6 @@
 // UC08 – Kiểm tra thiết bị định kỳ (BR-E04, BR-E05): checklist ca → quét QR thiết bị → nhập checklist, ảnh → Đạt / Có sự cố
 import {
-  AUDIT_ACTIONS, AUDIT_TARGETS, NOTIFICATION_TYPES, ROLE_TITLES, WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES,
+  AUDIT_ACTIONS, AUDIT_TARGETS, NOTIFICATION_TYPES, ROLE_TITLES, WORK_ORDER_OPEN_STATUSES, WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES,
 } from '../../constants/enums.js';
 import { Asset, User, WorkOrder } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
@@ -59,7 +59,7 @@ async function dutyOf(userId, now) {
 
 // ===== UC08 bước 1: Checklist ca =====
 /**
- * Phiếu định kỳ chưa ai nhận (đến hạn) + phiếu của chính KTV đang làm / được giao. Kèm tình trạng ca trực.
+ * Phiếu định kỳ chưa ai nhận (đến hạn) + phiếu chưa xong của chính KTV (kiểm tra, sửa chữa). Kèm tình trạng ca trực.
  * DutyShift là ca theo người, không có "ca của ngày" để gắn phiếu, nên phiếu chưa nhận hiện cho mọi KTV.
  */
 export async function shiftChecklist(user, now = new Date()) {
@@ -68,10 +68,10 @@ export async function shiftChecklist(user, now = new Date()) {
     type: WORK_ORDER_TYPES.SCHEDULED,
     $or: [
       { status: PENDING, assignedTo: null },
-      { status: { $in: [PENDING, IN_PROGRESS] }, assignedTo: user.id },
+      { status: { $in: [...WORK_ORDER_OPEN_STATUSES] }, assignedTo: user.id }, // cả phiếu đang sửa chữa của mình (UC09)
     ],
   })
-    .select('assetId title status scheduledDate assignedTo startedAt scannedAt result checklist')
+    .select('assetId title status scheduledDate assignedTo startedAt scannedAt result checklist note repair')
     .populate({ path: 'assetId', select: 'code name category location buildingId', populate: { path: 'buildingId', select: 'name' } })
     .sort({ scheduledDate: 1, _id: 1 })
     .lean();

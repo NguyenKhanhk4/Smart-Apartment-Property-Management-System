@@ -29,6 +29,22 @@ export const workOrderApi = {
     files.forEach((f) => form.append('images', f));
     return http.post(`/work-orders/${id}/inspection`, form);
   },
+  // UC09: KTV báo hư hỏng (multipart), tải biên bản nghiệm thu; UC10 tối thiểu + Q12: Trưởng BQL duyệt, nghiệm thu, yêu cầu sửa lại
+  reportFault: (id, body, files = []) => {
+    const form = new FormData();
+    Object.entries(body).forEach(([k, v]) => v != null && v !== '' && form.append(k, v));
+    files.forEach((f) => form.append('images', f));
+    return http.post(`/work-orders/${id}/fault-report`, form);
+  },
+  uploadAcceptance: (id, note, files = []) => {
+    const form = new FormData();
+    if (note) form.append('note', note);
+    files.forEach((f) => form.append('images', f));
+    return http.post(`/work-orders/${id}/acceptance`, form);
+  },
+  approveRepair: (id, body) => http.post(`/work-orders/${id}/approve-repair`, body),
+  acceptRepair: (id) => http.post(`/work-orders/${id}/accept`),
+  returnRepair: (id, comment) => http.post(`/work-orders/${id}/return-repair`, { comment }),
   // Chạy thủ công cron quét tài sản đến hạn; trả bản ghi cron_runs (affectedCount = số work order mới)
   runGenerate: () => http.post('/work-orders/jobs/generate/run'),
 };

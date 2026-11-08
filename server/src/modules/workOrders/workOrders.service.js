@@ -3,6 +3,7 @@ import {
   NOTIFICATION_TYPES,
   ROLES,
   ROLE_TITLES,
+  WORK_ORDER_INSPECTING_STATUSES,
   WORK_ORDER_OPEN_STATUSES as OPEN_WO_STATUSES,
   WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
@@ -23,8 +24,10 @@ const ASSET_POPULATE = {
 };
 
 /** Quá hạn = chưa DONE và đã qua hết ngày lên lịch (scheduledDate + 1 ngày < hiện tại) — UC-D03 */
+// Chỉ tính phiếu đang chờ kiểm tra (chưa nộp kết quả); phiếu đang sửa chữa không phải quá hạn kiểm tra
 export const isOverdue = (wo, now = new Date()) =>
-  wo.status !== WORK_ORDER_STATUS.DONE &&
+  WORK_ORDER_INSPECTING_STATUSES.includes(wo.status) &&
+  !wo.result &&
   Boolean(wo.scheduledDate) &&
   new Date(wo.scheduledDate).getTime() + DAY_MS < now.getTime();
 
@@ -45,7 +48,8 @@ export async function listWorkOrders(user, query) {
   if (query.unassigned) filter.assignedTo = null;
   if (query.overdue) {
     // Chỉ work order chưa DONE; lọc thêm status=DONE thì kết quả rỗng là đúng
-    filter.status = { $in: (query.status ?? OPEN_WO_STATUSES).filter((s) => s !== WORK_ORDER_STATUS.DONE) };
+    filter.status = { $in: (query.status ?? WORK_ORDER_INSPECTING_STATUSES).filter((s) => WORK_ORDER_INSPECTING_STATUSES.includes(s)) };
+    filter.result = null;
     filter.scheduledDate = { $lt: new Date(now.getTime() - DAY_MS) };
   }
   if (query.buildingId || query.q) {
@@ -95,7 +99,9 @@ export async function listAssignees() {
 export async function assignWorkOrder(user, id, { assignedTo, note }) {
   const wo = await WorkOrder.findById(id).lean();
   if (!wo) throw ApiError.notFound('Không tìm thấy work order');
-  if (wo.status === WORK_ORDER_STATUS.DONE) throw new ApiError('WORKORDER_INVALID_STATUS');
+  if (!WORK_ORDER_INSPECTING_STATUSES.includes(wo.status)) {
+    throw new ApiError('WORKORDER_INVALID_STATUS', wo.status === WORK_ORDER_STATUS.DONE ? undefined : 'Phiếu đang sửa chữa, không giao lại được');
+  }
 
   const tech = await User.findOne({ _id: assignedTo, ...TECHNICIAN }).select('fullName').lean();
   if (!tech) throw new ApiError('WORKORDER_INVALID_ASSIGNEE');
@@ -105,7 +111,7 @@ export async function assignWorkOrder(user, id, { assignedTo, note }) {
 
   const now = new Date();
   const updated = await WorkOrder.findOneAndUpdate(
-    { _id: id, status: { $in: OPEN_WO_STATUSES }, assignedTo: wo.assignedTo ?? null },
+    { _id: id, status: { $in: WORK_ORDER_INSPECTING_STATUSES }, assignedTo: wo.assignedTo ?? null },
     { $set: { assignedTo: tech._id, assignedBy: user.id, assignedAt: now } },
     { returnDocument: 'after' },
   ).lean();
