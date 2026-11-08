@@ -116,6 +116,7 @@ export const LABELS = {
   WORKORDER_ASSIGNED: 'Phân công phiếu bảo trì',
   ASSET_CREATED: 'Thêm thiết bị',
   ASSET_UPDATED: 'Sửa thiết bị',
+  WORKORDER_INSPECTED: 'Nộp kết quả kiểm tra thiết bị',
   ASSET_DEACTIVATED: 'Ngừng theo dõi thiết bị',
   ASSET_REACTIVATED: 'Theo dõi lại thiết bị',
   COMPLAINT_CATEGORY_CHANGED: 'Thay đổi danh mục phản ánh',

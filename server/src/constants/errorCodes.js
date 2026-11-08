@@ -66,6 +66,12 @@ export const ERROR_CODES = Object.freeze({
     message: 'Tài sản đang có work order chưa hoàn thành',
   },
   ASSET_CODE_EXISTS: { status: 409, message: 'Mã thiết bị đã tồn tại' }, // MSG-E01
+  // UC08 kiểm tra định kỳ
+  WORKORDER_WRONG_ASSET: { status: 409, message: 'Mã QR này không thuộc thiết bị của phiếu bảo trì' }, // MSG-E03
+  WORKORDER_NOT_ON_DUTY: { status: 403, message: 'Bạn không trong ca trực kỹ thuật lúc này nên không nhận được phiếu' },
+  WORKORDER_TAKEN: { status: 409, message: 'Phiếu bảo trì đã có kỹ thuật viên khác nhận' },
+  WORKORDER_NOT_SCANNED: { status: 409, message: 'Cần quét mã QR trên thiết bị trước khi nộp kết quả kiểm tra' },
+  WORKORDER_RESULT_CONFLICT: { status: 400, message: 'Có mục không đạt, kết quả phải là Có sự cố' },
   ASSET_HAS_OPEN_WORKORDER: { status: 409, message: 'Thiết bị còn phiếu bảo trì đang mở, không thể ngừng theo dõi' }, // MSG-E10
   WORKORDER_INVALID_STATUS: { status: 409, message: 'Work order đã hoàn thành, không thể thao tác' },
   WORKORDER_INVALID_ASSIGNEE: {

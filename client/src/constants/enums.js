@@ -281,8 +281,8 @@ export const PREPAID_TX_TYPES = {
 };
 
 export const WORK_ORDER_STATUS = {
-  PENDING: { label: 'Chờ xử lý', color: 'blue' },
-  IN_PROGRESS: { label: 'Đang xử lý', color: 'processing' },
+  PENDING: { label: 'Đến hạn', color: 'blue' }, // BR-E05: Due
+  IN_PROGRESS: { label: 'Đang kiểm tra', color: 'processing' }, // Inspecting
   DONE: { label: 'Hoàn thành', color: 'success' },
 };
 
@@ -332,6 +332,12 @@ export const RELATION_TYPES = {
   OWNER: { label: 'Chủ sở hữu', color: 'blue' },
   TENANT: { label: 'Người thuê', color: 'geekblue' },
   FAMILY_MEMBER: { label: 'Thành viên', color: 'default' },
+};
+
+// UC08: kết quả kiểm tra định kỳ
+export const WORK_ORDER_RESULTS = {
+  PASSED: { label: 'Đạt', color: 'success' },
+  FAULTY: { label: 'Có sự cố', color: 'error' },
 };
 
 // UC07: đơn vị chu kỳ bảo trì

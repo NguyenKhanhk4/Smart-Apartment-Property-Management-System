@@ -308,6 +308,12 @@ export const WORK_ORDER_STATUS = Object.freeze({
   DONE: 'DONE',
 });
 
+// UC08: kết quả kiểm tra định kỳ (BR-E05)
+export const WORK_ORDER_RESULTS = Object.freeze({
+  PASSED: 'PASSED',
+  FAULTY: 'FAULTY',
+});
+
 // Work order chưa hoàn thành (BR-O6: 1 tài sản chỉ 1 work order SCHEDULED đang mở)
 export const WORK_ORDER_OPEN_STATUSES = Object.freeze([WORK_ORDER_STATUS.PENDING, WORK_ORDER_STATUS.IN_PROGRESS]);
 
@@ -554,6 +560,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   WORKORDER_ASSIGNED: 'WORKORDER_ASSIGNED',
   ASSET_CREATED: 'ASSET_CREATED', // UC07
   ASSET_UPDATED: 'ASSET_UPDATED',
+  WORKORDER_INSPECTED: 'WORKORDER_INSPECTED', // UC08: nộp kết quả kiểm tra
   ASSET_DEACTIVATED: 'ASSET_DEACTIVATED',
   ASSET_REACTIVATED: 'ASSET_REACTIVATED',
   AMENITY_FEE_CHANGED: 'AMENITY_FEE_CHANGED',

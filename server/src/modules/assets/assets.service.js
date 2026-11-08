@@ -10,10 +10,14 @@ import { DAY_MS, VN_OFFSET_MS, endOfVnDay, startOfVnDay } from '../../utils/time
 
 const LIST_POPULATE = [{ path: 'buildingId', select: 'code name' }];
 
-/** Work order đúng hạn = hoàn thành không muộn hơn 1 ngày sau ngày lên lịch (khớp báo cáo UC-E12) */
-export const isOnTime = (wo) =>
-  Boolean(wo.completedAt) &&
-  new Date(wo.completedAt).getTime() <= new Date(wo.scheduledDate ?? wo.createdAt).getTime() + DAY_MS;
+/**
+ * Đúng hạn = kiểm tra (UC08: inspectedAt; phiếu cũ: completedAt) không muộn hơn 1 ngày sau ngày lên lịch (khớp báo cáo UC-E12).
+ * Đo theo lúc kiểm tra để phiếu có sự cố phải chờ sửa lâu không bị tính trễ hạn kiểm tra.
+ */
+export const isOnTime = (wo) => {
+  const at = wo.inspectedAt ?? wo.completedAt;
+  return Boolean(at) && new Date(at).getTime() <= new Date(wo.scheduledDate ?? wo.createdAt).getTime() + DAY_MS;
+};
 
 const MONTHS_OF = { [CYCLE_UNITS.MONTH]: 1, [CYCLE_UNITS.QUARTER]: 3 };
 

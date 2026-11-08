@@ -18,13 +18,16 @@ export const workOrderApi = {
   get: (id) => http.get(`/work-orders/${id}`),
   assignees: () => http.get('/work-orders/assignees'),
   assign: (id, body) => http.patch(`/work-orders/${id}/assign`, body),
-  // UC-D04 (KTV): body { status: 'IN_PROGRESS' } hoặc { status: 'DONE', note } + files (ảnh bằng chứng, bắt buộc khi DONE)
-  updateStatus: (id, body, files = []) => {
-    if (!files.length) return http.patch(`/work-orders/${id}/status`, body);
+  // UC08 (KTV): checklist ca → quét QR thiết bị → nộp kết quả (multipart: result, note, results JSON, images)
+  shiftChecklist: () => http.get('/work-orders/shift-checklist'),
+  scan: (id, qrCode) => http.post(`/work-orders/${id}/scan`, { qrCode }),
+  submitInspection: (id, { result, note, results }, files = []) => {
     const form = new FormData();
-    Object.entries(body).forEach(([k, v]) => v != null && v !== '' && form.append(k, v));
+    form.append('result', result);
+    form.append('note', note ?? '');
+    form.append('results', JSON.stringify(results ?? []));
     files.forEach((f) => form.append('images', f));
-    return http.patch(`/work-orders/${id}/status`, form);
+    return http.post(`/work-orders/${id}/inspection`, form);
   },
   // Chạy thủ công cron quét tài sản đến hạn; trả bản ghi cron_runs (affectedCount = số work order mới)
   runGenerate: () => http.post('/work-orders/jobs/generate/run'),

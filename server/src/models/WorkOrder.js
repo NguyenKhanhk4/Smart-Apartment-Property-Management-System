@@ -1,4 +1,4 @@
-import { WORK_ORDER_STATUS, WORK_ORDER_TYPES, values } from '../constants/enums.js';
+import { WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES, values } from '../constants/enums.js';
 import { ObjectId, Schema, model, schemaOptions } from './_shared.js';
 
 // work_orders — công việc bảo trì (UC-D02..D04)
@@ -30,6 +30,22 @@ const workOrderSchema = new Schema(
         minValue: { type: Number, default: null },
         maxValue: { type: Number, default: null },
         required: { type: Boolean, default: true },
+      }],
+      default: [],
+    },
+    // UC08: kiểm tra định kỳ. Quét đúng QR thiết bị mới được nộp kết quả (BR-E04)
+    scannedAt: { type: Date, default: null },
+    inspectedAt: { type: Date, default: null }, // lúc nộp kết quả; đo đúng hạn theo mốc này
+    result: { type: String, enum: [...values(WORK_ORDER_RESULTS), null], default: null },
+    // Kết quả từng mục, cùng thứ tự với checklist. value: giá trị đo; ok: KTV tick đạt / không đạt; isOk: server tự tính
+    results: {
+      type: [{
+        _id: false,
+        index: Number,
+        label: String,
+        value: { type: Number, default: null },
+        ok: { type: Boolean, default: null },
+        isOk: { type: Boolean, default: null },
       }],
       default: [],
     },

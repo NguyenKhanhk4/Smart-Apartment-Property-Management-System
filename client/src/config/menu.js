@@ -183,7 +183,7 @@ export const adminMenu = [
   {
     key: 'work-orders',
     group: 'Kỹ thuật & vận hành',
-    label: 'Work order',
+    label: 'Phiếu bảo trì',
     icon: ScheduleOutlined,
     path: 'work-orders',
     roles: ['MANAGER'],
@@ -193,7 +193,7 @@ export const adminMenu = [
   {
     key: 'my-work-orders',
     group: 'Kỹ thuật & vận hành',
-    label: 'Work order của tôi',
+    label: 'Bảo trì thiết bị',
     icon: CheckSquareOutlined,
     path: 'my-work-orders',
     roles: ['STAFF:TECHNICIAN'],

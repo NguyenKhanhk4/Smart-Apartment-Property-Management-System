@@ -47,6 +47,8 @@ function printLabel(asset, svgElement) {
   svg.setAttribute('width', '220');
   svg.setAttribute('height', '220');
   box.appendChild(doc.importNode(svg, true));
+  // Camera không quét được thì KTV gõ chuỗi này vào ô nhập mã (UC08)
+  line(asset.qrCode, 'font-family: monospace; font-size: 11px; color: #333; margin-top: 2px;');
   line(asset.name, 'font-size: 14px; font-weight: 600; margin-top: 8px;');
   if (asset.location) line(asset.location, 'font-size: 12px; color: #555;');
   line('Kỹ thuật viên quét mã này khi kiểm tra định kỳ', 'font-size: 10px; color: #777; margin-top: 8px;');
@@ -149,7 +151,9 @@ export default function AssetDetailPage() {
               </div>
               <Typography.Text strong>{a.code}</Typography.Text>
               <Typography.Text type="secondary" style={{ fontSize: 12, textAlign: 'center' }}>
-                In và dán lên thiết bị. Kỹ thuật viên quét mã này khi kiểm tra định kỳ. Mã không đổi khi sửa thiết bị.
+                <Typography.Text copyable style={{ fontFamily: 'monospace', fontSize: 12 }}>{a.qrCode}</Typography.Text>
+                <br />
+                In và dán lên thiết bị. Kỹ thuật viên quét mã này khi kiểm tra định kỳ; không quét được thì nhập chuỗi trên. Mã không đổi khi sửa thiết bị.
               </Typography.Text>
             </Flex>
           ) : (
