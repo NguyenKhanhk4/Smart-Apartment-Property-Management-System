@@ -4,6 +4,7 @@ import { FundProposal, FundTransaction } from '../../models/index.js';
 import { periodLabel } from '../../utils/time.js';
 import { listLedger } from '../debts/debts.ledger.js';
 import { financeDashboard, supervisionReport } from './finance.service.js';
+import { operationsDashboard } from './operations.service.js';
 
 // UC-E13 / UC65 — Xuất báo cáo Excel/PDF. Mỗi loại báo cáo được chuyển về 1 "spec" chung rồi dựng file bằng
 // dịch vụ xuất dùng chung (services/export.service.js) — số liệu giống hệt màn hình nguồn.
@@ -314,49 +315,89 @@ async function buildSpec(type, q) {
       };
     }
     case 'operations': {
-      const [occ, tk, mt] = await Promise.all([
-        reports.occupancyReport(q),
-        reports.ticketReport(q),
-        reports.maintenanceReport(q),
-      ]);
+      const r = await operationsDashboard(q);
+      const pct = (v) => (v == null ? '—' : fmtPercent(v));
+      const num = (v) => (v == null ? '—' : v);
+      const { incidents: inc, complaints: cp, maintenance: mt, residents: rs } = r;
       return {
-        title: 'BÁO CÁO VẬN HÀNH',
-        filterText: `Từ ${fmtDate(q.from)} đến ${fmtDate(q.to)}`,
+        title: 'DASHBOARD VẬN HÀNH',
+        filterText: `Kỳ ${periodLabel(q.from)} → ${periodLabel(q.to)}`,
         summary: [
-          ['Tỷ lệ lấp đầy', occ.occupancyRate, 'percent'],
-          ['Phản ánh trong kỳ', tk.total],
-          ['Đang mở / Quá hạn', `${tk.open} / ${tk.overdue}`],
-          ['Thời gian xử lý TB (giờ)', tk.avgResolutionHours],
-          ['Đánh giá TB', tk.avgRating],
-          ['Work order hoàn thành (đúng hạn/trễ)', `${mt.done} (${mt.onTime}/${mt.late})`],
+          ['Sự cố kỹ thuật trong kỳ', inc.total],
+          ['Đang mở / đang quá hạn', `${inc.open} / ${inc.overdueNow}`],
+          ['Nhận phiếu đúng hạn', pct(inc.ackOnTimeRate)],
+          ['Xử lý đúng hạn (đã trừ thời gian tạm dừng)', `${pct(inc.onTimeRate)} (${inc.onTime}/${inc.resolved})`],
+          ['Thời gian xử lý TB (giờ)', num(inc.avgResolutionHours)],
+          ['Đánh giá TB (sao)', `${num(inc.avgRating)} (${inc.rated} lượt)`],
+          ['Phản ánh / đã phản hồi', `${cp.count} / ${cp.responded}`],
+          ['Phản hồi đúng hạn / TB (giờ)', `${pct(cp.onTimeRate)} / ${num(cp.avgResponseHours)}`],
+          ['Bảo trì định kỳ hoàn thành đúng hạn', `${pct(mt.onTimeRate)} (${mt.onTime}/${mt.done})`],
+          ['Tỷ lệ lấp đầy', rs.occupancy.occupancyRate, 'percent'],
+          ['Cư dân vào ở / chuyển đi', `${rs.moveIn} / ${rs.moveOut}`],
         ],
         sections: [
+          {
+            title: 'Theo tháng',
+            columns: [
+              col('Tháng', 'label', 10),
+              col('Sự cố mới', 'created', 10),
+              col('Xử lý xong', 'resolved', 10),
+              col('Đúng hạn', 'onTime', 10),
+              col('Trễ hạn', 'late', 10),
+              col('Bảo trì lên lịch', 'scheduled', 12),
+              col('Bảo trì xong', 'done', 12),
+              col('Vào ở', 'moveIn', 9),
+              col('Chuyển đi', 'moveOut', 9),
+            ],
+            rows: inc.byMonth.map((m, i) => ({
+              ...m,
+              label: periodLabel(m.period),
+              scheduled: mt.byMonth[i].scheduled,
+              done: mt.byMonth[i].done,
+              moveIn: rs.byMonth[i].moveIn,
+              moveOut: rs.byMonth[i].moveOut,
+            })),
+          },
+          {
+            title: 'Kỹ thuật viên (xếp theo số sao)',
+            columns: [
+              col('Họ tên', 'fullName', 22),
+              col('Được giao', 'assigned', 10),
+              col('Đã xử lý', 'resolved', 10),
+              col('Đúng hạn', 'onTimeText', 10),
+              col('Số sao TB', 'ratingText', 10),
+              col('Lượt đánh giá', 'rated', 12),
+            ],
+            rows: inc.technicians.map((t) => ({ ...t, onTimeText: pct(t.onTimeRate), ratingText: num(t.avgRating) })),
+          },
+          {
+            title: 'Phản ánh theo loại',
+            columns: [
+              col('Loại phản ánh', 'name', 24),
+              col('Số phản ánh', 'count', 10),
+              col('Đã phản hồi', 'responded', 10),
+              col('Quá hạn chưa phản hồi', 'overdue', 14),
+              col('Phản hồi đúng hạn', 'onTimeText', 12),
+              col('TB phản hồi (giờ)', 'hoursText', 12),
+            ],
+            rows: cp.byCategory.map((c) => ({ ...c, onTimeText: pct(c.onTimeRate), hoursText: num(c.avgResponseHours) })),
+          },
           {
             title: 'Lấp đầy theo tòa',
             columns: [
               col('Tòa', 'buildingName', 16),
               col('Tổng căn', 'total', 10),
-              col('Sở hữu', 'owned', 10),
+              col('Chủ ở', 'owned', 10),
               col('Cho thuê', 'rented', 10),
               col('Trống', 'vacant', 10),
               col('Tỷ lệ', 'occupancyRate', 10, 'percent'),
             ],
-            rows: occ.byBuilding,
+            rows: rs.occupancy.byBuilding,
           },
           {
-            title: 'Phản ánh theo loại',
-            columns: [col('Loại phản ánh', 'name', 24), col('Số lượng', 'count', 10)],
-            rows: tk.byCategory,
-          },
-          {
-            title: 'Kỹ thuật viên',
-            columns: [
-              col('Họ tên', 'fullName', 22),
-              col('Được giao', 'assigned', 10),
-              col('Đã đóng', 'closed', 10),
-              col('Đánh giá TB', 'avgRating', 12),
-            ],
-            rows: tk.technicians,
+            title: 'Tiện ích',
+            columns: [col('Tiện ích', 'name', 22), col('Lượt đặt', 'bookings', 10), col('Lượt vào cửa', 'visits', 12), col('Tổng lượt', 'total', 10)],
+            rows: r.amenities,
           },
         ],
       };

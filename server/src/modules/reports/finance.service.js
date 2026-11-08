@@ -30,7 +30,7 @@ const NOT_INHERITED_PAYMENT = [
   { $match: { $expr: { $ne: [{ $first: '$prev.paidAt' }, '$paidAt'] } } },
 ];
 
-function assertRange(from, to) {
+export function assertRange(from, to) {
   if (from > to) throw ApiError.badRequest('Khoảng thời gian không hợp lệ (from > to)');
   const periods = periodRange(from, to);
   if (periods.length > MAX_RANGE_MONTHS) throw ApiError.badRequest(`Khoảng thời gian tối đa ${MAX_RANGE_MONTHS / 12} năm, hãy thu hẹp lại`);

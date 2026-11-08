@@ -84,6 +84,8 @@ export const reportApi = {
   occupancy: (params) => http.get('/reports/occupancy', { params }),
   tickets: (params) => http.get('/reports/tickets', { params }),
   maintenance: (params) => http.get('/reports/maintenance', { params }),
+  /** UC60 Dashboard vận hành — params: { from, to: 'YYYY-MM', buildingId } */
+  operationsKpi: (params) => http.get('/reports/operations-kpi', { params }),
   amenityUsage: (params) => http.get('/reports/amenity-usage', { params }),
   /** Mô đun 9 — Dashboard tài chính (UC60). params: { from, to } dạng YYYY-MM */
   finance: (params) => http.get('/reports/finance', { params }),
