@@ -24,11 +24,11 @@ export async function startApi() {
   return {
     close: app.close,
     api: (method, path, user, body) => app.request(method, path, { user: user ? asUser(user) : undefined, body }),
-    // files: [[tên, buffer, mimetype]]
+    // files: [[tên, buffer, mimetype, fieldName?]]
     upload: async (method, path, user, fields, files) => {
       const form = new FormData();
       Object.entries(fields).forEach(([key, value]) => form.append(key, value));
-      files.forEach(([name, buffer, type]) => form.append('images', new Blob([buffer], { type }), name));
+      files.forEach(([name, buffer, type, fieldName]) => form.append(fieldName || 'images', new Blob([buffer], { type }), name));
       const res = await fetch(`${app.base}${path}`, { method, headers: authHeader(user), body: form });
       return { status: res.status, body: await res.json() };
     },

@@ -124,6 +124,7 @@ const TicketBoardPage = lazy(() => import('../features/tickets/TicketBoardPage')
 // ===== Module C — audit (TM) =====
 const AuditLogsPage = lazy(() => import('../features/auditLogs/AuditLogsPage'));
 const PermissionMatrixPage = lazy(() => import('../features/permissions/PermissionMatrixPage'));
+const BuildingSettingsPage = lazy(() => import('../features/settings/BuildingSettingsPage'));
 
 // ===== Gate Pass & Kiểm soát xe (Người 2) =====
 const ManagerGatePassesPage = lazy(() => import('../features/gatePasses/ManagerGatePassesPage'));
@@ -446,6 +447,15 @@ export const adminMenu = [
     path: 'vehicle-requests',
     roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
     component: VehicleRequestsPage,
+  },
+  {
+    key: 'building-settings',
+    group: 'Cấu hình',
+    label: 'Tòa nhà & biểu phí',
+    icon: SettingOutlined,
+    path: 'building-settings',
+    roles: ['MANAGER'],
+    component: BuildingSettingsPage,
   },
   {
     key: 'buildings',

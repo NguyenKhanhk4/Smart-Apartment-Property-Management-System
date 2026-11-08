@@ -654,6 +654,11 @@ export const AUDIT_ACTIONS = Object.freeze({
   TICKET_RECLASSIFIED: 'TICKET_RECLASSIFIED',
   TICKET_MERGED: 'TICKET_MERGED',
   BOOKING_PAYMENT_CONFIRMED: 'BOOKING_PAYMENT_CONFIRMED',
+  // UC05 — Cấu hình tòa nhà & biểu phí (Vũ Việt)
+  BUILDING_PROFILE_UPDATED: 'BUILDING_PROFILE_UPDATED',
+  UTILITY_TARIFF_CREATED: 'UTILITY_TARIFF_CREATED',
+  UTILITY_TARIFF_DELETED: 'UTILITY_TARIFF_DELETED',
+  COLLECTION_SETTING_CHANGED: 'COLLECTION_SETTING_CHANGED',
 });
 
 // targetType của audit_logs = tên collection (index { targetType, targetId } tra lịch sử một bản ghi)
@@ -687,6 +692,10 @@ export const AUDIT_TARGETS = Object.freeze({
   ANNOUNCEMENT: 'announcements',
   SYSTEM_CONFIG: 'system_configs',
   DUTY_SHIFT: 'duty_shifts',
+  // UC05
+  BUILDING_PROFILE: 'building_profile',
+  UTILITY_TARIFF: 'utility_tariffs',
+  COLLECTION_SETTING: 'collection_settings',
 });
 
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
@@ -727,6 +736,10 @@ export const CONFIG_KEYS = Object.freeze({
   REPAIR_ACCEPTANCE_REMIND_DAYS: 'REPAIR_ACCEPTANCE_REMIND_DAYS', // UC09: chờ nghiệm thu quá N ngày thì nhắc Trưởng BQL (BR-X8)
   REPAIR_REVIEW_REPEAT_DAYS: 'REPAIR_REVIEW_REPEAT_DAYS', // UC10: phiếu hoãn đã tới ngày xem lại thì nhắc lại mỗi N ngày
   REPAIR_POSTPONE_MAX_DAYS: 'REPAIR_POSTPONE_MAX_DAYS', // UC10: ngày xem lại tối đa N ngày kể từ hôm hoãn
+  // UC05 — Cấu hình tòa nhà & biểu phí (BR-X8)
+  OWNER_CONFIRM_REMIND_DAYS: 'OWNER_CONFIRM_REMIND_DAYS',
+  OWNER_CONFIRM_AUTO_CANCEL_DAYS: 'OWNER_CONFIRM_AUTO_CANCEL_DAYS',
+  EMERGENCY_REPEAT_MINUTES: 'EMERGENCY_REPEAT_MINUTES',
 });
 
 export const DEFAULT_CONFIGS = Object.freeze([
@@ -766,6 +779,10 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.REPAIR_REVIEW_REPEAT_DAYS, value: 7, scope: CONFIG_SCOPES.BUSINESS, description: 'Phiếu tạm hoãn sửa đã tới ngày xem lại: nhắc Trưởng BQL lại mỗi N ngày cho tới khi xử lý (UC10, BR-X8)' },
   { key: CONFIG_KEYS.REPAIR_POSTPONE_MAX_DAYS, value: 90, scope: CONFIG_SCOPES.BUSINESS, description: 'Tạm hoãn sửa chữa: ngày xem lại tối đa N ngày kể từ hôm hoãn (UC10)' },
   { key: CONFIG_KEYS.REPAIR_ACCEPTANCE_REMIND_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Phiếu chờ nghiệm thu sửa chữa quá N ngày thì nhắc Trưởng BQL, không tự nghiệm thu (UC09, BR-X8)' },
+  // UC05 — Cấu hình tòa nhà & biểu phí (BR-X8)
+  { key: CONFIG_KEYS.OWNER_CONFIRM_REMIND_DAYS, value: 3, scope: CONFIG_SCOPES.BUSINESS, description: 'Chủ nhà chưa xác nhận yêu cầu sau N ngày → nhắc lại (BR-X8)' },
+  { key: CONFIG_KEYS.OWNER_CONFIRM_AUTO_CANCEL_DAYS, value: 7, scope: CONFIG_SCOPES.BUSINESS, description: 'Chủ nhà không phản hồi sau N ngày → tự hủy yêu cầu (BR-X8)' },
+  { key: CONFIG_KEYS.EMERGENCY_REPEAT_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Khoảng thời gian lặp lại cảnh báo khẩn cấp (phút) — BR-X8' },
   { key: CONFIG_KEYS.UPLOAD_MAX_SIZE_MB, value: 10, scope: CONFIG_SCOPES.TECHNICAL, description: 'Dung lượng ảnh tối đa (MB) — NFR-10. Client tự thu nhỏ ảnh trước khi gửi; mức này là lưới an toàn (Cloudinary miễn phí giới hạn ~10MB/ảnh)' },
 ]);
 

@@ -82,6 +82,7 @@ export const FEATURES = [
   { code: 'SYSTEM_CONFIGS', label: 'Cấu hình hệ thống', group: 'Hệ thống', prefixes: ['/system-configs'], menuKeys: [] },
   { code: 'AUDIT_LOGS', label: 'Nhật ký hoạt động', group: 'Hệ thống', prefixes: ['/audit-logs'], menuKeys: ['audit-logs'] },
   { code: 'SYSTEM_DASHBOARD', label: 'Dashboard hệ thống', group: 'Hệ thống', prefixes: ['/system-dashboard'], menuKeys: ['system-dashboard'] },
+  { code: 'BUILDING_SETTINGS', label: 'Cấu hình tòa nhà & biểu phí', group: 'Hệ thống', prefixes: ['/building-profile', '/utility-tariffs', '/collection-settings'], menuKeys: ['building-settings'] },
 ];
 
 /** Đường dẫn không thuộc ma trận: đăng nhập, hồ sơ của chính mình, thông báo, tra cứu dùng chung, trang phân quyền */

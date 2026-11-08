@@ -10,8 +10,13 @@ export const FINANCIAL_ACTIONS = [
   'PAYMENT_CONFIRMED', 'PREPAID_REFUNDED', 'DEBT_FOLLOWUP_RECORDED', 'DEBT_NOTICE_EXPORTED',
   'FUND_INCOME_RECORDED', 'FUND_VOTED', 'FUND_PROPOSAL_APPROVED', 'FUND_PROPOSAL_REJECTED',
   'FUND_PROPOSAL_CREATED', 'FUND_PROPOSAL_CANCELLED', 'FUND_WORK_ACCEPTED', 'FUND_EXPENSE_RECORDED',
+  // UC05 – Cấu hình tòa nhà & biểu phí (Vũ Việt)
+  'BUILDING_PROFILE_UPDATED', 'UTILITY_TARIFF_CREATED', 'UTILITY_TARIFF_DELETED', 'COLLECTION_SETTING_CHANGED',
 ];
-export const FINANCIAL_CONFIG_KEYS = [CONFIG_KEYS.FUND_APPROVAL_RATIO, CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, CONFIG_KEYS.FUND_APPROVAL_REMIND_DAYS];
+export const FINANCIAL_CONFIG_KEYS = [
+  CONFIG_KEYS.FUND_APPROVAL_RATIO, CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, CONFIG_KEYS.FUND_APPROVAL_REMIND_DAYS,
+  CONFIG_KEYS.PAYMENT_TERM_DAYS, CONFIG_KEYS.BILLING_REMIND_DAY,
+];
 export const financialAuditFilter = () => ({
   $or: [
     { action: { $in: FINANCIAL_ACTIONS } },
@@ -132,6 +137,11 @@ export const LABELS = {
   COMPLAINT_CATEGORY_CHANGED: 'Thay đổi danh mục phản ánh',
   DUTY_SHIFT_CREATED: 'Tạo ca trực',
   DUTY_SHIFT_DELETED: 'Xóa ca trực',
+  // UC05 – Cấu hình tòa nhà & biểu phí (Vũ Việt)
+  BUILDING_PROFILE_UPDATED: 'Cập nhật thông tin tòa nhà',
+  UTILITY_TARIFF_CREATED: 'Thêm biểu giá điện/nước',
+  UTILITY_TARIFF_DELETED: 'Xóa biểu giá điện/nước',
+  COLLECTION_SETTING_CHANGED: 'Thay đổi công tắc thu hộ',
   // Tiện ích, bảng tin
   BOOKING_CANCELLED_BY_STAFF: 'Nhân viên hủy đặt tiện ích',
   AMENITY_VISIT_CANCELLED: 'Hủy lượt vào tiện ích',
@@ -149,6 +159,7 @@ const TARGET_LABELS = {
   work_orders: 'Lệnh bảo trì', tickets: 'Sự cố và phản ánh', complaint_categories: 'Danh mục phản ánh',
   announcements: 'Bảng tin', system_configs: 'Cấu hình hệ thống', duty_shifts: 'Ca trực',
   audit_logs: 'Nhật ký hoạt động', assets: 'Thiết bị', role_permissions: 'Phân quyền',
+  building_profile: 'Thông tin tòa nhà', utility_tariffs: 'Biểu giá điện/nước', collection_settings: 'Công tắc thu hộ',
 };
 // Log cũ ghi targetType theo tên model ('Resident', 'Contract'...). Không sửa dữ liệu trên DB dùng chung:
 // đọc theo tên mới, và khi lọc theo đối tượng thì gồm cả tên cũ (giống bảng của scripts/migrateAuditTargets.js)
@@ -174,7 +185,8 @@ export function auditOptions(isBoard) {
   const targets = isBoard
     ? [AUDIT_TARGETS.MAINTENANCE_FUND, AUDIT_TARGETS.FUND_TRANSACTION, AUDIT_TARGETS.FUND_PROPOSAL,
       AUDIT_TARGETS.FEE_TYPE, AUDIT_TARGETS.INVOICE, AUDIT_TARGETS.PAYMENT,
-      AUDIT_TARGETS.DEBT_FOLLOWUP, AUDIT_TARGETS.AMENITY, AUDIT_TARGETS.SYSTEM_CONFIG]
+      AUDIT_TARGETS.DEBT_FOLLOWUP, AUDIT_TARGETS.AMENITY, AUDIT_TARGETS.SYSTEM_CONFIG,
+      AUDIT_TARGETS.BUILDING_PROFILE, AUDIT_TARGETS.UTILITY_TARIFF, AUDIT_TARGETS.COLLECTION_SETTING]
     : values(AUDIT_TARGETS);
   return {
     actions: actions.map((value) => ({ value, label: auditActionLabel(value) })),

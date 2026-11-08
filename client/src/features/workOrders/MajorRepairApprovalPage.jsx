@@ -104,7 +104,11 @@ export default function MajorRepairApprovalPage() {
 
   return (
     <>
-      <PageHeader title="Duyệt sửa chữa" subtitle="Báo cáo hư hỏng chờ quyết định, phiếu tạm hoãn và lịch sử quyết định" />
+      <PageHeader
+        title="Duyệt sửa chữa"
+        subtitle="Báo cáo hư hỏng chờ quyết định, phiếu tạm hoãn và lịch sử quyết định"
+        breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Duyệt sửa chữa' }]}
+      />
       <Card>
         <Tabs
           activeKey={tab}

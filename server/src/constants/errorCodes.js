@@ -127,4 +127,7 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại',
   },
+  // UC05 – Biểu phí điện nước
+  UTILITY_TARIFF_OVERLAP: { status: 409, message: 'Ngày hiệu lực trùng với mức giá đã có của loại tiện ích này' },
+  UTILITY_TARIFF_IN_USE: { status: 409, message: 'Biểu giá đã có hiệu lực, không thể xóa' },
 });

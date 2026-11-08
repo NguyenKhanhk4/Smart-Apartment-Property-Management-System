@@ -83,6 +83,9 @@ export const ERROR_MESSAGES = {
   ACCOUNT_CONFIRM_REQUIRED: 'Số điện thoại này đã có tài khoản, vui lòng kiểm tra và xác nhận đúng người.',
   CONTRACT_ACTIVE_EXISTS: 'Căn hộ đã có hợp đồng cùng loại đang hiệu lực.',
   STATUS_CONFLICT: 'Trạng thái hiện tại không cho phép thao tác này, vui lòng tải lại.',
+  // UC05 – Biểu phí điện nước
+  UTILITY_TARIFF_OVERLAP: 'Ngày hiệu lực trùng với mức giá đã có của loại tiện ích này.',
+  UTILITY_TARIFF_IN_USE: 'Biểu giá đã có hiệu lực, không thể xóa.',
   TOO_MANY_REQUESTS: 'Bạn thao tác quá nhiều lần, vui lòng thử lại sau ít phút.',
   SERVER_ERROR: 'Có lỗi xảy ra phía máy chủ, vui lòng thử lại sau.',
 };

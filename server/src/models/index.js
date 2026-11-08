@@ -54,3 +54,8 @@ export { SystemConfig } from './SystemConfig.js';
 
 // Hệ thống
 export { CronRun } from './CronRun.js';
+
+// UC05 — Cấu hình tòa nhà & biểu phí (Vũ Việt)
+export { BuildingProfile } from './BuildingProfile.js';
+export { UtilityTariff } from './UtilityTariff.js';
+export { CollectionSetting } from './CollectionSetting.js';
