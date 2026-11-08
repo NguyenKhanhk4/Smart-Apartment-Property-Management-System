@@ -106,8 +106,10 @@ router.get('/:id/comments', authenticate, validate({ params: idParams, query: Jo
 router.post('/:id/comments', authenticate, authorize('RESIDENT'), validate({ params: idParams,
   body: Joi.object({ content: Joi.string().trim().min(1).max(2000).required() }) }),
 async (req, res) => created(res, await service.addComment(req.user, req.params.id, req.body.content)));
-router.patch('/:id/comments/:commentId/hide', authenticate, authorize('MANAGER'), validate({ params: Joi.object({ id: objectId().required(), commentId: objectId().required() }) }),
-async (req, res) => ok(res, await service.hideComment(req.user, req.params.id, req.params.commentId)));
+router.patch('/:id/comments/:commentId/hide', authenticate, authorize('MANAGER'), validate({
+  params: Joi.object({ id: objectId().required(), commentId: objectId().required() }),
+  body: Joi.object({ reason: Joi.string().trim().min(1).max(500).required() }),
+}), async (req, res) => ok(res, await service.hideComment(req.user, req.params.id, req.params.commentId, req.body.reason)));
 router.get('/:id/poll', authenticate, authorize('MANAGER', 'BOARD', 'RESIDENT'), validate({ params: idParams, query: Joi.object({ apartmentId: objectId() }) }),
 async (req, res) => ok(res, await service.pollResults(req.user, req.params.id, req.validated.query.apartmentId)));
 router.put('/:id/poll/vote', authenticate, authorize('RESIDENT'), validate({ params: idParams,
