@@ -50,10 +50,9 @@ test('booking: nhóm giữ chỗ / tính phí / dữ liệu cũ', () => {
   }
 });
 
-test('enum gom từ service về constants: trạng thái đơn giá, xem trước hóa đơn, biến động nhân khẩu', () => {
+test('enum gom từ service về constants: trạng thái đơn giá và xem trước hóa đơn', () => {
   assert.deepEqual(values(E.FEE_TYPE_STATES), ['ACTIVE', 'UPCOMING', 'ENDED']);
   assert.ok(E.INVOICE_PREVIEW_STATUS.NEW && E.INVOICE_PREVIEW_STATUS.EXISTS);
-  assert.deepEqual(values(E.OCCUPANT_CHANGE_TYPES), ['MOVE_IN', 'MOVE_OUT']);
 });
 
 test('audit: targetType thống nhất là tên collection', () => {

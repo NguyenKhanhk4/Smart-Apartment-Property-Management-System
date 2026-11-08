@@ -77,6 +77,22 @@ test('UC17 liên kết tài khoản, xử lý phí, rời căn và giữ quyền
   assert.equal(String((await getPayer(apartment._id)).userId), String(tenant._id));
   await assert.rejects(terminateContract(sale._id, USERS.receptionist), { status: 409 });
 
+  const tenantApartments = await app.request('GET', '/residents/me/apartments', { user: asUser(tenant) });
+  assert.equal(tenantApartments.body.data.find((row) => row.apartmentId === apartment.id).canDeclareFamily, true);
+  const ownerApartments = await app.request('GET', '/residents/me/apartments', { user: asUser(owner) });
+  assert.equal(ownerApartments.body.data.find((row) => row.apartmentId === apartment.id).canDeclareFamily, false);
+  const declared = await app.request('POST', '/residents/me/family', {
+    user: asUser(tenant), body: { apartmentId: apartment._id, fullName: 'Thành viên ở cùng' },
+  });
+  assert.equal(declared.status, 201);
+  const familyId = declared.body.data._id;
+  assert.equal(String((await Resident.findById(familyId)).declaredByResidenceId), memberId);
+  const occupancy = async () => {
+    const report = await app.request('GET', '/residents/occupancy', { user: USERS.manager });
+    return report.body.data.flatMap((building) => building.apartments).find((row) => row._id === apartment.id);
+  };
+  assert.deepEqual((await occupancy()).residents.map((row) => row._id), [memberId, familyId]);
+
   const invoice = await createInvoice({ apartment, payerId: tenant._id });
   await createInvoice({ apartment, payerId: owner._id, period: '2026-11' });
   const vehicle = await createVehicle({ apartment, registeredBy: tenant, status: 'APPROVED' });
@@ -90,6 +106,8 @@ test('UC17 liên kết tài khoản, xử lý phí, rời căn và giữ quyền
   const departed = await Resident.findById(memberId).lean();
   assert.equal(departed.isActive, false);
   assert.ok(departed.moveOutDate);
+  assert.equal((await Resident.findById(familyId)).isActive, false);
+  assert.deepEqual((await occupancy()).residents, []);
   assert.equal((await Apartment.findById(apartment._id)).occupancyStatus, 'VACANT');
   assert.equal((await Vehicle.findById(vehicle._id)).status, 'CANCELLED');
   assert.equal((await ParkingCard.findById(card._id)).status, 'DISABLED_TO_COLLECT');

@@ -123,7 +123,7 @@ const AuditLogsPage = lazy(() => import('../features/auditLogs/AuditLogsPage'));
 // ===== Kiểm soát xe (Người 2) =====
 const SecurityGatePage = lazy(() => import('../features/security-gate/SecurityGatePage'));
 const ParkingCardsPage = lazy(() => import('../features/vehicles/ParkingCardsPage'));
-const OccupantChangesPage = lazy(() => import('../features/residents/OccupantChangesPage'));
+const ResidentOccupancyPage = lazy(() => import('../features/residents/ResidentOccupancyPage'));
 
 // Giao diện nội bộ (/app/*) — hiện ở sidebar
 export const adminMenu = [
@@ -503,13 +503,13 @@ export const adminMenu = [
     component: ParkingCardsPage,
   },
   {
-    key: 'resident-changes',
+    key: 'resident-occupancy',
     group: 'Cư dân & dịch vụ',
-    label: 'Biến động nhân khẩu',
+    label: 'Thông tin cư trú',
     icon: TeamOutlined,
-    path: 'resident-changes',
-    roles: ['STAFF:RECEPTIONIST', 'MANAGER'],
-    component: OccupantChangesPage,
+    path: 'resident-occupancy',
+    roles: ['MANAGER'],
+    component: ResidentOccupancyPage,
   },
 ];
 
@@ -525,7 +525,6 @@ export const receptionNav = [
       { key: 'tickets', badge: 'ticketsNew' },
       { key: 'vehicle-requests', badge: 'vehiclesPending' },
       { key: 'parking-cards' },
-      { key: 'resident-changes' },
       { key: 'contracts' },
     ],
   },

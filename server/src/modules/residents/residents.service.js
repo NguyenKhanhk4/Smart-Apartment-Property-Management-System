@@ -16,6 +16,7 @@ import { withTransaction } from '../../utils/transaction.js';
 import { normalizePhone } from '../../utils/validators.js';
 import { getHousehold } from '../household/household.service.js';
 import { revokeDepartedResidentServices } from './residentExit.service.js';
+import { effectiveOccupancy, occupyingHeadRelation } from './residentOccupancy.js';
 import { ensureCodes, parseDateOfBirth } from '../memberCodes/memberCodes.service.js';
 import {
   buildIdNumberFields,
@@ -112,7 +113,7 @@ export async function lookupAccountByPhone(phone) {
   };
 }
 
-async function createFamilyMemberWithoutAccount(data, contractId, session) {
+async function createFamilyMemberWithoutAccount(data, contractId, session, declaredByResidenceId = null) {
   const [resident] = await Resident.create([{
     userId: null,
     fullName: data.fullName.trim(),
@@ -120,6 +121,7 @@ async function createFamilyMemberWithoutAccount(data, contractId, session) {
     apartmentId: data.apartmentId,
     relationType: RELATION_TYPES.FAMILY_MEMBER,
     contractId,
+    declaredByResidenceId,
     isActive: true,
     moveInDate: new Date(),
     ...buildIdNumberFields(data.idNumber?.trim() || null),
@@ -141,20 +143,27 @@ function logFamilyMemberAssignment(actor, resident, ip, session) {
 /** UC15 — Chủ hộ tự khai báo nhân khẩu gia đình đang ở tại căn. */
 export function declareFamilyMember(actor, { apartmentId, fullName, dateOfBirth }, ip) {
   return withTransaction(async (session) => {
-    const { head } = await getHousehold(apartmentId, session);
-    if (head?.userId !== String(actor.id) || head.relationType !== RELATION_TYPES.OWNER) {
-      throw new ApiError('HOUSEHOLD_HEAD_REQUIRED', 'Chỉ chủ hộ được khai báo thành viên gia đình tại căn này');
+    const { head, apartment } = await getHousehold(apartmentId, session);
+    const headRelation = occupyingHeadRelation(effectiveOccupancy(apartment));
+    if (head?.userId !== String(actor.id) || head.relationType !== headRelation) {
+      throw new ApiError('HOUSEHOLD_HEAD_REQUIRED', 'Chỉ chủ hộ đang ở được khai báo thành viên tại căn này');
     }
 
-    // Ghi vào bản ghi chủ hộ để xung đột với thao tác kết thúc cư trú chạy đồng thời.
-    const owner = await Resident.findOneAndUpdate(
-      { apartmentId, userId: actor.id, relationType: RELATION_TYPES.OWNER, isActive: true },
-      { $set: { updatedAt: new Date() } },
+    // Ghi vào lượt ở của chủ hộ để xung đột với thao tác kết thúc cư trú chạy đồng thời.
+    const now = new Date();
+    const residence = await Resident.findOneAndUpdate(
+      {
+        apartmentId, userId: actor.id, relationType: headRelation, isActive: true,
+        $or: [{ moveInDate: null }, { moveInDate: { $lte: now } }],
+      },
+      { $set: { updatedAt: now } },
       { session },
     ).select('contractId').lean();
-    if (!owner) throw new ApiError('HOUSEHOLD_HEAD_REQUIRED');
+    if (!residence) throw new ApiError('HOUSEHOLD_HEAD_REQUIRED');
 
-    const member = await createFamilyMemberWithoutAccount({ apartmentId, fullName, dateOfBirth }, owner.contractId, session);
+    const member = await createFamilyMemberWithoutAccount(
+      { apartmentId, fullName, dateOfBirth }, residence.contractId, session, residence._id,
+    );
     await logFamilyMemberAssignment(actor, member, ip, session);
     return { _id: member._id, apartmentId, fullName: member.fullName, dateOfBirth: member.dateOfBirth };
   });
@@ -410,6 +419,8 @@ export async function myApartments(userOrId) {
       building: apt.buildingId,
       relationType: r.relationType,
       isHead,
+      canDeclareFamily: isHead && r.relationType === occupyingHeadRelation(effectiveOccupancy(apt))
+        && (!r.moveInDate || r.moveInDate <= new Date()),
       moveInDate: r.moveInDate,
     });
   }

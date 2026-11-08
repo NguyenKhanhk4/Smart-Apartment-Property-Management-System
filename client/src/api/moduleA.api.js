@@ -70,14 +70,15 @@ export const residentsApi = {
   startTenancy: (apartmentId, body) => http.post(`/residents/me/tenancies/${apartmentId}`, body),
   endTenancy: (apartmentId, residentId) => http.patch(`/residents/me/tenancies/${apartmentId}/${residentId}/end`),
   revealIdNumber: (id) => http.get(`/residents/${id}/id-number`),
-  listChanges: (params) => http.get('/residents/changes', { params }),
-  exportChanges: async (params) => {
-    const res = await apiClient.get('/residents/changes/export', {
+  listOccupancy: () => http.get('/residents/occupancy'),
+  previewOccupancyExcel: (params) => http.get('/residents/occupancy/preview', { params }),
+  exportOccupancy: async (params) => {
+    const res = await apiClient.get('/residents/occupancy/export', {
       params,
       responseType: 'blob',
     });
     const match = /filename="?([^"]+)"?/.exec(res.headers['content-disposition'] ?? '');
-    const filename = match?.[1] ?? 'bien-dong-nhan-khau.xlsx';
+    const filename = match?.[1] ?? 'thong-tin-cu-tru.xlsx';
     const url = URL.createObjectURL(res.data);
     const a = Object.assign(document.createElement('a'), { href: url, download: filename });
     document.body.appendChild(a);

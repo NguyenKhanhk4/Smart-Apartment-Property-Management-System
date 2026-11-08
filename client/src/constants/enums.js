@@ -350,11 +350,6 @@ export const PARKING_CARD_STATUS = {
   LOST: { label: 'Mất thẻ', color: 'error' },
 };
 
-export const OCCUPANT_CHANGE_TYPES = {
-  MOVE_IN: { label: 'Vào ở', color: 'green' },
-  MOVE_OUT: { label: 'Chuyển đi', color: 'volcano' },
-};
-
 // ===== Hệ thống =====
 export const CRON_JOBS = {
   INVOICE_GENERATE: { label: 'Tạo hóa đơn định kỳ', color: 'green' },

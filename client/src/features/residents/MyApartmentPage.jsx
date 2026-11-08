@@ -69,7 +69,7 @@ export default function MyApartmentPage() {
 
   // Căn hộ hiện tại đang chọn
   const currentApartment = apartments.find((a) => a.apartmentId === activeAptId);
-  const canDeclareFamily = currentApartment?.isHead && currentApartment.relationType === 'OWNER';
+  const canDeclareFamily = currentApartment?.canDeclareFamily;
 
   // Load danh sách thành viên trong căn hộ đang chọn
   const {
@@ -89,7 +89,7 @@ export default function MyApartmentPage() {
       dateOfBirth: dateOfBirth?.format('YYYY-MM-DD'),
     }),
     {
-      success: 'Đã khai báo thành viên gia đình',
+      success: 'Đã khai báo thành viên ở cùng',
       onDone: () => { setDeclaringApartment(null); reloadMembers(); },
     },
   );
@@ -248,7 +248,7 @@ export default function MyApartmentPage() {
         }
         extra={canDeclareFamily && (
           <Button type="primary" onClick={() => setDeclaringApartment(currentApartment)}>
-            Khai báo thành viên gia đình
+            Khai báo thành viên ở cùng
           </Button>
         )}
       >

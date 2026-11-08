@@ -36,10 +36,9 @@ const familyDeclarationBody = Joi.object({
   dateOfBirth: ymd().allow(null),
 });
 
-const changesQuerySchema = Joi.object({
-  from: Joi.date().iso().optional(),
-  to: Joi.date().iso().optional(),
-  format: Joi.string().valid('json', 'xlsx').optional(),
+const occupancyQuerySchema = Joi.object({
+  buildingId: objectId(),
+  floor: Joi.number().integer().min(1),
 });
 const tenancyParams = Joi.object({ apartmentId: objectId().required() });
 const startTenancyBody = Joi.object({
@@ -68,31 +67,13 @@ router.patch('/me/tenancies/:apartmentId/:residentId/end', authenticate, authori
   return ok(res, null, 'Đã kết thúc cho thuê');
 });
 
-/**
- * GET /residents/changes — UC21: Xem trước hoặc xuất Excel biến động nhân khẩu
- */
+/** UC21 — Danh sách người đang ở theo tòa nhà và tầng. */
 router.get(
-  '/changes',
+  '/occupancy',
   authenticate,
-  authorize('STAFF:RECEPTIONIST', 'MANAGER'),
-  validate({ query: changesQuerySchema }),
-  async (req, res) => {
-    if (req.validated.query.format === 'xlsx') {
-      const { buffer, filename } = await occupantReportsService.exportResidentChangesExcel(
-        req.validated.query,
-        req.user,
-        req.ip,
-      );
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      );
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      return res.send(Buffer.from(buffer));
-    }
-    const list = await occupantReportsService.listResidentChanges(req.validated.query);
-    return ok(res, list);
-  },
+  authorize('MANAGER'),
+  validate({ query: occupancyQuerySchema }),
+  async (req, res) => ok(res, await occupantReportsService.listResidentOccupancy(req.validated.query)),
 );
 
 /**
@@ -114,16 +95,25 @@ router.get(
   },
 );
 
+/** UC21 — Xem các sheet và hàng sẽ được xuất trong file Excel. */
+router.get(
+  '/occupancy/preview',
+  authenticate,
+  authorize('MANAGER'),
+  validate({ query: occupancyQuerySchema }),
+  async (req, res) => ok(res, await occupantReportsService.previewResidentOccupancyExcel(req.validated.query)),
+);
+
 /**
- * GET /residents/changes/export — UC21: Xuất Excel biến động nhân khẩu
+ * UC21 — Xuất danh sách người đang ở, mỗi tòa một sheet.
  */
 router.get(
-  '/changes/export',
+  '/occupancy/export',
   authenticate,
-  authorize('STAFF:RECEPTIONIST', 'MANAGER'),
-  validate({ query: changesQuerySchema }),
+  authorize('MANAGER'),
+  validate({ query: occupancyQuerySchema }),
   async (req, res) => {
-    const { buffer, filename } = await occupantReportsService.exportResidentChangesExcel(
+    const { buffer, filename } = await occupantReportsService.exportResidentOccupancyExcel(
       req.validated.query,
       req.user,
       req.ip,

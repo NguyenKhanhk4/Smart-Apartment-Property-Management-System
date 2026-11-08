@@ -114,11 +114,13 @@ export async function endTenancy(actor, apartmentId, residentId, ip) {
     const lease = await legacyLeaseQuery(apartmentId, member, residentId)?.session(session);
     if (!member && !lease) throw new ApiError('STATUS_CONFLICT', 'Lượt thuê đã kết thúc hoặc không tồn tại');
 
-    const filter = { apartmentId, isActive: true, _id: member?._id };
+    const group = member ? [
+      { _id: member._id },
+      { declaredByResidenceId: member._id, relationType: RELATION_TYPES.FAMILY_MEMBER },
+    ] : [];
+    const filter = { apartmentId, isActive: true, $or: group };
     if (lease) {
-      delete filter._id;
-      filter.$or = [{ contractId: lease._id, relationType: { $ne: RELATION_TYPES.OWNER } },
-        ...(member ? [{ _id: member._id }] : [])];
+      group.push({ contractId: lease._id, relationType: { $ne: RELATION_TYPES.OWNER } });
       lease.status = CONTRACT_STATUS.TERMINATED;
       lease.terminatedAt = now;
       await lease.save({ session });

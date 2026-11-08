@@ -93,9 +93,6 @@ export const VEHICLE_STATUS = Object.freeze({
 });
 
 // ===== Thẻ gửi xe (Người 2 — UC66) =====
-// Biến động nhân khẩu nộp Công an phường (UC21)
-export const OCCUPANT_CHANGE_TYPES = Object.freeze({ MOVE_IN: 'MOVE_IN', MOVE_OUT: 'MOVE_OUT' });
-
 export const PARKING_CARD_STATUS = Object.freeze({
   PENDING_HANDOVER: 'PENDING_HANDOVER',
   ACTIVE: 'ACTIVE',
@@ -554,6 +551,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   PARKING_CARD_LOST: 'PARKING_CARD_LOST',
   // Biến động nhân khẩu (Người 2 — UC21)
   RESIDENT_CHANGES_EXPORTED: 'RESIDENT_CHANGES_EXPORTED',
+  RESIDENT_OCCUPANCY_EXPORTED: 'RESIDENT_OCCUPANCY_EXPORTED',
   RESIDENT_ID_VIEWED: 'RESIDENT_ID_VIEWED',
   // Sự cố & tiện ích (Người 4)
   DUTY_SHIFT_CREATED: 'DUTY_SHIFT_CREATED',

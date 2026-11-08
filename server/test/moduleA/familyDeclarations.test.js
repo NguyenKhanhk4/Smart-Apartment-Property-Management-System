@@ -36,6 +36,8 @@ test('chủ hộ khai báo tại đúng căn, ban quản lý và UC21 đọc đ�
   assert.equal(String(member.apartmentId), String(secondApartment._id));
   assert.equal(String(member.contractId), String(contract._id));
   assert.equal(member.isActive, true);
+  const head = await Resident.findOne({ apartmentId: secondApartment._id, userId: user._id });
+  assert.equal(String(member.declaredByResidenceId), head.id);
   assert.equal(await Resident.countDocuments({ apartmentId: firstApartment._id, relationType: 'FAMILY_MEMBER' }), 0);
 
   const path = `/apartments/${secondApartment._id}/residents`;
@@ -45,13 +47,14 @@ test('chủ hộ khai báo tại đúng căn, ban quản lý và UC21 đọc đ�
     assert.equal(list.body.data.find((row) => row._id === saved.body.data._id)?.fullName, 'Nguyễn An');
   }
 
-  const report = await app.request('GET', '/residents/changes', { user: USERS.receptionist });
+  const report = await app.request('GET', '/residents/occupancy', { user: USERS.manager });
   assert.equal(report.status, 200);
-  assert.ok(report.body.data.some((row) => row.residentId === saved.body.data._id && row.changeType === 'MOVE_IN'));
+  const reportApartment = report.body.data.flatMap((b) => b.apartments).find((a) => a._id === secondApartment.id);
+  assert.deepEqual(reportApartment.residents.map((row) => row._id), [head.id, saved.body.data._id]);
   assert.ok(await AuditLog.exists({ targetId: member._id, performedBy: user._id, action: 'RESIDENT_ASSIGNED' }));
 });
 
-test('từ chối người thuê, thành viên, chủ hộ căn khác và tài khoản nội bộ', async (t) => {
+test('từ chối người không phải chủ hộ đang ở, chủ hộ căn khác và tài khoản nội bộ', async (t) => {
   const app = await startApp();
   t.after(app.close);
   const { user: owner, apartment, building } = await createHousehold();
@@ -65,7 +68,7 @@ test('từ chối người thuê, thành viên, chủ hộ căn khác và tài k
 
   const attempts = [
     [asUser(family), apartment], [asUser(otherOwner), apartment],
-    [asUser(tenant), rentedApartment], [asUser(owner), rentedApartment],
+    [asUser(tenant), apartment], [asUser(owner), rentedApartment],
     [USERS.manager, apartment], [USERS.receptionist, apartment],
   ];
   for (const [user, target] of attempts) {

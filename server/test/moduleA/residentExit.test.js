@@ -4,7 +4,6 @@ import { Apartment, Contract, ParkingCard, Resident, User, Vehicle } from '../..
 import { endTenancy } from '../../src/modules/residents/residentTenancies.js';
 import { listApartmentResidents, removeMember, updateMember } from '../../src/modules/residents/residents.service.js';
 import { linkResident as linkAccount } from '../../src/modules/residents/residentAccounts.js';
-import { listResidentChanges, exportResidentChangesExcel } from '../../src/modules/occupantReports/occupantReports.service.js';
 import { getBillableVehicles } from '../../src/modules/vehicles/vehicles.queries.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { startApp } from '../helpers/http.js';
@@ -85,7 +84,7 @@ test('gỡ thành viên: thu hồi đúng dịch vụ và giữ lịch sử, kh�
   assert.equal((await Resident.findById(row.id)).isActive, false);
 });
 
-test('nhân khẩu không tài khoản: API thêm nhiều người cùng căn, sửa, xuất Excel và chuyển đi', async () => {
+test('nhân khẩu không tài khoản: API thêm nhiều người cùng căn, sửa và chuyển đi', async () => {
   const { user: owner, apartment } = await createHousehold();
   await createContract({ apartment, owner });
   const actor = asUser(await createReceptionist());
@@ -105,11 +104,11 @@ test('nhân khẩu không tài khoản: API thêm nhiều người cùng căn, s
   await updateMember(child._id, { dateOfBirth: '2020-02-04' }, actor);
   assert.equal((await Resident.findById(child._id)).dateOfBirth.toISOString().slice(0, 10), '2020-02-03');
   // parseDateOfBirth lưu 00:00 VN, tương ứng chiều ngày trước theo UTC.
-  const exported = await exportResidentChangesExcel({}, actor);
-  assert.ok(exported.buffer.byteLength > 0);
-  assert.equal((await listResidentChanges({})).filter((r) => r.fullName.startsWith('Nguyễn Bé')).length, 2);
+  assert.equal(members.filter((r) => r.fullName.startsWith('Nguyễn Bé')).length, 2);
   await removeMember(child._id, actor);
-  assert.equal((await listResidentChanges({})).filter((r) => String(r.residentId) === String(child._id)).length, 2);
+  const departed = await Resident.findById(child._id).lean();
+  assert.equal(departed.isActive, false);
+  assert.ok(departed.moveOutDate);
 });
 
 test('quay lại cùng căn: tạo đợt mới, giữ nguyên ngày vào/ra của đợt cũ và chặn hai đợt active', async () => {
@@ -124,7 +123,6 @@ test('quay lại cùng căn: tạo đợt mới, giữ nguyên ngày vào/ra c�
   assert.equal(old.moveInDate.getTime(), entered.getTime());
   assert.equal(old.moveOutDate.getTime(), left.getTime());
   assert.equal(old.isActive, false);
-  assert.equal((await listResidentChanges({})).filter((r) => String(r.residentId) === previous.id).length, 2);
   await assert.rejects(linkResident(member, apartment), { code: 11000 });
   assert.equal((await listApartmentResidents(apartment.id, asUser(user))).filter((r) => String(r.userId) === member.id).length, 1);
 });
