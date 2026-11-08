@@ -25,7 +25,8 @@ export default function TicketsPage() {
   const navigate = useNavigate();
   const { message } = App.useApp();
   const { user, hasRole } = useAuth();
-  const isDispatcher = hasRole('MANAGER', 'STAFF:RECEPTIONIST');
+  const isDispatcher = hasRole('MANAGER', 'STAFF:RECEPTIONIST'); // xem toàn bộ phiếu
+  const isManager = hasRole('MANAGER'); // điều phối: cột Phân công
   const isTech = hasRole('STAFF:TECHNICIAN');
   const [tab, setTab] = useState('queue');
   const [filters, setFilters] = useState({ page: 1, limit: 20, status: isDispatcher ? undefined : TICKET_OPEN_STATUSES });
@@ -88,7 +89,7 @@ export default function TicketsPage() {
       width: 160,
       render: (v, r) => <Typography.Text type={r.isOverdue ? 'danger' : undefined}>{formatDateTime(v)}</Typography.Text>,
     },
-    ...(isDispatcher
+    ...(isManager
       ? [
           {
             title: '',

@@ -22,7 +22,7 @@ export default function ReceptionSidebarNav({ collapsed, onNavigate }) {
         return (
           <div key={group ?? gi} className="space-y-1">
             {group && !collapsed && (
-              <div className="px-3 pb-1 pt-1 text-[11px] font-bold tracking-[0.12em] uppercase text-[#C9A24A] select-none">{group}</div>
+              <div className="px-3 pb-1 pt-1 text-[11px] font-medium tracking-wider uppercase text-ink-3 dark:text-[#8B8B94] select-none">{group}</div>
             )}
             {visible.map(({ menu, badge, badgeTone }) => {
               const active = activeKey === menu.path.split('/')[0];
@@ -34,20 +34,20 @@ export default function ReceptionSidebarNav({ collapsed, onNavigate }) {
                   viewTransition
                   onClick={onNavigate}
                   aria-current={active ? 'page' : undefined}
-                  className="block no-underline rounded-[10px]"
+                  className="block no-underline rounded-md"
                 >
                   {/* Màu chữ đặt ở thẻ con: CSS toàn cục của thẻ <a> không phân lớp nên sẽ đè class Tailwind đặt trên <a> */}
                   <span
-                    className={`flex items-center gap-3 min-h-11 px-3 rounded-[10px] text-sm transition-colors ${
-                      active ? 'bg-[#2C3858] text-white font-semibold' : 'text-[#C8D1DE] font-medium hover:bg-[#232E4D] hover:text-white'
+                    className={`flex items-center gap-3 min-h-10 px-3 rounded-md text-[13px] transition-colors ${
+                      active ? 'bg-navy-bg text-navy font-semibold dark:bg-[#27272A] dark:text-white' : 'text-ink-2 font-medium hover:bg-surface-alt hover:text-ink dark:text-[#A1A1AA] dark:hover:bg-[#27272A] dark:hover:text-white'
                     } ${collapsed ? 'justify-center' : ''}`}
                   >
-                    {menu.icon && <span className={`text-lg shrink-0 ${active ? 'text-[#C9A24A]' : 'text-[#8C93A0]'}`}>{createElement(menu.icon)}</span>}
+                    {menu.icon && <span className={`text-lg shrink-0 ${active ? 'text-navy dark:text-[#60A5FA]' : 'text-ink-3'}`}>{createElement(menu.icon)}</span>}
                     {!collapsed && <span className="flex-1 truncate">{menu.label}</span>}
                     {!collapsed && count > 0 && (
                       <span
-                        className={`min-w-6 h-6 px-2 rounded-full text-xs font-bold flex items-center justify-center ${
-                          badgeTone === 'neutral' ? 'bg-[#3A4768] text-white' : 'bg-[#C9A24A] text-[#1A2440]'
+                        className={`min-w-6 h-6 px-2 rounded-full text-[11px] font-semibold flex items-center justify-center ${
+                          badgeTone === 'neutral' ? 'bg-surface-alt text-ink-2 dark:bg-[#27272A] dark:text-[#A1A1AA]' : 'bg-navy text-white'
                         }`}
                         aria-label={`${count} việc đang chờ`}
                       >

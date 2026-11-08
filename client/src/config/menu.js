@@ -557,7 +557,7 @@ export const receptionNav = [
   { group: 'Cấu hình', items: [{ key: 'buildings' }] },
 ];
 
-// Giao diện cư dân (/r/*). Mục nào hiện ở đâu do residentBottomNav / residentWebNav bên dưới quyết định
+// Giao diện cư dân (/r/*). Mục nào hiện ở đâu do residentBottomNav / residentSideNav bên dưới quyết định
 // (theo `key`), không còn do hideInMenu. Thông báo vào qua chuông trên header.
 export const residentMenu = [
   { key: 'home', label: 'Trang chủ', icon: HomeOutlined, path: 'home', component: ResidentHomePage },
@@ -635,5 +635,9 @@ export const residentMenu = [
 
 // Thanh điều hướng dưới (mobile): 5 mục, mục giữa là nút nổi "Mã của tôi". Bảng tin vào qua "Xem tất cả" ở trang chủ.
 export const residentBottomNav = ['home', 'amenities', 'my-code', 'tickets', 'guests'];
-// Thanh điều hướng ngang (web ≥768px). "Mã của tôi" là nút riêng bên phải nên không nằm trong danh sách này.
-export const residentWebNav = ['home', 'my-invoices', 'amenities', 'tickets', 'guests', 'announcements'];
+// Sidebar cư dân trên máy tính (≥768px), gom theo nhóm. Các trang ẩn khỏi menu (hideInMenu) vẫn hiện ở đây nếu có tên.
+export const residentSideNav = [
+  { group: 'Tổng quan', keys: ['home', 'announcements', 'notifications'] },
+  { group: 'Dịch vụ', keys: ['my-invoices', 'amenities', 'tickets', 'guests', 'gate-passes'] },
+  { group: 'Của tôi', keys: ['my-code', 'my-apartment', 'my-vehicles', 'profile'] },
+];

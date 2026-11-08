@@ -84,7 +84,7 @@ export default function MyApartmentPage() {
   if (!apartments || apartments.length === 0) {
     return (
       <div className="p-4 md:p-6 max-w-xl mx-auto text-center py-12">
-        <Card className="shadow-sm border-gray-100 dark:border-gray-800">
+        <Card className="shadow-sm border-line dark:border-gray-800">
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
@@ -92,7 +92,7 @@ export default function MyApartmentPage() {
                 <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">
                   Chưa gắn căn hộ
                 </h3>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-ink-3">
                   Bạn chưa được gắn vào căn hộ nào trong tòa nhà. Vui lòng liên hệ Lễ tân để được hỗ trợ.
                 </p>
               </div>
@@ -138,14 +138,14 @@ export default function MyApartmentPage() {
       {/* Thẻ thông tin chi tiết căn hộ */}
       {currentApartment && (
         <Card
-          className="shadow-sm border-gray-100 dark:border-gray-800 overflow-hidden"
+          className="shadow-sm border-line dark:border-gray-800 overflow-hidden"
           title={
             <div className="flex items-center justify-between">
               <Space align="center">
                 <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
                   {currentApartment.code}
                 </span>
-                <span className="text-xs text-gray-400 font-normal">
+                <span className="text-xs text-ink-3 font-normal">
                   {currentApartment.building?.name || ''}
                 </span>
               </Space>
@@ -195,7 +195,7 @@ export default function MyApartmentPage() {
             </Col>
           </Row>
 
-          <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-400 flex flex-wrap justify-between gap-2">
+          <div className="mt-4 pt-3 border-t border-line dark:border-gray-800 text-xs text-ink-3 flex flex-wrap justify-between gap-2">
             <span>
               Địa chỉ: <b>{currentApartment.building?.address || 'Khu chung cư SAPMS'}</b>
             </span>
@@ -208,7 +208,7 @@ export default function MyApartmentPage() {
 
       {/* Danh sách thành viên trong căn hộ */}
       <Card
-        className="shadow-sm border-gray-100 dark:border-gray-800"
+        className="shadow-sm border-line dark:border-gray-800"
         title={
           <div className="flex items-center gap-2">
             <TeamOutlined className="text-blue-500" />
@@ -244,12 +244,12 @@ export default function MyApartmentPage() {
                     )}
                     <EnumTag map={RELATION_TYPES} value={m.relationType} />
                     {String(m.userId) === String(user?._id || user?.id) && (
-                      <Badge status="processing" text={<span className="text-xs text-gray-400">(Bạn)</span>} />
+                      <Badge status="processing" text={<span className="text-xs text-ink-3">(Bạn)</span>} />
                     )}
                   </Space>
                 }
                 description={
-                  <div className="text-xs text-gray-400 space-x-3 mt-0.5">
+                  <div className="text-xs text-ink-3 space-x-3 mt-0.5">
                     {m.phone && <span>SĐT: {m.phone}</span>}
                     {m.idNumber && <span>CCCD: {m.idNumber}</span>}
                     {m.dateOfBirth && <span>Ngày sinh: {formatDate(m.dateOfBirth)}</span>}
@@ -265,9 +265,9 @@ export default function MyApartmentPage() {
       {/* Lối tắt tiện ích nhanh cho cư dân */}
       <Card
         size="small"
-        className="shadow-sm border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50"
+        className="border-line-strong bg-surface-alt dark:border-[#2E2E33] dark:bg-[#27272A]"
       >
-        <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+        <div className="text-xs font-semibold uppercase tracking-wider text-ink-3 mb-2">
           Dịch vụ & Tiện ích căn hộ
         </div>
         <Row gutter={[12, 12]}>

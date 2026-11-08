@@ -13,7 +13,9 @@ import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from './ti
 import * as service from './tickets.service.js';
 
 const router = Router();
-const DISPATCHERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
+// Xem toàn bộ phiếu: Trưởng BQL + Lễ tân (lễ tân tạo phiếu hộ, trả lời cư dân tại quầy).
+// Điều phối (phân công, từ chối, gộp phiếu, danh sách KTV) chỉ Trưởng BQL — SRS 2.3: Defect Kanban / UC41–42 chỉ Building Admin.
+const DESK = ['MANAGER', 'STAFF:RECEPTIONIST'];
 
 const listQuery = Joi.object({
   ...paginationQuery,
@@ -52,7 +54,7 @@ const MANUAL_JOBS = {
  * /tickets:
  *   get:
  *     tags: [Ticket]
- *     summary: Danh sách phản ánh theo quyền (cư dân → căn mình; KTV → được giao; Manager/Lễ tân → tất cả)
+ *     summary: Danh sách phản ánh theo quyền (cư dân → căn mình; KTV → được giao; Trưởng BQL / Lễ tân → tất cả, lễ tân chỉ xem)
  *     parameters:
  *       - $ref: '#/components/parameters/page'
  *       - $ref: '#/components/parameters/limit'
@@ -81,7 +83,7 @@ const MANUAL_JOBS = {
 router.get(
   '/',
   authenticate,
-  authorize('RESIDENT', 'STAFF:TECHNICIAN', ...DISPATCHERS),
+  authorize('RESIDENT', 'STAFF:TECHNICIAN', ...DESK),
   validate({ query: listQuery }),
   async (req, res) => {
     const { items, pagination } = await service.listTickets(req.user, req.validated.query);
@@ -141,7 +143,7 @@ router.get('/queue', authenticate, authorize('STAFF:TECHNICIAN'), async (req, re
 router.get(
   '/similar',
   authenticate,
-  authorize('RESIDENT', ...DISPATCHERS),
+  authorize('RESIDENT', ...DESK),
   validate({ query: Joi.object({ apartmentId: objectId(), categoryId: objectId().required(), excludeId: objectId() }) }), // cư dân 1 căn bỏ trống apartmentId
   async (req, res) => ok(res, await service.findSimilarTickets(req.user, req.query)),
 );
@@ -169,7 +171,7 @@ router.get(
  *     tags: [Ticket]
  *     summary: Kỹ thuật viên đang hoạt động + số ticket đang mở (để phân công)
  */
-router.get('/assignees', authenticate, authorize(...DISPATCHERS), async (_req, res) =>
+router.get('/assignees', authenticate, authorize('MANAGER'), async (_req, res) =>
   ok(res, await service.listAssignees()),
 );
 
@@ -203,7 +205,7 @@ router.post(
 router.get(
   '/:id',
   authenticate,
-  authorize('RESIDENT', 'STAFF:TECHNICIAN', ...DISPATCHERS),
+  authorize('RESIDENT', 'STAFF:TECHNICIAN', ...DESK),
   validate({ params: idParams }),
   async (req, res) => ok(res, await service.getTicket(req.user, req.params.id)),
 );
@@ -229,7 +231,7 @@ router.get(
 router.patch(
   '/:id/assign',
   authenticate,
-  authorize(...DISPATCHERS),
+  authorize('MANAGER'),
   validate({
     params: idParams,
     body: Joi.object({
@@ -247,13 +249,13 @@ router.patch(
  * /tickets/{id}/reject:
  *   patch:
  *     tags: [Ticket]
- *     summary: Từ chối phản ánh không hợp lệ (Manager/Lễ tân)
+ *     summary: Từ chối phản ánh không hợp lệ (chỉ Trưởng BQL)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
 router.patch(
   '/:id/reject',
   authenticate,
-  authorize(...DISPATCHERS),
+  authorize('MANAGER'),
   validate({
     params: idParams,
     body: Joi.object({ reason: Joi.string().trim().min(5).max(500).required() }),
@@ -273,7 +275,7 @@ router.patch(
 router.patch(
   '/:id/classify',
   authenticate,
-  authorize(...DISPATCHERS, 'STAFF:TECHNICIAN'),
+  authorize(...DESK, 'STAFF:TECHNICIAN'),
   validate({
     params: idParams,
     body: Joi.object({
@@ -290,13 +292,13 @@ router.patch(
  * /tickets/{id}/merge:
  *   patch:
  *     tags: [Ticket]
- *     summary: 'M5-6 - Gộp phiếu trùng vào phiếu chính; phiếu con đóng theo phiếu chính (Trưởng BQL, Lễ tân)'
+ *     summary: 'M5-6 - Gộp phiếu trùng vào phiếu chính; phiếu con đóng theo phiếu chính (chỉ Trưởng BQL)'
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
 router.patch(
   '/:id/merge',
   authenticate,
-  authorize(...DISPATCHERS),
+  authorize('MANAGER'),
   validate({ params: idParams, body: Joi.object({ parentId: objectId().required(), note: Joi.string().trim().max(500).allow('') }) }),
   async (req, res) => ok(res, await service.mergeTicket(req.user, req.params.id, req.body), 'Đã gộp phiếu'),
 );

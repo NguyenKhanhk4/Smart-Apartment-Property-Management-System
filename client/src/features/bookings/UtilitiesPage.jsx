@@ -43,7 +43,7 @@ export default function UtilitiesPage() {
       {wide ? (
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="m-0 text-[28px] font-semibold">Tiện ích</h1>
+            <h1 className="m-0 text-[clamp(20px,2.2vw,26px)] font-semibold">Tiện ích</h1>
             <p className="mt-1 mb-0 text-[15px] text-r-muted">Xem dịch vụ và lịch sử đặt ở một nơi</p>
           </div>
           {tabs}

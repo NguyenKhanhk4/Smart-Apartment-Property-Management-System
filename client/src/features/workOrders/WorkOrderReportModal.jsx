@@ -6,7 +6,7 @@ import { formatDate, formatDateTime } from '../../utils/format';
 // Manager (người giao việc) xem ở trang Work order và lịch sử bảo trì tài sản; KTV xem lại việc của mình.
 export default function WorkOrderReportModal({ workOrder, open, onClose }) {
   return (
-    <Modal title="Báo cáo hoàn thành" open={open} onCancel={onClose} footer={null} width={640} destroyOnHidden>
+    <Modal title="Báo cáo hoàn thành" open={open} onCancel={onClose} footer={null} width="min(640px, 94vw)" destroyOnHidden>
       <Typography.Paragraph type="secondary">{workOrder.title}</Typography.Paragraph>
       <Descriptions column={1} size="small" bordered>
         <Descriptions.Item label="Kỹ thuật viên">{workOrder.assignedTo?.fullName ?? '—'}</Descriptions.Item>

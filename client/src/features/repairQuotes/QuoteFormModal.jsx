@@ -37,7 +37,7 @@ export default function QuoteFormModal({ ticket, open, accepted, pending, percen
       title={`${revising ? 'Báo giá lại' : 'Gửi báo giá'} — ${ticket.code}`}
       okText={revising && total <= limit ? 'Cập nhật chi phí' : 'Gửi cho Người nộp phí'}
       cancelText="Đóng"
-      width={720}
+      width="min(720px, 94vw)"
       confirmLoading={loading}
       onCancel={onClose}
       onOk={() => form.submit()}

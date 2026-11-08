@@ -23,7 +23,7 @@ function Hero({ amenity }) {
   return amenity.imageUrl ? (
     <img src={amenity.imageUrl} alt={amenity.name} className="w-full h-40 md:h-48 object-cover rounded-xl block" />
   ) : (
-    <div className="w-full h-28 md:h-36 rounded-xl bg-[#F0ECE4] text-r-navy flex items-center justify-center">
+    <div className="w-full h-28 md:h-36 rounded-xl bg-r-ok-bg border border-r-border text-r-navy flex items-center justify-center">
       <AmenityIcon name={amenity.name} size={44} />
     </div>
   );
@@ -288,7 +288,7 @@ export default function AmenityBookingPage() {
         <button type="button" onClick={back} aria-label="Quay lại" className="w-11 h-11 -ml-2.5 border-0 bg-transparent text-r-text text-base cursor-pointer">
           <ArrowLeftOutlined />
         </button>
-        <h1 className="m-0 text-xl md:text-[28px] font-semibold">{a.name}</h1>
+        <h1 className="m-0 text-[clamp(20px,2.2vw,26px)] font-semibold">{a.name}</h1>
       </div>
 
       <div className="flex flex-wrap gap-4 md:gap-6 items-start">

@@ -262,7 +262,7 @@ export default function InternalAccountsPage() {
       key: 'fullName',
       render: (text, record) => (
         <div>
-          <span className="font-semibold text-ink dark:text-[#EEF1F6]">{text}</span>
+          <span className="font-semibold text-ink dark:text-[#FAFAFA]">{text}</span>
           {record._id === currentUser?.id && (
             <Tag color="cyan" className="ml-2 text-[10px]">
               Tài khoản của bạn

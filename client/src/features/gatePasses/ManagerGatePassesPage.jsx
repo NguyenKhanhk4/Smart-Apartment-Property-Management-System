@@ -292,7 +292,7 @@ export default function ManagerGatePassesPage() {
         title={`Chi tiết Gate Pass ${detailData?.code || ''}`}
         open={Boolean(detailId)}
         onCancel={() => setDetailId(null)}
-        width={680}
+        width="min(680px, 94vw)"
         footer={
           <Space>
             {detailData?.status === 'PENDING' && (

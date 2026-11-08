@@ -16,7 +16,7 @@ import { usersApi } from '../../api/moduleA.api';
 import { useAuth } from '../../hooks/useAuth';
 import { roleLabelOf } from '../../constants/enums';
 import PageHeader from '../../components/PageHeader';
-import ConsentTab from './ConsentTab';
+import ConsentSection from './ConsentSection';
 import { roleHome } from '../../routes/roleHome';
 import { useImageCheck } from '../../hooks/useImageCheck';
 import { IMAGE_ACCEPT } from '../../utils/imageUpload';
@@ -140,7 +140,7 @@ export default function ProfilePage() {
               </Upload>
             </div>
             <div>
-              <h3 className="m-0 text-base font-semibold text-ink dark:text-[#EEF1F6]">
+              <h3 className="m-0 text-base font-semibold text-ink dark:text-[#FAFAFA]">
                 {user?.fullName}
               </h3>
               <div className="mt-1 flex items-center gap-2">
@@ -156,6 +156,9 @@ export default function ProfilePage() {
               </p>
             </div>
           </div>
+
+          {/* BR-X7: trạng thái đồng ý điều khoản, xem lại và rút đồng ý (chỉ cư dân) */}
+          {user?.role === 'RESIDENT' && <ConsentSection />}
 
           <Form
             form={profileForm}
@@ -321,8 +324,6 @@ export default function ProfilePage() {
         </div>
       ),
     },
-    // Màn hình 5 của SRS: chỉ cư dân có mục đồng ý điều khoản
-    ...(user?.role === 'RESIDENT' ? [{ key: 'consent', label: 'Dữ liệu cá nhân', children: <ConsentTab /> }] : []),
   ];
 
   return (

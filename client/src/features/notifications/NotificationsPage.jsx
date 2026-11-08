@@ -38,7 +38,7 @@ export default function NotificationsPage() {
   return (
     <Flex vertical gap={12}>
       <Flex justify="space-between" align="center" wrap gap={8}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
+        <Typography.Title level={3} style={{ margin: 0 }}>
           Thông báo {raw?.unreadCount > 0 && <Badge count={raw.unreadCount} />}
         </Typography.Title>
         <Flex gap={8}>
