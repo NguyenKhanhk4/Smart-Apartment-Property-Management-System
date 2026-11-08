@@ -180,7 +180,7 @@ async function publishOne(user, invoice, { now, dueDate }) {
     ).lean();
     if (!claimed) return null;
 
-    const applied = await applyPrepaid(claimed, claimed.totalAmount - claimed.paidAmount, session);
+    const applied = await applyPrepaid(claimed, claimed.totalAmount - (claimed.paidAmount ?? 0), session);
     const paidAmount = claimed.paidAmount + applied;
     let status = UNPAID;
     if (paidAmount >= claimed.totalAmount) status = PAID;
@@ -205,7 +205,7 @@ async function publishOne(user, invoice, { now, dueDate }) {
 }
 
 function notifyPayer(inv) {
-  const outstanding = inv.totalAmount - inv.paidAmount;
+  const outstanding = inv.totalAmount - (inv.paidAmount ?? 0);
   const lines = [`Thông báo phí ${inv.code}: ${formatVnd(inv.totalAmount)}.`];
   if (inv.prepaidApplied) lines.push(`Đã trừ Số dư trả trước ${formatVnd(inv.prepaidApplied)}.`);
   lines.push(

@@ -313,6 +313,12 @@ export const WORK_ORDER_TYPES = {
 
 // ===== Module D =====
 // PENDING, REJECTED: dữ liệu luồng duyệt cũ (không còn tạo mới — BR-O12). `tone` dùng cho StatusBadge ở giao diện cư dân
+// Cách trả phí tiện ích có phí (cư dân chọn khi đặt)
+export const BOOKING_PAYMENT_METHODS = {
+  ONLINE: { label: 'Thanh toán online', color: 'blue' },
+  INVOICE: { label: 'Cộng vào phí tháng', color: 'purple' },
+};
+
 export const BOOKING_STATUS = {
   PENDING_PAYMENT: { label: 'Chờ thanh toán', color: 'gold', tone: 'warn' },
   APPROVED: { label: 'Đã xác nhận', color: 'blue', tone: 'ok' },

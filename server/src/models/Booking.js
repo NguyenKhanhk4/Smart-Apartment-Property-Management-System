@@ -1,4 +1,4 @@
-import { BOOKING_STATUS, values } from '../constants/enums.js';
+import { BOOKING_PAYMENT_METHODS, BOOKING_STATUS, values } from '../constants/enums.js';
 import { ObjectId, Schema, model, schemaOptions } from './_shared.js';
 
 // bookings — lượt đặt tiện ích (UC-D06, D07)
@@ -35,6 +35,8 @@ const bookingSchema = new Schema(
     invoiceId: { type: ObjectId, ref: 'Invoice', default: null }, // chống tính phí 2 lần
     // Giữ chỗ chờ thanh toán (Người 4): đã thanh toán trước thì không gộp phí vào hóa đơn tháng
     holdExpiresAt: { type: Date, default: null },
+    // Tiện ích có phí: ONLINE (trả ngay qua payOS) / INVOICE (cộng vào thông báo phí tháng); miễn phí thì null
+    paymentMethod: { type: String, enum: [...values(BOOKING_PAYMENT_METHODS), null], default: null },
     paidAt: { type: Date, default: null },
     paymentRef: { type: String, default: null },
     // Đổi lịch: booking mới trỏ về booking cũ. Tiện ích có phí chỉ được đổi 1 lần

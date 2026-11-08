@@ -75,6 +75,7 @@ function BookingPanel({ amenity, apartmentId }) {
   const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [picked, setPicked] = useState(null); // slotStart đang chọn
   const [booking, setBooking] = useState(false);
+  const [payMethod, setPayMethod] = useState(null); // tiện ích có phí: ONLINE (trả ngay) | INVOICE (cộng phí tháng)
 
   const { data: info, loading, reload } = useApi(
     () => amenityApi.slots(amenity._id, { date, apartmentId }),
@@ -96,7 +97,9 @@ function BookingPanel({ amenity, apartmentId }) {
   const submit = async () => {
     setBooking(true);
     try {
-      const { data: booking } = await bookingApi.create({ apartmentId, amenityId: amenity._id, date, slotStart: picked });
+      const options = info?.rules.paymentOptions ?? ['INVOICE'];
+      const method = slot?.fee > 0 ? (payMethod && options.includes(payMethod) ? payMethod : options[0]) : undefined;
+      const { data: booking } = await bookingApi.create({ apartmentId, amenityId: amenity._id, date, slotStart: picked, ...(method && { paymentMethod: method }) });
       // Tiện ích có phí: giữ chỗ chờ thanh toán → sang payOS ngay; lỗi thì vẫn thanh toán lại được từ Lịch sử đặt
       if (booking?.status === 'PENDING_PAYMENT') {
         message.warning(`${holdLabel(booking.holdExpiresAt)}. Đang chuyển sang trang thanh toán…`, 6);
@@ -106,7 +109,7 @@ function BookingPanel({ amenity, apartmentId }) {
         } catch (e) {
           message.error(e.message);
         }
-      } else message.success('Đặt chỗ thành công');
+      } else message.success(booking?.paymentMethod === 'INVOICE' ? `Đặt chỗ thành công. Phí ${formatMoney(booking.fee)} sẽ cộng vào phí dịch vụ tháng.` : 'Đặt chỗ thành công');
       navigate(`/r/amenities?tab=history&apartmentId=${apartmentId}`, { viewTransition: true });
     } catch (e) {
       message.error(e.message);
@@ -196,11 +199,39 @@ function BookingPanel({ amenity, apartmentId }) {
               <div className="text-sm">
                 Phí lượt đặt: <b>{formatMoney(slot.fee)}</b>
               </div>
-              <div className="px-3.5 py-3 rounded-xl bg-r-warn-bg text-r-warn-fg text-[13px] leading-normal">
-                {info.rules.payOnline
-                  ? `Đặt xong sẽ chuyển sang trang thanh toán online (payOS). Chỗ được giữ ${info.rules.holdMinutes} phút, quá hạn chưa thanh toán thì tự hủy.`
-                  : `Phí ${formatMoney(slot.fee)} sẽ được cộng vào hóa đơn cuối tháng của căn hộ.`}
+              {/* Cư dân chọn cách trả: thanh toán ngay (payOS) hoặc cộng vào phí dịch vụ tháng */}
+              <div className="text-[13px] font-medium">Cách thanh toán</div>
+              <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Cách thanh toán">
+                {(info.rules.paymentOptions ?? ['INVOICE']).map((m) => {
+                  const options = info.rules.paymentOptions ?? ['INVOICE'];
+                  const active = (payMethod && options.includes(payMethod) ? payMethod : options[0]) === m;
+                  const online = m === 'ONLINE';
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setPayMethod(m)}
+                      className={`text-left cursor-pointer rounded-xl border px-3.5 py-3 transition-colors ${
+                        active ? 'border-r-navy bg-r-ok-bg ring-2 ring-r-navy/15' : 'border-r-border bg-white hover:border-r-border-control'
+                      }`}
+                    >
+                      <span className={`block text-[14px] font-semibold ${active ? 'text-r-navy' : 'text-r-text'}`}>
+                        {online ? 'Thanh toán ngay' : 'Cộng vào phí tháng'}
+                      </span>
+                      <span className="block text-[12.5px] text-r-muted leading-snug">
+                        {online
+                          ? `Quét QR / chuyển khoản qua payOS. Giữ chỗ ${info.rules.holdMinutes} phút, quá hạn chưa trả thì tự hủy.`
+                          : `Xác nhận chỗ ngay, ${formatMoney(slot.fee)} cộng vào thông báo phí dịch vụ của căn hộ.`}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
+              {!info.rules.payOnline && (
+                <div className="text-[12.5px] text-r-subtle">Thanh toán online đang tạm ngưng, phí sẽ cộng vào phí dịch vụ tháng.</div>
+              )}
             </div>
           )}
 
@@ -217,7 +248,7 @@ function BookingPanel({ amenity, apartmentId }) {
             Đặt xong là được xác nhận ngay. Check-in tại lễ tân hoặc bảo vệ từ {info.rules.checkinEarlyMinutes} phút trước giờ bắt đầu (không sớm hơn giờ mở
             quầy {info.rules.receptionOpen}) đến {info.rules.noShowGraceMinutes} phút sau giờ bắt đầu.{' '}
             {amenity.feePerBooking > 0
-              ? `Tiện ích có phí: ${info.rules.payOnline ? 'thanh toán online ngay khi đặt (quá hạn giữ chỗ thì tự hủy)' : 'phí cộng vào hóa đơn tháng'}, hủy không hoàn tiền, được đổi giờ 1 lần trước giờ sử dụng ít nhất ${amenity.changeDeadlineHours ?? 24} giờ.`
+              ? `Tiện ích có phí: chọn thanh toán ngay hoặc cộng vào phí dịch vụ tháng, hủy không hoàn tiền, được đổi giờ 1 lần trước giờ sử dụng ít nhất ${amenity.changeDeadlineHours ?? 24} giờ.`
               : 'Hủy hoặc đổi giờ miễn phí trước giờ bắt đầu.'}{' '}
             Mỗi căn tối đa {info.rules.maxActivePerApartment} booking chưa dùng.
           </p>

@@ -216,3 +216,11 @@ test('nội dung chuyển khoản dạng <Mã căn> <Kỳ>, tối đa 25 ký t�
   assert.equal(_test.descriptionOf(apt, [{ period: '2026-10' }]), 'A1205 T10-2026');
   assert.equal(_test.descriptionOf(apt, [{ period: '2026-09' }, { period: '2026-10' }]), 'A1205 T10-2026 2KY');
 });
+
+test('hóa đơn dữ liệu cũ thiếu paidAmount (ghi thẳng DB) vẫn tạo được link: số tiền = tổng phí, không lỗi "amount"', async () => {
+  const { ownerUser, mk } = await setup();
+  const inv = await mk('HD-OLD', '2026-09', 694000);
+  await Invoice.collection.updateOne({ _id: inv._id }, { $unset: { paidAmount: '' } });
+  const link = await createPayosPayment(ownerUser, { invoiceIds: [inv._id] }, { now: NOW });
+  assert.equal(link.amount, 694000);
+});

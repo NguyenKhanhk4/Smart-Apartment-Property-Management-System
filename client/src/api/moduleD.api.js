@@ -45,6 +45,8 @@ export const bookingApi = {
   markPaid: (id, paymentRef) => http.patch(`/bookings/${id}/mark-paid`, paymentRef ? { paymentRef } : {}),
   /** Cư dân tạo link payOS trả phí booking đang giữ chỗ → { checkoutUrl, orderCode, expiredAt } */
   payos: (id) => http.post(`/bookings/${id}/payos`),
+  /** Booking đang giữ chỗ chờ trả online → chuyển sang cộng phí vào thông báo phí tháng */
+  payLater: (id) => http.patch(`/bookings/${id}/pay-later`),
   /** Cư dân đổi sang khung giờ khác. body: { date: 'YYYY-MM-DD', slotStart: 'HH:mm' } */
   reschedule: (id, body) => http.patch(`/bookings/${id}/reschedule`, body),
 };
