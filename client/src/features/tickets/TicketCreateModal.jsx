@@ -5,6 +5,7 @@ import { complaintCategoryApi, lookupApi, ticketApi } from '../../api/moduleE.ap
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { PHONE_RULES } from '../../utils/phone';
+import { isConsentLocked } from '../../utils/consent';
 import ApartmentSelect from '../../components/ApartmentSelect';
 import { PRIORITIES, TICKET_STATUS } from '../../constants/enums';
 import { IMAGE_ACCEPT, IMAGE_HINT, checkImageFile } from '../../utils/imageUpload';
@@ -230,6 +231,9 @@ export default function TicketCreateModal({ open, onClose, onCreated, staff = fa
             <Form.Item name="title" label="Tiêu đề" rules={[{ required: true, min: 5, max: 150, message: 'Tiêu đề 5-150 ký tự' }]}>
               <Input maxLength={150} placeholder={type === 'COMPLAINT' ? 'Vd: Hành lang tầng 5 chưa được dọn' : 'Vd: Rò nước trần nhà tắm'} />
             </Form.Item>
+            <Form.Item name="location" label="Vị trí cụ thể">
+              <Input maxLength={150} placeholder={scope === 'IN_APARTMENT' ? 'Vd: nhà tắm phòng ngủ chính' : 'Vd: hành lang tầng 5, gần thang máy B'} />
+            </Form.Item>
             <Form.Item name="description" label="Mô tả chi tiết" rules={[{ required: true, min: 10, message: 'Mô tả tối thiểu 10 ký tự' }]}>
               <Input.TextArea
                 autoSize={{ minRows: 4, maxRows: 7 }}
@@ -238,6 +242,15 @@ export default function TicketCreateModal({ open, onClose, onCreated, staff = fa
                 placeholder="Vị trí cụ thể, bắt đầu từ khi nào, mức độ ảnh hưởng…"
               />
             </Form.Item>
+            {/* BR-X7: cư dân chưa đồng ý điều khoản dữ liệu cá nhân thì không đính kèm ảnh (vẫn gửi phiếu được) */}
+            {!staff && isConsentLocked(user) ? (
+              <Alert
+                type="info"
+                showIcon
+                title="Chưa đính kèm ảnh được"
+                description="Bạn cần đồng ý điều khoản dữ liệu cá nhân (trong Hồ sơ cá nhân) để gửi ảnh. Vẫn gửi phiếu không kèm ảnh được."
+              />
+            ) : (
             <Form.Item label={`Ảnh minh họa (${files.length}/${MAX_PHOTOS})`} extra={IMAGE_HINT} className="mb-0">
               <Upload listType="picture-card" accept={IMAGE_ACCEPT} multiple fileList={files} beforeUpload={beforeUpload} onChange={changeFiles}>
                 {files.length < MAX_PHOTOS && (
@@ -248,6 +261,7 @@ export default function TicketCreateModal({ open, onClose, onCreated, staff = fa
                 )}
               </Upload>
             </Form.Item>
+            )}
           </div>
         </div>
       </Form>

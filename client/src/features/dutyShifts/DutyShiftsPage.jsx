@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Button, Card, Flex, Segmented, Skeleton, Typography } from 'antd';
-import { CalendarOutlined, DragOutlined, LeftOutlined, MoonOutlined, PhoneOutlined, PlusOutlined, RightOutlined, TableOutlined } from '@ant-design/icons';
+import { Button, Card, Flex, Popconfirm, Segmented, Skeleton, Typography } from 'antd';
+import { CalendarOutlined, CopyOutlined, DragOutlined, LeftOutlined, MoonOutlined, PhoneOutlined, PlusOutlined, RightOutlined, TableOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { dutyShiftApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
@@ -98,6 +98,12 @@ export default function DutyShiftsPage() {
   }, [roleTitle, view, anchor]);
   const { data: shifts = [], loading, reload } = useApi(() => dutyShiftApi.list(params), [params]);
   const [remove] = useAction(dutyShiftApi.remove, { success: 'Đã hủy ca trực', onDone: reload });
+  // UC37: sao chép ca của tuần trước sang tuần đang xem (bỏ qua ca đã qua, người bị khóa, ca trùng giờ)
+  const [copyWeek, copying] = useAction(() => dutyShiftApi.copyWeek({ roleTitle, weekStart: anchor.startOf('week').toISOString() }), {
+    success: (res) => `Đã sao chép ${res.data.created} ca${res.data.skipped ? `, bỏ qua ${res.data.skipped} ca (đã qua / trùng giờ / người bị khóa)` : ''}`,
+    onDone: reload,
+  });
+  const weekOver = !anchor.startOf('week').add(7, 'day').isAfter(dayjs()); // tuần đã qua hết: không sao chép vào
 
   // Kéo thả: chỉ Trưởng BQL, ca chưa bắt đầu; thả vào ngày chưa qua → dời ca, giữ giờ và độ dài
   const [dragging, setDragging] = useState(null);
@@ -168,6 +174,20 @@ export default function DutyShiftsPage() {
           <Button onClick={() => setAnchor(dayjs())}>{view === 'week' ? 'Tuần này' : 'Tháng này'}</Button>
           <Button icon={<RightOutlined />} aria-label={view === 'week' ? 'Tuần sau' : 'Tháng sau'} onClick={() => setAnchor((a) => a.add(1, unit))} />
           <span className="min-w-[150px] text-[14px] font-semibold text-ink">{title}</span>
+          {isManager && view === 'week' && (
+            <Popconfirm
+              title="Sao chép lịch tuần trước?"
+              description={`Ca của tuần ${anchor.startOf('week').subtract(7, 'day').format('DD/MM')} – ${anchor.startOf('week').subtract(1, 'day').format('DD/MM')} sẽ được chép sang tuần này (cùng giờ). Ca đã qua, trùng giờ hoặc người bị khóa sẽ bỏ qua.`}
+              okText="Sao chép"
+              cancelText="Hủy"
+              disabled={weekOver}
+              onConfirm={() => copyWeek().catch(() => {})}
+            >
+              <Button icon={<CopyOutlined />} loading={copying} disabled={weekOver}>
+                Sao chép tuần trước
+              </Button>
+            </Popconfirm>
+          )}
         </Flex>
       </Flex>
 

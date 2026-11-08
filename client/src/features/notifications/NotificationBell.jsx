@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import { Alert, App, Badge, Button } from 'antd';
 import { BellOutlined } from '@ant-design/icons';
-import { guestApi, notificationApi } from '../../api/moduleE.api';
+import { guestApi, notificationApi, ticketApi } from '../../api/moduleE.api';
 import { usePolling } from '../../hooks/usePolling';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -23,6 +23,15 @@ export default function NotificationBell({ area, variant }) {
   const { hasRole } = useAuth();
   const { message } = App.useApp();
   const canSeeAlerts = hasRole('MANAGER', 'RESIDENT', 'STAFF:SECURITY', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN');
+  // BR-X6 (Người 4): sự cố khẩn cấp quá hạn nhận chưa ai nhận — chung banner với cảnh báo an ninh
+  const canSeeTicketAlerts = hasRole('MANAGER', 'STAFF:SECURITY', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN');
+  const [ticketAlerts, setTicketAlerts] = useState([]);
+  const receiveTicket = async (id) => {
+    setReceiving(id);
+    try { await ticketApi.emergencyAck(id); setTicketAlerts((items) => items.filter((a) => a._id !== id)); message.success('Đã tiếp nhận cảnh báo'); }
+    catch (error) { message.error(error.message); }
+    finally { setReceiving(null); }
+  };
   const receive = async (id) => {
     setReceiving(id);
     try { await guestApi.acknowledge(id); setAlerts((items) => items.filter((a) => a._id !== id)); message.success('Đã tiếp nhận sự cố'); }
@@ -45,7 +54,8 @@ export default function NotificationBell({ area, variant }) {
       .then((res) => setCount(res.data.count))
       .catch(() => {});
     if (canSeeAlerts) guestApi.alerts().then((res) => setAlerts(res.data)).catch(() => {});
-  }, [canSeeAlerts]);
+    if (canSeeTicketAlerts) ticketApi.emergencyAlerts().then((res) => setTicketAlerts(res.data)).catch(() => {});
+  }, [canSeeAlerts, canSeeTicketAlerts]);
 
   usePolling(refresh, canSeeAlerts ? 15000 : POLL_MS);
   useEffect(() => {
@@ -58,9 +68,14 @@ export default function NotificationBell({ area, variant }) {
     };
   }, [refresh]);
 
-  const banner = alerts.length ? createPortal(<div role="region" aria-label="Cảnh báo khẩn cấp" style={{ position: 'fixed', bottom: 76, left: 12, right: 12, zIndex: 1100, maxHeight: '30vh', overflowY: 'auto' }}>
+  const banner = alerts.length || ticketAlerts.length ? createPortal(<div role="region" aria-label="Cảnh báo khẩn cấp" style={{ position: 'fixed', bottom: 76, left: 12, right: 12, zIndex: 1100, maxHeight: '30vh', overflowY: 'auto' }}>
     {alerts.map((a) => <Alert key={a._id} type="error" showIcon title={`KHẨN CẤP · ${a.location}`} description={a.description}
       action={a.canAcknowledge && <Button loading={receiving === a._id} onClick={() => receive(a._id)}>Đã tiếp nhận</Button>} />)}
+    {ticketAlerts.map((t) => <Alert key={t._id} type="error" showIcon className="mt-2"
+      title={`KHẨN CẤP · Sự cố ${t.code} chưa có người nhận`}
+      description={`${t.title}${t.location ? ` — ${t.location}` : ''}${t.apartmentId?.code ? ` (căn ${t.apartmentId.code})` : ''}`}
+      action={<span className="flex gap-2"><Button onClick={() => navigate(`/app/tickets/${t._id}`)}>Xem phiếu</Button>
+        {t.canAcknowledge && <Button danger loading={receiving === t._id} onClick={() => receiveTicket(t._id)}>Đã tiếp nhận</Button>}</span>} />)}
   </div>, document.body) : null;
   if (variant === 'resident') {
     return (

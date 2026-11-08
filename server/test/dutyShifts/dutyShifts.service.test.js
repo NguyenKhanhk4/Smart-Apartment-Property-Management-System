@@ -1,7 +1,7 @@
 // Service lịch ca trực trên MongoDB trong RAM: chặn trùng ca, ai đang trực, hủy ca.
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DutyShift } from '../../src/models/index.js';
+import { DutyShift, User } from '../../src/models/index.js';
 import * as service from '../../src/modules/dutyShifts/dutyShifts.service.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { asUser, createManager, createSecurity, createTechnician } from '../helpers/fixtures.js';
@@ -134,4 +134,42 @@ test('lịch cũ chỉ để xem: không xếp ca cho ngày đã qua, không x�
   await assert.rejects(create('2026-11-10T00:00:00+07:00', '2026-11-10T06:00:00+07:00'), /đã kết thúc/);
   const [running] = await create('2026-11-10T06:00:00+07:00', '2026-11-10T14:00:00+07:00');
   assert.ok(running);
+});
+
+test('UC37: sao chép tuần trước sang tuần mới (+7 ngày); bỏ qua người bị khóa, ca trùng giờ, ca đã qua', async () => {
+  const manager = asUser(await createManager());
+  const [a, b, locked] = await Promise.all([createTechnician(), createTechnician(), createTechnician()]);
+  const now = new Date('2026-11-09T08:00:00+07:00'); // thứ Hai
+  const lastWeek = new Date('2026-11-02T00:00:00+07:00');
+  const at = (d, h) => new Date(d.getTime() + h * H);
+  await DutyShift.insertMany([
+    { roleTitle: 'TECHNICIAN', userId: a._id, startAt: at(lastWeek, 1 * 24 + 6), endAt: at(lastWeek, 1 * 24 + 14) }, // T3 → copy
+    { roleTitle: 'TECHNICIAN', userId: b._id, startAt: at(lastWeek, 2 * 24 + 6), endAt: at(lastWeek, 2 * 24 + 14) }, // T4 → trùng ca có sẵn
+    { roleTitle: 'TECHNICIAN', userId: locked._id, startAt: at(lastWeek, 3 * 24 + 6), endAt: at(lastWeek, 3 * 24 + 14) },
+    { roleTitle: 'TECHNICIAN', userId: a._id, startAt: at(lastWeek, 6), endAt: at(lastWeek, 7) }, // T2 06–07 → tuần mới đã qua
+  ]);
+  await User.updateOne({ _id: locked._id }, { $set: { isActive: false } });
+  await DutyShift.create({ roleTitle: 'TECHNICIAN', userId: b._id, startAt: at(lastWeek, 9 * 24 + 8), endAt: at(lastWeek, 9 * 24 + 16) });
+
+  const res = await service.copyWeek(manager, { roleTitle: 'TECHNICIAN', weekStart: '2026-11-09T00:00:00+07:00' }, { now });
+  assert.deepEqual(res, { created: 1, skipped: 3 });
+  const copied = await DutyShift.findOne({ userId: a._id, startAt: at(lastWeek, 8 * 24 + 6) });
+  assert.ok(copied);
+  await assert.rejects(service.copyWeek(manager, { roleTitle: 'SECURITY', weekStart: '2026-11-09T00:00:00+07:00' }, { now }), /chưa có ca/);
+});
+
+test('UC37 Alt 3b: khóa nhân viên → xóa ca sắp tới, ca đang diễn ra kết thúc ngay, ca đã qua giữ nguyên', async () => {
+  const { setStatus } = await import('../../src/modules/users/users.service.js');
+  const manager = asUser(await createManager());
+  const tech = await createTechnician();
+  const base = Date.now();
+  await DutyShift.insertMany([
+    { roleTitle: 'TECHNICIAN', userId: tech._id, startAt: new Date(base - 10 * H), endAt: new Date(base - 5 * H) },
+    { roleTitle: 'TECHNICIAN', userId: tech._id, startAt: new Date(base - H), endAt: new Date(base + 3 * H) },
+    { roleTitle: 'TECHNICIAN', userId: tech._id, startAt: new Date(base + 20 * H), endAt: new Date(base + 28 * H) },
+  ]);
+  await setStatus(manager, tech._id, { isActive: false });
+  const left = await DutyShift.find({ userId: tech._id }).sort({ startAt: 1 }).lean();
+  assert.equal(left.length, 2);
+  assert.ok(left[1].endAt.getTime() <= Date.now(), 'ca đang diễn ra đã kết thúc');
 });

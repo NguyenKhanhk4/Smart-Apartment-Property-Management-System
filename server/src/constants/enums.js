@@ -460,6 +460,7 @@ export const TICKET_HISTORY_ACTIONS = Object.freeze({
   REJECTED: 'REJECTED',
   RECLASSIFIED: 'RECLASSIFIED', // M5-5: đổi loại / phạm vi phiếu
   MERGED: 'MERGED', // M5-6: gộp phiếu trùng vào phiếu chính
+  EMERGENCY_ACKED: 'EMERGENCY_ACKED', // BR-X6: có người bấm "Đã tiếp nhận" cảnh báo khẩn sự cố chưa ai nhận
 });
 
 // Loại phiếu: sự cố kỹ thuật vào hàng chờ Kỹ thuật; phản ánh chuyển sang màn hình xử lý của Người 2

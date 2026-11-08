@@ -176,6 +176,7 @@ export default function TicketDetailPage() {
             </Descriptions.Item>
             <Descriptions.Item label="Người gửi">{t.createdBy?.fullName}</Descriptions.Item>
             <Descriptions.Item label="Ngày gửi">{formatDateTime(t.createdAt)}</Descriptions.Item>
+            {t.location && <Descriptions.Item label="Vị trí">{t.location}</Descriptions.Item>}
             {t.ackDueAt && !t.assignedTo && (
               <Descriptions.Item label="Hạn nhận phiếu">{formatDateTime(t.ackDueAt)}</Descriptions.Item>
             )}

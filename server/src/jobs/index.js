@@ -26,8 +26,8 @@ export const JOBS = [
   { name: CRON_JOBS.OPERATIONS_SECURITY, schedule: '* * * * *', handler: runOperationsJobs },
   // UC-E06 / BR-O8 — 09:00 hằng ngày
   { name: CRON_JOBS.TICKET_ESCALATE, schedule: '0 9 * * *', handler: escalateOverdueTickets },
-  // Người 4 — mỗi 5 phút cảnh báo sự cố quá hạn nhận / phản ánh quá hạn phản hồi
-  { name: CRON_JOBS.TICKET_SLA_ALERT, schedule: '*/5 * * * *', handler: alertSlaBreaches },
+  // Người 4 — mỗi phút: cảnh báo sự cố quá hạn nhận / phản ánh quá hạn phản hồi + cảnh báo khẩn lặp 15 phút (BR-X6)
+  { name: CRON_JOBS.TICKET_SLA_ALERT, schedule: '* * * * *', handler: alertSlaBreaches },
   // BR-O9 — 01:00 hằng ngày tự đóng ticket chờ xác nhận quá hạn
   { name: CRON_JOBS.TICKET_AUTO_CLOSE, schedule: '0 1 * * *', handler: autoCloseTickets },
   // UC-D02 / BR-O6 — 02:00 hằng ngày tạo work order bảo trì định kỳ cho tài sản đến hạn

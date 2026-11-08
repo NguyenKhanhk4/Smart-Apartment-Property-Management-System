@@ -127,6 +127,21 @@ router.get(
  *     summary: Hủy ca chưa kết thúc (ca đã qua giữ lại để tra cứu)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
+/**
+ * @openapi
+ * /duty-shifts/copy-week:
+ *   post:
+ *     tags: [Ca trực]
+ *     summary: 'UC37 - Sao chép ca của tuần trước sang tuần weekStart (+7 ngày). Bỏ qua ca đã qua, người bị khóa, ca trùng giờ'
+ */
+router.post(
+  '/copy-week',
+  authenticate,
+  authorize('MANAGER'),
+  validate({ body: Joi.object({ roleTitle: roleTitle().required(), weekStart: Joi.date().iso().required() }) }),
+  async (req, res) => ok(res, await service.copyWeek(req.user, req.body), 'Đã sao chép lịch tuần trước'),
+);
+
 router.patch(
   '/:id',
   authenticate,

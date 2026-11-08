@@ -6,7 +6,7 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { activeShifts, overlaps, repeatWindows, validateShiftWindow } from './shift.rules.js';
-import { DAY_MS, fmtDateTimeVn, startOfVnDay } from '../../utils/time.js';
+import { DAY_MS, fmtDateTimeVn, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 
 const USER_SELECT = 'fullName phone roleTitle avatarUrl';
 const LINK = '/app/duty-shifts';
@@ -175,6 +175,65 @@ export async function updateShift(user, id, changes, { now = new Date() } = {}) 
     await notify(userId, { type: NOTIFICATION_TYPES.SYSTEM, title: 'Ca trực của bạn đã thay đổi', content: `Ca mới: ${window}.`, refId: shift._id, link: LINK });
   }
   return DutyShift.findById(shift._id).populate('userId', USER_SELECT).lean();
+}
+
+/**
+ * UC37 bước 2: sao chép ca của tuần trước sang tuần `weekStart` (cùng giờ, +7 ngày). Bỏ qua ca rơi vào thời điểm đã qua,
+ * người đã bị khóa / đổi chức danh, hoặc trùng giờ với ca đã có của chính người đó. Trả về { created, skipped }.
+ */
+export async function copyWeek(user, { roleTitle, weekStart }, { now = new Date() } = {}) {
+  const target = new Date(weekStart);
+  const from = new Date(target.getTime() - 7 * DAY_MS);
+  const source = await DutyShift.find({ roleTitle, startAt: { $gte: from, $lt: target } }).lean();
+  if (!source.length) throw ApiError.badRequest('Tuần trước chưa có ca nào để sao chép');
+
+  const active = new Set(
+    (await User.find({ _id: { $in: source.map((s) => s.userId) }, role: ROLES.STAFF, roleTitle, isActive: true }).select('_id').lean()).map((u) =>
+      String(u._id),
+    ),
+  );
+  const candidates = source
+    .map((s) => ({ roleTitle, userId: s.userId, startAt: new Date(s.startAt.getTime() + 7 * DAY_MS), endAt: new Date(s.endAt.getTime() + 7 * DAY_MS), note: s.note, createdBy: user.id }))
+    .filter((c) => c.startAt >= startOfVnDay(now) && c.endAt > now && active.has(String(c.userId)));
+  const existing = await DutyShift.find({
+    userId: { $in: candidates.map((c) => c.userId) },
+    startAt: { $lt: new Date(target.getTime() + 8 * DAY_MS) },
+    endAt: { $gt: target },
+  })
+    .select('userId startAt endAt')
+    .lean();
+  const toCreate = candidates.filter((c) => !existing.some((e) => String(e.userId) === String(c.userId) && overlaps(c, e)));
+  const created = toCreate.length ? await DutyShift.insertMany(toCreate) : [];
+
+  if (created.length) {
+    await logAudit({
+      action: AUDIT_ACTIONS.DUTY_SHIFT_CREATED,
+      user,
+      targetType: AUDIT_TARGETS.DUTY_SHIFT,
+      targetId: created[0]._id,
+      metadata: { roleTitle, count: created.length, copiedFromWeek: from, weekStart: target },
+    });
+    const ids = [...new Set(created.map((c) => String(c.userId)))];
+    await notify(ids, {
+      type: NOTIFICATION_TYPES.SYSTEM,
+      title: 'Bạn được xếp ca trực tuần mới',
+      content: `Lịch trực tuần ${fmtDateVn(target)} đã được sao chép từ tuần trước.`,
+      link: LINK,
+    });
+  }
+  return { created: created.length, skipped: source.length - created.length };
+}
+
+/**
+ * UC37 Alt 3b: nhân viên bị khóa → gỡ khỏi các ca sắp tới, ca đang diễn ra kết thúc ngay lúc khóa
+ * (ca đã qua giữ nguyên để tra cứu). Gọi từ chỗ khóa tài khoản. Trả về số ca bị ảnh hưởng.
+ */
+export async function releaseShiftsOf(userId, { now = new Date() } = {}) {
+  const [removed, ended] = await Promise.all([
+    DutyShift.deleteMany({ userId, startAt: { $gt: now } }),
+    DutyShift.updateMany({ userId, startAt: { $lte: now }, endAt: { $gt: now } }, { $set: { endAt: now } }),
+  ]);
+  return removed.deletedCount + ended.modifiedCount;
 }
 
 /** Xóa ca chưa kết thúc (ca đã qua giữ lại để tra cứu ai trực lúc xảy ra sự cố) */
