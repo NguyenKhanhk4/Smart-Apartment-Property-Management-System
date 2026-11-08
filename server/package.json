@@ -15,6 +15,7 @@
     "db:migrate-audit-targets": "node scripts/migrateAuditTargets.js",
     "db:migrate-walk-in": "node scripts/migrateWalkInAmenities.js",
     "db:migrate-assets": "node scripts/migrateAssetsUc07.js",
+    "db:fix-legacy": "node scripts/fixLegacyData.js",
     "db:set-manager": "node scripts/set-manager.js"
   },
   "dependencies": {

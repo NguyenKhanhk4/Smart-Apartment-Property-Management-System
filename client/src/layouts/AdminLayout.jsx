@@ -239,7 +239,7 @@ export default function AdminLayout() {
 
         <main className="flex-1 p-4 md:p-8 w-full max-w-[1400px] mx-auto">
           <Suspense fallback={<PageLoader />}>
-            <PageTransition key={pathname}>
+            <PageTransition key={pathname} className="page-stack">
               <Outlet />
             </PageTransition>
           </Suspense>

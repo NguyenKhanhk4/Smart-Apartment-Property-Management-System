@@ -139,7 +139,7 @@ export default function TodoList() {
               <li key={row.key} className={`flex items-center gap-4 flex-wrap px-6 py-3.5 border-t ${DIVIDER}`}>
                 <Tag kind={row.kind} />
                 <div className="flex-1 basis-60 min-w-0">
-                  <div className={`font-semibold text-[15px] ${TEXT}`}>{row.title}</div>
+                  <div className={`font-semibold text-[14px] ${TEXT}`}>{row.title}</div>
                   <div className={`text-[13px] ${MUTED}`}>{row.sub}</div>
                 </div>
                 {row.done ? (

@@ -140,7 +140,7 @@ export default function ProfilePage() {
               </Upload>
             </div>
             <div>
-              <h3 className="m-0 text-base font-semibold text-ink dark:text-[#EEF1F6]">
+              <h3 className="m-0 text-base font-semibold text-ink dark:text-[#FAFAFA]">
                 {user?.fullName}
               </h3>
               <div className="mt-1 flex items-center gap-2">

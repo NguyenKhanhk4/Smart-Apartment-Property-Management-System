@@ -302,7 +302,7 @@ export default function GuestBookPage() {
         {operation?.kind === 'handover' && <>
           <Form.Item name="recipientId" label="Thành viên nhận hàng" rules={[{ required: true }]}><Select loading={recipients.loading} options={(recipients.data || []).map((p) => ({ value: p._id, label: p.fullName }))} /></Form.Item>
           <Typography.Paragraph>Người nhận ký tay vào vùng dưới đây:</Typography.Paragraph>
-          <canvas ref={canvasRef} width={420} height={180} aria-label="Vùng ký nhận bưu kiện" style={{ width: '100%', height: 180, border: '1px solid #d9d9d9', touchAction: 'none' }}
+          <canvas ref={canvasRef} width={420} height={180} aria-label="Vùng ký nhận bưu kiện" style={{ width: '100%', height: 180, border: '1px dashed #A1A1AA', touchAction: 'none' }}
             onPointerDown={(e) => { drawingRef.current = true; e.currentTarget.setPointerCapture(e.pointerId); const r = e.currentTarget.getBoundingClientRect(); const ctx = e.currentTarget.getContext('2d'); ctx.beginPath(); ctx.moveTo((e.clientX - r.left) * 420 / r.width, e.clientY - r.top); }}
             onPointerMove={(e) => { if (!drawingRef.current) return; const r = e.currentTarget.getBoundingClientRect(); const ctx = e.currentTarget.getContext('2d'); ctx.lineWidth = 2; ctx.lineTo((e.clientX - r.left) * 420 / r.width, e.clientY - r.top); ctx.stroke(); signedRef.current = true; }}
             onPointerUp={() => { drawingRef.current = false; }} onPointerCancel={() => { drawingRef.current = false; }} />

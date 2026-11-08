@@ -333,6 +333,12 @@ export const WORK_ORDER_OPEN_STATUSES = Object.freeze([...WORK_ORDER_ACTIVE_STAT
 // PENDING, REJECTED: luồng duyệt cũ, Module D KHÔNG còn tạo mới — giữ để dữ liệu & báo cáo UC-E14 cũ không lỗi.
 // PENDING_PAYMENT (Người 4): booking có phí giữ chỗ chờ thanh toán khi BOOKING_PAYMENT_HOLD_MINUTES > 0,
 // quá hạn giữ mà chưa thanh toán thì cron chuyển CANCELLED.
+// Cách trả phí tiện ích có phí (cư dân chọn khi đặt): ONLINE = giữ chỗ và trả ngay qua payOS; INVOICE = cộng vào thông báo phí tháng
+export const BOOKING_PAYMENT_METHODS = Object.freeze({
+  ONLINE: 'ONLINE',
+  INVOICE: 'INVOICE',
+});
+
 export const BOOKING_STATUS = Object.freeze({
   PENDING_PAYMENT: 'PENDING_PAYMENT',
   APPROVED: 'APPROVED',

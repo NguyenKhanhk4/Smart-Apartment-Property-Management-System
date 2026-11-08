@@ -117,3 +117,39 @@ test('booking chưa giữ chỗ / đã hết hạn giữ chỗ thì không tạo
   await Booking.updateOne({ _id: booking._id }, { $set: { status: 'APPROVED' } });
   await assert.rejects(createBookingPayosPayment(resident, booking._id), { errorCode: 'BOOKING_INVALID_STATUS' });
 });
+
+test('cư dân chọn cộng vào phí tháng: xác nhận luôn, không giữ chỗ, không tạo link payOS; phí vào thông báo phí kỳ đó', async () => {
+  const { collectAmenityCharges } = await import('../../src/modules/invoices/invoices.builder.js');
+  const { user, apartment } = await createHousehold();
+  const amenity = await createAmenity();
+  const date = inDays(2);
+  const booking = await placeBooking(asUser(user), { apartmentId: apartment._id, amenityId: amenity._id, date, slotStart: '10:00', paymentMethod: 'INVOICE' });
+  assert.equal(booking.status, 'APPROVED');
+  assert.equal(booking.paymentMethod, 'INVOICE');
+  assert.equal(booking.holdExpiresAt, null);
+  assert.equal(created.length, 0);
+  const { items } = await collectAmenityCharges(apartment._id, date.slice(0, 7));
+  assert.equal(items.length, 1);
+});
+
+test('đang giữ chỗ chờ trả online → chuyển sang cộng phí tháng: xác nhận luôn, hủy link payOS đang mở', async () => {
+  const { payLater } = await import('../../src/modules/bookings/bookings.service.js');
+  const { resident, booking } = await setup();
+  assert.equal(booking.paymentMethod, 'ONLINE');
+  await createBookingPayosPayment(resident, booking._id);
+  const updated = await payLater(resident, booking._id);
+  assert.equal(updated.status, 'APPROVED');
+  assert.equal(updated.paymentMethod, 'INVOICE');
+  assert.equal(updated.holdExpiresAt, null);
+  await assert.rejects(payLater(resident, booking._id), { errorCode: 'BOOKING_INVALID_STATUS' });
+});
+
+test('chọn trả online khi payOS đang tắt → báo lỗi, gợi ý cộng vào phí tháng', async () => {
+  setPayosForTest({ config: { ...CONFIG, enabled: false }, fetch: fakeFetch });
+  const { user, apartment } = await createHousehold();
+  const amenity = await createAmenity();
+  await assert.rejects(
+    placeBooking(asUser(user), { apartmentId: apartment._id, amenityId: amenity._id, date: inDays(2), slotStart: '10:00', paymentMethod: 'ONLINE' }),
+    /cộng vào phí tháng/,
+  );
+});

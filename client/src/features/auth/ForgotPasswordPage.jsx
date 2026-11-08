@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { Alert, Button, Form, Input } from 'antd';
 import { ArrowRightOutlined, LockOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons';
 import { authApi } from '../../api/auth.api';
+import { ALERT_GAP } from './authStyles';
 import { portalPath, useAuthPortal } from './authPortal';
 import { PHONE_RULES } from '../../utils/phone';
 
@@ -52,13 +53,12 @@ export default function ForgotPasswordPage() {
 
   return (
     <>
-      <h2 className="m-0 text-2xl font-semibold tracking-tight text-ink">Quên mật khẩu</h2>
-      <div className="w-8 h-0.5 bg-gold mt-2 mb-2" />
-      <p className="m-0 mb-6 text-[13px] text-ink-2">
+      <h2 className="m-0 text-lg font-semibold tracking-tight text-ink">Quên mật khẩu</h2>
+      <p className="mt-1 mb-6 text-[13px] text-ink-2">
         {phone ? 'Nhập mã đã gửi tới email và đặt mật khẩu mới.' : 'Nhập số điện thoại đăng nhập, mã đặt lại mật khẩu sẽ gửi tới email của tài khoản.'}
       </p>
 
-      {error && <Alert type="error" showIcon title={error} className="mb-4" closable={{ onClose: () => setError(null) }} />}
+      {error && <Alert type="error" showIcon title={error} style={ALERT_GAP} closable={{ onClose: () => setError(null) }} />}
 
       {!phone ? (
         <Form layout="vertical" requiredMark={false} disabled={loading} onFinish={({ phone: value }) => sendCode(value)}>
@@ -74,7 +74,7 @@ export default function ForgotPasswordPage() {
           <Alert
             type="info"
             showIcon
-            className="mb-4"
+            style={ALERT_GAP}
             title={`Nếu số ${phone} có tài khoản và email, mã đã được gửi tới email, có hiệu lực 10 phút.`}
             description="Không nhận được email hoặc tài khoản không có email: mang CCCD đến quầy lễ tân để lấy mã in."
           />
@@ -121,11 +121,11 @@ export default function ForgotPasswordPage() {
 
       <div className="mt-4 text-center text-[13px] text-ink-2">
         Có mã in tại quầy?{' '}
-        <Link to={portalPath(portal, '/activate')} className="font-semibold text-navy hover:text-gold transition-colors">
+        <Link to={portalPath(portal, '/activate')} className="font-medium text-navy hover:text-navy-hover">
           Nhập mã tại đây
         </Link>
         {' · '}
-        <Link to={portalPath(portal, '/login')} className="font-semibold text-navy hover:text-gold transition-colors">
+        <Link to={portalPath(portal, '/login')} className="font-medium text-navy hover:text-navy-hover">
           Đăng nhập
         </Link>
       </div>

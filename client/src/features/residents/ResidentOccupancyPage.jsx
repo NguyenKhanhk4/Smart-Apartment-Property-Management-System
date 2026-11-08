@@ -42,7 +42,7 @@ function OccupancyExcelPreview({ filters, onClose }) {
   }));
 
   return (
-    <Modal title="Xem trước file Excel" open width={1100} onCancel={onClose}
+    <Modal title="Xem trước file Excel" open width="min(1100px, 94vw)" onCancel={onClose}
       footer={<Button onClick={onClose}>Đóng</Button>}>
       <Spin spinning={loading}>
         <div className="min-h-32">
@@ -52,9 +52,9 @@ function OccupancyExcelPreview({ filters, onClose }) {
               key: sheet.name,
               label: sheet.name,
               children: (
-                <div className="rounded-md border border-gray-200 dark:border-gray-700">
-                  <div className="border-b border-gray-200 px-4 py-2 font-semibold dark:border-gray-700">{sheet.title}</div>
-                  <div className="border-b border-gray-200 px-4 py-2 dark:border-gray-700">{sheet.summary}</div>
+                <div className="rounded-md border border-line dark:border-gray-700">
+                  <div className="border-b border-line px-4 py-2 font-semibold dark:border-gray-700">{sheet.title}</div>
+                  <div className="border-b border-line px-4 py-2 dark:border-gray-700">{sheet.summary}</div>
                   <Table
                     bordered size="small" rowKey="number" columns={columns} dataSource={sheet.rows}
                     pagination={false} scroll={{ x: 'max-content', y: 360 }}
@@ -108,7 +108,7 @@ export default function ResidentOccupancyPage() {
       render: (_, row) => (
         <div>
           <b>{row.buildingName}</b>
-          {row.buildingAddress && <div className="text-xs text-gray-500">{row.buildingAddress}</div>}
+          {row.buildingAddress && <div className="text-xs text-ink-3">{row.buildingAddress}</div>}
         </div>
       ),
     },

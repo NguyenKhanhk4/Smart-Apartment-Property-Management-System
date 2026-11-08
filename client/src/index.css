@@ -1,5 +1,8 @@
 /* Tailwind v4 — dùng cho layout & tiện ích nhỏ; component vẫn ưu tiên Ant Design.
    Màu luôn lấy theo design tokens (theme/tokens.js), không tự đặt màu mới. */
+/* Thứ tự layer: style antd (StyleProvider layer trong App.jsx) nằm dưới utilities của Tailwind,
+   nên class khoảng cách / màu (mb-4, gap-3, bg-…) đặt trên component antd có tác dụng. */
+@layer theme, base, antd, components, utilities;
 @import 'tailwindcss';
 
 /* Dark mode theo class `dark` trên <html> (ThemeModeProvider), KHÔNG theo cài đặt hệ điều hành —
@@ -7,8 +10,40 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  /* Font: Inter (khu quản lý, trang đăng nhập); khu cư dân dùng Mulish (lớp .font-resident). Không dùng font serif trang trí */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Thang cỡ chữ gọn + chiều cao dòng đủ cho dấu tiếng Việt (dấu chồng không chạm dòng dưới) */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.55;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.6;
+  --text-lg: 1rem;
+  --text-lg--line-height: 1.5;
+  --text-xl: 1.125rem;
+  --text-xl--line-height: 1.45;
+  --text-2xl: 1.25rem;
+  --text-2xl--line-height: 1.4;
+  --text-3xl: 1.5rem;
+  --text-3xl--line-height: 1.35;
+  --text-4xl: 1.75rem;
+  --text-4xl--line-height: 1.3;
+  /* Không dùng chiều cao dòng < 1.25 và khoảng cách chữ âm: chữ có dấu bị dính nhau */
+  --leading-none: 1.25;
+  --leading-tight: 1.35;
+  --leading-snug: 1.45;
+  --leading-normal: 1.55;
+  --tracking-tight: 0em;
+  --tracking-tighter: 0em;
+  /* Chữ đậm tối đa 600 trên toàn app */
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
+  --font-weight-black: 600;
+  /* Bóng nhẹ cho khung / thẻ nổi (dùng ở vài trang) */
+  --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.05);
+  --shadow-float-r: 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 20px rgba(0, 0, 0, 0.06);
 
   --color-midnight: #0f1b2d;
   --color-navy: #1e3a5f;
@@ -65,6 +100,10 @@
     background: var(--color-ivory);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-size: 13px;
+    line-height: 1.55;
+    letter-spacing: 0.005em; /* Inter / Mulish cỡ nhỏ: thêm chút khoảng cách cho chữ có dấu dễ đọc */
+    text-rendering: optimizeLegibility;
   }
 
   .dark body {
@@ -79,9 +118,9 @@
 
 /* Tiêu đề sang trọng — chỉ dùng 2–3 chỗ (trang đăng nhập, số tiền lớn) */
 .font-serif-luxury {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 /* Thanh cuộn mảnh */
@@ -137,4 +176,72 @@
   ::view-transition-new(*) {
     animation-duration: 0.01ms !important;
   }
+}
+
+/* Khu cư dân: font Mulish, chữ 13.5px (ResidentLayout gắn lớp này) */
+.font-resident {
+  font-family: 'Mulish', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+/* ===== Responsive dùng chung (đơn vị %, vw, vh) ===== */
+
+/* Bảng không khai báo scroll.x: cho cuộn ngang trong khung thay vì tràn trang trên màn hình hẹp */
+.ant-table-content {
+  overflow-x: auto;
+}
+
+/* Thẻ antd luôn có viền rõ trên nền trang (A: nền #f4f4f6, thẻ trắng) */
+.ant-card-bordered {
+  border-color: var(--color-line);
+}
+
+/* Khu nội dung: tối đa 100% chiều ngang, ảnh / bảng không đẩy tràn */
+main img,
+main video,
+main canvas {
+  max-width: 100%;
+}
+
+/* Điện thoại (<640px): ô lọc ghi cứng chiều rộng (style={{ width: N }}) giãn hết hàng,
+   modal gần full màn hình, nội dung modal dài thì cuộn trong 70vh */
+@media (max-width: 639.98px) {
+  main :is(.ant-select, .ant-input-search, .ant-input-affix-wrapper, .ant-picker, .ant-input-number, .ant-input)[style*='width']:not(.ant-table *, .ant-pagination *, .ant-form-item *) {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .ant-modal .ant-modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .ant-card .ant-card-body {
+    padding: 4vw;
+  }
+}
+
+/* Khoảng cách mặc định giữa các khối antd nằm liền nhau ở cấp trang (Card, Alert, Bảng, Tabs…) khi trang quên đặt margin.
+   Margin dọc của các khối liền kề gộp lại (collapse) với mb-* sẵn có nên không bị gấp đôi. */
+.page-stack > * + :is(.ant-card, .ant-alert, .ant-table-wrapper, .ant-tabs, .ant-row, .ant-descriptions, .ant-list, .ant-steps, .ant-result, .ant-empty) {
+  margin-top: 16px;
+}
+
+/* Hộp thoại: các khối liền nhau trong thân modal cách nhau 12px (đoạn văn, tiêu đề, ô nhập, nút…), footer cách nội dung 20px.
+   Margin dọc gộp với margin sẵn có (Form.Item 24px) nên không bị cộng dồn. */
+.ant-modal .ant-modal-body > * + * {
+  margin-top: 12px;
+}
+.ant-modal .ant-modal-footer {
+  margin-top: 20px;
+}
+.ant-modal .ant-modal-title {
+  padding-right: 24px;
+}
+
+/* Nhóm nút trong ô bảng (cột Thao tác…) được xuống dòng khi cột hẹp hơn nội dung, không tràn ra ngoài bảng */
+.ant-table-tbody .ant-space-horizontal,
+.ant-table-tbody .ant-flex:not(.ant-flex-vertical) {
+  flex-wrap: wrap;
+  row-gap: 4px;
 }

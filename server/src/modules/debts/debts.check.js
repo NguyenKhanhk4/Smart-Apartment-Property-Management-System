@@ -46,7 +46,7 @@ async function currentSnapshot(apartmentId, today) {
     invoices: invoices.map((i) => ({
       ...i,
       paid: i.paidAmount,
-      outstanding: Math.max(0, i.totalAmount - i.paidAmount),
+      outstanding: Math.max(0, i.totalAmount - (i.paidAmount ?? 0)),
       overdue: i.status === OVERDUE || Boolean(i.dueDate && i.dueDate < today),
     })),
     balances: balances.map((b) => ({ payerId: b.payerId, balance: b.balance })),

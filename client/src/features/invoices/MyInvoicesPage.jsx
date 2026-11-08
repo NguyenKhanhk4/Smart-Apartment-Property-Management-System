@@ -109,7 +109,7 @@ export default function MyInvoicesPage() {
               >
                 <span className="flex-1 min-w-0">
                   <span className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[15px] font-semibold">Tháng {periodLabel(inv.period)}</span>
+                    <span className="text-[14px] font-semibold">Tháng {periodLabel(inv.period)}</span>
                     <StatusBadge tone={INVOICE_TONE[inv.status]}>{INVOICE_STATUS[inv.status]?.label}</StatusBadge>
                   </span>
                   <span className="block text-[13px] text-r-muted truncate">
@@ -117,7 +117,7 @@ export default function MyInvoicesPage() {
                   </span>
                 </span>
                 <span className="text-right shrink-0">
-                  <span className="block text-[15px] font-semibold">{formatMoney(due ? outstandingOf(inv) : inv.totalAmount)}</span>
+                  <span className="block text-[14px] font-semibold">{formatMoney(due ? outstandingOf(inv) : inv.totalAmount)}</span>
                   <span className="block text-[12px] text-r-muted">{due ? 'còn phải trả' : 'tổng tiền'}</span>
                 </span>
                 <RightOutlined className="text-r-muted" />

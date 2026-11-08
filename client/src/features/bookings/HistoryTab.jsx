@@ -69,6 +69,12 @@ export default function HistoryTab({ wide }) {
     </span>
   );
   const pay = (b) => payBooking(b._id).catch((e) => message.error(e.message));
+  // Đang giữ chỗ chờ trả online → đổi ý, cộng phí vào thông báo phí tháng (xác nhận chỗ luôn)
+  const later = (b) =>
+    bookingApi
+      .payLater(b._id)
+      .then(() => message.success(`Đã xác nhận. Phí ${formatMoney(b.fee)} sẽ cộng vào phí dịch vụ tháng.`))
+      .catch((e) => message.error(e.message));
   const holdLine = (b) =>
     b.status === 'PENDING_PAYMENT' && (
       <span className="block text-xs text-r-warn-fg">
@@ -80,6 +86,10 @@ export default function HistoryTab({ wide }) {
         ) : (
           'thanh toán tại quầy lễ tân'
         )}
+        {' · '}
+        <button type="button" className={linkBtn} onClick={() => later(b)}>
+          Cộng vào phí tháng
+        </button>
       </span>
     );
 
@@ -172,7 +182,7 @@ export default function HistoryTab({ wide }) {
           <div className="text-xs text-r-muted">Th{d.format('MM')}</div>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[15px] font-medium truncate">{b.amenity?.name ?? 'Tiện ích'}</div>
+          <div className="text-[14px] font-medium truncate">{b.amenity?.name ?? 'Tiện ích'}</div>
           <div className="text-[13px] text-r-muted">
             {timeOf(b)} · {feeOf(b)}
           </div>

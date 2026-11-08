@@ -234,14 +234,14 @@ export default function ApartmentDetailPage() {
       render: (_, r) => (
         <div>
           <Space>
-            <span className="font-semibold text-gray-800 dark:text-gray-100">{r.fullName}</span>
+            <span className="font-semibold text-ink dark:text-gray-100">{r.fullName}</span>
             {(showOccupants ? r.occupancyRole === 'HEAD' : r.isHead) && (
               <Tag color="gold" icon={<CrownOutlined />}>
                 Chủ hộ
               </Tag>
             )}
           </Space>
-          <div className="text-xs text-gray-400">{r.email}</div>
+          <div className="text-xs text-ink-3">{r.email}</div>
         </div>
       ),
     },
@@ -362,17 +362,17 @@ export default function ApartmentDetailPage() {
       render: (_, c) =>
         c.type === 'SALE' ? (
           <div>
-            <span className="font-medium text-gray-800 dark:text-gray-100">
+            <span className="font-medium text-ink dark:text-gray-100">
               {c.ownerId?.fullName || '—'}
             </span>
-            <div className="text-xs text-gray-400">Chủ sở hữu • {c.ownerId?.email}</div>
+            <div className="text-xs text-ink-3">Chủ sở hữu • {c.ownerId?.email}</div>
           </div>
         ) : (
           <div>
-            <span className="font-medium text-gray-800 dark:text-gray-100">
+            <span className="font-medium text-ink dark:text-gray-100">
               {c.tenantId?.fullName || '—'}
             </span>
-            <div className="text-xs text-gray-400">
+            <div className="text-xs text-ink-3">
               Người thuê • {c.tenantId?.email}
               {c.tenantPaysFees && (
                 <Tag color="orange" className="ml-1 text-[10px]">
@@ -409,8 +409,8 @@ export default function ApartmentDetailPage() {
       key: 'plateNumber',
       width: 150,
       render: (val, r) => (
-        <span className="font-semibold text-gray-800 dark:text-gray-100">
-          {val || (r.type === 'BICYCLE' ? <i className="text-gray-400 font-normal">Không biển số</i> : '—')}
+        <span className="font-semibold text-ink dark:text-gray-100">
+          {val || (r.type === 'BICYCLE' ? <i className="text-ink-3 font-normal">Không biển số</i> : '—')}
         </span>
       ),
     },
@@ -569,7 +569,7 @@ export default function ApartmentDetailPage() {
       )}
 
       {/* Thông tin tổng quan căn hộ */}
-      <Card loading={loadingApt} className="mb-6 shadow-sm border border-gray-100 dark:border-gray-800">
+      <Card loading={loadingApt} className="mb-6 shadow-sm border border-line dark:border-gray-800">
         <Row gutter={[24, 16]} align="middle">
           <Col xs={24} sm={12} md={5}>
             <Statistic
@@ -616,7 +616,7 @@ export default function ApartmentDetailPage() {
       </Card>
 
       {/* Tabs Thành viên / Hợp đồng / Phương tiện */}
-      <Card className="shadow-sm border border-gray-100 dark:border-gray-800">
+      <Card className="shadow-sm border border-line dark:border-gray-800">
         <Tabs
           defaultActiveKey="residents"
           items={[

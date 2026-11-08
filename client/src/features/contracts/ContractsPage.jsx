@@ -43,7 +43,7 @@ import ApartmentSelect from '../../components/ApartmentSelect';
 // SĐT nhập trước để biết có tài khoản chưa; tài khoản có sẵn không nhận họ tên, email, ngày sinh mới (BR-X5)
 function PartyFields({ prefix, title, check, namePlaceholder, emailPlaceholder, phonePlaceholder, idPlaceholder }) {
   return (
-    <Card size="small" title={title} className="mb-4 bg-gray-50/50 dark:bg-gray-800">
+    <Card size="small" title={title} className="mb-4 bg-surface-alt border-line-strong dark:bg-[#27272A]">
       <Row gutter={16}>
         <Col span={12}>
           <Form.Item name={`${prefix}Phone`} label="Số điện thoại" rules={PHONE_RULES}>
@@ -239,10 +239,10 @@ export default function ContractsPage() {
       width: 140,
       render: (apt) => (
         <div>
-          <span className="font-semibold text-blue-600 dark:text-blue-400">
+          <span className="font-semibold text-navy dark:text-blue-400">
             {apt?.code || '—'}
           </span>
-          <div className="text-xs text-gray-400">{apt?.buildingId?.name || ''}</div>
+          <div className="text-xs text-ink-3">{apt?.buildingId?.name || ''}</div>
         </div>
       ),
     },
@@ -267,7 +267,7 @@ export default function ContractsPage() {
         owner ? (
           <div>
             <div className="font-medium text-ink dark:text-gray-200">{owner.fullName}</div>
-            <div className="text-xs text-gray-400">{owner.email}</div>
+            <div className="text-xs text-ink-3">{owner.email}</div>
           </div>
         ) : (
           '—'
@@ -281,10 +281,10 @@ export default function ContractsPage() {
         tenant ? (
           <div>
             <div className="font-medium text-ink dark:text-gray-200">{tenant.fullName}</div>
-            <div className="text-xs text-gray-400">{tenant.email}</div>
+            <div className="text-xs text-ink-3">{tenant.email}</div>
           </div>
         ) : (
-          <span className="text-gray-400 italic">Không có</span>
+          <span className="text-ink-3 italic">Không có</span>
         ),
     }, {
       title: 'Thời hạn',
@@ -312,7 +312,7 @@ export default function ContractsPage() {
       render: (_, record) => (
         <div>
           <div>{OWNERSHIP_DOCUMENT_TYPES[record.ownershipDocumentType]?.label || 'Chưa ghi nhận'}</div>
-          {record.ownershipDocumentNumber && <div className="text-xs text-gray-500">{record.ownershipDocumentNumber}</div>}
+          {record.ownershipDocumentNumber && <div className="text-xs text-ink-3">{record.ownershipDocumentNumber}</div>}
         </div>
       ),
     }, {
@@ -382,7 +382,7 @@ export default function ContractsPage() {
 
       <Card bordered={false} className="shadow-sm">
         {/* Bộ lọc */}
-        <div className="flex flex-wrap gap-3 items-center mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+        <div className="flex flex-wrap gap-3 items-center mb-4 p-3 bg-surface-alt border border-line rounded-lg dark:bg-[#27272A] dark:border-[#2E2E33]">
           <Select
             placeholder="Tòa nhà"
             allowClear
@@ -461,7 +461,7 @@ export default function ContractsPage() {
         onOk={handleSaveCreate}
         okButtonProps={{ disabled: Boolean(check.blockReason) }}
         confirmLoading={creating}
-        width={680}
+        width="min(680px, 94vw)"
         destroyOnClose
       >
         <Form form={createForm} layout="vertical" className="mt-4">
@@ -544,13 +544,13 @@ export default function ContractsPage() {
             Đóng
           </Button>,
         ]}
-        width={680}
+        width="min(680px, 94vw)"
       >
         {selectedContract ? (
           <div>
             <Descriptions bordered column={2} size="small" className="mb-4">
               <Descriptions.Item label="Mã căn hộ">
-                <span className="font-bold text-blue-600">
+                <span className="font-semibold text-navy">
                   {selectedContract.apartmentId?.code}
                 </span>
               </Descriptions.Item>
@@ -604,22 +604,22 @@ export default function ContractsPage() {
 
             <Row gutter={16} className="mb-4">
               <Col span={selectedContract.type === 'LEASE' ? 12 : 24}>
-                <Card size="small" title="Chủ sở hữu" className="bg-gray-50 dark:bg-gray-800">
+                <Card size="small" title="Chủ sở hữu" className="bg-surface-alt border-line-strong dark:bg-[#27272A]">
                   <div className="font-medium">{selectedContract.ownerId?.fullName}</div>
-                  <div className="text-xs text-gray-500">Email: {selectedContract.ownerId?.email}</div>
-                  <div className="text-xs text-gray-500">SĐT: {selectedContract.ownerId?.phone || '—'}</div>
+                  <div className="text-xs text-ink-3">Email: {selectedContract.ownerId?.email}</div>
+                  <div className="text-xs text-ink-3">SĐT: {selectedContract.ownerId?.phone || '—'}</div>
                 </Card>
               </Col>
               {selectedContract.type === 'LEASE' && <Col span={12}>
-                <Card size="small" title="Người thuê" className="bg-gray-50 dark:bg-gray-800">
+                <Card size="small" title="Người thuê" className="bg-surface-alt border-line-strong dark:bg-[#27272A]">
                   {selectedContract.tenantId ? (
                     <div>
                       <div className="font-medium">{selectedContract.tenantId?.fullName}</div>
-                      <div className="text-xs text-gray-500">Email: {selectedContract.tenantId?.email}</div>
-                      <div className="text-xs text-gray-500">SĐT: {selectedContract.tenantId?.phone || '—'}</div>
+                      <div className="text-xs text-ink-3">Email: {selectedContract.tenantId?.email}</div>
+                      <div className="text-xs text-ink-3">SĐT: {selectedContract.tenantId?.phone || '—'}</div>
                     </div>
                   ) : (
-                    <span className="text-gray-400 italic">Không có người thuê</span>
+                    <span className="text-ink-3 italic">Không có người thuê</span>
                   )}
                 </Card>
               </Col>}
