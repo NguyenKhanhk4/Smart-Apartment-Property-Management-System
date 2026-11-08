@@ -110,9 +110,10 @@ router.get('/cases/:id', STAFF, validate({ params: idParams }), async (req, res)
  *               note: { type: string }
  *               promisedDate: { type: string, example: '2026-11-20' }
  */
+// UC31: công nợ do Kế toán quản lý, Trưởng BQL chỉ xem (SRS 2.3: Receivables Ledger — Building Admin X (view))
 router.post(
   '/cases/:id/activities',
-  authorize('MANAGER'),
+  authorize('ACCOUNTANT'),
   validate({ params: idParams, body: activityBody }),
   async (req, res) => ok(res, await cases.recordActivity(req.user, req.params.id, req.body), 'Đã ghi kết quả xử lý nợ'),
 );

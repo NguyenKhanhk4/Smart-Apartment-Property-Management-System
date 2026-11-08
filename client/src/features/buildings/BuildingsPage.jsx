@@ -878,7 +878,7 @@ export default function BuildingsPage() {
           <div>
             <Descriptions bordered column={2} size="small" className="mb-4">
               <Descriptions.Item label="Mã căn">
-                <span className="font-bold text-blue-600">{selectedApartment.code}</span>
+                <span className="font-semibold text-navy">{selectedApartment.code}</span>
               </Descriptions.Item>
               <Descriptions.Item label="Trạng thái căn hộ">
                 <ApartmentOccupancyTag status={selectedApartment.occupancyStatus} />

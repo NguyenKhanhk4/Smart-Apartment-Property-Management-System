@@ -22,8 +22,8 @@ const VIEWERS = [
   ROLES.RESIDENT,
   ROLES.MANAGER,
   `STAFF:${ROLE_TITLES.SECURITY}`,
-  `STAFF:${ROLE_TITLES.RECEPTIONIST}`,
 ];
+// SRS 2.3: đơn chuyển đồ — cư dân tạo, Trưởng BQL duyệt (UC53), Bảo vệ kiểm tra (UC54); Lễ tân không có quyền
 const SECURITY_AND_MANAGER = [`STAFF:${ROLE_TITLES.SECURITY}`, ROLES.MANAGER];
 const SECURITY_ONLY = [`STAFF:${ROLE_TITLES.SECURITY}`];
 const MANAGER_ONLY = [ROLES.MANAGER];

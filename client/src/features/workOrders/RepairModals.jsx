@@ -106,7 +106,7 @@ export function FaultReportModal({ workOrder, open, onClose, onDone }) {
     { success: (res) => res.message, onDone: done(onClose, onDone) },
   );
   return (
-    <Modal title="Báo cáo hư hỏng" open={open} onCancel={onClose} onOk={() => form.submit()} okText="Gửi Trưởng BQL" cancelText="Để sau" confirmLoading={saving} destroyOnHidden width={640}>
+    <Modal title="Báo cáo hư hỏng" open={open} onCancel={onClose} onOk={() => form.submit()} okText="Gửi Trưởng BQL" cancelText="Để sau" confirmLoading={saving} destroyOnHidden width="min(640px, 94vw)">
       <Typography.Paragraph type="secondary">
         {assetText(workOrder)}. Báo cáo gửi Trưởng BQL duyệt sửa chữa; Trưởng BQL tự liên hệ nhà thầu.
       </Typography.Paragraph>
@@ -138,7 +138,7 @@ export function AcceptanceUploadModal({ workOrder, open, onClose, onDone }) {
   });
   const returned = workOrder.repair?.history?.filter((h) => h.action === 'RETURNED').at(-1);
   return (
-    <Modal title="Tải biên bản nghiệm thu" open={open} onCancel={onClose} onOk={() => form.submit()} okText="Gửi nghiệm thu" cancelText="Đóng" confirmLoading={saving} destroyOnHidden width={600}>
+    <Modal title="Tải biên bản nghiệm thu" open={open} onCancel={onClose} onOk={() => form.submit()} okText="Gửi nghiệm thu" cancelText="Đóng" confirmLoading={saving} destroyOnHidden width="min(600px, 94vw)">
       <Typography.Paragraph type="secondary">{assetText(workOrder)}. Chụp hoặc quét biên bản nghiệm thu có chữ ký của nhà thầu.</Typography.Paragraph>
       {returned && <Alert type="warning" showIcon style={{ marginBottom: 12 }} title="Trưởng BQL đã yêu cầu sửa lại" description={returned.note} />}
       <Form form={form} layout="vertical" onFinish={(v) => save(v).catch(() => {})}>
@@ -221,7 +221,7 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
       cancelText="Đóng"
       confirmLoading={saving}
       destroyOnHidden
-      width={720}
+      width="min(720px, 94vw)"
     >
       {awaitingFund && (
         <Alert
@@ -306,7 +306,7 @@ export function RepairRequestModal({ workOrder, open, onClose, onDone }) {
   );
   const r = workOrder.repair ?? {};
   return (
-    <Modal title={`Gửi yêu cầu sửa lại: ${assetText(workOrder)}`} open={open} onCancel={onClose} onOk={() => form.submit()} okText="Gửi Trưởng BQL" cancelText="Đóng" confirmLoading={saving} destroyOnHidden width={640}>
+    <Modal title={`Gửi yêu cầu sửa lại: ${assetText(workOrder)}`} open={open} onCancel={onClose} onOk={() => form.submit()} okText="Gửi Trưởng BQL" cancelText="Đóng" confirmLoading={saving} destroyOnHidden width="min(640px, 94vw)">
       <Alert
         type="info"
         showIcon
@@ -346,7 +346,7 @@ export function AcceptanceReviewModal({ workOrder, open, onClose, onDone }) {
       cancelText="Đóng"
       confirmLoading={saving}
       destroyOnHidden
-      width={720}
+      width="min(720px, 94vw)"
     >
       <RepairInfo workOrder={workOrder} />
       <Form form={form} layout="vertical" initialValues={{ decision: 'ACCEPT' }} onFinish={(v) => save(v).catch(() => {})}>
