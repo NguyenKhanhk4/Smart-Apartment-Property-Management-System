@@ -6,9 +6,10 @@ import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
-import { idParams, objectId, ymd } from '../../utils/validators.js';
+import { idParams, objectId, phoneVn, ymd } from '../../utils/validators.js';
 import * as service from './apartments.service.js';
 import { listApartmentResidents } from '../residents/residents.service.js';
+import { issueOwnerAccount } from '../contracts/contracts.service.js';
 
 // Module A — Vũ Việt. UC-A05, UC-A07: Quản lý căn hộ & Cư dân
 const router = Router();
@@ -155,6 +156,26 @@ router.put(
       req.ip,
     );
     ok(res, apartment);
+  },
+);
+
+/** UC22 — Trưởng Ban quản lý cấp quyền theo hồ sơ mua bán của căn. */
+router.post(
+  '/:id/owner-account',
+  authenticate,
+  authorize('MANAGER'),
+  validate({
+    params: idParams,
+    body: Joi.object({
+      contractId: objectId().required(),
+      phone: phoneVn().required(),
+      email: Joi.string().trim().email().max(254).allow('', null),
+      identityVerified: Joi.boolean().valid(true).required(),
+    }),
+  }),
+  async (req, res) => {
+    const { params, body } = req.validated;
+    created(res, await issueOwnerAccount(params.id, body, req.user, req.ip));
   },
 );
 

@@ -65,7 +65,8 @@ export async function getApartmentById(id) {
 
   const [activeContracts, activeResidentsCount, approvedVehiclesCount] = await Promise.all([
     Contract.find({ apartmentId: id, status: CONTRACT_STATUS.ACTIVE })
-      .populate('ownerId', 'fullName email phone')
+      .populate('ownerId', 'fullName email phone activatedAt isActive')
+      .populate('ownerAccountIssuedBy', 'fullName')
       .populate('tenantId', 'fullName email phone')
       .lean(),
     Resident.countDocuments({ apartmentId: id, isActive: true }),
@@ -287,10 +288,13 @@ export function confirmMoveIn(id, receptionist, ip) {
       apartmentId: id,
       status: CONTRACT_STATUS.ACTIVE,
       startDate: { $lte: today },
-    }).select('type').session(session).lean();
+    }).select('type ownerAccountPending').session(session).lean();
     const owner = contracts.find((contract) => contract.type === CONTRACT_TYPES.SALE);
     if (!owner) {
       throw new ApiError('STATUS_CONFLICT', 'Cần hợp đồng mua bán đang hiệu lực để xác nhận vào ở');
+    }
+    if (owner.ownerAccountPending) {
+      throw new ApiError('STATUS_CONFLICT', 'Ban quản lý cần cấp tài khoản chủ sở hữu trước khi xác nhận vào ở');
     }
     const lease = contracts.find((contract) => contract.type === CONTRACT_TYPES.LEASE);
     const currentTenant = await Resident.exists({ apartmentId: id, relationType: RELATION_TYPES.TENANT,

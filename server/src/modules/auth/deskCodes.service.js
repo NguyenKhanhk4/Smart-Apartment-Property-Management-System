@@ -1,6 +1,6 @@
 // UC02 bước 5–6: Lễ tân đối chiếu CCCD rồi cấp mã in tại quầy, hạn 48 giờ (BR-X4, BR-S05).
-import { AUDIT_ACTIONS, AUDIT_TARGETS, ROLES, VERIFICATION_PURPOSES } from '../../constants/enums.js';
-import { Apartment, Resident, User } from '../../models/index.js';
+import { AUDIT_ACTIONS, AUDIT_TARGETS, CONTRACT_TYPES, ROLES, VERIFICATION_PURPOSES } from '../../constants/enums.js';
+import { Apartment, Contract, Resident, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { findUserByPhone, phoneTakenError, uniqueConflictError } from '../users/userLookup.js';
@@ -27,6 +27,16 @@ function issueBlockReason(actor, target) {
   return null;
 }
 
+async function activationBlockReason(actor, user, hasResidence) {
+  const blocked = issueBlockReason(actor, user);
+  if (blocked || user.role !== ROLES.RESIDENT || user.activatedAt) return blocked;
+  const resident = hasResidence ?? await Resident.exists({ userId: user._id, isActive: true });
+  if (!resident && await Contract.exists({ ownerId: user._id, type: CONTRACT_TYPES.SALE, ownerAccountPending: true })) {
+    return 'Ban quản lý cần cấp tài khoản chủ sở hữu trước khi cấp mã kích hoạt';
+  }
+  return null;
+}
+
 const accountStatus = (user) => {
   if (!user.isActive) return 'LOCKED';
   return user.activatedAt ? 'ACTIVE' : 'PENDING';
@@ -40,7 +50,7 @@ export async function lookupForDeskCode(actor, phone) {
   const residents = await Resident.find({ userId: user._id, isActive: true }).select('apartmentId idNumberEnc createdAt').lean();
   const apartments = await Apartment.find({ _id: { $in: residents.map((r) => r.apartmentId) } }).select('code').lean();
   const withId = residents.filter((r) => r.idNumberEnc).sort((a, b) => b.createdAt - a.createdAt)[0];
-  const blockReason = issueBlockReason(actor, user);
+  const blockReason = await activationBlockReason(actor, user, residents.length > 0);
 
   return {
     userId: user._id,
@@ -89,7 +99,7 @@ export async function changePhoneAtDesk(actor, userId, phone, { ip } = {}) {
 export async function issueDeskCode(actor, userId, { ip } = {}) {
   const user = await User.findById(userId).select('fullName phone role activatedAt isActive').lean();
   if (!user) throw ApiError.notFound('Không tìm thấy tài khoản');
-  const blockReason = issueBlockReason(actor, user);
+  const blockReason = await activationBlockReason(actor, user);
   if (blockReason) {
     throw user.isActive ? ApiError.forbidden(blockReason) : new ApiError('STATUS_CONFLICT', blockReason);
   }

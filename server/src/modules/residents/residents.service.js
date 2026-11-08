@@ -227,6 +227,9 @@ export async function addMember(receptionistUser, data, ip) {
       savedResident = await createFamilyMemberWithoutAccount(data, activeContract._id, session);
     } else {
       account = await findOrCreateResidentUser(data, session);
+      if (activeContract.ownerAccountPending && String(activeContract.ownerId) === String(account.user._id)) {
+        throw new ApiError('STATUS_CONFLICT', 'Ban quản lý cần cấp tài khoản cho người đứng tên theo hồ sơ mua bán');
+      }
       const alreadyActive = await Resident.exists({ apartmentId, userId: account.user._id, isActive: true }).session(session);
       if (alreadyActive) throw new ApiError('STATUS_CONFLICT', 'Cư dân đã là thành viên đang ở của căn hộ này');
 

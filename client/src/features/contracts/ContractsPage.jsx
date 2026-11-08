@@ -141,11 +141,7 @@ export default function ContractsPage() {
   const [createContract, creating] = useAction(
     async (formData) => contractsApi.create(formData),
     {
-      success: (res) => {
-        return res?.data?.activationInviteSent === false
-          ? 'Đã tạo hợp đồng. Chưa gửi được email mời (hoặc cư dân không có email): cấp mã tại menu Cấp mã kích hoạt để cư dân kích hoạt.'
-          : 'Tạo hợp đồng thành công';
-      },
+      success: 'Đã ghi nhận hợp đồng. Ban quản lý cấp tài khoản tại Chi tiết căn hộ.',
       onDone: () => {
         setCreateModalOpen(false);
         createForm.resetFields();

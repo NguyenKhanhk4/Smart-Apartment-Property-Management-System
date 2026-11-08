@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import {
+  Alert,
   Card,
   Tabs,
   Segmented,
@@ -45,7 +46,7 @@ import {
   VEHICLE_STATUS,
   VEHICLE_TYPES,
 } from '../../constants/enums';
-import { formatDate } from '../../utils/format';
+import { formatDate, formatDateTime } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi, useAction } from '../../hooks/useApi';
 import { apartmentsApi, contractsApi, residentsApi, vehicleApi } from '../../api/moduleA.api';
@@ -56,6 +57,7 @@ export default function ApartmentDetailPage() {
   const { hasRole } = useAuth();
 
   const isReceptionist = hasRole('STAFF:RECEPTIONIST');
+  const isManager = hasRole('MANAGER');
   const canRevealIdNumber = hasRole('STAFF:RECEPTIONIST', 'MANAGER');
   const [revealedIds, setRevealedIds] = useState({});
   const [residentView, setResidentView] = useState('occupants');
@@ -96,8 +98,26 @@ export default function ApartmentDetailPage() {
       reloadResidents();
     },
   });
-  const canConfirmMoveIn = isReceptionist && apartment?.handoverDate &&
-    apartment.activeContracts?.some((contract) => contract.type === 'SALE');
+  const activeSale = apartment?.activeContracts?.find((contract) => contract.type === 'SALE');
+  const owner = activeSale?.ownerId;
+  const ownerResidence = residents.find((resident) => resident.relationType === 'OWNER');
+  const ownerLinked = owner && ownerResidence?.userId === owner._id;
+  const canConfirmMoveIn = isReceptionist && apartment?.handoverDate && activeSale && !activeSale.ownerAccountPending;
+  const canIssueOwner = isManager && owner?.isActive && !loadingApt && !loadingResidents && !ownerResidence;
+  const [ownerModalOpen, setOwnerModalOpen] = useState(false);
+  const [ownerForm] = Form.useForm();
+  const [issueOwner, issuingOwner] = useAction(
+    (values) => apartmentsApi.issueOwnerAccount(id, { contractId: activeSale._id, ...values }),
+    {
+      success: (response) => response.data.activationInviteSent === false
+        ? 'Đã cấp quyền. Hướng dẫn chủ sở hữu kích hoạt qua email đã đăng ký hoặc nhận mã tại quầy.'
+        : 'Đã cấp tài khoản chủ sở hữu cho căn hộ',
+      onDone: async () => {
+        setOwnerModalOpen(false);
+        await Promise.all([reloadApt(), reloadResidents()]);
+      },
+    },
+  );
 
   // Load contracts list
   const {
@@ -434,6 +454,11 @@ export default function ApartmentDetailPage() {
           subtitle={`${apartment?.building?.name || ''} • Tầng ${apartment?.floor || ''}`}
           extra={
             <Space wrap>
+              {canIssueOwner && (
+                <Button type="primary" icon={<CrownOutlined />} onClick={() => setOwnerModalOpen(true)}>
+                  Cấp tài khoản chủ sở hữu
+                </Button>
+              )}
               {canConfirmMoveIn && (
                 <Popconfirm
                   title="Xác nhận cư dân đã vào ở?"
@@ -460,6 +485,73 @@ export default function ApartmentDetailPage() {
           }
         />
       </div>
+
+      {isManager && apartment && (
+        <Card title="Tài khoản chủ sở hữu" size="small" className="mb-6">
+          {owner ? (
+            <Space direction="vertical" size={6}>
+              <Space wrap>
+                <strong>{owner.fullName}</strong>
+                <span>{owner.phone}</span>
+                {ownerLinked && <Tag color={owner.activatedAt ? 'green' : 'gold'}>
+                  {owner.isActive === false ? 'Tài khoản bị khóa' : owner.activatedAt ? 'Đã kích hoạt' : 'Chờ kích hoạt'}
+                </Tag>}
+                {!ownerResidence && (owner.isActive
+                  ? <Tag color="blue">Chờ Ban quản lý cấp quyền</Tag>
+                  : <Tag color="red">Tài khoản bị khóa</Tag>)}
+              </Space>
+              {ownerResidence && !ownerLinked && (
+                <Alert type="warning" showIcon title="Căn đang có chủ sở hữu khác. Xử lý qua Chuyển nhượng căn hộ." />
+              )}
+              {ownerLinked && activeSale.ownerAccountIssuedAt && (
+                <span>Đã cấp lúc {formatDateTime(activeSale.ownerAccountIssuedAt)}
+                  {activeSale.ownerAccountIssuedBy?.fullName && ` bởi ${activeSale.ownerAccountIssuedBy.fullName}`}
+                </span>
+              )}
+              {ownerLinked && !activeSale.ownerAccountIssuedAt && <span>Đã liên kết từ hồ sơ trước đây</span>}
+            </Space>
+          ) : (
+            <span>Cần ghi nhận hồ sơ mua bán trước khi cấp tài khoản chủ sở hữu.</span>
+          )}
+        </Card>
+      )}
+
+      <Modal
+        title="Cấp tài khoản chủ sở hữu"
+        open={ownerModalOpen}
+        onCancel={() => setOwnerModalOpen(false)}
+        onOk={() => ownerForm.submit()}
+        okText="Cấp tài khoản"
+        cancelText="Hủy"
+        confirmLoading={issuingOwner}
+        destroyOnHidden
+      >
+        <Alert className="mb-4" type="info" showIcon
+          title={`${apartment?.building?.name} · Căn ${apartment?.code}`}
+          description={`Người đứng tên theo hồ sơ mua bán là ${owner?.fullName ?? '—'}.`}
+        />
+        <Form
+          form={ownerForm}
+          layout="vertical"
+          initialValues={{ phone: owner?.phone, email: owner?.email }}
+          preserve={false}
+          onFinish={(values) => issueOwner(values).catch(() => {})}
+        >
+          <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="email" label="Email" rules={[{ type: 'email', message: 'Email không hợp lệ' }]}>
+            <Input disabled={Boolean(owner?.email || owner?.activatedAt)} autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="identityVerified" valuePropName="checked" rules={[{
+            validator: (_, verified) => verified
+              ? Promise.resolve()
+              : Promise.reject(new Error('Cần đối chiếu người đứng tên trước khi cấp')),
+          }]}>
+            <Checkbox>Đã đối chiếu hồ sơ mua bán và giấy tờ định danh của người đứng tên.</Checkbox>
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* Thông tin tổng quan căn hộ */}
       <Card loading={loadingApt} className="mb-6 shadow-sm border border-gray-100 dark:border-gray-800">

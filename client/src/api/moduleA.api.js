@@ -37,6 +37,7 @@ export const apartmentsApi = {
   delete: (id) => http.delete(`/apartments/${id}`),
   setOccupancy: (id, body) => http.patch(`/apartments/${id}/occupancy-status`, body),
   confirmMoveIn: (id) => http.patch(`/apartments/${id}/confirm-move-in`),
+  issueOwnerAccount: (id, body) => http.post(`/apartments/${id}/owner-account`, body),
 };
 
 // ===== UC-A06: Hợp đồng =====

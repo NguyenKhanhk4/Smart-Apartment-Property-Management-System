@@ -7,6 +7,10 @@ const contractSchema = new Schema(
     apartmentId: { type: ObjectId, ref: 'Apartment', required: true },
     type: { type: String, enum: values(CONTRACT_TYPES), required: true },
     ownerId: { type: ObjectId, ref: 'User', required: true },
+    ownerIdNumberEnc: { type: String, select: false },
+    ownerAccountPending: Boolean,
+    ownerAccountIssuedAt: Date,
+    ownerAccountIssuedBy: { type: ObjectId, ref: 'User' },
     tenantId: { type: ObjectId, ref: 'User', default: null },
     tenantPaysFees: { type: Boolean, default: false }, // BR-F7
     startDate: { type: Date, required: true },

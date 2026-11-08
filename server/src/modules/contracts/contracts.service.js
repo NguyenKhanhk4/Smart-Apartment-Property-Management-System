@@ -7,8 +7,9 @@ import {
   CONTRACT_TYPES,
   NOTIFICATION_TYPES,
   RELATION_TYPES,
+  ROLES,
 } from '../../constants/enums.js';
-import { Apartment, Contract, Resident } from '../../models/index.js';
+import { Apartment, Contract, Resident, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { uploadToCloudinary } from '../../services/upload.service.js';
@@ -16,10 +17,13 @@ import { ApiError } from '../../utils/ApiError.js';
 import { paginate } from '../../utils/pagination.js';
 import { DAY_MS, endOfVnDay, startOfVnDay } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
+import { normalizePhone } from '../../utils/validators.js';
 import { recordOccupancy } from '../apartments/apartmentOccupancy.js';
 import { ensureCodes } from '../memberCodes/memberCodes.service.js';
 import { revokeDepartedResidentServices } from '../residents/residentExit.service.js';
-import { findOrCreateResidentUser, inviteNewResident, linkResident } from '../residents/residentAccounts.js';
+import { decryptIdNumber, encryptIdNumber } from '../residents/idCrypto.js';
+import { findOrCreateResidentUser, linkResident, sendActivationInvite } from '../residents/residentAccounts.js';
+import { uniqueConflictError } from '../users/userLookup.js';
 
 /**
  * Danh sách hợp đồng phân trang, lọc theo tòa/căn/loại/trạng thái/sắp hết hạn (UC-A06)
@@ -105,25 +109,38 @@ export async function createContract(receptionistUser, data, file, ip) {
   const startDate = contractDay(data.startDate);
   const fileUrl = await uploadContractFile(file);
 
-  let account = null; // { user, created } của người đứng tên
-  let savedContract = null;
-
-  await withTransaction(async (session) => {
+  return withTransaction(async (session) => {
     const apartment = await Apartment.findById(apartmentId).session(session);
     if (!apartment) throw ApiError.notFound('Căn hộ không tồn tại');
 
     if (await findActiveContract(apartmentId, CONTRACT_TYPES.SALE, session)) {
       throw new ApiError('CONTRACT_ACTIVE_EXISTS', 'Căn hộ đã có hợp đồng mua bán đang hiệu lực');
     }
-    account = await findOrCreateResidentUser(owner, session);
+    const { user } = await findOrCreateResidentUser(owner, session);
+    const currentOwner = await Resident.findOne({
+      apartmentId, relationType: RELATION_TYPES.OWNER, isActive: true,
+    }).select('userId').session(session).lean();
+    if (currentOwner && String(currentOwner.userId) !== String(user._id)) {
+      throw new ApiError('STATUS_CONFLICT', 'Căn hộ đang có chủ sở hữu khác. Hãy xử lý qua Chuyển nhượng căn hộ');
+    }
+
+    if (!currentOwner) {
+      apartment.occupancyStatus ??= apartment.handoverDate
+        ? APARTMENT_OCCUPANCY.VACANT
+        : APARTMENT_OCCUPANCY.NOT_HANDED_OVER;
+    }
     apartment.status = APARTMENT_STATUS.OWNED;
+    // Các yêu cầu ghi hồ sơ cùng căn phải tranh chấp trên cùng bản ghi trong transaction.
+    apartment.markModified('status');
 
     const [contract] = await Contract.create(
       [
         {
           apartmentId,
           type,
-          ownerId: account.user._id,
+          ownerId: user._id,
+          ownerIdNumberEnc: currentOwner ? undefined : encryptIdNumber(owner.idNumber),
+          ownerAccountPending: !currentOwner,
           startDate,
           status: CONTRACT_STATUS.ACTIVE,
           fileUrl,
@@ -132,19 +149,12 @@ export async function createContract(receptionistUser, data, file, ip) {
       ],
       { session },
     );
-    savedContract = contract;
-
-    await linkResident(
-      {
-        userId: account.user._id,
-        apartmentId,
-        relationType: RELATION_TYPES.OWNER,
-        contractId: contract._id,
-        moveInDate: startDate,
-        idNumber: owner.idNumber,
-      },
-      session,
-    );
+    if (currentOwner) {
+      await linkResident({
+        userId: user._id, apartmentId, relationType: RELATION_TYPES.OWNER, contractId: contract._id,
+        moveInDate: startDate, idNumber: owner.idNumber,
+      }, session);
+    }
     await apartment.save({ session });
 
     await logAudit(
@@ -158,24 +168,102 @@ export async function createContract(receptionistUser, data, file, ip) {
       },
       { session },
     );
+
+    return { contract: await Contract.findById(contract._id).session(session) };
+  });
+}
+
+/** UC22 — Liên kết đúng người đứng tên trong hồ sơ mua bán đã đối chiếu. */
+export async function issueOwnerAccount(apartmentId, { contractId, phone, email }, actor, ip) {
+  const owner = await withTransaction(async (session) => {
+    const contract = await Contract.findOne({
+      _id: contractId, apartmentId, type: CONTRACT_TYPES.SALE, status: CONTRACT_STATUS.ACTIVE,
+      startDate: { $lte: startOfVnDay() },
+    }).select('+ownerIdNumberEnc').session(session);
+    if (!contract) {
+      throw new ApiError('STATUS_CONFLICT', 'Cần hồ sơ mua bán đang có hiệu lực của căn hộ này');
+    }
+
+    const user = await User.findById(contract.ownerId).session(session);
+    if (!user?.isActive || user.role !== ROLES.RESIDENT) {
+      throw new ApiError('STATUS_CONFLICT', 'Tài khoản người đứng tên phải là tài khoản cư dân đang hoạt động');
+    }
+    if (normalizePhone(phone) !== user.phone) {
+      throw ApiError.field('phone', 'Số điện thoại phải khớp với người đứng tên trong hồ sơ mua bán');
+    }
+
+    const residents = await Resident.find({
+      apartmentId,
+      isActive: true,
+      $or: [{ relationType: RELATION_TYPES.OWNER }, { userId: user._id }],
+    }).select('userId relationType').session(session).lean();
+    if (residents.some((resident) => String(resident.userId) !== String(user._id))) {
+      throw new ApiError('STATUS_CONFLICT', 'Căn hộ đang có chủ sở hữu khác. Hãy xử lý qua Chuyển nhượng căn hộ');
+    }
+    if (residents.some((resident) => resident.relationType === RELATION_TYPES.OWNER)) {
+      throw new ApiError('STATUS_CONFLICT', 'Chủ sở hữu đã có quyền truy cập căn hộ này');
+    }
+    if (residents.length) {
+      throw new ApiError('STATUS_CONFLICT', 'Tài khoản đã có vai trò khác tại căn hộ. Hãy đối chiếu lại hồ sơ');
+    }
+
+    const confirmedEmail = email?.trim().toLowerCase();
+    if (confirmedEmail && confirmedEmail !== user.email) {
+      if (user.email || user.activatedAt) {
+        throw ApiError.field('email', 'Email đã lưu thuộc hồ sơ tài khoản. Hãy cập nhật qua chức năng quản lý tài khoản');
+      }
+      if (await User.exists({ email: confirmedEmail }).session(session)) {
+        throw new ApiError('EMAIL_EXISTS');
+      }
+      user.email = confirmedEmail;
+      await user.save({ session }).catch((error) => { throw uniqueConflictError(error) ?? error; });
+    }
+
+    contract.ownerAccountPending = false;
+    contract.ownerAccountIssuedAt = new Date();
+    contract.ownerAccountIssuedBy = actor.id;
+    await contract.save({ session });
+
+    const resident = await linkResident({
+      userId: user._id,
+      apartmentId,
+      relationType: RELATION_TYPES.OWNER,
+      contractId: contract._id,
+      moveInDate: contract.startDate,
+      idNumber: decryptIdNumber(contract.ownerIdNumberEnc),
+    }, session);
+    await logAudit({
+      action: AUDIT_ACTIONS.OWNER_ACCOUNT_ISSUED,
+      user: actor,
+      targetType: AUDIT_TARGETS.RESIDENT,
+      targetId: resident._id,
+      metadata: { apartmentId, contractId: contract._id, userId: user._id },
+      ip,
+    }, { session });
+    return user;
+  }).catch((error) => {
+    if (error?.code === 11000) {
+      throw new ApiError('STATUS_CONFLICT', 'Căn hộ hoặc tài khoản vừa được liên kết. Vui lòng làm mới');
+    }
+    throw error;
   });
 
-  // Sau commit: email mời kích hoạt (nếu vừa tạo tài khoản), thông báo, đồng bộ mã cư dân
-  const activationInviteSent = await inviteNewResident(account);
-  await notify(account.user._id, {
-    type: NOTIFICATION_TYPES.SYSTEM,
-    title: 'Hợp đồng mới đã được tạo',
-    content: 'Hợp đồng mua bán của bạn đã được thiết lập thành công.',
-    refId: savedContract._id,
-    link: '/r/my-apartment',
-  });
+  const activationInviteSent = owner.activatedAt ? null : await sendActivationInvite(owner);
   try {
-    await ensureCodes(apartmentId);
+    await Promise.all([
+      notify(owner._id, {
+        type: NOTIFICATION_TYPES.SYSTEM,
+        title: 'Đã cấp quyền truy cập căn hộ',
+        content: 'Ban quản lý đã liên kết căn hộ với tài khoản của bạn.',
+        refId: apartmentId,
+        link: '/r/my-apartment',
+      }),
+      ensureCodes(apartmentId),
+    ]);
   } catch (err) {
-    console.error('[module-a] ensureCodes', apartmentId, err.message);
+    console.error('[UC22] Đồng bộ quyền căn hộ', apartmentId, err.message);
   }
-
-  return { contract: savedContract, activationInviteSent };
+  return { activationInviteSent };
 }
 
 /**
