@@ -26,16 +26,20 @@ import { findOrCreateResidentUser, linkResident, sendActivationInvite } from '..
 import { uniqueConflictError } from '../users/userLookup.js';
 
 /**
- * Danh sách hợp đồng phân trang, lọc theo tòa/căn/loại/trạng thái/sắp hết hạn (UC-A06)
+ * Danh sách hợp đồng phân trang, lọc theo tòa/tầng/căn/loại/trạng thái/sắp hết hạn (UC-A06)
  */
 export async function listContracts(query = {}) {
   const filter = {};
 
-  if (query.apartmentId) {
+  if (query.floor !== undefined || (query.buildingId && !query.apartmentId)) {
+    const apartments = await Apartment.find({
+      ...(query.apartmentId ? { _id: query.apartmentId } : {}),
+      ...(query.buildingId ? { buildingId: query.buildingId } : {}),
+      ...(query.floor !== undefined ? { floor: query.floor } : {}),
+    }).select('_id').lean();
+    filter.apartmentId = { $in: apartments.map((apartment) => apartment._id) };
+  } else if (query.apartmentId) {
     filter.apartmentId = query.apartmentId;
-  } else if (query.buildingId) {
-    const apts = await Apartment.find({ buildingId: query.buildingId }).select('_id').lean();
-    filter.apartmentId = { $in: apts.map((a) => a._id) };
   }
 
   if (query.type) {
@@ -103,8 +107,8 @@ const findActiveContract = (apartmentId, type, session) =>
 /**
  * Tạo mới hợp đồng mua bán trong 1 transaction (UC-A06.1, BR-A5)
  */
-export async function createContract(receptionistUser, data, file, ip) {
-  const { apartmentId, type, owner } = data;
+export async function createContract(actor, data, file, ip) {
+  const { apartmentId, type, owner, ownershipDocumentType, ownershipDocumentNumber } = data;
   if (type !== CONTRACT_TYPES.SALE) throw ApiError.field('type', 'Chủ sở hữu khai báo lượt thuê trong Căn hộ của tôi');
   const startDate = contractDay(data.startDate);
   const fileUrl = await uploadContractFile(file);
@@ -141,10 +145,12 @@ export async function createContract(receptionistUser, data, file, ip) {
           ownerId: user._id,
           ownerIdNumberEnc: currentOwner ? undefined : encryptIdNumber(owner.idNumber),
           ownerAccountPending: !currentOwner,
+          ownershipDocumentType,
+          ownershipDocumentNumber,
           startDate,
           status: CONTRACT_STATUS.ACTIVE,
           fileUrl,
-          createdBy: receptionistUser?.id ?? null,
+          createdBy: actor?.id ?? null,
         },
       ],
       { session },
@@ -160,7 +166,7 @@ export async function createContract(receptionistUser, data, file, ip) {
     await logAudit(
       {
         action: AUDIT_ACTIONS.CONTRACT_CREATED,
-        user: receptionistUser,
+        user: actor,
         targetType: AUDIT_TARGETS.CONTRACT,
         targetId: contract._id,
         metadata: { type, apartmentId, ownerId: contract.ownerId, tenantId: contract.tenantId },

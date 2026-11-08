@@ -3,6 +3,7 @@ import Joi from 'joi';
 import {
   CONTRACT_STATUS,
   CONTRACT_TYPES,
+  OWNERSHIP_DOCUMENT_TYPES,
   values,
 } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
@@ -24,6 +25,7 @@ const listQuery = Joi.object({
   sort: sortable('startDate', 'endDate', 'createdAt'),
   buildingId: objectId(),
   apartmentId: objectId(),
+  floor: Joi.number().integer().min(1),
   type: Joi.string().valid(...values(CONTRACT_TYPES)),
   status: Joi.string().valid(...values(CONTRACT_STATUS)),
   endingWithinDays: Joi.number().integer().min(0).max(365),
@@ -43,7 +45,9 @@ const createContractBody = Joi.object({
   type: Joi.string().valid(CONTRACT_TYPES.SALE).required(),
   startDate: Joi.date().required(),
   owner: personSchema.required(),
-});
+  ownershipDocumentType: Joi.string().valid(...values(OWNERSHIP_DOCUMENT_TYPES)),
+  ownershipDocumentNumber: Joi.string().trim().max(100),
+}).and('ownershipDocumentType', 'ownershipDocumentNumber');
 
 const updateContractBody = Joi.object({
   endDate: Joi.date().allow(null, ''),
@@ -68,7 +72,9 @@ const parseMultipartContract = (req, _res, next) => {
  * /contracts:
  *   get:
  *     tags: [Hợp đồng]
- *     summary: Danh sách hợp đồng (phân trang, lọc theo tòa/căn/loại/trạng thái/hạn) — UC-A06
+ *     summary: Danh sách hợp đồng (phân trang, lọc theo tòa/tầng/căn/loại/trạng thái/hạn) — UC-A06
+ *     parameters:
+ *       - { in: query, name: floor, schema: { type: integer, minimum: 1 } }
  */
 router.get('/', authenticate, authorize(...VIEWERS), validate({ query: listQuery }), async (req, res) => {
   const { items, pagination } = await service.listContracts(req.validated.query);
@@ -94,12 +100,12 @@ router.get('/:id', authenticate, authorize(...VIEWERS), validate({ params: idPar
  * /contracts:
  *   post:
  *     tags: [Hợp đồng]
- *     summary: Lễ tân tạo mới hợp đồng mua bán — UC-A06
+ *     summary: Ban quản lý ghi nhận hồ sơ sở hữu căn hộ — UC-A06
  */
 router.post(
   '/',
   authenticate,
-  authorize('STAFF:RECEPTIONIST'),
+  authorize('MANAGER'),
   uploadImages('file', 1),
   parseMultipartContract,
   validate({ body: createContractBody }),
@@ -126,7 +132,7 @@ router.post(
 router.patch(
   '/:id',
   authenticate,
-  authorize('STAFF:RECEPTIONIST'),
+  authorize('MANAGER'),
   uploadImages('file', 1),
   parseMultipartContract,
   validate({ params: idParams, body: updateContractBody }),

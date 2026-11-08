@@ -45,6 +45,11 @@ export const CONTRACT_TYPES = {
   LEASE: { label: 'Cho thuê', color: 'green' },
 };
 
+export const OWNERSHIP_DOCUMENT_TYPES = {
+  DEVELOPER_SALE_CONTRACT: { label: 'Hợp đồng mua bán với chủ đầu tư', color: 'blue' },
+  OWNERSHIP_CERTIFICATE: { label: 'Giấy chứng nhận quyền sở hữu', color: 'purple' },
+};
+
 export const CONTRACT_STATUS = {
   ACTIVE: { label: 'Đang hiệu lực', color: 'green' },
   EXPIRED: { label: 'Hết hạn', color: 'default' },

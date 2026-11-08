@@ -167,10 +167,10 @@ test('UC17 cho chủ sở hữu kết thúc lượt thuê cũ, màn hợp đồn
   assert.equal(current.body.data.tenantPaysFees, true);
   assert.equal(String((await getPayer(apartment._id)).userId), String(tenant._id));
   assert.equal((await app.request('GET', `/contracts/${lease.id}`, { user: USERS.receptionist })).status, 200);
-  assert.equal((await app.request('POST', '/contracts', { user: USERS.receptionist, body: {
+  assert.equal((await app.request('POST', '/contracts', { user: USERS.manager, body: {
     apartmentId: apartment.id, type: 'LEASE', startDate: '2026-11-01', owner: { phone: owner.phone },
   } })).status, 400);
-  assert.equal((await app.request('PATCH', `/contracts/${lease.id}`, { user: USERS.receptionist, body: { endDate: '2099-01-01' } })).status, 409);
+  assert.equal((await app.request('PATCH', `/contracts/${lease.id}`, { user: USERS.manager, body: { endDate: '2099-01-01' } })).status, 409);
   assert.equal((await app.request('PATCH', `/contracts/${lease.id}/terminate`, { user: USERS.manager })).status, 409);
   assert.equal((await app.request('POST', path, { user: asUser(owner), body: { phone: '0987654321', fullName: 'Khách mới' } })).status, 409);
   assert.equal((await app.request('PATCH', `${path}/${resident._id}/end`, { user: asUser(owner) })).status, 200);

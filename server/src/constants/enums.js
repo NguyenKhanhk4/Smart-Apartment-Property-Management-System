@@ -67,6 +67,11 @@ export const APARTMENT_STATUS = Object.freeze({
 
 export const CONTRACT_TYPES = Object.freeze({ SALE: 'SALE', LEASE: 'LEASE' });
 
+export const OWNERSHIP_DOCUMENT_TYPES = Object.freeze({
+  DEVELOPER_SALE_CONTRACT: 'DEVELOPER_SALE_CONTRACT',
+  OWNERSHIP_CERTIFICATE: 'OWNERSHIP_CERTIFICATE',
+});
+
 export const CONTRACT_STATUS = Object.freeze({
   ACTIVE: 'ACTIVE',
   EXPIRED: 'EXPIRED',

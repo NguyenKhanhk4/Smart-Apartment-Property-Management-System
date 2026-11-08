@@ -1,4 +1,4 @@
-import { CONTRACT_STATUS, CONTRACT_TYPES, values } from '../constants/enums.js';
+import { CONTRACT_STATUS, CONTRACT_TYPES, OWNERSHIP_DOCUMENT_TYPES, values } from '../constants/enums.js';
 import { ObjectId, Schema, model, schemaOptions } from './_shared.js';
 
 // contracts — hợp đồng mua bán (SALE) / cho thuê (LEASE)
@@ -8,6 +8,8 @@ const contractSchema = new Schema(
     type: { type: String, enum: values(CONTRACT_TYPES), required: true },
     ownerId: { type: ObjectId, ref: 'User', required: true },
     ownerIdNumberEnc: { type: String, select: false },
+    ownershipDocumentType: { type: String, enum: values(OWNERSHIP_DOCUMENT_TYPES) },
+    ownershipDocumentNumber: { type: String, trim: true, maxlength: 100 },
     ownerAccountPending: Boolean,
     ownerAccountIssuedAt: Date,
     ownerAccountIssuedBy: { type: ObjectId, ref: 'User' },

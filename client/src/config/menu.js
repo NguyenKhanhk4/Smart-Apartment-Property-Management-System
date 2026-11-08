@@ -415,7 +415,7 @@ export const adminMenu = [
   {
     key: 'contracts',
     group: 'Cư dân & dịch vụ',
-    label: 'Hợp đồng',
+    label: 'Hồ sơ sở hữu căn hộ',
     icon: FileTextOutlined,
     path: 'contracts',
     roles: ['MANAGER', 'STAFF:RECEPTIONIST'],
