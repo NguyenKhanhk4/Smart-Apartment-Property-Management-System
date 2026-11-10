@@ -18,7 +18,6 @@ router.get('/accounts', async (_req, res) => {
   const users = await User.find({ isActive: true })
     .select('email fullName role roleTitle boardTitle')
     .sort({ role: 1, email: 1 })
-    .limit(50)
     .lean();
   ok(res, users);
 });
