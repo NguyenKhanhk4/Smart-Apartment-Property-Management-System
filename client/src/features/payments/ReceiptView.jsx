@@ -7,11 +7,12 @@ import { periodLabel } from '../invoices/invoiceShared';
 /** Nội dung biên lai (UC35) — dùng chung trang quản trị và cư dân. Biên lai chỉ xác nhận đã thu tiền, không thay thế hóa đơn GTGT */
 export default function ReceiptView({ receipt: r }) {
   const apt = [r.apartmentId?.buildingId?.code, r.apartmentId?.code].filter(Boolean).join('-');
+  const done = !r.status || r.status === 'SUCCESS'; // chưa thu được tiền thì không phải biên lai
   return (
     <div className="receipt-print">
       <Flex vertical align="center" className="mb-4">
         <Typography.Title level={4} className="mb-0!">
-          BIÊN LAI THU TIỀN
+          {done ? 'BIÊN LAI THU TIỀN' : 'GIAO DỊCH CHƯA THU TIỀN'}
         </Typography.Title>
         <Typography.Text type="secondary">Số {r.receiptNumber ?? r.receiptNo ?? r._id}</Typography.Text>
       </Flex>
@@ -20,15 +21,16 @@ export default function ReceiptView({ receipt: r }) {
           {apt} {r.apartmentId?.buildingId?.name && `(${r.apartmentId.buildingId.name})`}
         </Descriptions.Item>
         <Descriptions.Item label="Người nộp">{r.payerId?.fullName ?? '—'}</Descriptions.Item>
-        <Descriptions.Item label="Thời điểm">{formatDateTime(r.paidAt)}</Descriptions.Item>
+        <Descriptions.Item label={done ? 'Thời điểm' : 'Tạo lúc'}>{formatDateTime(done ? r.paidAt : r.createdAt)}</Descriptions.Item>
         <Descriptions.Item label="Hình thức">
           <EnumTag map={PAYMENT_METHODS} value={r.method} />
+          {r.orderCode && ` · Mã payOS ${r.orderCode}`}
           {(r.bankRef || r.reference) && ` · Mã GD ${r.bankRef || r.reference}`}
         </Descriptions.Item>
         <Descriptions.Item label="Số tiền">
           <b>{formatMoney(r.amount)}</b>
         </Descriptions.Item>
-        <Descriptions.Item label="Người thu">{r.confirmedBy?.fullName ?? 'payOS tự động'}</Descriptions.Item>
+        <Descriptions.Item label="Người thu">{r.confirmedBy?.fullName ?? (done ? 'payOS tự động' : '—')}</Descriptions.Item>
         {r.note && (
           <Descriptions.Item label="Ghi chú" span={2}>
             {r.note}
@@ -67,7 +69,7 @@ export default function ReceiptView({ receipt: r }) {
         <span>Tổng còn nợ hiện tại: <b>{formatMoney(r.currentOutstanding)}</b></span>
         <span>Số dư trả trước hiện tại: <b>{formatMoney(r.prepaidBalance)}</b></span>
       </Flex>
-      {r.vatNote && (
+      {done && r.vatNote && (
         <Typography.Paragraph type="secondary" italic className="mt-4 mb-0">
           {r.vatNote}
         </Typography.Paragraph>

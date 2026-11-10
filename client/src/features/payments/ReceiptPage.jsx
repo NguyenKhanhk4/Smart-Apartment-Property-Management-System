@@ -1,9 +1,11 @@
 import { useNavigate, useParams } from 'react-router';
-import { Button, Card, Flex, Skeleton } from 'antd';
-import { ArrowLeftOutlined, PrinterOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Flex, Skeleton, Typography } from 'antd';
+import { ArrowLeftOutlined, PrinterOutlined, SyncOutlined } from '@ant-design/icons';
 import { paymentApi } from '../../api/moduleB.api';
+import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
-import { useApi } from '../../hooks/useApi';
+import { useAction, useApi } from '../../hooks/useApi';
+import { PAYMENT_STATUS, reconcileHint } from './paymentShared';
 import { DownloadPdfButton } from '../invoices/invoiceComponents';
 import ReceiptView from './ReceiptView';
 
@@ -11,20 +13,26 @@ import ReceiptView from './ReceiptView';
 export function ReceiptPageFor({ area }) {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { data, loading } = useApi(() => paymentApi.receipt(id), [id]);
+  const { data, loading, reload } = useApi(() => paymentApi.receipt(id), [id]);
   const back = area === 'app' ? '/app/payments' : '/r/invoices';
+  const done = data?.status === 'SUCCESS';
+  // Kế toán: giao dịch payOS còn chờ → hỏi thẳng payOS (server gạch nợ nếu đã trả, chuyển Thất bại nếu hết hạn / bị hủy)
+  const [recheck, rechecking] = useAction(() => paymentApi.payosStatus(data.orderCode), {
+    success: false,
+    onDone: () => reload(),
+  });
 
   return (
     <Flex vertical gap={16} className="max-w-4xl">
       <PageHeader
         className="mb-0 print:hidden"
-        title="Biên lai"
+        title={!data || done ? 'Biên lai' : 'Chi tiết giao dịch'}
         breadcrumb={
           area === 'app'
             ? [
                 { label: 'Trang chủ', path: '/app/home' },
                 { label: 'Giao dịch thu', path: '/app/payments' },
-                { label: 'Biên lai' },
+                { label: !data || done ? 'Biên lai' : 'Chi tiết giao dịch' },
               ]
             : undefined
         }
@@ -40,6 +48,29 @@ export function ReceiptPageFor({ area }) {
           </>
         }
       />
+      {data && area === 'app' && (data.needsReconcile || !done) && (
+        <Alert
+          className="print:hidden"
+          type={data.status === 'FAILED' ? 'error' : 'warning'}
+          showIcon
+          message={
+            <>
+              <EnumTag map={PAYMENT_STATUS} value={data.status} />
+              {data.needsReconcile && <Typography.Text type="warning">Cần đối soát</Typography.Text>}
+            </>
+          }
+          description={reconcileHint(data)}
+          action={
+            data.method === 'PAYOS' &&
+            data.orderCode &&
+            data.status === 'PENDING' && (
+              <Button size="small" icon={<SyncOutlined />} loading={rechecking} onClick={() => recheck().catch(() => {})}>
+                Kiểm tra lại với payOS
+              </Button>
+            )
+          }
+        />
+      )}
       <Card>{loading && !data ? <Skeleton active /> : data && <ReceiptView receipt={data} />}</Card>
     </Flex>
   );

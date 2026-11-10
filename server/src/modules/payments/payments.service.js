@@ -237,6 +237,8 @@ export async function listPayments({ method, status, apartmentId, payerId, from,
   if (q) {
     const rx = { $regex: escapeRegex(q.trim()), $options: 'i' };
     filter.$or = [{ receiptNo: rx }, { bankRef: rx }, { reference: rx }];
+    // Mã giao dịch payOS (orderCode) là số: tìm đúng mã — dùng khi bấm từ cảnh báo "Cần đối soát"
+    if (/^\d{1,15}$/.test(q.trim())) filter.$or.push({ orderCode: Number(q.trim()) });
   }
   const [{ items, pagination }, [totals]] = await Promise.all([
     paginate(Payment, filter, { ...query, sort: query.sort ?? '-paidAt' }, {
