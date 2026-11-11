@@ -16,6 +16,7 @@ import { useReceptionPolling } from '../features/home/reception/receptionDashboa
 import SlidingIndicator from '../motion/SlidingIndicator';
 import PageTransition from '../motion/PageTransition';
 import { springConfig } from '../motion/presets';
+import { activeMenuKey } from './activeMenu';
 
 const WIDE = 248;
 const WIDE_RECEPTION = 260;
@@ -34,8 +35,8 @@ function useGroupedMenu() {
 
 function SidebarNav({ collapsed, onNavigate }) {
   const { pathname } = useLocation();
-  const activeKey = pathname.split('/')[2];
   const groups = useGroupedMenu();
+  const activeKey = activeMenuKey(pathname, groups.flatMap((g) => g.items));
 
   return (
     <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-4" aria-label="Menu chính">
@@ -47,8 +48,7 @@ function SidebarNav({ collapsed, onNavigate }) {
             </div>
           )}
           {items.map((item) => {
-            // Trang chi tiết (assets/:id) vẫn sáng mục cha "assets"
-            const active = activeKey === item.path.split('/')[0];
+            const active = activeKey === item.key;
             const link = (
               <Link
                 key={item.key}
