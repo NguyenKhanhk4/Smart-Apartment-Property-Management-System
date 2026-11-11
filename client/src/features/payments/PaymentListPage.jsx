@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Card, DatePicker, Flex, Input, Select, Statistic, Table, Typography } from 'antd';
+import { useNavigate, useSearchParams } from 'react-router';
+import { Card, DatePicker, Flex, Input, Select, Statistic, Table, Tag, Typography } from 'antd';
 import { paymentApi } from '../../api/moduleB.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
@@ -8,20 +8,21 @@ import { PAYMENT_METHODS } from '../../constants/enums';
 import { useApi } from '../../hooks/useApi';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { formatDateTime, formatMoney } from '../../utils/format';
+import { PAYMENT_STATUS } from './paymentShared';
 
 // Mô đun 4 — danh sách giao dịch thu (tiền mặt, chuyển khoản, payOS). Bấm dòng → biên lai.
-const PAYMENT_STATUS = {
-  SUCCESS: { label: 'Thành công', color: 'green' },
-  PENDING: { label: 'Chờ kết quả', color: 'gold' },
-  FAILED: { label: 'Thất bại', color: 'red' },
-};
 
 export default function PaymentListPage() {
   const navigate = useNavigate();
+  // Mở từ nơi khác (vd cảnh báo Cần đối soát ở Sổ công nợ): ?status=RECONCILE&q=<mã GD>&apartmentId=...
+  const [search] = useSearchParams();
   const [method, setMethod] = useState([]);
-  const [status, setStatus] = useState('SUCCESS');
+  const [status, setStatus] = useState(() => search.get('status') || 'SUCCESS');
   const [range, setRange] = useState(null);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(() => search.get('q') ?? '');
+  const [apartment, setApartment] = useState(() =>
+    search.get('apartmentId') ? { id: search.get('apartmentId'), label: search.get('apt') || 'căn đã chọn' } : null,
+  );
   const debouncedQ = useDebouncedValue(q, 400);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -37,8 +38,9 @@ export default function PaymentListPage() {
       from: range?.[0]?.startOf('day').toISOString(),
       to: range?.[1]?.endOf('day').toISOString(),
       q: debouncedQ || undefined,
+      apartmentId: apartment?.id,
     }),
-    [page, pageSize, status, method, range, debouncedQ],
+    [page, pageSize, status, method, range, debouncedQ, apartment],
   );
   const list = useApi(() => paymentApi.list(params), [params]);
   const totals = list.raw?.totals;
@@ -109,11 +111,16 @@ export default function PaymentListPage() {
             />
             <Input.Search
               allowClear
-              placeholder="Số phiếu thu / mã giao dịch"
+              placeholder="Số phiếu thu / mã GD / mã payOS"
               style={{ width: 260 }}
               value={q}
               onChange={(e) => (setQ(e.target.value), setPage(1))}
             />
+            {apartment && (
+              <Tag closable className="self-center" onClose={() => (setApartment(null), setPage(1))}>
+                Căn {apartment.label}
+              </Tag>
+            )}
           </Flex>
           {totals && (
             <Flex gap={32} wrap>

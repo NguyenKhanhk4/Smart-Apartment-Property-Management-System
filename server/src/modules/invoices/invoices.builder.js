@@ -1,7 +1,9 @@
 // UC-B02 — Tính dòng phí của hóa đơn kỳ P (chỉ đọc, không ghi): dùng chung cho xem trước, sinh thủ công và cron.
 // Phí vệ sinh, gửi xe tính cho chính kỳ P (thu trước); phí tiện ích phát sinh trong kỳ P−1 (thu sau);
-// chi phí sửa chữa trong căn của phiếu đã nghiệm thu trước đầu kỳ P mà chưa tính (UC48).
+// chi phí sửa chữa trong căn của phiếu đã nghiệm thu trước đầu kỳ P mà chưa tính (UC48);
+// ± khoản điều chỉnh của các thông báo kỳ trước đã phát hành (M4-5).
 import {
+  ADJUSTMENT_STATUS,
   APARTMENT_OCCUPANCY,
   BOOKING_BILLABLE_STATUSES,
   FEE_CALC_METHODS,
@@ -9,7 +11,7 @@ import {
   QUOTE_STATUS,
   TICKET_STATUS,
 } from '../../constants/enums.js';
-import { Booking, RepairQuote } from '../../models/index.js';
+import { Booking, InvoiceAdjustment, RepairQuote } from '../../models/index.js';
 import { getPayer } from '../contracts/contracts.queries.js';
 import { getBillableVehicles } from '../vehicles/vehicles.queries.js';
 import { ApiError } from '../../utils/ApiError.js';
@@ -150,6 +152,48 @@ export async function collectRepairCharges(apartmentId, period, { invoiceId = nu
   };
 }
 
+export const ADJUSTMENT_FEE_CODE = 'ADJUSTMENT';
+
+/**
+ * Tổng tiền từ các dòng phí. Khoản điều chỉnh giảm có thể làm tổng âm: tổng để 0, phần dư (adjustmentCredit)
+ * cộng vào Số dư trả trước khi phát hành — không mất tiền của Người nộp phí.
+ */
+export function totalsOf(items) {
+  const sum = items.reduce((s, i) => s + i.amount, 0);
+  return { totalAmount: Math.max(0, sum), adjustmentCredit: Math.max(0, -sum) };
+}
+
+/**
+ * Khoản điều chỉnh (M4-5) chờ vào kỳ sau: của thông báo kỳ trước `period`, cùng Người nộp phí `payerId` (X1),
+ * chưa gộp vào thông báo nào (hoặc đã gộp vào chính thông báo Nháp `invoiceId` đang tính lại).
+ * Đổi Người nộp phí thì khoản điều chỉnh của người cũ chờ đến khi Kế toán xử lý (hủy / tất toán).
+ */
+export async function collectAdjustments(apartmentId, period, payerId, { invoiceId = null } = {}) {
+  const adjustments = await InvoiceAdjustment.find({
+    apartmentId,
+    payerId,
+    status: ADJUSTMENT_STATUS.PENDING,
+    invoiceId: invoiceId ? { $in: [null, invoiceId] } : null,
+  })
+    .populate('sourceInvoiceId', 'code period')
+    .sort({ createdAt: 1 })
+    .lean();
+  const billable = adjustments.filter((a) => a.sourceInvoiceId && a.sourceInvoiceId.period < period);
+  return {
+    items: billable.map((a) =>
+      item(
+        FEE_CATEGORIES.ADJUSTMENT,
+        ADJUSTMENT_FEE_CODE,
+        `Điều chỉnh ${a.sourceInvoiceId.code} (kỳ ${periodLabel(a.sourceInvoiceId.period)}): ${a.reason}`,
+        1,
+        a.amount,
+        a._id,
+      ),
+    ),
+    adjustmentIds: billable.map((a) => a._id),
+  };
+}
+
 /**
  * Bản nháp hóa đơn kỳ `period` cho 1 căn (apartment cần có buildingId đã populate `code`).
  * Bỏ qua căn chưa bàn giao trong kỳ hoặc chưa xác định được người nộp phí.
@@ -181,20 +225,23 @@ export async function buildInvoiceDraft(apartment, period, prices, { invoiceId =
 
   const charges = await collectAmenityCharges(apartment._id, shiftPeriod(period, -1), { invoiceId });
   const repairs = await collectRepairCharges(apartment._id, period, { invoiceId });
+  const adjustments = await collectAdjustments(apartment._id, period, payer.userId, { invoiceId });
   const items = [
     ...apartmentItems(apartment, prices, (end - start) / DAY_MS, (end - billFrom) / DAY_MS),
     ...(await parkingItems(apartment, period, prices)),
     ...charges.items,
     ...repairs.items,
+    ...adjustments.items,
   ];
   return {
     ...base,
     payer,
     items,
-    totalAmount: items.reduce((s, i) => s + i.amount, 0),
+    ...totalsOf(items),
     charges: {
       bookingIds: charges.bookingIds,
       repairQuoteIds: repairs.repairQuoteIds,
+      adjustmentIds: adjustments.adjustmentIds,
     },
   };
 }

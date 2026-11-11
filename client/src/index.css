@@ -178,6 +178,11 @@
   }
 }
 
+/* Dòng "Điều chỉnh" trong bảng dòng phí (Mô đun 4, M4-5): tô nhạt để Trưởng BQL thấy khi duyệt */
+.invoice-row-adjustment > td {
+  background: rgba(250, 178, 25, 0.12) !important;
+}
+
 /* Khu cư dân: font Mulish, chữ 13.5px (ResidentLayout gắn lớp này) */
 .font-resident {
   font-family: 'Mulish', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

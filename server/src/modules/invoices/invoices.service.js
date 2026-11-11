@@ -3,6 +3,7 @@
 // Nháp chưa gửi cho cư dân, chưa có hạn đóng: chỉ đặt khi Trưởng BQL Duyệt & Phát hành.
 import mongoose from 'mongoose';
 import {
+  ADJUSTMENT_STATUS,
   AUDIT_ACTIONS,
   AUDIT_TARGETS,
   BOOKING_BILLABLE_STATUSES,
@@ -14,7 +15,7 @@ import {
   QUOTE_STATUS,
 } from '../../constants/enums.js';
 import { runTrackedJob } from '../../jobs/cronRunner.js';
-import { Apartment, Booking, Invoice, RepairQuote, User } from '../../models/index.js';
+import { Apartment, Booking, Invoice, InvoiceAdjustment, RepairQuote, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex } from '../../utils/pagination.js';
@@ -45,11 +46,12 @@ async function nextInvoiceCode(base) {
   return `${base}-R${max + 1}`;
 }
 
-/** Bản ghi tiện ích + báo giá sửa chữa gắn vào thông báo: [Model, ids, điều kiện status còn hiệu lực] */
+/** Bản ghi tiện ích + báo giá sửa chữa + khoản điều chỉnh gắn vào thông báo: [Model, ids, điều kiện status còn hiệu lực] */
 export const amenityTargets = (charges) =>
   [
     [Booking, charges.bookingIds, { $in: BOOKING_BILLABLE_STATUSES }],
     [RepairQuote, charges.repairQuoteIds ?? [], QUOTE_STATUS.ACCEPTED],
+    [InvoiceAdjustment, charges.adjustmentIds ?? [], ADJUSTMENT_STATUS.PENDING],
   ].filter(([, ids]) => ids.length);
 
 /**
@@ -92,6 +94,7 @@ async function persistDraft(draft, { generatedBy }) {
             period: draft.period,
             items: draft.items,
             totalAmount: draft.totalAmount,
+            adjustmentCredit: draft.adjustmentCredit ?? 0,
             status: INVOICE_STATUS.DRAFT,
             generatedBy,
           },

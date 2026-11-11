@@ -7,18 +7,21 @@ import {
   RightOutlined,
   ToolOutlined,
   UserAddOutlined,
+  WalletOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { announcementApi, guestApi, ticketApi } from '../../api/moduleE.api';
+import { invoiceApi } from '../../api/moduleB.api';
 import { bookingApi } from '../../api/moduleD.api';
 import StatusBadge from '../../components/resident/StatusBadge';
 import SurfaceCard from '../../components/resident/SurfaceCard';
-import { TICKET_STATUS, TICKET_OPEN_STATUSES } from '../../constants/enums';
+import { INVOICE_STATUS, TICKET_STATUS, TICKET_OPEN_STATUSES } from '../../constants/enums';
 import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useResident } from '../../hooks/useResident';
-import { dayLabel, formatDate } from '../../utils/format';
+import { dayLabel, formatDate, formatMoney } from '../../utils/format';
+import { INVOICE_TONE, outstandingOf, periodLabel } from '../invoices/invoiceShared';
 import ResidentAside from './ResidentAside';
 
 // Phản ánh còn dang dở (cư dân đang chờ BQL hoặc cần xác nhận kết quả)
@@ -120,6 +123,8 @@ export default function ResidentHomePage() {
   const tickets = useApi(() => ticketApi.list({ status: OPEN_TICKET_STATUS, limit: 1, sort: '-createdAt' }), []);
   const guests = useApi(() => guestApi.list({ date: new Date().toISOString(), status: 'EXPECTED,CHECKED_IN', limit: 5, sort: 'expectedTime' }), []);
   const news = useApi(() => announcementApi.list({ limit: 3 }), [], { enabled: showNews });
+  // Mô đun 4: thông báo phí mới nhất đã phát hành của căn đang chọn (X1: thành viên chỉ thấy kỳ mình đang ở)
+  const invoices = useApi(() => invoiceApi.my({ apartmentId, limit: 1, sort: '-period' }), [apartmentId], { enabled });
 
   const nextBooking = booking.data?.[0];
   const ticket = tickets.data?.[0];
@@ -127,6 +132,27 @@ export default function ResidentHomePage() {
   const firstGuest = todayGuests[0];
 
   const cards = [];
+  const latestInvoice = invoices.data?.[0];
+  const owed = latestInvoice ? outstandingOf(latestInvoice) : 0;
+  // Thẻ "Thông báo phí tháng này": có thông báo của kỳ hiện tại, hoặc thông báo gần nhất còn nợ
+  if (latestInvoice && (latestInvoice.period === dayjs().format('YYYY-MM') || owed > 0)) {
+    const status = INVOICE_STATUS[latestInvoice.status]?.label ?? latestInvoice.status;
+    const otherDebt = Math.max(0, (invoices.raw?.summary?.outstanding ?? 0) - (latestInvoice.isPayer ? owed : 0));
+    const dueText = owed > 0 ? `Còn phải trả · hạn ${formatDate(latestInvoice.dueDate)}` : 'Đã thanh toán đủ';
+    cards.unshift(
+      <TodoCard
+        key="invoice"
+        wide={wide}
+        to={`/r/invoices/${latestInvoice._id}`}
+        tone={latestInvoice.status === 'OVERDUE' ? 'warn' : owed > 0 ? 'info' : 'ok'}
+        icon={<WalletOutlined />}
+        label={`Thông báo phí tháng ${periodLabel(latestInvoice.period)}`}
+        title={formatMoney(owed > 0 ? owed : latestInvoice.totalAmount)}
+        subtitle={`${wide ? dueText : `Phí tháng ${periodLabel(latestInvoice.period)} · ${dueText.toLowerCase()}`}${otherDebt > 0 ? ` · nợ kỳ trước ${formatMoney(otherDebt)}` : ''}`}
+        badge={<StatusBadge tone={INVOICE_TONE[latestInvoice.status] ?? 'info'}>{status}</StatusBadge>}
+      />,
+    );
+  }
   if (nextBooking) {
     const when = dayLabel(nextBooking.startAt);
     cards.push(
@@ -177,7 +203,7 @@ export default function ResidentHomePage() {
   }
 
   const newsItems = news.data ?? [];
-  const todoLoading = (booking.loading && enabled) || tickets.loading || guests.loading;
+  const todoLoading = (booking.loading && enabled) || (invoices.loading && enabled) || tickets.loading || guests.loading;
 
   const todo = todoLoading && !cards.length ? (
     <Skeleton active paragraph={{ rows: 2 }} title={false} />

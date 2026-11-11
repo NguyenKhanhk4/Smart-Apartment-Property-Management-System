@@ -32,6 +32,8 @@ const invoiceSchema = new Schema(
     paidAmount: { type: Number, required: true, default: 0, min: 0 }, // đã trả (kể cả trừ số dư trả trước)
     prepaidApplied: { type: Number, required: true, default: 0, min: 0 }, // phần trừ từ Số dư trả trước
     previousDebt: { type: Number, required: true, default: 0, min: 0 }, // "Nợ các kỳ trước" — chỉ hiển thị, không cộng vào kỳ này
+    // Khoản điều chỉnh giảm vượt quá số phải trả kỳ này: tổng tiền để 0, phần dư cộng vào Số dư trả trước khi phát hành
+    adjustmentCredit: { type: Number, default: 0, min: 0 },
     status: {
       type: String,
       enum: values(INVOICE_STATUS),

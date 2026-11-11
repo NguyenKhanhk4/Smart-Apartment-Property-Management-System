@@ -89,6 +89,29 @@ test('phát hành: Chờ duyệt → Chưa thanh toán, có hạn đóng, gửi 
   assert.equal(await countNotif(owner._id, 'INVOICE'), 1);
 });
 
+test('xử lý cả kỳ kèm buildingId: chỉ đụng thông báo của tòa đó', async () => {
+  const { accountant, manager, draft } = await setup();
+  const { user: owner2, apartment: apt2, building: building2 } = await createHousehold();
+  await createContract({ apartment: apt2, owner: owner2 });
+  const other = await generateForApartment(accountant, { period: PERIOD, apartmentId: apt2._id }, { now: NOW });
+
+  const r = await submitInvoices(accountant, { period: PERIOD, buildingId: building2._id }, { now: NOW });
+  assert.equal(r.count, 1);
+  assert.equal((await Invoice.findById(other._id).lean()).status, 'PENDING_APPROVAL');
+  assert.equal((await Invoice.findById(draft._id).lean()).status, 'DRAFT'); // tòa khác giữ nguyên
+
+  await submitInvoices(accountant, { invoiceIds: [draft._id] }, { now: NOW });
+  const ret = await returnInvoices(manager, { period: PERIOD, buildingId: building2._id, reason: 'Kiểm tra lại số xe' }, { now: NOW });
+  assert.equal(ret.count, 1);
+  assert.equal((await Invoice.findById(other._id).lean()).status, 'DRAFT');
+  assert.equal((await Invoice.findById(draft._id).lean()).status, 'PENDING_APPROVAL');
+
+  const pub = await publishInvoices(manager, { period: PERIOD, buildingId: draft.buildingId }, { now: NOW });
+  assert.equal(pub.count, 1);
+  assert.equal((await Invoice.findById(draft._id).lean()).status, 'UNPAID');
+  assert.equal((await Invoice.findById(other._id).lean()).status, 'DRAFT');
+});
+
 test('không phát hành được thông báo còn Nháp (chưa trình duyệt)', async () => {
   const { manager, owner, draft } = await setup();
   const r = await publishInvoices(manager, { invoiceIds: [draft._id] }, { now: NOW });

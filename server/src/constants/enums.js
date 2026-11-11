@@ -198,7 +198,9 @@ export const PREPAID_TX_TYPES = Object.freeze({
   REFUND: 'REFUND', // phiếu chi hoàn tiền (hoàn ngoài hệ thống)
 });
 
-export const ADJUSTMENT_TYPES = Object.freeze({ ADJUST: 'ADJUST', CANCEL: 'CANCEL' });
+// Khoản điều chỉnh thông báo phí đã phát hành (M4-5): Kế toán lập kèm lý do → tự vào thông báo Nháp kỳ sau
+// (Trưởng BQL duyệt cùng thông báo đó) → APPLIED khi thông báo kỳ sau được phát hành. Hủy được khi chưa trình duyệt.
+export const ADJUSTMENT_STATUS = Object.freeze({ PENDING: 'PENDING', APPLIED: 'APPLIED', CANCELLED: 'CANCELLED' });
 
 // Dùng chung cho các yêu cầu cần duyệt (điều chỉnh hóa đơn, đề xuất chi quỹ)
 export const REVIEW_STATUS = Object.freeze({
@@ -531,6 +533,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   ROLE_ASSIGNED: 'ROLE_ASSIGNED',
   INVOICE_GENERATED: 'INVOICE_GENERATED',
   INVOICE_ADJUSTED: 'INVOICE_ADJUSTED',
+  INVOICE_ADJUSTMENT_CANCELLED: 'INVOICE_ADJUSTMENT_CANCELLED',
   INVOICE_CANCELLED: 'INVOICE_CANCELLED',
   PAYMENT_CONFIRMED: 'PAYMENT_CONFIRMED',
   INVOICE_RECALCULATED: 'INVOICE_RECALCULATED',
@@ -645,6 +648,7 @@ export const AUDIT_TARGETS = Object.freeze({
   PARKING_CARD: 'parking_cards',
   FEE_TYPE: 'fee_types',
   INVOICE: 'invoices',
+  INVOICE_ADJUSTMENT: 'invoice_adjustments',
   PAYMENT: 'payments',
   DEBT_FOLLOWUP: 'debt_followups',
   REPAIR_QUOTE: 'repair_quotes',
@@ -703,6 +707,10 @@ export const CONFIG_KEYS = Object.freeze({
   TECH_WORK_DAYS: 'TECH_WORK_DAYS',
   COMPLAINT_RESPONSE_HOURS: 'COMPLAINT_RESPONSE_HOURS',
   BOOKING_PAYMENT_HOLD_MINUTES: 'BOOKING_PAYMENT_HOLD_MINUTES',
+  // Tài khoản nhận tiền in trên thông báo phí (Mô đun 4) — tạm đặt ở tham số hệ thống cho tới khi có trang thông tin tòa nhà
+  BANK_NAME: 'BANK_NAME',
+  BANK_ACCOUNT_NO: 'BANK_ACCOUNT_NO',
+  BANK_ACCOUNT_NAME: 'BANK_ACCOUNT_NAME',
   REPAIR_ACCEPTANCE_REMIND_DAYS: 'REPAIR_ACCEPTANCE_REMIND_DAYS', // UC09: chờ nghiệm thu quá N ngày thì nhắc Trưởng BQL (BR-X8)
   REPAIR_REVIEW_REPEAT_DAYS: 'REPAIR_REVIEW_REPEAT_DAYS', // UC10: phiếu hoãn đã tới ngày xem lại thì nhắc lại mỗi N ngày
   REPAIR_POSTPONE_MAX_DAYS: 'REPAIR_POSTPONE_MAX_DAYS', // UC10: ngày xem lại tối đa N ngày kể từ hôm hoãn
@@ -748,6 +756,9 @@ export const DEFAULT_CONFIGS = Object.freeze([
   { key: CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'SLA dừng tối đa N giờ khi chờ linh kiện, quá thì cảnh báo Trưởng BQL — M5-2' },
   { key: CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS, value: 48, scope: CONFIG_SCOPES.BUSINESS, description: 'Hạn phản hồi phản ánh của cư dân (giờ)' },
   { key: CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES, value: 15, scope: CONFIG_SCOPES.BUSINESS, description: 'Giữ chỗ booking có phí chờ thanh toán qua payOS (phút); 0 hoặc chưa cấu hình payOS = phí gộp vào thông báo phí tháng' },
+  { key: CONFIG_KEYS.BANK_NAME, value: '', scope: CONFIG_SCOPES.BUSINESS, description: 'Ngân hàng nhận tiền phí dịch vụ (in trên thông báo phí PDF)' },
+  { key: CONFIG_KEYS.BANK_ACCOUNT_NO, value: '', scope: CONFIG_SCOPES.BUSINESS, description: 'Số tài khoản nhận tiền phí dịch vụ' },
+  { key: CONFIG_KEYS.BANK_ACCOUNT_NAME, value: '', scope: CONFIG_SCOPES.BUSINESS, description: 'Tên chủ tài khoản nhận tiền phí dịch vụ' },
   // TECHNICAL — tham số kỹ thuật, Trưởng BQL sửa
   { key: CONFIG_KEYS.REPAIR_REVIEW_REPEAT_DAYS, value: 7, scope: CONFIG_SCOPES.BUSINESS, description: 'Phiếu tạm hoãn sửa đã tới ngày xem lại: nhắc Trưởng BQL lại mỗi N ngày cho tới khi xử lý (UC10, BR-X8)' },
   { key: CONFIG_KEYS.REPAIR_POSTPONE_MAX_DAYS, value: 90, scope: CONFIG_SCOPES.BUSINESS, description: 'Tạm hoãn sửa chữa: ngày xem lại tối đa N ngày kể từ hôm hoãn (UC10)' },

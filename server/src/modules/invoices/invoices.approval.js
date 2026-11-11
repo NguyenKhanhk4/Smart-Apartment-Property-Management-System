@@ -5,6 +5,7 @@
 // Chọn theo danh sách id hoặc cả kỳ. Mỗi thông báo cập nhật có điều kiện status nên 2 người bấm cùng lúc không xử lý 2 lần;
 // thông báo không đúng trạng thái bị bỏ qua và trả về trong `skipped`.
 import {
+  ADJUSTMENT_STATUS,
   AUDIT_ACTIONS,
   AUDIT_TARGETS,
   CONFIG_KEYS,
@@ -13,7 +14,7 @@ import {
   NOTIFICATION_TYPES,
   PREPAID_TX_TYPES,
 } from '../../constants/enums.js';
-import { Invoice, PrepaidBalance, PrepaidTransaction } from '../../models/index.js';
+import { Invoice, InvoiceAdjustment, PrepaidBalance, PrepaidTransaction } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
@@ -31,9 +32,12 @@ const audit = (action, user, invoice, metadata, session = null) =>
     { session },
   );
 
-/** Lấy các thông báo cần xử lý theo id hoặc cả kỳ; id không đúng trạng thái → skipped */
-async function selectInvoices({ invoiceIds, period }, status) {
-  const filter = invoiceIds ? { _id: { $in: invoiceIds } } : { period, status };
+/**
+ * Lấy các thông báo cần xử lý theo id hoặc cả kỳ (tùy chọn chỉ 1 tòa: `buildingId`, khớp bộ lọc tòa trên màn hình);
+ * id không đúng trạng thái → skipped
+ */
+async function selectInvoices({ invoiceIds, period, buildingId }, status) {
+  const filter = invoiceIds ? { _id: { $in: invoiceIds } } : { period, status, ...(buildingId && { buildingId }) };
   const found = await Invoice.find(filter).sort({ code: 1 }).lean();
   if (invoiceIds && !found.length) throw ApiError.notFound('Không tìm thấy thông báo phí');
   const skipped = [];
@@ -168,6 +172,31 @@ async function applyPrepaid(invoice, max, session) {
   return 0; // tranh chấp liên tục: phát hành không trừ, cư dân vẫn còn nguyên số dư cho kỳ sau
 }
 
+/** Điều chỉnh giảm vượt số phải trả kỳ này → cộng phần dư vào Số dư trả trước (ghi sổ DEPOSIT gắn thông báo) */
+async function creditAdjustment(invoice, session) {
+  const amount = invoice.adjustmentCredit ?? 0;
+  if (amount <= 0 || !invoice.payerId) return;
+  const bal = await PrepaidBalance.findOneAndUpdate(
+    { apartmentId: invoice.apartmentId, payerId: invoice.payerId },
+    { $inc: { balance: amount } },
+    { upsert: true, new: true, session, setDefaultsOnInsert: true },
+  ).lean();
+  await PrepaidTransaction.create(
+    [
+      {
+        apartmentId: invoice.apartmentId,
+        payerId: invoice.payerId,
+        type: PREPAID_TX_TYPES.DEPOSIT,
+        amount,
+        balanceAfter: bal.balance,
+        invoiceId: invoice._id,
+        note: `Điều chỉnh giảm vượt số phải trả của thông báo ${invoice.code}`,
+      },
+    ],
+    { session },
+  );
+}
+
 async function publishOne(user, invoice, { now, dueDate }) {
   const previousDebt = await previousDebtOf(invoice);
 
@@ -181,6 +210,13 @@ async function publishOne(user, invoice, { now, dueDate }) {
     if (!claimed) return null;
 
     const applied = await applyPrepaid(claimed, claimed.totalAmount - (claimed.paidAmount ?? 0), session);
+    await creditAdjustment(claimed, session);
+    // Khoản điều chỉnh trong thông báo này đã được Trưởng BQL duyệt cùng → Đã áp dụng
+    await InvoiceAdjustment.updateMany(
+      { invoiceId: claimed._id, status: ADJUSTMENT_STATUS.PENDING },
+      { $set: { status: ADJUSTMENT_STATUS.APPLIED, appliedAt: now } },
+      { session },
+    );
     const paidAmount = claimed.paidAmount + applied;
     let status = UNPAID;
     if (paidAmount >= claimed.totalAmount) status = PAID;
@@ -197,7 +233,7 @@ async function publishOne(user, invoice, { now, dueDate }) {
       AUDIT_ACTIONS.INVOICE_PUBLISHED,
       user,
       invoice,
-      { totalAmount: invoice.totalAmount, prepaidApplied: applied, previousDebt, dueDate },
+      { totalAmount: invoice.totalAmount, prepaidApplied: applied, previousDebt, dueDate, adjustmentCredit: claimed.adjustmentCredit ?? 0 },
       session,
     );
     return published;
@@ -208,6 +244,7 @@ function notifyPayer(inv) {
   const outstanding = inv.totalAmount - (inv.paidAmount ?? 0);
   const lines = [`Thông báo phí ${inv.code}: ${formatVnd(inv.totalAmount)}.`];
   if (inv.prepaidApplied) lines.push(`Đã trừ Số dư trả trước ${formatVnd(inv.prepaidApplied)}.`);
+  if (inv.adjustmentCredit) lines.push(`Khoản điều chỉnh giảm còn dư ${formatVnd(inv.adjustmentCredit)} đã cộng vào Số dư trả trước.`);
   lines.push(
     outstanding > 0
       ? `Cần thanh toán ${formatVnd(outstanding)}, hạn ${fmtDateVn(inv.dueDate)}.`
