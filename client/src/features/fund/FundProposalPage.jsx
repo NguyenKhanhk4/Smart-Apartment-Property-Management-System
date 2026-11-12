@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import dayjs from 'dayjs';
 import {
   Alert,
@@ -27,7 +27,7 @@ import EvidencePhotos from '../../components/EvidencePhotos';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
 import PageHeader from '../../components/PageHeader';
 import ReasonModal from '../../components/ReasonModal';
-import { BOARD_TITLES, FUND_PLAN_TYPES, FUND_PROPOSAL_STATUS, VOTE_DECISIONS } from '../../constants/enums';
+import { BOARD_TITLES, FUND_PLAN_TYPES, FUND_PROPOSAL_STATUS, VOTE_DECISIONS, WORK_ORDER_STATUS } from '../../constants/enums';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate, formatDateTime, formatMoney, moneyInputProps } from '../../utils/format';
@@ -35,7 +35,9 @@ import { toFiles } from '../../utils/upload';
 
 // Mô đun 4 — UC34: chi tiết đề xuất chi quỹ. Ban quản trị biểu quyết (1 phiếu, không sửa); đủ tỷ lệ thì tự chốt.
 // Đã duyệt: (sửa chữa lớn) Trưởng BQL nghiệm thu → Kế toán lập phiếu chi kèm hóa đơn.
+// Đề xuất gắn phiếu bảo trì (UC10): nghiệm thu trên phiếu bảo trì (có biên bản nhà thầu); đã duyệt thì không rút được.
 export default function FundProposalPage() {
+  const navigate = useNavigate();
   const { id } = useParams();
   const { hasRole } = useAuth();
   const [modal, setModal] = useState(null);
@@ -52,9 +54,10 @@ export default function FundProposalPage() {
   const pending = p.status === 'PENDING';
   const approved = p.status === 'APPROVED';
   const canVote = isBoard && pending && !p.myVote;
-  const canAccept = isManager && approved && p.largeRepair && !p.workAcceptedAt;
+  const wo = p.workOrderId; // phiếu bảo trì gắn kèm (đã populate) hoặc null
+  const canAccept = isManager && approved && p.largeRepair && !p.workAcceptedAt && !wo;
   const canPay = isAccountant && approved && (!p.largeRepair || p.workAcceptedAt);
-  const canCancel = isAccountant && (pending || approved);
+  const canCancel = isAccountant && (pending || (approved && !wo));
 
   return (
     <>
@@ -95,7 +98,15 @@ export default function FundProposalPage() {
       />
       <Flex vertical gap={16}>
         {approved && p.largeRepair && !p.workAcceptedAt && (
-          <Alert type="info" showIcon message="Sửa chữa lớn: chờ Trưởng BQL nghiệm thu rồi Kế toán mới lập phiếu chi." />
+          <Alert
+            type="info"
+            showIcon
+            message={
+              wo
+                ? 'Phiếu bảo trì đang sửa. Nhà thầu sửa xong, Trưởng BQL nghiệm thu trên phiếu bảo trì rồi Kế toán mới lập phiếu chi.'
+                : 'Sửa chữa lớn: chờ Trưởng BQL nghiệm thu rồi Kế toán mới lập phiếu chi.'
+            }
+          />
         )}
         {approved && p.amount > p.fundBalance && (
           <Alert type="warning" showIcon message={`Số dư quỹ hiện tại ${formatMoney(p.fundBalance)} không đủ chi ${formatMoney(p.amount)}`} />
@@ -115,6 +126,20 @@ export default function FundProposalPage() {
             <Descriptions.Item label={p.planType === 'UNSCHEDULED' ? 'Lý do đột xuất' : 'Kế hoạch'}>
               {p.planType === 'UNSCHEDULED' ? p.urgentReason : (p.planRef ?? '—')}
             </Descriptions.Item>
+            {wo && (
+              <Descriptions.Item label="Phiếu bảo trì">
+                <Flex gap={8} wrap align="center">
+                  {isManager ? (
+                    <Typography.Link onClick={() => navigate('/app/work-orders')}>
+                      {wo.assetId ? `${wo.assetId.code} – ${wo.assetId.name}` : 'Thiết bị'}
+                    </Typography.Link>
+                  ) : (
+                    <span>{wo.assetId ? `${wo.assetId.code} – ${wo.assetId.name}` : 'Thiết bị'}</span>
+                  )}
+                  <EnumTag map={WORK_ORDER_STATUS} value={wo.status} />
+                </Flex>
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label="Người lập">{p.proposedBy?.fullName}</Descriptions.Item>
             <Descriptions.Item label="Ngày lập">{formatDateTime(p.createdAt)}</Descriptions.Item>
             <Descriptions.Item label="Số dư quỹ hiện tại">{formatMoney(p.fundBalance)}</Descriptions.Item>

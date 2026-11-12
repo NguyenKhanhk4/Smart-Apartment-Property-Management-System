@@ -129,3 +129,22 @@ test('xuất Excel / PDF dashboard vận hành; chỉ Trưởng BQL xem', async 
     await app.close();
   }
 });
+
+test('bảo trì: đúng hạn tính theo ngày kiểm tra (inspectedAt); phiếu Tạm hoãn sửa không tính quá hạn', async () => {
+  const assetId = new mongoose.Types.ObjectId();
+  await WorkOrder.create([
+    // Kiểm tra đúng ngày, có sự cố, 2 tuần sau mới nghiệm thu sửa chữa → vẫn đúng hạn
+    { assetId, type: 'SCHEDULED', status: 'DONE', scheduledDate: d('2026-10-05'), inspectedAt: d('2026-10-05'), completedAt: d('2026-10-19') },
+    // Kiểm tra muộn 4 ngày → trễ
+    { assetId, type: 'SCHEDULED', status: 'DONE', scheduledDate: d('2026-10-06'), inspectedAt: d('2026-10-10'), completedAt: d('2026-10-10') },
+    // Tạm hoãn sửa đã qua ngày lên lịch → không tính quá hạn
+    { assetId, type: 'SCHEDULED', status: 'REPAIR_POSTPONED', scheduledDate: d('2026-10-20'), inspectedAt: d('2026-10-20') },
+  ]);
+  const r = await operationsDashboard({ from: '2026-10', to: '2026-11' }, { now: NOW });
+  assert.equal(r.maintenance.done, 2);
+  assert.equal(r.maintenance.inspected, 3); // phiếu tạm hoãn đã kiểm tra đúng hạn cũng tính
+  assert.equal(r.maintenance.onTime, 2);
+  assert.equal(r.maintenance.late, 1);
+  assert.equal(r.maintenance.onTimeRate, 0.6667);
+  assert.equal(r.maintenance.overdueOpen, 0);
+});

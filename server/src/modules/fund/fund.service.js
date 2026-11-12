@@ -5,6 +5,9 @@
 //     không còn khả năng đạt → Từ chối (báo Trưởng BQL chọn phương án khác — M10-2). Quá N ngày chỉ nhắc, không tự duyệt (X8).
 //   • Đã duyệt → Kế toán lập Phiếu chi thực tế kèm hóa đơn, trừ số dư (không cho âm). Sửa chữa lớn: chỉ chi sau khi
 //     Trưởng BQL nghiệm thu (M10-3).
+//   • UC10: Trưởng BQL duyệt sửa bằng Quỹ → phiếu bảo trì chờ ở "Chờ duyệt sửa". Kế toán lập đề xuất gắn workOrderId (điền sẵn
+//     từ báo cáo hư hỏng); kết quả biểu quyết / rút đề xuất báo lại phiếu qua onFundDecision; nghiệm thu làm trên phiếu bảo trì
+//     (Q12 → markFundWorkAccepted), sau đó Kế toán mới lập phiếu chi.
 import mongoose from 'mongoose';
 import {
   AUDIT_ACTIONS,
@@ -14,10 +17,12 @@ import {
   FUND_PROPOSAL_STATUS,
   FUND_TX_TYPES,
   NOTIFICATION_TYPES,
+  REPAIR_COST_SOURCES,
   ROLES,
   VOTE_DECISIONS,
+  WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
-import { FundProposal, FundTransaction, MaintenanceFund, User } from '../../models/index.js';
+import { FundProposal, FundTransaction, MaintenanceFund, User, WorkOrder } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
@@ -28,6 +33,7 @@ import { paginate } from '../../utils/pagination.js';
 import { DAY_MS, fmtDateVn, periodStart, vnPeriod } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { formatVnd } from '../amenities/pricing.js';
+import { FUND_DECISIONS, assertAwaitingFund, fundPrefill, onFundDecision } from '../workOrders/workOrders.fund.js';
 
 const { PENDING, APPROVED, REJECTED, PAID, CANCELLED } = FUND_PROPOSAL_STATUS;
 const oid = (id) => new mongoose.Types.ObjectId(String(id));
@@ -148,11 +154,49 @@ const PROPOSAL_POPULATE = [
   { path: 'finalizedBy', select: 'fullName' },
   { path: 'workAcceptedBy', select: 'fullName' },
   { path: 'expenseTxId', select: 'code amount occurredAt documentNo attachmentUrls description' },
+  {
+    path: 'workOrderId',
+    select: 'status assetId repair.estimatedCost repair.acceptedAt',
+    populate: { path: 'assetId', select: 'code name location' },
+  },
 ];
 
-/** body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair? } + ảnh báo giá */
+// ---------------------------------------------------------------------------
+// UC10 — phiếu bảo trì Trưởng BQL duyệt sửa bằng Quỹ, chờ Kế toán lập đề xuất
+// ---------------------------------------------------------------------------
+/** Phiếu đang chờ lập đề xuất: Chờ duyệt sửa + nguồn Quỹ + chưa có đề xuất đang chờ biểu quyết. Cũ nhất trước. */
+export async function listAwaitingWorkOrders() {
+  const wos = await WorkOrder.find({ status: WORK_ORDER_STATUS.AWAITING_REPAIR_APPROVAL, 'repair.costSource': REPAIR_COST_SOURCES.FUND })
+    .select('assetId title repair.estimatedCost repair.faultDesc repair.decidedAt repair.decisionNote')
+    .populate('assetId', 'code name location')
+    .sort({ 'repair.decidedAt': 1 })
+    .lean();
+  if (!wos.length) return [];
+  const pending = new Set(
+    (await FundProposal.find({ workOrderId: { $in: wos.map((w) => w._id) }, status: PENDING }).distinct('workOrderId')).map(String),
+  );
+  return wos.filter((w) => !pending.has(String(w._id)));
+}
+
+/** Dữ liệu điền sẵn form đề xuất từ phiếu bảo trì (báo lỗi nếu phiếu không còn chờ đề xuất) */
+export async function workOrderPrefill(workOrderId) {
+  await assertAwaitingFund(workOrderId);
+  return fundPrefill(workOrderId);
+}
+
+/** Báo kết quả đề xuất về phiếu bảo trì. Đề xuất đã lưu xong nên lỗi ở đây chỉ ghi log, không làm hỏng thao tác của người dùng. */
+async function syncWorkOrder(p, decision, user, now) {
+  if (!p.workOrderId) return;
+  try {
+    await onFundDecision(p.workOrderId, decision, { user, proposalId: p._id, now });
+  } catch (err) {
+    console.error(`[UC33/UC10] Không cập nhật được phiếu bảo trì ${p.workOrderId} theo đề xuất ${p.code}:`, err);
+  }
+}
+
+/** body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair?, workOrderId? } + ảnh báo giá */
 export async function createProposal(user, body, files = [], { now = new Date() } = {}) {
-  const { title, description, amount, planType, planRef = null, urgentReason = null, largeRepair = false } = body;
+  const { title, description, amount, planType, planRef = null, urgentReason = null, largeRepair = false, workOrderId = null } = body;
   if (planType === FUND_PLAN_TYPES.UNSCHEDULED && !urgentReason?.trim()) {
     throw ApiError.field('urgentReason', 'Bảo trì đột xuất phải ghi lý do');
   }
@@ -164,7 +208,9 @@ export async function createProposal(user, body, files = [], { now = new Date() 
   if (amount > available) {
     throw new ApiError('FUND_INSUFFICIENT_BALANCE', `Số dư quỹ còn có thể chi ${formatVnd(available)} (đã trừ các đề xuất đã duyệt chưa chi)`);
   }
-  const attachmentUrls = await uploadToCloudinary(files, 'fund-quotations');
+  // UC10: phiếu phải đang chờ đề xuất chi quỹ; ảnh hư hỏng của phiếu đi kèm báo giá
+  const linked = workOrderId ? (await assertAwaitingFund(workOrderId), await fundPrefill(workOrderId)) : null;
+  const attachmentUrls = [...(linked?.attachmentUrls ?? []), ...(await uploadToCloudinary(files, 'fund-quotations'))];
 
   const proposal = await retryOnDuplicate(async () =>
     FundProposal.create({
@@ -176,15 +222,23 @@ export async function createProposal(user, body, files = [], { now = new Date() 
       planType,
       planRef: planType === FUND_PLAN_TYPES.ANNUAL_PLAN ? planRef : null,
       urgentReason: planType === FUND_PLAN_TYPES.UNSCHEDULED ? urgentReason : null,
-      largeRepair: Boolean(largeRepair),
+      largeRepair: linked ? true : Boolean(largeRepair), // sửa chữa thiết bị luôn là sửa chữa lớn
+      workOrderId: linked ? oid(workOrderId) : null,
       attachmentUrls,
       proposedBy: user.id,
-    }).then((d) => d.toObject()),
+    })
+      .then((d) => d.toObject())
+      .catch((err) => {
+        // trùng index "1 đề xuất đang chờ / phiếu" (request song song) → báo lỗi nghiệp vụ, không thử lại
+        if (err?.code === 11000 && err.keyPattern?.workOrderId) throw new ApiError('WORKORDER_FUND_PENDING');
+        throw err;
+      }),
   );
   await audit(AUDIT_ACTIONS.FUND_PROPOSAL_CREATED, user, AUDIT_TARGETS.FUND_PROPOSAL, proposal._id, {
     code: proposal.code,
     amount,
     planType,
+    ...(linked && { workOrderId: proposal.workOrderId }),
   });
 
   const members = await boardMembers();
@@ -279,6 +333,8 @@ export async function vote(user, id, { decision, comment = null }, { now = new D
     p._id,
     { code: p.code, agree, size },
   );
+  // UC10: đề xuất gắn phiếu bảo trì → Duyệt: phiếu sang Đang sửa, báo KTV; Từ chối: bỏ nguồn Quỹ, báo Trưởng BQL quyết định lại
+  await syncWorkOrder(p, outcome === APPROVED ? FUND_DECISIONS.APPROVED : FUND_DECISIONS.REJECTED, user, now);
 
   if (outcome === APPROVED) {
     await notifyRoles(['ACCOUNTANT', 'MANAGER'], {
@@ -286,15 +342,18 @@ export async function vote(user, id, { decision, comment = null }, { now = new D
       title: `Ban quản trị đã duyệt chi quỹ: ${p.title}`,
       content:
         `${p.code} được duyệt (${finalNote}), số tiền ${formatVnd(p.amount)}. ` +
-        (p.largeRepair
-          ? 'Sửa chữa lớn: Trưởng BQL nghiệm thu xong thì Kế toán mới lập phiếu chi.'
-          : 'Kế toán lập phiếu chi thực tế kèm hóa đơn, chứng từ.'),
+        (p.workOrderId
+          ? 'Phiếu bảo trì đã chuyển Đang sửa. Nhà thầu sửa xong, Trưởng BQL nghiệm thu trên phiếu bảo trì rồi Kế toán mới lập phiếu chi.'
+          : p.largeRepair
+            ? 'Sửa chữa lớn: Trưởng BQL nghiệm thu xong thì Kế toán mới lập phiếu chi.'
+            : 'Kế toán lập phiếu chi thực tế kèm hóa đơn, chứng từ.'),
       refId: p._id,
       link: proposalLink(p),
       email: true,
     });
   } else {
-    await notifyRoles(['ACCOUNTANT', 'MANAGER'], {
+    // Phiếu bảo trì đã tự báo Trưởng BQL quyết định lại (onFundDecision) → ở đây chỉ báo Kế toán
+    await notifyRoles(p.workOrderId ? ['ACCOUNTANT'] : ['ACCOUNTANT', 'MANAGER'], {
       type: NOTIFICATION_TYPES.FUND_APPROVAL,
       title: `Ban quản trị không duyệt chi quỹ: ${p.title}`,
       content: `${p.code} không đạt tỷ lệ đồng ý (${finalNote}). Trưởng BQL cân nhắc phương án khác.`,
@@ -306,15 +365,25 @@ export async function vote(user, id, { decision, comment = null }, { now = new D
   return { proposal: finalized, outcome };
 }
 
-/** Kế toán rút đề xuất đang chờ / đã duyệt chưa chi */
-export async function cancelProposal(user, id, { reason }) {
+/**
+ * Kế toán rút đề xuất đang chờ / đã duyệt chưa chi. Đề xuất gắn phiếu bảo trì đã duyệt thì không rút được (phiếu đã sang
+ * Đang sửa, nhà thầu đã được liên hệ); rút lúc đang chờ thì phiếu bỏ nguồn Quỹ, Trưởng BQL quyết định lại.
+ */
+export async function cancelProposal(user, id, { reason }, { now = new Date() } = {}) {
   const p = await FundProposal.findOneAndUpdate(
-    { _id: id, status: { $in: [PENDING, APPROVED] } },
+    { _id: id, $or: [{ status: PENDING }, { status: APPROVED, workOrderId: null }] },
     { $set: { status: CANCELLED, cancelReason: reason } },
     { new: true },
   ).lean();
-  if (!p) throw ApiError.badRequest('Chỉ rút được đề xuất đang chờ duyệt hoặc đã duyệt chưa chi');
+  if (!p) {
+    const cur = await FundProposal.findById(id).select('status workOrderId').lean();
+    if (cur?.status === APPROVED && cur.workOrderId) {
+      throw ApiError.badRequest('Đề xuất sửa chữa thiết bị đã duyệt, phiếu bảo trì đang sửa: không rút được. Nghiệm thu xong thì lập phiếu chi.');
+    }
+    throw ApiError.badRequest('Chỉ rút được đề xuất đang chờ duyệt hoặc đã duyệt chưa chi');
+  }
   await audit(AUDIT_ACTIONS.FUND_PROPOSAL_CANCELLED, user, AUDIT_TARGETS.FUND_PROPOSAL, p._id, { code: p.code, reason });
+  await syncWorkOrder(p, FUND_DECISIONS.CANCELLED, user, now);
   const members = await boardMembers();
   await notify(
     members.map((m) => m._id),
@@ -329,14 +398,21 @@ export async function cancelProposal(user, id, { reason }) {
   return p;
 }
 
-/** Trưởng BQL nghiệm thu hạng mục sửa chữa lớn trước khi chi (M10-3) */
+/**
+ * Trưởng BQL nghiệm thu hạng mục sửa chữa lớn trước khi chi (M10-3). Đề xuất gắn phiếu bảo trì thì nghiệm thu trên phiếu
+ * (Q12, có biên bản nhà thầu) — hệ thống tự đánh dấu ở đây, không nghiệm thu tay.
+ */
 export async function acceptWork(user, id, { now = new Date() } = {}) {
   const p = await FundProposal.findOneAndUpdate(
-    { _id: id, status: APPROVED, largeRepair: true, workAcceptedAt: null },
+    { _id: id, status: APPROVED, largeRepair: true, workAcceptedAt: null, workOrderId: null },
     { $set: { workAcceptedBy: user.id, workAcceptedAt: now } },
     { new: true },
   ).lean();
-  if (!p) throw ApiError.badRequest('Chỉ nghiệm thu được đề xuất sửa chữa lớn đã duyệt, chưa nghiệm thu');
+  if (!p) {
+    const cur = await FundProposal.findById(id).select('workOrderId').lean();
+    if (cur?.workOrderId) throw ApiError.badRequest('Đề xuất gắn phiếu bảo trì: nghiệm thu trên phiếu bảo trì khi đã có biên bản của nhà thầu');
+    throw ApiError.badRequest('Chỉ nghiệm thu được đề xuất sửa chữa lớn đã duyệt, chưa nghiệm thu');
+  }
   await audit(AUDIT_ACTIONS.FUND_WORK_ACCEPTED, user, AUDIT_TARGETS.FUND_PROPOSAL, p._id, { code: p.code });
   await notifyRoles(['ACCOUNTANT'], {
     type: NOTIFICATION_TYPES.FUND_APPROVAL,

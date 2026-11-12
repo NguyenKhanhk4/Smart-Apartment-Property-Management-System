@@ -63,18 +63,23 @@ test('quyền trần đúng authorize(): Kế toán lập được thông báo p
   assert.ok(!accountant.has('INVOICES:APPROVE'));
   assert.ok(ceiling.get('BOARD').has('FUND:APPROVE'));
   assert.ok(!ceiling.get('TECHNICIAN').has('STAFF_ACCOUNTS:VIEW'));
-  // Báo giá sửa chữa: Bảo vệ không xem. Bảng giá hiện hành: mọi vai trò xem (thiết kế của Khánh), Trưởng BQL tắt riêng được
+  // Báo giá sửa chữa: Bảo vệ không xem. Bảng giá (kể cả giá hiện hành): chỉ Trưởng BQL, Kế toán
   assert.ok(!ceiling.get('SECURITY').has('REPAIR_QUOTES:VIEW'));
   assert.ok(ceiling.get('RESIDENT').has('REPAIR_QUOTES:VIEW'));
-  assert.ok(ceiling.get('SECURITY').has('FEE_TYPES:VIEW'));
+  assert.ok(!ceiling.get('SECURITY').has('FEE_TYPES:VIEW'));
+  assert.ok(!ceiling.get('RESIDENT').has('FEE_TYPES:VIEW'));
+  assert.ok(ceiling.get('ACCOUNTANT').has('FEE_TYPES:VIEW'));
 });
 
-test('Bảo vệ gọi thẳng API báo giá của phiếu → 403; giá hiện hành xem được, tắt trong ma trận thì bị chặn', async () => {
+test('Bảo vệ gọi thẳng API báo giá của phiếu → 403; giá hiện hành chỉ nội bộ tài chính, tắt trong ma trận thì bị chặn', async () => {
+  const accountant = { role: 'ACCOUNTANT' };
   assert.equal((await get('/repair-quotes/ticket/64b000000000000000000009', USERS.security)).status, 403);
-  assert.equal((await get('/fee-types/current', USERS.security)).status, 200);
-  await save('SECURITY', [...ceiling.get('SECURITY')].filter((k) => k !== 'FEE_TYPES:VIEW'));
   assert.equal((await get('/fee-types/current', USERS.security)).status, 403);
-  assert.equal((await get('/fee-types/current', USERS.technician)).status, 200);
+  assert.equal((await get('/fee-types/current', USERS.resident)).status, 403);
+  assert.equal((await get('/fee-types/current', accountant)).status, 200);
+  await save('ACCOUNTANT', [...ceiling.get('ACCOUNTANT')].filter((k) => k !== 'FEE_TYPES:VIEW'));
+  assert.equal((await get('/fee-types/current', accountant)).status, 403);
+  assert.equal((await get('/fee-types/current', USERS.manager)).status, 200);
 });
 
 test('UC04 bước 2: ma trận đánh dấu ô lõi; vai trò Trưởng BQL chỉ đọc; chỉ Trưởng BQL xem và sửa được', async () => {
