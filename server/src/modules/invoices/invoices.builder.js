@@ -1,5 +1,6 @@
 // UC-B02 — Tính dòng phí của hóa đơn kỳ P (chỉ đọc, không ghi): dùng chung cho xem trước, sinh thủ công và cron.
-// Phí vệ sinh, gửi xe tính cho chính kỳ P (thu trước); phí tiện ích phát sinh trong kỳ P−1 (thu sau);
+// Phí quản lý, gửi xe tính cho chính kỳ P (thu trước, theo số ngày thực tế); truy thu / hoàn phí xe kỳ P−1 khi xe
+// đăng ký / gỡ sau lúc tính; phí tiện ích phát sinh trong kỳ P−1 (thu sau);
 // chi phí sửa chữa trong căn của phiếu đã nghiệm thu trước đầu kỳ P mà chưa tính (UC48);
 // ± khoản điều chỉnh của các thông báo kỳ trước đã phát hành (M4-5).
 import {
@@ -8,11 +9,13 @@ import {
   BOOKING_BILLABLE_STATUSES,
   FEE_CALC_METHODS,
   FEE_CATEGORIES,
+  INVOICE_PUBLISHED_STATUSES,
   QUOTE_STATUS,
   TICKET_STATUS,
 } from '../../constants/enums.js';
-import { Booking, InvoiceAdjustment, RepairQuote } from '../../models/index.js';
+import { Booking, Invoice, InvoiceAdjustment, RepairQuote } from '../../models/index.js';
 import { getPayer } from '../contracts/contracts.queries.js';
+import { getPriceTable } from '../feeTypes/feeTypes.queries.js';
 import { getBillableVehicles } from '../vehicles/vehicles.queries.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { DAY_MS, fmtDateVn, periodEnd, periodLabel, periodStart, shiftPeriod, startOfVnDay } from '../../utils/time.js';
@@ -66,17 +69,98 @@ function apartmentItems(apartment, prices, daysInPeriod, billableDays) {
   return items;
 }
 
-/** Mỗi xe tính phí kỳ P (BR-F5) 1 dòng, giá theo mã phí gửi xe của loại xe. Thiếu giá → lỗi rõ ràng, không tính 0đ */
-async function parkingItems(apartment, period, prices) {
-  const byType = new Map(
-    [...prices.values()].filter((f) => f.calcMethod === FEE_CALC_METHODS.PER_VEHICLE).map((f) => [f.vehicleType, f]),
-  );
+// ---------------------------------------------------------------------------
+// Phí gửi xe theo số ngày thực tế (Mô đun 4: xe đăng ký mới / gỡ xe / bàn giao giữa tháng).
+// Phí thu trước: thông báo kỳ P tính lúc đầu kỳ nên chưa biết xe duyệt / gỡ sau đó. Thông báo kỳ P+1 đối chiếu số ngày đã tính
+// trên thông báo kỳ P đã phát hành với số ngày thực tế → dòng "Truy thu" (thiếu) / "Hoàn" (thừa). Mỗi kỳ chỉ đối chiếu kỳ ngay trước.
+// ---------------------------------------------------------------------------
+export const PARKING_CORRECTION_FEE_CODE = 'PARKING_CORRECTION';
+const QTY_EPSILON = 1e-9;
+
+/** Số ngày xe được gửi trong [from, to): tính cả ngày duyệt, phí dừng từ ngày gỡ (không tính ngày gỡ) — theo ngày giờ VN */
+export function vehicleDays(vehicle, from, to) {
+  const s = Math.max(from.getTime(), startOfVnDay(new Date(vehicle.approvedAt)).getTime());
+  const e = Math.min(to.getTime(), vehicle.cancelledAt ? startOfVnDay(new Date(vehicle.cancelledAt)).getTime() : to.getTime());
+  return Math.max(0, Math.round((e - s) / DAY_MS));
+}
+
+const parkingFees = (prices) =>
+  new Map([...prices.values()].filter((f) => f.calcMethod === FEE_CALC_METHODS.PER_VEHICLE).map((f) => [f.vehicleType, f]));
+
+const missingPrice = (type, period) => new ApiError('FEE_PRICE_MISSING', `Chưa có đơn giá gửi xe loại ${type} cho kỳ ${periodLabel(period)}`);
+
+/**
+ * Mỗi xe có ngày gửi trong kỳ P: 1 dòng, số lượng = số ngày / số ngày của kỳ (đủ tháng = 1), giá theo loại xe.
+ * `billFrom`: ngày bắt đầu tính phí của căn (bàn giao giữa kỳ). Thiếu giá → lỗi rõ ràng, không tính 0đ.
+ */
+async function parkingItems(apartment, period, prices, billFrom) {
+  const byType = parkingFees(prices);
+  const end = periodEnd(period);
+  const daysInPeriod = Math.round((end - periodStart(period)) / DAY_MS);
   const vehicles = await getBillableVehicles(apartment._id, period);
-  return vehicles.map((v) => {
+  const items = [];
+  for (const v of vehicles) {
+    const days = vehicleDays(v, billFrom, end);
+    if (!days) continue;
     const fee = byType.get(v.type);
-    if (!fee) throw new ApiError('FEE_PRICE_MISSING', `Chưa có đơn giá gửi xe loại ${v.type} cho kỳ ${periodLabel(period)}`);
-    return item(FEE_CATEGORIES.PARKING, fee.code, `${fee.name} ${v.plateNumber}`, 1, fee.unitPrice, v._id);
-  });
+    if (!fee) throw missingPrice(v.type, period);
+    const label = days === daysInPeriod ? `${fee.name} ${v.plateNumber}` : `${fee.name} ${v.plateNumber} (${days}/${daysInPeriod} ngày)`;
+    items.push(item(FEE_CATEGORIES.PARKING, fee.code, label, days / daysInPeriod, fee.unitPrice, v._id));
+  }
+  return items;
+}
+
+/**
+ * Đối chiếu phí xe kỳ trước `prev` = P−1 trên các thông báo đã phát hành của căn: số ngày thực tế (theo approvedAt / cancelledAt
+ * hiện tại) − số ngày đã tính → dòng điều chỉnh (dương: truy thu, âm: hoàn), giá = đơn giá đã tính kỳ đó (xe chưa tính thì
+ * giá kỳ đó). Kỳ trước chưa phát hành / không có thông báo thì không đối chiếu (Nháp kỳ trước tự tính lại đúng số ngày).
+ */
+async function parkingCorrections(apartment, period, prices) {
+  const prev = shiftPeriod(period, -1);
+  const prevInvoices = await Invoice.find({ apartmentId: apartment._id, period: prev, status: { $in: INVOICE_PUBLISHED_STATUSES } })
+    .select('items')
+    .lean();
+  if (!prevInvoices.length) return [];
+
+  const billed = new Map(); // vehicleId → { qty, unitPrice }
+  for (const it of prevInvoices.flatMap((inv) => inv.items)) {
+    if (it.feeCategory !== FEE_CATEGORIES.PARKING || !it.refId || it.feeCode === PARKING_CORRECTION_FEE_CODE) continue;
+    const key = String(it.refId);
+    const b = billed.get(key) ?? { qty: 0, unitPrice: it.unitPrice };
+    b.qty += it.quantity;
+    billed.set(key, b);
+  }
+
+  const start = periodStart(prev);
+  const end = periodEnd(prev);
+  const daysInPrev = Math.round((end - start) / DAY_MS);
+  const handover = apartment.handoverDate ? startOfVnDay(new Date(apartment.handoverDate)) : null;
+  const from = handover && handover > start ? handover : start;
+  const vehicles = await getBillableVehicles(apartment._id, prev, { ids: [...billed.keys()] });
+
+  let prevPrices = null; // chỉ tải bảng giá kỳ trước khi có xe chưa từng tính
+  const items = [];
+  for (const v of vehicles) {
+    const actual = vehicleDays(v, from, end);
+    const b = billed.get(String(v._id));
+    const diffQty = actual / daysInPrev - (b?.qty ?? 0);
+    if (Math.abs(diffQty) < QTY_EPSILON) continue;
+
+    let unitPrice = b?.unitPrice;
+    const name = parkingFees(prices).get(v.type)?.name ?? 'Phí gửi xe';
+    if (unitPrice == null) {
+      prevPrices ??= parkingFees(await getPriceTable(prev));
+      const fee = prevPrices.get(v.type);
+      if (!fee) throw missingPrice(v.type, prev);
+      unitPrice = fee.unitPrice;
+    }
+    const diffDays = Math.round(Math.abs(diffQty) * daysInPrev);
+    const reason = diffQty > 0 ? `đăng ký ${dayLabel(v.approvedAt)}` : v.cancelledAt ? `gỡ xe ${dayLabel(v.cancelledAt)}` : 'tính thừa';
+    const label = `${diffQty > 0 ? 'Truy thu' : 'Hoàn'} ${name.toLowerCase()} ${v.plateNumber} kỳ ${periodLabel(prev)} (${diffDays} ngày, ${reason})`;
+    const line = item(FEE_CATEGORIES.PARKING, PARKING_CORRECTION_FEE_CODE, label, diffQty, unitPrice, v._id);
+    if (line.amount !== 0) items.push(line);
+  }
+  return items;
 }
 
 /**
@@ -224,15 +308,17 @@ export async function buildInvoiceDraft(apartment, period, prices, { invoiceId =
   if (!payer) return { ...base, payer: null, items: [], totalAmount: 0, charges: null };
 
   // Các nguồn phí độc lập nhau → truy vấn song song (DB ở xa: tuần tự thì cộng dồn độ trễ mỗi căn)
-  const [charges, repairs, adjustments, parking] = await Promise.all([
+  const [charges, repairs, adjustments, parking, parkingFix] = await Promise.all([
     collectAmenityCharges(apartment._id, shiftPeriod(period, -1), { invoiceId }),
     collectRepairCharges(apartment._id, period, { invoiceId }),
     collectAdjustments(apartment._id, period, payer.userId, { invoiceId }),
-    parkingItems(apartment, period, prices),
+    parkingItems(apartment, period, prices, billFrom),
+    parkingCorrections(apartment, period, prices),
   ]);
   const items = [
     ...apartmentItems(apartment, prices, (end - start) / DAY_MS, (end - billFrom) / DAY_MS),
     ...parking,
+    ...parkingFix,
     ...charges.items,
     ...repairs.items,
     ...adjustments.items,

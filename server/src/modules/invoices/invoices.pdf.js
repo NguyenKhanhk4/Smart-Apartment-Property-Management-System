@@ -7,6 +7,9 @@ import { drawLetterhead, drawTable, drawTotals, fmtMoney, renderDocument } from 
 import { fmtDateVn, periodLabel } from '../../utils/time.js';
 import { getInvoice } from './invoices.queries.js';
 
+/** Số lượng tính theo ngày ra số lẻ (16/31 ≈ 0,5161) → tối đa 4 chữ số thập phân, kiểu VN */
+const fmtQty = (n) => (n ?? 0).toLocaleString('vi-VN', { maximumFractionDigits: 4 });
+
 const UNPUBLISHED = [INVOICE_STATUS.DRAFT, INVOICE_STATUS.PENDING_APPROVAL];
 export async function buildInvoicePdf(user, id) {
   const invoice = await getInvoice(user, id);
@@ -47,7 +50,7 @@ export async function buildInvoicePdf(user, id) {
           { header: 'Đơn giá', width: 0.17, align: 'right' },
           { header: 'Thành tiền', width: 0.19, align: 'right' },
         ],
-        invoice.items.map((i, idx) => [idx + 1, i.description, i.quantity, fmtMoney(i.unitPrice), fmtMoney(i.amount)]),
+        invoice.items.map((i, idx) => [idx + 1, i.description, fmtQty(i.quantity), fmtMoney(i.unitPrice), fmtMoney(i.amount)]),
       );
       doc.moveDown(0.5);
 
