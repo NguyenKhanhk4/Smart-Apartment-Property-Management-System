@@ -127,8 +127,11 @@ export const fundApi = {
   /** params: { page, limit, status (CSV) } */
   proposals: (params) => http.get('/fund/proposals', { params }),
   proposal: (id) => http.get(`/fund/proposals/${id}`),
-  /** body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair? } */
+  /** body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair?, workOrderId? } */
   createProposal: (body, files) => http.post('/fund/proposals', toMultipart(body, files)),
+  /** UC10: phiếu bảo trì Trưởng BQL duyệt sửa bằng Quỹ, chờ Kế toán lập đề xuất */
+  awaitingWorkOrders: () => http.get('/fund/work-orders'),
+  workOrderPrefill: (id) => http.get(`/fund/work-orders/${id}/prefill`),
   /** body: { decision: AGREE | DISAGREE, comment? } */
   vote: (id, body) => http.post(`/fund/proposals/${id}/votes`, body),
   cancel: (id, reason) => http.post(`/fund/proposals/${id}/cancel`, { reason }),
