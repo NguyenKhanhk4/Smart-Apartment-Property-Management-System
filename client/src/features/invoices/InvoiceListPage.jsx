@@ -14,7 +14,6 @@ import { useAuth } from '../../hooks/useAuth';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { formatDate, formatMoney } from '../../utils/format';
 import AdjustmentsPanel from './AdjustmentsPanel';
-import BankInfoModal from './BankInfoModal';
 import { aptLabel, OUTSTANDING_STATUSES, outstandingOf, periodLabel } from './invoiceShared';
 
 // Mô đun 4 — UC27/UC28: danh sách thông báo phí theo kỳ. Kế toán trình duyệt Nháp; Trưởng BQL Duyệt & Phát hành / Trả lại.
@@ -37,7 +36,6 @@ export default function InvoiceListPage() {
   const [pageSize, setPageSize] = useState(20);
   const [selected, setSelected] = useState([]);
   const [returning, setReturning] = useState(null); // selector đang trả lại
-  const [bankOpen, setBankOpen] = useState(false);
   const period = month?.format('YYYY-MM');
 
   const { data: buildings = [] } = useApi(() => lookupApi.buildings(), []);
@@ -133,7 +131,8 @@ export default function InvoiceListPage() {
         extra={
           <Space wrap>
             {isManager && (
-              <Button icon={<BankOutlined />} onClick={() => setBankOpen(true)}>
+              // Tài khoản nhận tiền nhập ở hồ sơ tòa nhà (UC05) — một nguồn cho PDF thông báo phí
+              <Button icon={<BankOutlined />} onClick={() => navigate('/app/building-settings')}>
                 Tài khoản nhận tiền
               </Button>
             )}
@@ -258,7 +257,6 @@ export default function InvoiceListPage() {
         </Flex>
       </Card>
 
-      <BankInfoModal open={bankOpen} onClose={() => setBankOpen(false)} />
 
       <ReasonModal
         open={Boolean(returning)}

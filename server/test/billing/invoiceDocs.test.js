@@ -1,11 +1,11 @@
 // Mô đun 4 — việc lẻ: khoản điều chỉnh vào kỳ sau (M4-5), PDF thông báo phí, PDF biên lai (không thay thế hóa đơn GTGT).
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AuditLog, FeeType, Invoice, InvoiceAdjustment, Payment, PrepaidBalance, SystemConfig } from '../../src/models/index.js';
+import { AuditLog, BuildingProfile, FeeType, Invoice, InvoiceAdjustment, Payment, PrepaidBalance, SystemConfig } from '../../src/models/index.js';
 import { cancelAdjustment, createAdjustment, listAdjustments } from '../../src/modules/invoices/invoices.adjustments.js';
 import { publishInvoices, submitInvoices } from '../../src/modules/invoices/invoices.approval.js';
 import { recalculateDraft } from '../../src/modules/invoices/invoices.drafts.js';
-import { transferContent } from '../../src/modules/invoices/invoices.payinfo.js';
+import { bankInfo, migrateLegacyBankConfigs, transferContent } from '../../src/modules/invoices/invoices.payinfo.js';
 import { buildInvoicePdf } from '../../src/modules/invoices/invoices.pdf.js';
 import { getInvoice } from '../../src/modules/invoices/invoices.queries.js';
 import { generateForApartment } from '../../src/modules/invoices/invoices.service.js';
@@ -139,13 +139,13 @@ test('PDF thông báo phí: nội dung chuyển khoản mẫu, tài khoản nh�
 
   const ctx = await setup();
   const oct = await publishPeriod(ctx, '2026-10', OCT);
-  await SystemConfig.create([
-    { key: 'BANK_NAME', value: 'Vietcombank', scope: 'BUSINESS' },
-    { key: 'BANK_ACCOUNT_NO', value: '0123456789', scope: 'BUSINESS' },
-    { key: 'BANK_ACCOUNT_NAME', value: 'BQL TOA NHA', scope: 'BUSINESS' },
-  ]);
+  assert.equal((await getInvoice(asUser(ctx.owner), oct._id)).payInfo.configured, false); // chưa nhập ở UC05
+
+  // Tài khoản nhận tiền lấy từ hồ sơ tòa nhà (UC05)
+  await BuildingProfile.create({ bankName: 'Vietcombank', bankAccountNo: '0123456789', bankAccountName: 'BQL TOA NHA' });
   const detail = await getInvoice(asUser(ctx.owner), oct._id);
   assert.equal(detail.payInfo.configured, true);
+  assert.equal(detail.payInfo.accountNo, '0123456789');
   assert.match(detail.payInfo.content, / T10-2026$/);
 
   const file = await buildInvoicePdf(asUser(ctx.owner), oct._id);
@@ -185,4 +185,22 @@ test('API: tải PDF thông báo phí / biên lai, lập điều chỉnh chỉ K
   } finally {
     await app.close();
   }
+});
+
+test('db:sync: tham số BANK_* cũ chuyển sang hồ sơ tòa nhà (không ghi đè ô đã nhập), rồi bị xóa; chạy lại không đổi gì', async () => {
+  await BuildingProfile.create({ name: 'Tòa A', bankName: 'BIDV' }); // Trưởng BQL đã nhập ngân hàng ở UC05
+  await SystemConfig.create([
+    { key: 'BANK_NAME', value: 'Vietcombank', scope: 'BUSINESS' },
+    { key: 'BANK_ACCOUNT_NO', value: '0123 456.789', scope: 'BUSINESS' },
+    { key: 'BANK_ACCOUNT_NAME', value: ' BQL TOA NHA ', scope: 'BUSINESS' },
+  ]);
+
+  const first = await migrateLegacyBankConfigs();
+  assert.deepEqual(first.moved.sort(), ['bankAccountName', 'bankAccountNo']);
+  assert.equal(first.removed, 3);
+  assert.equal(await SystemConfig.countDocuments({ key: /^BANK_/ }), 0);
+  assert.deepEqual(await bankInfo(), { bankName: 'BIDV', accountNo: '0123456789', accountName: 'BQL TOA NHA', configured: true });
+
+  assert.deepEqual(await migrateLegacyBankConfigs(), { moved: [], removed: 0 });
+  assert.equal(await BuildingProfile.countDocuments(), 1);
 });

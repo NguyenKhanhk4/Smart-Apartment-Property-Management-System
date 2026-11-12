@@ -223,12 +223,16 @@ export async function buildInvoiceDraft(apartment, period, prices, { invoiceId =
   const payer = await getPayer(apartment._id, billFrom);
   if (!payer) return { ...base, payer: null, items: [], totalAmount: 0, charges: null };
 
-  const charges = await collectAmenityCharges(apartment._id, shiftPeriod(period, -1), { invoiceId });
-  const repairs = await collectRepairCharges(apartment._id, period, { invoiceId });
-  const adjustments = await collectAdjustments(apartment._id, period, payer.userId, { invoiceId });
+  // Các nguồn phí độc lập nhau → truy vấn song song (DB ở xa: tuần tự thì cộng dồn độ trễ mỗi căn)
+  const [charges, repairs, adjustments, parking] = await Promise.all([
+    collectAmenityCharges(apartment._id, shiftPeriod(period, -1), { invoiceId }),
+    collectRepairCharges(apartment._id, period, { invoiceId }),
+    collectAdjustments(apartment._id, period, payer.userId, { invoiceId }),
+    parkingItems(apartment, period, prices),
+  ]);
   const items = [
     ...apartmentItems(apartment, prices, (end - start) / DAY_MS, (end - billFrom) / DAY_MS),
-    ...(await parkingItems(apartment, period, prices)),
+    ...parking,
     ...charges.items,
     ...repairs.items,
     ...adjustments.items,
