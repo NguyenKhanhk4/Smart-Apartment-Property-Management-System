@@ -39,3 +39,6 @@ Thumbs.db
 # Local caches and Module C integration notes
 .cache/
 !deliverables/TM/module-c-preparation.md
+
+# Script seed dữ liệu test cá nhân (vd seedNguoi3Test.js) - không push
+server/scripts/seed*Test.js

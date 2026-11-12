@@ -13,6 +13,7 @@ import { csvEnum, objectId, period } from '../../utils/validators.js';
 import { exportReport } from './reports.export.js';
 import * as reports from './reports.service.js';
 import { financeDashboard, supervisionReport } from './finance.service.js';
+import { operationsDashboard } from './operations.service.js';
 
 const router = Router();
 router.use(authenticate);
@@ -175,8 +176,26 @@ router.get(
   async (req, res) => ok(res, await supervisionReport(q(req))),
 );
 
+/**
+ * @openapi
+ * /reports/operations-kpi:
+ *   get:
+ *     tags: [Báo cáo]
+ *     summary: Dashboard vận hành (UC60, 5.3–5.4) — sự cố theo tháng và đúng hạn (trừ thời gian tạm dừng), số sao theo kỹ thuật viên, phản ánh theo loại và thời gian phản hồi, bảo trì đúng hạn, lấp đầy và biến động cư dân, lượt dùng tiện ích. from/to dạng YYYY-MM
+ *     parameters:
+ *       - { in: query, name: from, schema: { type: string, example: '2026-01' } }
+ *       - { in: query, name: to, schema: { type: string, example: '2026-11' } }
+ *       - { in: query, name: buildingId, schema: { type: string } }
+ */
+router.get(
+  '/operations-kpi',
+  authorize('MANAGER'),
+  validate({ query: Joi.object(periodQuery) }),
+  async (req, res) => ok(res, await operationsDashboard(q(req))),
+);
+
 // Loại báo cáo xuất được theo vai trò; Ban quản trị chỉ xuất phần giám sát (5.6)
-const PERIOD_TYPES = ['billing', 'finance', 'supervision'];
+const PERIOD_TYPES = ['billing', 'finance', 'supervision', 'operations'];
 const BOARD_EXPORTS = ['supervision', 'fund', 'billing'];
 
 /**
@@ -186,7 +205,7 @@ const BOARD_EXPORTS = ['supervision', 'fund', 'billing'];
  *     tags: [Báo cáo]
  *     summary: Xuất báo cáo Excel/PDF (UC-E13) — Manager, Accountant
  *     description: |
- *       billing / finance / supervision dùng from/to dạng YYYY-MM; fund / operations / amenity dùng from/to dạng ngày;
+ *       billing / finance / supervision / operations dùng from/to dạng YYYY-MM; fund / amenity dùng from/to dạng ngày;
  *       debts, ledger (sổ công nợ, lọc status CSV) không cần from/to. Ban quản trị chỉ xuất supervision, fund, billing.
  *     parameters:
  *       - { in: query, name: type, required: true, schema: { type: string, enum: [billing, debts, fund, operations, amenity, finance, supervision, ledger] } }

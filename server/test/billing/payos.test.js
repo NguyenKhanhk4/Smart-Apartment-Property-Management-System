@@ -125,6 +125,42 @@ test('tạo link: số tiền = tổng còn nợ đã chọn, ký đúng, giao d
   assert.equal(calls.length, 1);
 });
 
+test('tạo link đồng thời (StrictMode / 2 tab): chỉ 1 link payOS, yêu cầu sau dùng lại link của yêu cầu trước', async () => {
+  await Payment.createIndexes(); // cần index unique linkKey
+  const { ownerUser, mk } = await setup();
+  const inv = await mk('HD-10', '2026-10', 500_000);
+
+  const [a, b] = await Promise.all([
+    createPayosPayment(ownerUser, { invoiceIds: [inv._id] }, { now: NOW }),
+    createPayosPayment(ownerUser, { invoiceIds: [inv._id] }, { now: NOW }),
+  ]);
+  assert.equal(a.orderCode, b.orderCode);
+  assert.ok(b.checkoutUrl);
+  assert.equal(calls.filter((c) => c.method === 'POST').length, 1);
+  assert.equal(await Payment.countDocuments({ method: 'PAYOS' }), 1);
+});
+
+test('tạo link: link cũ hết hạn hoặc payOS lỗi → gỡ khóa, tạo được link mới', async () => {
+  await Payment.createIndexes();
+  const { ownerUser, mk } = await setup();
+  const inv = await mk('HD-10', '2026-10', 500_000);
+
+  // payOS lỗi lần đầu → giao dịch FAILED, khóa được gỡ
+  setPayosForTest({ config: CONFIG, fetch: () => Promise.reject(new Error('payOS down')) });
+  await assert.rejects(createPayosPayment(ownerUser, { invoiceIds: [inv._id] }, { now: NOW }));
+  setPayosForTest({ config: CONFIG, fetch: fakeFetch });
+  const first = await createPayosPayment(ownerUser, { invoiceIds: [inv._id] }, { now: NOW });
+  assert.ok(first.checkoutUrl);
+
+  // 20 phút sau link đã hết hạn → link mới; link cũ vẫn PENDING (cron đối soát xử lý) nhưng không giữ khóa
+  const later = new Date(NOW.getTime() + 20 * 60_000);
+  const second = await createPayosPayment(ownerUser, { invoiceIds: [inv._id] }, { now: later });
+  assert.notEqual(second.orderCode, first.orderCode);
+  const old = await Payment.findById(first.paymentId).lean();
+  assert.equal(old.status, 'PENDING');
+  assert.equal(old.linkKey, undefined);
+});
+
 test('tạo link: chỉ Người nộp phí; thông báo đã trả đủ bị chặn; chưa cấu hình → PAYOS_DISABLED', async () => {
   const { mk } = await setup();
   const inv = await mk('HD-10', '2026-10', 500_000);

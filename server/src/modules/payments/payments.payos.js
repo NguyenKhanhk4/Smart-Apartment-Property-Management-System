@@ -49,6 +49,70 @@ function descriptionOf(apartment, invoices) {
   return `${apt} ${tail}`.slice(0, 25);
 }
 
+// ---------------------------------------------------------------------------
+// Mỗi nhóm thông báo / booking chỉ 1 link đang dùng (linkKey unique). Trang thanh toán tạo link ngay khi mở
+// (dev StrictMode gọi 2 lần, cư dân mở 2 tab) → 2 yêu cầu đồng thời: yêu cầu sau chờ link của yêu cầu trước.
+// ---------------------------------------------------------------------------
+const LINK_WAIT_MS = 8000; // tối đa chờ yêu cầu trước gọi xong payOS
+const LINK_POLL_MS = 150;
+const MAX_KEY_ATTEMPTS = 4;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const releaseKey = (p) => Payment.updateOne({ _id: p._id, linkKey: p.linkKey }, { $unset: { linkKey: 1 } });
+
+/**
+ * Giao dịch đang giữ `linkKey`: còn dùng được và đã có link → trả về để dùng lại; hỏng / hết hạn / chờ quá lâu → gỡ
+ * khóa (giao dịch vẫn PENDING cho cron đối soát) rồi trả null để tạo link mới.
+ */
+async function waitForHolder(linkKey, now) {
+  const deadline = Date.now() + LINK_WAIT_MS;
+  for (;;) {
+    const holder = await Payment.findOne({ linkKey }).lean();
+    if (!holder) return null;
+    const usable = holder.status === PENDING && holder.expiredAt > new Date(now.getTime() + MINUTE_MS);
+    if (usable && holder.checkoutUrl) return holder;
+    if (!usable || Date.now() > deadline) {
+      await releaseKey(holder);
+      return null;
+    }
+    await sleep(LINK_POLL_MS);
+  }
+}
+
+/**
+ * Tạo giao dịch PENDING giữ `linkKey`, gọi payOS, lưu link. `doc`: dữ liệu Payment (không gồm orderCode);
+ * `link(payment)`: tham số gọi payos.createPaymentLink. Đã có link đang dùng cho cùng khóa → dùng lại.
+ */
+async function openLink(linkKey, doc, link, now) {
+  let payment;
+  for (let attempt = 1; !payment; attempt += 1) {
+    try {
+      // Lưu PENDING trước khi gọi payOS: webhook về sớm vẫn tìm thấy giao dịch
+      payment = await Payment.create({ ...doc, linkKey, status: PENDING, orderCode: newOrderCode() });
+    } catch (err) {
+      if (attempt >= MAX_KEY_ATTEMPTS) throw err;
+      if (isDuplicateOn(err, 'orderCode')) continue;
+      if (!isDuplicateOn(err, 'linkKey')) throw err;
+      const holder = await waitForHolder(linkKey, now);
+      if (holder) return linkView(holder);
+    }
+  }
+  try {
+    const created = await payos.createPaymentLink({ orderCode: payment.orderCode, ...link(payment) });
+    const saved = await Payment.findByIdAndUpdate(
+      payment._id,
+      { $set: { paymentLinkId: created.paymentLinkId, checkoutUrl: created.checkoutUrl, qrCode: created.qrCode } },
+      { new: true },
+    ).lean();
+    return linkView(saved);
+  } catch (err) {
+    await Payment.updateOne(
+      { _id: payment._id, status: PENDING },
+      { $set: { status: FAILED, note: 'Không tạo được link payOS' }, $unset: { linkKey: 1 } },
+    );
+    throw err;
+  }
+}
+
 const linkView = (p) => ({
   paymentId: p._id,
   orderCode: p.orderCode,
@@ -95,45 +159,26 @@ export async function createPayosPayment(user, { invoiceIds }, { now = new Date(
   if (reusable && reusable.allocations.map((a) => String(a.invoiceId)).sort().join() === ids.join()) return linkView(reusable);
 
   const expiredAt = new Date(now.getTime() + RECONCILE_AFTER_MS);
-  for (let attempt = 1; ; attempt += 1) {
-    let payment;
-    try {
-      // Lưu PENDING trước khi gọi payOS: webhook về sớm vẫn tìm thấy giao dịch
-      payment = await Payment.create({
-        apartmentId: apartment._id,
-        payerId: user.id,
-        invoiceId: planned[0].invoiceId,
-        allocations: planned,
-        method: PAYMENT_METHODS.PAYOS,
-        amount,
-        status: PENDING,
-        orderCode: newOrderCode(),
-        expiredAt,
-      });
-    } catch (err) {
-      if (isDuplicateOn(err, 'orderCode') && attempt < MAX_ATTEMPTS) continue;
-      throw err;
-    }
-
-    try {
-      const link = await payos.createPaymentLink({
-        orderCode: payment.orderCode,
-        amount,
-        description: descriptionOf(apartment, invoices),
-        expiredAt,
-        items: invoices.map((i) => ({ name: `Phi ${shortPeriod(i.period)}`, quantity: 1, price: i.totalAmount - (i.paidAmount ?? 0) })),
-      });
-      const saved = await Payment.findByIdAndUpdate(
-        payment._id,
-        { $set: { paymentLinkId: link.paymentLinkId, checkoutUrl: link.checkoutUrl, qrCode: link.qrCode } },
-        { new: true },
-      ).lean();
-      return linkView(saved);
-    } catch (err) {
-      await Payment.updateOne({ _id: payment._id, status: PENDING }, { $set: { status: FAILED, note: 'Không tạo được link payOS' } });
-      throw err;
-    }
-  }
+  // Khóa theo số tiền nữa: thông báo vừa được trả thêm (số còn nợ đổi) thì cần link mới, không dùng link cũ
+  return openLink(
+    `inv:${user.id}:${ids.join(',')}:${amount}`,
+    {
+      apartmentId: apartment._id,
+      payerId: user.id,
+      invoiceId: planned[0].invoiceId,
+      allocations: planned,
+      method: PAYMENT_METHODS.PAYOS,
+      amount,
+      expiredAt,
+    },
+    () => ({
+      amount,
+      description: descriptionOf(apartment, invoices),
+      expiredAt,
+      items: invoices.map((i) => ({ name: `Phi ${shortPeriod(i.period)}`, quantity: 1, price: i.totalAmount - (i.paidAmount ?? 0) })),
+    }),
+    now,
+  );
 }
 
 /**
@@ -163,42 +208,24 @@ export async function createBookingPayosPayment(user, bookingId, { now = new Dat
   const apartment = booking.apartmentId;
   const apt = `${apartment.buildingId?.code ?? ''}${apartment.code}`.replace(/[^A-Za-z0-9]/g, '');
   const day = fmtDateVn(booking.date).slice(0, 5).replace('/', '');
-  for (let attempt = 1; ; attempt += 1) {
-    let payment;
-    try {
-      payment = await Payment.create({
-        apartmentId: apartment._id,
-        payerId: booking.chargedTo ?? user.id,
-        bookingId: booking._id,
-        method: PAYMENT_METHODS.PAYOS,
-        amount: booking.fee,
-        status: PENDING,
-        orderCode: newOrderCode(),
-        expiredAt: booking.holdExpiresAt,
-      });
-    } catch (err) {
-      if (isDuplicateOn(err, 'orderCode') && attempt < MAX_ATTEMPTS) continue;
-      throw err;
-    }
-    try {
-      const link = await payos.createPaymentLink({
-        orderCode: payment.orderCode,
-        amount: booking.fee,
-        description: `${apt} TIEN ICH ${day}`.slice(0, 25),
-        expiredAt: booking.holdExpiresAt,
-        items: [{ name: `Dat ${booking.slotStart}-${booking.slotEnd}`, quantity: 1, price: booking.fee }],
-      });
-      const saved = await Payment.findByIdAndUpdate(
-        payment._id,
-        { $set: { paymentLinkId: link.paymentLinkId, checkoutUrl: link.checkoutUrl, qrCode: link.qrCode } },
-        { new: true },
-      ).lean();
-      return linkView(saved);
-    } catch (err) {
-      await Payment.updateOne({ _id: payment._id, status: PENDING }, { $set: { status: FAILED, note: 'Không tạo được link payOS' } });
-      throw err;
-    }
-  }
+  return openLink(
+    `booking:${booking._id}`,
+    {
+      apartmentId: apartment._id,
+      payerId: booking.chargedTo ?? user.id,
+      bookingId: booking._id,
+      method: PAYMENT_METHODS.PAYOS,
+      amount: booking.fee,
+      expiredAt: booking.holdExpiresAt,
+    },
+    () => ({
+      amount: booking.fee,
+      description: `${apt} TIEN ICH ${day}`.slice(0, 25),
+      expiredAt: booking.holdExpiresAt,
+      items: [{ name: `Dat ${booking.slotStart}-${booking.slotEnd}`, quantity: 1, price: booking.fee }],
+    }),
+    now,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -373,7 +400,14 @@ export async function syncPayosPayment(payment, { now = new Date() } = {}) {
   } else if (info.status === 'CANCELLED' || info.status === 'EXPIRED') {
     await Payment.updateOne(
       { _id: payment._id, status: PENDING },
-      { $set: { status: FAILED, note: info.status === 'CANCELLED' ? 'Cư dân hủy thanh toán' : 'Link payOS hết hạn' } },
+      // payOS xác nhận không có tiền về → hết việc đối soát (bỏ cảnh báo Cần đối soát)
+      {
+        $set: {
+          status: FAILED,
+          needsReconcile: false,
+          note: info.status === 'CANCELLED' ? 'Cư dân hủy thanh toán' : 'Link payOS hết hạn',
+        },
+      },
     );
   } else if (now - payment.createdAt > RECONCILE_AFTER_MS) {
     await Payment.updateOne({ _id: payment._id, status: PENDING }, { $set: { needsReconcile: true } });

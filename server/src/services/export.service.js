@@ -127,6 +127,139 @@ export function renderPdf(spec) {
 }
 
 
+// ===== PDF văn bản (thông báo phí, biên lai): khổ dọc A4, tiêu đề Ban quản lý, bảng tự sang trang =====
+
+/**
+ * Dựng 1 PDF văn bản: draw(doc, layout) vẽ nội dung; layout = { left, width, bottom() }.
+ * @returns {Promise<Buffer>}
+ */
+export function renderDocument(draw, { title } = {}) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50, info: title ? { Title: title } : undefined });
+    doc.registerFont('regular', FONT_REGULAR);
+    doc.registerFont('bold', FONT_BOLD);
+    const chunks = [];
+    doc.on('data', (b) => chunks.push(b));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+    const left = doc.page.margins.left;
+    const layout = { left, width: doc.page.width - left - doc.page.margins.right, bottom: () => doc.page.height - doc.page.margins.bottom };
+    try {
+      draw(doc, layout);
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/** Đầu trang: "BAN QUẢN LÝ TÒA NHÀ" + tên, địa chỉ tòa bên trái; dòng phải (vd ngày) bên phải */
+export function drawLetterhead(doc, { left, width }, { building, right }) {
+  const top = doc.y;
+  doc.font('bold').fontSize(11).text('BAN QUẢN LÝ TÒA NHÀ', left, top);
+  doc.font('regular').fontSize(10);
+  if (building?.name) doc.text(building.name, left);
+  if (building?.address) doc.text(building.address, left, doc.y, { width: width * 0.6 });
+  const after = doc.y;
+  if (right) doc.text(right, left, top, { width, align: 'right' });
+  doc.x = left;
+  doc.y = after;
+  doc.moveDown(1.5);
+}
+
+/**
+ * Bảng đơn giản: columns [{ header, width (tỷ lệ), align }], rows: mảng chuỗi, hoặc { cells, bold } để in đậm.
+ * Dòng cao theo nội dung; hết trang thì sang trang và vẽ lại tiêu đề cột.
+ */
+export function drawTable(doc, { left, width, bottom }, columns, rows) {
+  const total = columns.reduce((s, c) => s + c.width, 0);
+  const widths = columns.map((c) => (c.width / total) * width);
+  const line = (cells, { header = false, bold = false } = {}) => {
+    const font = header || bold ? 'bold' : 'regular';
+    doc.font(font).fontSize(9.5);
+    const h = Math.max(...cells.map((t, i) => doc.heightOfString(String(t ?? ''), { width: widths[i] - 8 }))) + 8;
+    if (doc.y + h > bottom()) {
+      doc.addPage();
+      if (!header) line(columns.map((c) => c.header), { header: true });
+      doc.font(font).fontSize(9.5);
+    }
+    const y = doc.y;
+    if (header) doc.rect(left, y, width, h).fill('#eef3f8').fillColor('#000');
+    let x = left;
+    cells.forEach((t, i) => {
+      doc.text(String(t ?? ''), x + 4, y + 4, { width: widths[i] - 8, align: columns[i].align ?? 'left' });
+      x += widths[i];
+    });
+    doc.moveTo(left, y + h).lineTo(left + width, y + h).lineWidth(0.5).strokeColor('#999').stroke();
+    doc.x = left;
+    doc.y = y + h;
+  };
+  line(columns.map((c) => c.header), { header: true });
+  for (const r of rows) {
+    if (Array.isArray(r)) line(r);
+    else line(r.cells, { bold: r.bold });
+  }
+}
+
+/** Cặp nhãn – giá trị căn phải (khối tổng tiền dưới bảng): [[nhãn, giá trị, { bold }]] */
+export function drawTotals(doc, { left, width }, pairs) {
+  for (const [label, value, { bold = false } = {}] of pairs) {
+    const y = doc.y;
+    doc.font(bold ? 'bold' : 'regular').fontSize(10.5);
+    doc.text(label, left + width * 0.35, y, { width: width * 0.4 });
+    const after = doc.y;
+    doc.text(value, left + width * 0.75, y, { width: width * 0.25, align: 'right' });
+    doc.x = left;
+    doc.y = Math.max(after, doc.y);
+    doc.moveDown(0.25);
+  }
+}
+
+// ===== Đọc số tiền bằng chữ (biên lai) =====
+const DIGITS = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+const GROUP_UNITS = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ', 'triệu tỷ'];
+
+function readTriple(n, full) {
+  const h = Math.floor(n / 100);
+  const t = Math.floor((n % 100) / 10);
+  const u = n % 10;
+  const parts = [];
+  if (h > 0 || full) parts.push(`${DIGITS[h]} trăm`);
+  if (t > 1) {
+    parts.push(`${DIGITS[t]} mươi`);
+    if (u === 1) parts.push('mốt');
+    else if (u === 4) parts.push('tư');
+    else if (u === 5) parts.push('lăm');
+    else if (u > 0) parts.push(DIGITS[u]);
+  } else if (t === 1) {
+    parts.push('mười');
+    if (u === 5) parts.push('lăm');
+    else if (u > 0) parts.push(DIGITS[u]);
+  } else if (u > 0) {
+    if (h > 0 || full) parts.push('linh');
+    parts.push(DIGITS[u]);
+  }
+  return parts.join(' ');
+}
+
+/** 1250000 → "Một triệu hai trăm năm mươi nghìn đồng" */
+export function moneyInWords(amount) {
+  let n = Math.round(Math.abs(amount ?? 0));
+  if (n === 0) return 'Không đồng';
+  const groups = [];
+  while (n > 0) {
+    groups.push(n % 1000);
+    n = Math.floor(n / 1000);
+  }
+  const words = [];
+  for (let i = groups.length - 1; i >= 0; i -= 1) {
+    if (!groups[i]) continue;
+    words.push(readTriple(groups[i], i < groups.length - 1), GROUP_UNITS[i]);
+  }
+  const text = words.filter(Boolean).join(' ');
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)} đồng`;
+}
+
 /**
  * Dựng file từ spec. `basename` không có đuôi, vd 'so-cong-no' → so-cong-no-2026-11-07.xlsx
  * @returns {Promise<{ buffer: Buffer, filename: string, contentType: string }>}
