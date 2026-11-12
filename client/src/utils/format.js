@@ -13,7 +13,9 @@ export const moneyInputProps = {
   formatter: (v) => (v == null ? '' : `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')),
   parser: (v) => (v == null ? '' : v.replace(/\./g, '')),
 };
-export const formatPercent = (r, digits = 1) => `${((r ?? 0) * 100).toFixed(digits)}%`;
+/** Số lượng dòng phí: tính theo ngày ra số lẻ (16/31 ngày ≈ 0,5161) → tối đa 4 chữ số thập phân, kiểu VN */
+export const formatQuantity = (n) => (n ?? 0).toLocaleString('vi-VN', { maximumFractionDigits: 4 });
+export const formatPercent =(r, digits = 1) => `${((r ?? 0) * 100).toFixed(digits)}%`;
 export const formatDateTime = (d) => (d ? dayjs(d).format('HH:mm DD/MM/YYYY') : '—');
 export const formatDate = (d) => (d ? dayjs(d).format('DD/MM/YYYY') : '—');
 export const fromNow = (d) => (d ? dayjs(d).fromNow() : '');
