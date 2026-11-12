@@ -331,7 +331,7 @@ async function buildSpec(type, q) {
           ['Đánh giá TB (sao)', `${num(inc.avgRating)} (${inc.rated} lượt)`],
           ['Phản ánh / đã phản hồi', `${cp.count} / ${cp.responded}`],
           ['Phản hồi đúng hạn / TB (giờ)', `${pct(cp.onTimeRate)} / ${num(cp.avgResponseHours)}`],
-          ['Bảo trì định kỳ hoàn thành đúng hạn', `${pct(mt.onTimeRate)} (${mt.onTime}/${mt.done})`],
+          ['Bảo trì định kỳ kiểm tra đúng hạn', `${pct(mt.onTimeRate)} (${mt.onTime}/${mt.inspected})`],
           ['Tỷ lệ lấp đầy', rs.occupancy.occupancyRate, 'percent'],
           ['Cư dân vào ở / chuyển đi', `${rs.moveIn} / ${rs.moveOut}`],
         ],

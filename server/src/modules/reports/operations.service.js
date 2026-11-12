@@ -16,7 +16,7 @@ import {
   TICKET_SCOPES,
   TICKET_STATUS,
   TICKET_TYPES,
-  WORK_ORDER_OPEN_STATUSES,
+  WORK_ORDER_ACTIVE_STATUSES,
   WORK_ORDER_STATUS,
 } from '../../constants/enums.js';
 import { Apartment, Asset, Booking, Resident, Ticket, WorkOrder } from '../../models/index.js';
@@ -216,8 +216,12 @@ async function maintenanceStats({ start, end, periods, now, buildingId }) {
   const assetIds = buildingId ? await Asset.find({ buildingId }).distinct('_id') : null;
   const base = assetIds ? { assetId: { $in: assetIds } } : {};
   const planned = { $ifNull: ['$scheduledDate', '$createdAt'] };
-  // Đúng hạn = hoàn thành không muộn hơn 1 ngày sau ngày lên lịch (cùng quy ước báo cáo bảo trì cũ)
-  const onTime = { $and: [isDate('$completedAt'), { $lte: ['$completedAt', { $add: [planned, DAY_MS] }] }] };
+  // Đúng hạn = KIỂM TRA không muộn hơn 1 ngày sau ngày lên lịch (UC08: inspectedAt; phiếu cũ chưa có thì lấy completedAt).
+  // Phiếu kiểm tra đúng hạn nhưng có sự cố, sửa lâu mới nghiệm thu vẫn tính đúng hạn — khớp assets.isOnTime.
+  // Tỷ lệ tính trên phiếu ĐÃ KIỂM TRA (kể cả đang sửa / tạm hoãn) để tử và mẫu cùng một tập.
+  const checkedAt = { $ifNull: ['$inspectedAt', '$completedAt'] };
+  const inspected = isDate(checkedAt);
+  const onTime = { $and: [inspected, { $lte: [checkedAt, { $add: [planned, DAY_MS] }] }] };
   const [rows, overdueOpen] = await Promise.all([
     WorkOrder.aggregate([
       { $match: base },
@@ -228,13 +232,14 @@ async function maintenanceStats({ start, end, periods, now, buildingId }) {
           _id: monthOf('$planned'),
           scheduled: { $sum: 1 },
           done: { $sum: { $cond: [{ $eq: ['$status', WORK_ORDER_STATUS.DONE] }, 1, 0] } },
+          inspected: { $sum: { $cond: [inspected, 1, 0] } },
           onTime: { $sum: { $cond: [onTime, 1, 0] } },
         },
       },
     ]),
     WorkOrder.countDocuments({
       ...base,
-      status: { $in: [...WORK_ORDER_OPEN_STATUSES] },
+      status: { $in: [...WORK_ORDER_ACTIVE_STATUSES] }, // phiếu Tạm hoãn sửa (REPAIR_POSTPONED) không tính quá hạn (UC10)
       $expr: { $lt: [{ $add: [{ $ifNull: ['$scheduledDate', '$createdAt'] }, DAY_MS] }, now] },
     }),
   ]);
@@ -243,15 +248,17 @@ async function maintenanceStats({ start, end, periods, now, buildingId }) {
     period,
     scheduled: map.get(period)?.scheduled ?? 0,
     done: map.get(period)?.done ?? 0,
+    inspected: map.get(period)?.inspected ?? 0,
     onTime: map.get(period)?.onTime ?? 0,
   }));
   const sum = (k) => byMonth.reduce((s, m) => s + m[k], 0);
   return {
     scheduled: sum('scheduled'),
     done: sum('done'),
+    inspected: sum('inspected'),
     onTime: sum('onTime'),
-    late: sum('done') - sum('onTime'),
-    onTimeRate: rate(sum('onTime'), sum('done')),
+    late: sum('inspected') - sum('onTime'),
+    onTimeRate: rate(sum('onTime'), sum('inspected')),
     overdueOpen,
     byMonth,
   };
