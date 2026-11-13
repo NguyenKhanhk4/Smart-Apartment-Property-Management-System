@@ -18,4 +18,5 @@ export const utilityTariffsApi = {
 export const collectionSettingsApi = {
   get: () => http.get('/collection-settings'),
   update: (body) => http.put('/collection-settings', body),
+  cancelUpcoming: (utility) => http.delete(`/collection-settings/${utility}/upcoming`),
 };

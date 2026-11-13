@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Badge, Button, Card, Flex, Space, Table, Tabs, Tag, Typography } from 'antd';
+import { Badge, Button, Card, Flex, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import { workOrderApi } from '../../api/equipment.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
@@ -60,7 +60,7 @@ export default function MajorRepairApprovalPage() {
         key: 'source',
         width: 160,
         render: (_, r) => (r.repair?.costSource === 'FUND'
-          ? <Flex vertical><EnumTag map={REPAIR_COST_SOURCES} value="FUND" /><Typography.Text type="secondary" style={{ fontSize: 12 }}>Chờ Ban quản trị</Typography.Text></Flex>
+          ? <Flex vertical><EnumTag map={REPAIR_COST_SOURCES} value="FUND" /><Typography.Text type="secondary" style={{ fontSize: 12 }}>{r.pendingFund ? `Đề xuất ${r.pendingFund.code} đang chờ biểu quyết` : "Chờ Kế toán lập đề xuất"}</Typography.Text></Flex>
           : <Tag>Chưa quyết định</Tag>),
       },
       {
@@ -68,7 +68,12 @@ export default function MajorRepairApprovalPage() {
         key: 'act',
         width: 120,
         fixed: 'right',
-        render: (_, r) => <Button size="small" type="primary" onClick={() => setActing({ mode: 'decide', wo: r })}>Quyết định</Button>,
+        // Đề xuất chi quỹ đang chờ biểu quyết thì không quyết định lại được (server trả WORKORDER_FUND_PENDING)
+        render: (_, r) => (
+          <Tooltip title={r.pendingFund ? `Đề xuất ${r.pendingFund.code} đang chờ Ban quản trị biểu quyết` : undefined}>
+            <Button size="small" type="primary" disabled={Boolean(r.pendingFund)} onClick={() => setActing({ mode: 'decide', wo: r })}>Quyết định</Button>
+          </Tooltip>
+        ),
       },
     ],
     postponed: [

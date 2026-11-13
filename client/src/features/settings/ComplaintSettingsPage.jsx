@@ -21,6 +21,7 @@ import { useAction, useApi } from '../../hooks/useApi';
 import EnumTag from '../../components/EnumTag';
 import { PRIORITIES, enumOptions } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
+import { DEADLINE_CONFIG_KEYS } from './deadlineConfigs';
 
 function CategoryModal({ category, open, onClose, onDone }) {
   const [form] = Form.useForm();
@@ -165,11 +166,11 @@ export default function ComplaintSettingsPage() {
         />
       </Card>
 
-      <Card title="Tham số nghiệp vụ" extra={<Typography.Text type="secondary">Áp dụng ngay cho nghiệp vụ phát sinh sau khi lưu</Typography.Text>}>
+      <Card title="Tham số nghiệp vụ" extra={<Typography.Text type="secondary">Áp dụng ngay cho nghiệp vụ phát sinh sau khi lưu. Các mốc nhắc / thời hạn sửa ở Tòa nhà & biểu phí → Lịch & thời hạn</Typography.Text>}>
         <Table
           rowKey="key"
           loading={configs.loading}
-          dataSource={configs.data}
+          dataSource={(configs.data || []).filter((c) => !DEADLINE_CONFIG_KEYS.has(c.key))}
           pagination={false}
           scroll={{ x: 640 }}
           columns={[

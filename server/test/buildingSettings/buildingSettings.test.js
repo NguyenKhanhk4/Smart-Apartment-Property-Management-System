@@ -4,7 +4,7 @@ import { after, afterEach, before, test } from 'node:test';
 import { AUDIT_ACTIONS, CONFIG_KEYS } from '../../src/constants/enums.js';
 import { AuditLog, SystemConfig, UtilityTariff } from '../../src/models/index.js';
 import { getBankInfo } from '../../src/modules/buildingSettings/buildingProfile.service.js';
-import { getCollectionSettings, isCollecting, updateCollectionSetting } from '../../src/modules/buildingSettings/collectionSettings.service.js';
+import { cancelUpcomingSetting, getCollectionSettings, isCollecting, updateCollectionSetting } from '../../src/modules/buildingSettings/collectionSettings.service.js';
 import { computeTieredAmount, createTariff, deleteTariff, getTariffAt } from '../../src/modules/buildingSettings/utilityTariffs.service.js';
 import { createFeeType } from '../../src/modules/feeTypes/feeTypes.service.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
@@ -197,6 +197,38 @@ test('Công tắc thu hộ: mặc định điện tắt nước bật, đổi c�
   assert.ok(audit);
   assert.equal(audit.after.enabled, true);
   assert.equal(audit.after.fromPeriod, '2026-12');
+});
+
+test('Công tắc thu hộ: hủy lịch hẹn, chọn lại đúng trạng thái hiện tại = hủy hẹn; định mức nước theo đầu người từ kỳ sau', async () => {
+  const manager = await createUser('MANAGER');
+  const now = new Date('2026-11-15T00:00:00+07:00'); // Kỳ 2026-11
+  const upcoming = async (utility) => (await getCollectionSettings({ now })).settings[utility].upcoming;
+
+  // Hẹn BẬT điện rồi hủy bằng API hủy hẹn → kỳ sau giữ TẮT, có audit kèm loại điện / nước
+  await updateCollectionSetting(manager, { utility: 'ELECTRICITY', enabled: true }, { now });
+  const cancelled = await cancelUpcomingSetting(manager, 'ELECTRICITY', { now });
+  assert.match(cancelled.message, /Đã hủy lịch hẹn/);
+  assert.equal(await upcoming('ELECTRICITY'), null);
+  assert.equal(await isCollecting('ELECTRICITY', '2026-12'), false);
+  const logs = await AuditLog.find({ action: AUDIT_ACTIONS.COLLECTION_SETTING_CHANGED }).lean();
+  assert.equal(logs.length, 2);
+  assert.ok(logs.every((l) => l.metadata.utility === 'ELECTRICITY'));
+  assert.match((await cancelUpcomingSetting(manager, 'ELECTRICITY', { now })).message, /Không có lịch hẹn/);
+
+  // Hẹn BẬT rồi bấm lại TẮT (đúng trạng thái kỳ hiện tại) → không tạo dòng hẹn thừa
+  await updateCollectionSetting(manager, { utility: 'ELECTRICITY', enabled: true }, { now });
+  await updateCollectionSetting(manager, { utility: 'ELECTRICITY', enabled: false }, { now });
+  assert.equal(await upcoming('ELECTRICITY'), null);
+
+  // Định mức nước (nước mặc định BẬT): 4 m³/người từ kỳ sau, kỳ hiện tại chưa có định mức
+  await updateCollectionSetting(manager, { utility: 'WATER', enabled: true, waterQuotaPerOccupant: 4 }, { now });
+  const water = (await getCollectionSettings({ now })).settings.WATER;
+  assert.equal(water.current.waterQuotaPerOccupant, null);
+  assert.equal(water.upcoming.waterQuotaPerOccupant, 4);
+  assert.equal(water.upcoming.fromPeriod, '2026-12');
+  // Đặt lại đúng định mức hiện tại (không áp) → hủy hẹn
+  await updateCollectionSetting(manager, { utility: 'WATER', enabled: true, waterQuotaPerOccupant: null }, { now });
+  assert.equal(await upcoming('WATER'), null);
 });
 
 // 4. Test Thông tin tòa nhà (BuildingProfile) và API

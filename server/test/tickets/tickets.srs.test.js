@@ -66,6 +66,12 @@ test('BR-X7: cư dân chưa đồng ý điều khoản không đính kèm ảnh 
   await assert.rejects(service.createTicket(asUser(user), body, [fakeFile]), { errorCode: 'CONSENT_REQUIRED' });
   const ticket = await service.createTicket(asUser(user), body, []);
   assert.equal(ticket.location, 'Hành lang tầng 5, gần thang B');
+  // Xác nhận chưa đạt: lý do gửi được, ảnh minh chứng thì cần đồng ý điều khoản
+  await Ticket.updateOne({ _id: ticket._id }, { $set: { status: 'WAITING_CONFIRM' } });
+  await assert.rejects(
+    service.confirmTicket(asUser(user), ticket._id, { accepted: false, reason: 'Đèn vẫn chập chờn' }, [fakeFile]),
+    { errorCode: 'CONSENT_REQUIRED' },
+  );
 });
 
 test('UC41: giao lại thì báo cả KTV cũ; Kanban lọc theo danh mục và KTV', async () => {
