@@ -7,7 +7,7 @@ import StatusBadge from '../../components/resident/StatusBadge';
 import SurfaceCard from '../../components/resident/SurfaceCard';
 import { FEE_CATEGORIES, INVOICE_STATUS, PAYMENT_METHODS } from '../../constants/enums';
 import { useApi } from '../../hooks/useApi';
-import { formatDate, formatDateTime, formatMoney } from '../../utils/format';
+import { formatDate, formatDateTime, formatMoney, formatQuantity } from '../../utils/format';
 import PayosButton from '../payments/PayosButton';
 import PayosQrPanel from '../payments/PayosQrPanel';
 import { DownloadPdfButton } from './invoiceComponents';
@@ -79,7 +79,7 @@ export default function MyInvoiceDetailPage() {
                       <span className="block">{it.description}</span>
                       <span className="block text-[12px] text-r-muted">
                         {FEE_CATEGORIES[it.feeCategory]?.label}
-                        {it.quantity !== 1 && ` · ${it.quantity} × ${formatMoney(it.unitPrice)}`}
+                        {it.quantity !== 1 && ` · ${formatQuantity(it.quantity)} × ${formatMoney(it.unitPrice)}`}
                       </span>
                     </span>
                     <span className="shrink-0">{formatMoney(it.amount)}</span>

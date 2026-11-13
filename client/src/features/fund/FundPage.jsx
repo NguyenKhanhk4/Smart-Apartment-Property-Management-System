@@ -40,8 +40,10 @@ export default function FundPage() {
   const navigate = useNavigate();
   const { hasRole } = useAuth();
   const isAccountant = hasRole('ACCOUNTANT');
+  const isManager = hasRole('MANAGER');
   const [tab, setTab] = useState(hasRole('BOARD') ? 'proposals' : 'transactions');
   const [modal, setModal] = useState(null);
+  const [prefill, setPrefill] = useState(null); // UC10: dữ liệu điền sẵn từ phiếu bảo trì
   const [txType, setTxType] = useState();
   const [txPage, setTxPage] = useState(1);
   const [status, setStatus] = useState(hasRole('BOARD') ? ['PENDING'] : []);
@@ -52,8 +54,11 @@ export default function FundPage() {
   const txs = useApi(() => fundApi.transactions(txParams), [txParams]);
   const pParams = useMemo(() => ({ page: pPage, limit: 15, status: status.length ? status.join(',') : undefined }), [pPage, status]);
   const proposals = useApi(() => fundApi.proposals(pParams), [pParams]);
+  const awaiting = useApi(() => fundApi.awaitingWorkOrders(), [], { enabled: isAccountant || isManager });
   const o = overview.data;
   const reloadAll = () => Promise.all([overview.reload(), txs.reload(), proposals.reload()]);
+  const openProposal = (data = null) => (setPrefill(data), setModal('proposal'));
+  const [startFromWorkOrder, loadingPrefill] = useAction(async (id) => openProposal((await fundApi.workOrderPrefill(id)).data));
 
   return (
     <>
@@ -72,7 +77,7 @@ export default function FundPage() {
             {isAccountant && (
               <>
               <Button onClick={() => setModal('income')}>Ghi nhận thu quỹ</Button>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setModal('proposal')}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => openProposal()}>
                   Lập đề xuất chi
                 </Button>
               </>
@@ -98,6 +103,40 @@ export default function FundPage() {
             </Flex>
           )}
         </Card>
+
+        {awaiting.data?.length > 0 && (
+          <Card
+            title={`Sửa chữa thiết bị chờ lập đề xuất chi (${awaiting.data.length})`}
+            extra={<Typography.Text type="secondary">Trưởng BQL đã duyệt sửa bằng Quỹ bảo trì</Typography.Text>}
+          >
+            <Table
+              rowKey="_id"
+              size="small"
+              pagination={false}
+              scroll={{ x: 'max-content' }}
+              dataSource={awaiting.data}
+              columns={[
+                { title: 'Thiết bị', render: (_, r) => (r.assetId ? `${r.assetId.code} – ${r.assetId.name}` : r.title) },
+                { title: 'Hư hỏng', render: (_, r) => r.repair?.faultDesc },
+                { title: 'Chi phí dự kiến', width: 140, align: 'right', render: (_, r) => formatMoney(r.repair?.estimatedCost) },
+                { title: 'Duyệt ngày', width: 110, render: (_, r) => formatDate(r.repair?.decidedAt) },
+                ...(isAccountant
+                  ? [
+                      {
+                        title: '',
+                        width: 130,
+                        render: (_, r) => (
+                          <Button size="small" type="primary" loading={loadingPrefill} onClick={() => startFromWorkOrder(r._id).catch(() => {})}>
+                            Lập đề xuất
+                          </Button>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </Card>
+        )}
 
         <Card>
           <Tabs
@@ -209,6 +248,7 @@ export default function FundPage() {
       <ProposalModal
         open={modal === 'proposal'}
         available={o?.available}
+        prefill={prefill}
         onClose={() => setModal(null)}
         onDone={(res) => navigate(`/app/fund/proposals/${res.data._id}`)}
       />
@@ -246,16 +286,39 @@ function IncomeModal({ open, onClose, onDone }) {
   );
 }
 
-function ProposalModal({ open, available, onClose, onDone }) {
+/** prefill (UC10): { workOrderId, title, description, amount, estimatedCost, attachmentUrls } từ báo cáo hư hỏng của phiếu bảo trì */
+function ProposalModal({ open, available, prefill, onClose, onDone }) {
   const [form] = Form.useForm();
   const planType = Form.useWatch('planType', form);
   const [run, loading] = useAction(({ images, ...v }) => fundApi.createProposal(v, toFiles(images)), {
     onDone: async (res) => (onClose(), await onDone?.(res)),
   });
+  const initialValues = prefill
+    ? {
+        planType: 'UNSCHEDULED', // hư hỏng phát hiện khi kiểm tra định kỳ — thường là bảo trì đột xuất
+        largeRepair: true,
+        workOrderId: prefill.workOrderId,
+        title: prefill.title,
+        description: prefill.description,
+        amount: prefill.amount,
+      }
+    : { planType: 'ANNUAL_PLAN', largeRepair: false };
   return (
     <Modal open={open} title="Lập đề xuất chi quỹ" okText="Gửi Ban quản trị" width="min(640px, 94vw)" confirmLoading={loading} onCancel={onClose} onOk={() => form.submit()} destroyOnHidden>
       {available != null && <Alert className="mb-3" type="info" showIcon message={`Còn có thể đề xuất chi tối đa ${formatMoney(available)}`} />}
-      <Form form={form} layout="vertical" preserve={false} initialValues={{ planType: 'ANNUAL_PLAN', largeRepair: false }} onFinish={(v) => run(v).catch(() => {})}>
+      {prefill && (
+        <Alert
+          className="mb-3"
+          type="success"
+          showIcon
+          message="Lập từ phiếu bảo trì được Trưởng BQL duyệt sửa bằng Quỹ"
+          description={`Chi phí kỹ thuật viên dự kiến ${formatMoney(prefill.estimatedCost)}, sửa theo báo giá thật nếu khác. ${prefill.attachmentUrls?.length ? `${prefill.attachmentUrls.length} ảnh hư hỏng tự đính kèm. ` : ''}Ban quản trị duyệt thì phiếu chuyển Đang sửa; nghiệm thu làm trên phiếu bảo trì.`}
+        />
+      )}
+      <Form form={form} layout="vertical" preserve={false} initialValues={initialValues} onFinish={(v) => run(v).catch(() => {})}>
+        <Form.Item name="workOrderId" hidden>
+          <Input />
+        </Form.Item>
         <Form.Item name="title" label="Hạng mục" rules={[{ required: true, min: 3, message: 'Nhập hạng mục' }]}>
           <Input maxLength={200} placeholder="Vd: Thay cáp thang máy Block A" />
         </Form.Item>
@@ -278,7 +341,7 @@ function ProposalModal({ open, available, onClose, onDone }) {
           </Form.Item>
         )}
         <Form.Item name="largeRepair" valuePropName="checked" extra="Sửa chữa lớn (thiết bị, kết cấu): Kế toán chỉ lập phiếu chi sau khi Trưởng BQL nghiệm thu.">
-          <Checkbox>Sửa chữa lớn</Checkbox>
+          <Checkbox disabled={Boolean(prefill)}>Sửa chữa lớn</Checkbox>
         </Form.Item>
         <EvidencePhotosField name="images" label="Ảnh báo giá" required={false} />
       </Form>

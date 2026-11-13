@@ -25,6 +25,9 @@ const fundProposalSchema = new Schema(
     planRef: { type: String, default: null }, // tên / số kế hoạch năm, nghị quyết Hội nghị nhà chung cư
     urgentReason: { type: String, default: null }, // bắt buộc khi bảo trì đột xuất
     largeRepair: { type: Boolean, default: false }, // sửa chữa lớn (Mô đun 10): chỉ lập phiếu chi sau khi Trưởng BQL nghiệm thu (M10-3)
+    // UC10: đề xuất lập từ phiếu bảo trì Trưởng BQL duyệt sửa bằng Quỹ. Kết quả biểu quyết / rút báo lại phiếu (onFundDecision);
+    // nghiệm thu làm trên phiếu bảo trì (Q12), không làm ở đây.
+    workOrderId: { type: ObjectId, ref: 'WorkOrder', default: null },
     attachmentUrls: [String], // ảnh báo giá
     proposedBy: { type: ObjectId, ref: 'User', required: true }, // Kế toán (dữ liệu cũ: Trưởng BQL)
     votes: [voteSchema],
@@ -44,5 +47,10 @@ const fundProposalSchema = new Schema(
 );
 
 fundProposalSchema.index({ status: 1, createdAt: -1 });
+// Mỗi phiếu bảo trì chỉ 1 đề xuất đang chờ biểu quyết (chặn cả 2 request song song)
+fundProposalSchema.index(
+  { workOrderId: 1 },
+  { unique: true, partialFilterExpression: { status: 'PENDING', workOrderId: { $type: 'objectId' } } },
+);
 
 export const FundProposal = model('FundProposal', fundProposalSchema);

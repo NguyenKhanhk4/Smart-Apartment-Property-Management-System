@@ -18,6 +18,7 @@ import { runTrackedJob } from '../../jobs/cronRunner.js';
 import { Apartment, Booking, Invoice, InvoiceAdjustment, RepairQuote, User } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { mapLimit } from '../../utils/concurrency.js';
 import { escapeRegex } from '../../utils/pagination.js';
 import { periodLabel, vnPeriod } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
@@ -25,6 +26,8 @@ import { getPriceTable } from '../feeTypes/feeTypes.queries.js';
 import { buildInvoiceDraft } from './invoices.builder.js';
 
 const MAX_ATTEMPTS = 3;
+// Số căn tính phí cùng lúc (xem trước / tính cả kỳ): mỗi căn ~6 truy vấn → giữ dưới pool mặc định 100 kết nối của driver
+const APARTMENT_CONCURRENCY = 10;
 export const isDuplicateOn = (err, field) => err?.code === 11000 && Boolean(err.keyPattern?.[field] ?? err.keyValue?.[field]);
 const ACTIVE_INVOICE = { $ne: INVOICE_STATUS.CANCELLED };
 
@@ -143,10 +146,11 @@ export async function generateForPeriod({ period = vnPeriod(), user = null } = {
   );
 
   const summary = { period, totalApartments: apartments.length, created: 0, existing: 0, notHandedOver: 0, noPayer: 0, totalAmount: 0, failed: [] };
-  for (const apt of apartments) {
+  // Mỗi căn độc lập (mã thông báo, phí tiện ích / sửa chữa / điều chỉnh đều theo căn) → chạy song song có giới hạn
+  await mapLimit(apartments, APARTMENT_CONCURRENCY, async (apt) => {
     if (billed.has(String(apt._id))) {
       summary.existing += 1;
-      continue;
+      return;
     }
     try {
       const r = await generateOne(apt, period, prices, { generatedBy });
@@ -161,7 +165,7 @@ export async function generateForPeriod({ period = vnPeriod(), user = null } = {
       console.error(`[invoice] tính phí ${apt.buildingId.code}-${apt.code} kỳ ${period} lỗi:`, err);
       summary.failed.push({ apartmentId: apt._id, apartment: `${apt.buildingId.code}-${apt.code}`, message: err.message });
     }
-  }
+  });
 
   if (summary.created || summary.failed.length) {
     await auditGenerated(user, { period, generatedBy, created: summary.created, totalAmount: summary.totalAmount, failed: summary.failed.length });
@@ -233,8 +237,7 @@ export async function previewInvoices({ period, apartmentId, buildingId }) {
   if (apartmentId && !apartments.length) throw ApiError.notFound('Không tìm thấy căn hộ');
   const existing = new Map(existingInvoices.map((i) => [String(i.apartmentId), i]));
 
-  const rows = [];
-  for (const apt of apartments) {
+  const rows = await mapLimit(apartments, APARTMENT_CONCURRENCY, async (apt) => {
     const base = {
       apartmentId: apt._id,
       apartmentCode: apt.code,
@@ -244,13 +247,10 @@ export async function previewInvoices({ period, apartmentId, buildingId }) {
       area: apt.area,
     };
     const inv = existing.get(String(apt._id));
-    if (inv) {
-      rows.push({ ...base, status: PREVIEW_STATUS.EXISTS, code: inv.code, invoice: inv, items: [], totalAmount: inv.totalAmount });
-      continue;
-    }
+    if (inv) return { ...base, status: PREVIEW_STATUS.EXISTS, code: inv.code, invoice: inv, items: [], totalAmount: inv.totalAmount };
     try {
       const d = await buildInvoiceDraft(apt, period, prices);
-      rows.push({
+      return {
         ...base,
         status: d.excludedByHandover
           ? PREVIEW_STATUS.NOT_HANDED_OVER
@@ -259,11 +259,11 @@ export async function previewInvoices({ period, apartmentId, buildingId }) {
         payer: d.payer && { userId: d.payer.userId, source: d.payer.source },
         items: d.items,
         totalAmount: d.totalAmount,
-      });
+      };
     } catch (err) {
-      rows.push({ ...base, status: PREVIEW_STATUS.ERROR, error: err.message, items: [], totalAmount: 0 });
+      return { ...base, status: PREVIEW_STATUS.ERROR, error: err.message, items: [], totalAmount: 0 };
     }
-  }
+  });
 
   // Tên người nộp phí: 1 truy vấn cho cả danh sách
   const payerIds = [...new Set(rows.map((r) => r.payer?.userId).filter(Boolean).map(String))];

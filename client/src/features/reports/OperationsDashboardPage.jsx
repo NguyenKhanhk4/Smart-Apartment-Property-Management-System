@@ -35,7 +35,7 @@ export default function OperationsDashboardPage() {
   const occ = rs?.occupancy;
   const label = (rows) => (rows ?? []).map((m) => ({ ...m, label: periodLabel(m.period) }));
   const incMonths = label(inc?.byMonth);
-  const mtMonths = label(mt?.byMonth).map((m) => ({ ...m, late: m.done - m.onTime, notDone: m.scheduled - m.done }));
+  const mtMonths = label(mt?.byMonth).map((m) => ({ ...m, late: m.inspected - m.onTime, notInspected: m.scheduled - m.inspected }));
   const rsMonths = label(rs?.byMonth);
   const axis = { stroke: theme.grid, tick: { fill: theme.axis, fontSize: 12 } };
   const bar = { isAnimationActive: false };
@@ -196,8 +196,8 @@ export default function OperationsDashboardPage() {
       {/* ===== Bảo trì thiết bị ===== */}
       <Typography.Text strong>Bảo trì thiết bị định kỳ</Typography.Text>
       <StatRow>
-        <StatCard title="Phiếu bảo trì lên lịch" value={mt?.scheduled} hint={`${mt?.done ?? 0} đã hoàn thành`} />
-        <StatCard title="Hoàn thành đúng hạn" value={pct(mt?.onTimeRate)} hint={`${mt?.onTime ?? 0} đúng hạn · ${mt?.late ?? 0} trễ`} />
+        <StatCard title="Phiếu bảo trì lên lịch" value={mt?.scheduled} hint={`${mt?.inspected ?? 0} đã kiểm tra · ${mt?.done ?? 0} đã hoàn thành`} />
+        <StatCard title="Kiểm tra đúng hạn" value={pct(mt?.onTimeRate)} hint={`${mt?.onTime ?? 0} đúng hạn · ${mt?.late ?? 0} trễ`} />
         <StatCard
           title="Quá hạn chưa làm"
           value={mt?.overdueOpen}
@@ -213,9 +213,9 @@ export default function OperationsDashboardPage() {
             <YAxis allowDecimals={false} width={36} {...axis} axisLine={false} tickLine={false} />
             <Tooltip cursor={cursor} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="onTime" name="Xong đúng hạn" stackId="m" fill={theme.status.good} stroke={theme.surface} strokeWidth={2} {...bar} />
-            <Bar dataKey="late" name="Xong trễ hạn" stackId="m" fill={theme.status.critical} stroke={theme.surface} strokeWidth={2} {...bar} />
-            <Bar dataKey="notDone" name="Chưa xong" stackId="m" fill={theme.status.warning} stroke={theme.surface} strokeWidth={2} radius={[4, 4, 0, 0]} {...bar} />
+            <Bar dataKey="onTime" name="Kiểm tra đúng hạn" stackId="m" fill={theme.status.good} stroke={theme.surface} strokeWidth={2} {...bar} />
+            <Bar dataKey="late" name="Kiểm tra trễ hạn" stackId="m" fill={theme.status.critical} stroke={theme.surface} strokeWidth={2} {...bar} />
+            <Bar dataKey="notInspected" name="Chưa kiểm tra" stackId="m" fill={theme.status.warning} stroke={theme.surface} strokeWidth={2} radius={[4, 4, 0, 0]} {...bar} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>

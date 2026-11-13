@@ -7,7 +7,7 @@ import { validate } from '../../middlewares/validate.js';
 import { uploadImages } from '../../services/upload.service.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
-import { csvEnum, idParams } from '../../utils/validators.js';
+import { csvEnum, idParams, objectId } from '../../utils/validators.js';
 import * as service from './fund.service.js';
 
 // Mô đun 4 — Quỹ bảo trì 2% (UC33 Kế toán, UC34 Ban quản trị). Form có ảnh gửi multipart, field ảnh `images`.
@@ -34,6 +34,7 @@ const proposalBody = Joi.object({
   planRef: Joi.string().trim().max(200).allow('', null),
   urgentReason: Joi.string().trim().max(1000).allow('', null),
   largeRepair: Joi.boolean().default(false),
+  workOrderId: objectId().allow('', null), // UC10: lập từ phiếu bảo trì duyệt sửa bằng Quỹ
 });
 
 const expenseBody = Joi.object({
@@ -91,13 +92,35 @@ router.post('/incomes', authorize('ACCOUNTANT'), uploadImages('images', 5), vali
 
 /**
  * @openapi
+ * /fund/work-orders:
+ *   get:
+ *     tags: [Quỹ bảo trì]
+ *     summary: UC10 — phiếu bảo trì Trưởng BQL đã duyệt sửa bằng Quỹ, đang chờ Kế toán lập đề xuất chi (chưa có đề xuất đang chờ biểu quyết)
+ */
+router.get('/work-orders', authorize('ACCOUNTANT', 'MANAGER'), async (_req, res) => ok(res, await service.listAwaitingWorkOrders()));
+
+/**
+ * @openapi
+ * /fund/work-orders/{id}/prefill:
+ *   get:
+ *     tags: [Quỹ bảo trì]
+ *     summary: Dữ liệu điền sẵn form đề xuất chi từ báo cáo hư hỏng (hạng mục, mô tả, chi phí dự kiến, ảnh). Phiếu không chờ đề xuất → WORKORDER_NOT_AWAITING_FUND / WORKORDER_FUND_PENDING
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ */
+router.get('/work-orders/:id/prefill', authorize('ACCOUNTANT'), validate({ params: idParams }), async (req, res) =>
+  ok(res, await service.workOrderPrefill(req.params.id)),
+);
+
+/**
+ * @openapi
  * /fund/proposals:
  *   get:
  *     tags: [Quỹ bảo trì]
  *     summary: Danh sách đề xuất chi quỹ (lọc trạng thái CSV)
  *   post:
  *     tags: [Quỹ bảo trì]
- *     summary: Kế toán lập đề xuất chi (multipart; ảnh báo giá ở field images). Kế hoạch năm phải có planRef, đột xuất phải có urgentReason; vượt số dư còn có thể chi → FUND_INSUFFICIENT_BALANCE. Báo Ban quản trị
+ *     summary: Kế toán lập đề xuất chi (multipart; ảnh báo giá ở field images). Kế hoạch năm phải có planRef, đột xuất phải có urgentReason; vượt số dư còn có thể chi → FUND_INSUFFICIENT_BALANCE. Có workOrderId (UC10) thì phiếu phải đang chờ đề xuất, đề xuất là sửa chữa lớn và kèm ảnh hư hỏng. Báo Ban quản trị
  */
 router.get(
   '/proposals',
