@@ -174,9 +174,23 @@ const SPECIAL_NAMES = {
   },
 };
 
+// Biểu giá / thu hộ điện nước (UC05): không có trường tên, bản ghi có thể đã bị xóa → ghép từ before/after của log
+const UTILITY_NAMES = { ELECTRICITY: 'Điện', WATER: 'Nước' };
+const UTILITY_TARGETS = new Set([AUDIT_TARGETS.UTILITY_TARIFF, AUDIT_TARGETS.COLLECTION_SETTING]);
+const periodText = (p) => (typeof p === 'string' && /^\d{4}-\d{2}$/.test(p) ? `${p.slice(5, 7)}/${p.slice(0, 4)}` : null);
+function utilityName(log) {
+  if (!UTILITY_TARGETS.has(normalizeTarget(log.targetType))) return null;
+  const data = { ...(log.before ?? {}), ...(log.after ?? {}) };
+  const utility = UTILITY_NAMES[data.utility ?? log.metadata?.utility];
+  const period = periodText(data.fromPeriod ?? log.before?.fromPeriod);
+  if (!utility) return period ? `Từ ${period}` : null;
+  return period ? `${utility} · ${period}` : utility;
+}
+
 // Log không gắn ID bản ghi: lấy tên từ metadata (mã phiếu, vai trò được phân quyền...)
 const nameOf = (names, log) =>
   (log.targetId && names.get(`${normalizeTarget(log.targetType)}:${log.targetId}`))
+  ?? utilityName(log)
   ?? (typeof log.metadata?.code === 'string' ? log.metadata.code : null)
   ?? (typeof log.metadata?.roleLabel === 'string' ? `Vai trò ${log.metadata.roleLabel}` : null);
 

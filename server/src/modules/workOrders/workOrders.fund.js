@@ -36,6 +36,29 @@ export async function hasPendingFundProposal(workOrderId, session = null) {
 }
 
 /**
+ * Đề xuất chi quỹ đang chờ biểu quyết của các phiếu chờ duyệt sửa nguồn Quỹ (1 truy vấn cho cả trang).
+ * @returns {Promise<Map<string, { _id, code }>>} workOrderId → đề xuất
+ */
+export async function pendingFundProposals(workOrders) {
+  const ids = workOrders
+    .filter((w) => w.status === S.AWAITING_REPAIR_APPROVAL && w.repair?.costSource === REPAIR_COST_SOURCES.FUND)
+    .map((w) => w._id);
+  if (!ids.length) return new Map();
+  const docs = await FundProposal.find({ workOrderId: { $in: ids }, status: FUND_PROPOSAL_STATUS.PENDING })
+    .setOptions(LOOSE)
+    .select('code workOrderId')
+    .lean();
+  return new Map(docs.map((d) => [String(d.workOrderId), { _id: d._id, code: d.code }]));
+}
+
+/** Số phiếu (trong `filter`) đang có đề xuất chi quỹ chờ Ban quản trị biểu quyết */
+export async function countAwaitingVote(filter) {
+  const woIds = await FundProposal.distinct('workOrderId', { status: FUND_PROPOSAL_STATUS.PENDING, workOrderId: { $ne: null } }).setOptions(LOOSE);
+  if (!woIds.length) return 0;
+  return WorkOrder.countDocuments({ ...filter, _id: { $in: woIds } });
+}
+
+/**
  * Kế toán gọi TRƯỚC khi tạo đề xuất gắn phiếu bảo trì (cùng session nếu có): phiếu phải chờ duyệt sửa, nguồn Quỹ,
  * và chưa có đề xuất đang chờ (mỗi phiếu chỉ 1 đề xuất PENDING).
  */

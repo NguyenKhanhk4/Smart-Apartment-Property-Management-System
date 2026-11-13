@@ -4,6 +4,7 @@ import { after, afterEach, before, beforeEach, describe, it, mock } from 'node:t
 import assert from 'node:assert/strict';
 import { Asset, AuditLog, FundProposal, Notification, SystemConfig, WorkOrder } from '../../src/models/index.js';
 import * as assetsService from '../../src/modules/assets/assets.service.js';
+import * as auditLogs from '../../src/modules/auditLogs/auditLogs.service.js';
 import * as decision from '../../src/modules/workOrders/workOrders.decision.js';
 import * as fund from '../../src/modules/workOrders/workOrders.fund.js';
 import * as inspection from '../../src/modules/workOrders/workOrders.inspection.js';
@@ -64,7 +65,7 @@ describe('UC10 — duyệt sửa chữa lớn', () => {
   const reload = (wo) => WorkOrder.findById(wo._id).lean();
   const postpone = (ctx, days = 30, comment = 'Chờ ngân sách quý sau') =>
     decision.decideRepair(ctx.mUser, ctx.wo._id, { decision: 'POSTPONE', comment, reviewDate: inDays(days) });
-  const pendingProposal = (wo) => FundProposal.collection.insertOne({ workOrderId: wo._id, status: 'PENDING', title: 'Sửa thang máy', amount: 1 });
+  const pendingProposal = (wo) => FundProposal.collection.insertOne({ workOrderId: wo._id, code: 'DX-0001', status: 'PENDING', title: 'Sửa thang máy', amount: 1 });
 
   it('duyệt Quỹ: giữ Chờ duyệt sửa, ghi nguồn Quỹ, báo Kế toán và KTV; chưa có đề xuất thì Trưởng BQL đổi được quyết định', async () => {
     const ctx = await setup();
@@ -76,6 +77,11 @@ describe('UC10 — duyệt sửa chữa lớn', () => {
     assert.ok(await Notification.exists({ userId: ctx.tech._id, title: 'Sửa chữa chờ duyệt chi quỹ' }));
     const audit = await AuditLog.findOne({ action: 'WORKORDER_FUND_REQUESTED' }).lean();
     assert.equal(audit.metadata.financial, true);
+    // UC06, BR-X2: Ban quản trị thấy log xin Quỹ (tài chính), không thấy log kỹ thuật của phiếu (báo hư hỏng)
+    const board = asUser(await createUser('BOARD', { boardTitle: 'MEMBER' }));
+    const boardLogs = (await auditLogs.listAuditLogs(board, { targetType: 'work_orders' })).items.map((l) => l.action);
+    assert.ok(boardLogs.includes('WORKORDER_FUND_REQUESTED'));
+    assert.ok(!boardLogs.includes('WORKORDER_FAULT_REPORTED'));
 
     await fund.assertAwaitingFund(ctx.wo._id); // Kế toán lập được đề xuất
     const prefill = await fund.fundPrefill(ctx.wo._id);
@@ -96,6 +102,12 @@ describe('UC10 — duyệt sửa chữa lớn', () => {
     await assert.rejects(fund.assertAwaitingFund(ctx.wo._id), { errorCode: 'WORKORDER_FUND_PENDING' });
     await assert.rejects(postpone(ctx), { errorCode: 'WORKORDER_FUND_PENDING' });
     await assert.rejects(decision.decideRepair(ctx.mUser, ctx.wo._id, { decision: 'APPROVE', costSource: 'OPERATING' }), { errorCode: 'WORKORDER_FUND_PENDING' });
+    // Danh sách trả đề xuất đang chờ để client khóa nút Quyết định; menu không đếm phiếu này là việc cần làm
+    const listed = await decision.listRepairs({ tab: 'pending' });
+    assert.equal(listed.items[0].pendingFund.code, 'DX-0001');
+    assert.equal(listed.counts.awaitingVote, 1);
+    const all = await service.listWorkOrders(ctx.mUser, {});
+    assert.equal(all.items.find((w) => String(w._id) === String(ctx.wo._id)).pendingFund.code, 'DX-0001');
 
     await FundProposal.collection.updateMany({ workOrderId: ctx.wo._id }, { $set: { status: 'REJECTED' } });
     assert.equal(await fund.onFundDecision(ctx.wo._id, 'REJECTED'), true);
@@ -266,7 +278,8 @@ describe('UC10 — duyệt sửa chữa lớn', () => {
     const pending = await api('GET', '/work-orders/repairs?tab=pending', ctx.manager);
     assert.equal(pending.status, 200);
     assert.equal(pending.body.data.length, 1);
-    assert.deepEqual(pending.body.counts, { pending: 1, postponed: 0, reviewDue: 0 });
+    assert.deepEqual(pending.body.counts, { pending: 1, postponed: 0, reviewDue: 0, awaitingVote: 0 });
+    assert.equal(pending.body.data[0].pendingFund, null);
     assert.deepEqual(pending.body.settings, { reviewRepeatDays: 7, postponeMaxDays: 90 });
     assert.equal((await api('GET', '/work-orders/repairs', ctx.tech)).status, 403);
 

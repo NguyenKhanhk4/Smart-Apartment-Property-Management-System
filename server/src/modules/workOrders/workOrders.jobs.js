@@ -2,7 +2,7 @@ import {
   CONFIG_KEYS, NOTIFICATION_TYPES, ROLE_TITLES, WORK_ORDER_ACTIVE_STATUSES, WORK_ORDER_INSPECTING_STATUSES, WORK_ORDER_STATUS, WORK_ORDER_TYPES,
 } from '../../constants/enums.js';
 import { Asset, WorkOrder } from '../../models/index.js';
-import { notifyRoles } from '../../services/notification.service.js';
+import { notify, notifyRoles } from '../../services/notification.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
 import { DAY_MS, endOfVnDay, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { listShifts } from '../dutyShifts/dutyShifts.service.js';
@@ -95,8 +95,18 @@ export async function generateMaintenanceWorkOrders(now = new Date()) {
   if (createdAssets.length) {
     try {
       const shifts = await listShifts({ from: startOfVnDay(now), to: endOfVnDay(now), roleTitle: ROLE_TITLES.TECHNICIAN });
+      const names = createdAssets.map((a) => a.code ?? a.name).join(', ');
+      // MSG-E05: báo KTV có ca kỹ thuật trong ngày (job 01:00 nên báo theo ca trong ngày, không theo người đang trực lúc chạy)
+      const techIds = [...new Set(shifts.filter((s) => s.userId).map((s) => String(s.userId._id)))];
+      if (techIds.length) {
+        await notify(techIds, {
+          type: NOTIFICATION_TYPES.MAINTENANCE,
+          title: 'Có phiếu bảo trì mới trong ca',
+          content: `Có ${createdAssets.length} phiếu bảo trì định kỳ mới hôm nay (${names}). Mở Checklist ca để quét QR và kiểm tra.`,
+          link: '/app/my-work-orders',
+        });
+      }
       if (!shifts.length) {
-        const names = createdAssets.map((a) => a.code ?? a.name).join(', ');
         await notifyRoles(['MANAGER'], {
           type: NOTIFICATION_TYPES.MAINTENANCE,
           title: 'Phiếu bảo trì chưa có ca kỹ thuật',

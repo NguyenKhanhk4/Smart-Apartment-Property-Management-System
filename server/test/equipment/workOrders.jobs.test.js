@@ -145,7 +145,7 @@ describe('workOrders.jobs (UC-D02)', () => {
     assert.equal(await WorkOrder.countDocuments({ assetId: bad._id }), 0);
     assert.ok(err.mock.callCount() > 0);
     // Thông báo vẫn gửi với số work order thực tế đã tạo
-    const [note] = await Notification.find({ type: 'MAINTENANCE' }).lean();
+    const [note] = await Notification.find({ type: 'MAINTENANCE', title: 'Có tài sản đến hạn bảo trì' }).lean();
     assert.ok((note.content).includes('2 work order'));
 
     mock.restoreAll();
@@ -188,7 +188,7 @@ describe('workOrders.jobs (UC-D02)', () => {
     assert.equal((await Asset.findById(asset._id)).isActive, true);
   });
 
-  it('Manager nhận đúng 1 thông báo MAINTENANCE kèm số work order mới; KTV/Lễ tân/Cư dân không nhận; chạy lại không gửi thêm', async () => {
+  it('Manager nhận đúng 1 thông báo MAINTENANCE kèm số work order mới; KTV không có ca/Lễ tân/Cư dân không nhận; chạy lại không gửi thêm', async () => {
     const manager = await setup();
     const tech = await createTechnician();
     const recep = await createReceptionist();
@@ -197,7 +197,8 @@ describe('workOrders.jobs (UC-D02)', () => {
 
     assert.equal(await generateMaintenanceWorkOrders(), 3);
 
-    const notes = await Notification.find({ type: 'MAINTENANCE' }).lean();
+    // KTV có ca nhận MSG-E05 riêng (test MSG-E05); ở đây chỉ xét thông báo cho Trưởng BQL
+    const notes = await Notification.find({ type: 'MAINTENANCE', title: 'Có tài sản đến hạn bảo trì' }).lean();
     assert.equal(notes.length, 1);
     assert.equal(String(notes[0].userId), String(manager._id));
     assert.equal(notes[0].title, 'Có tài sản đến hạn bảo trì');
@@ -205,7 +206,7 @@ describe('workOrders.jobs (UC-D02)', () => {
     assert.equal(await Notification.countDocuments({ userId: { $in: [tech._id, recep._id, resident._id] } }), 0);
 
     assert.equal(await generateMaintenanceWorkOrders(), 0);
-    assert.equal(await Notification.countDocuments({ type: 'MAINTENANCE' }), 1);
+    assert.equal(await Notification.countDocuments({ type: 'MAINTENANCE', title: 'Có tài sản đến hạn bảo trì' }), 1);
   });
 
   it('không có tài sản đến hạn → không tạo, không thông báo', async () => {
@@ -253,6 +254,27 @@ describe('workOrders.jobs (UC-D02)', () => {
     await makeAsset();
     await generateMaintenanceWorkOrders();
     assert.equal(await Notification.countDocuments({ title: 'Phiếu bảo trì chưa có ca kỹ thuật' }), 0);
+  });
+
+  it('MSG-E05: có phiếu mới → báo mọi KTV có ca kỹ thuật trong ngày (1 lần/người); không có phiếu mới hoặc KTV không có ca thì không báo', async () => {
+    await setup();
+    const shiftTech = (await DutyShift.findOne({ roleTitle: 'TECHNICIAN' }).lean()).userId;
+    // Cùng KTV 2 ca trong ngày chỉ nhận 1 thông báo; KTV không có ca không nhận
+    await DutyShift.create({ roleTitle: 'TECHNICIAN', userId: shiftTech, startAt: new Date(startOfVnDay().getTime() + 18 * 3600e3), endAt: new Date(startOfVnDay().getTime() + 22 * 3600e3) });
+    const offTech = await createTechnician();
+    await makeAsset({ code: 'TM-E05' });
+
+    await generateMaintenanceWorkOrders();
+    const notes = await Notification.find({ title: 'Có phiếu bảo trì mới trong ca' }).lean();
+    assert.equal(notes.length, 1);
+    assert.equal(String(notes[0].userId), String(shiftTech));
+    assert.match(notes[0].content, /TM-E05/);
+    assert.equal(notes[0].link, '/app/my-work-orders');
+    assert.equal(await Notification.countDocuments({ userId: offTech._id, title: 'Có phiếu bảo trì mới trong ca' }), 0);
+
+    // Chạy lại trong ngày: không có phiếu mới → không báo thêm
+    await generateMaintenanceWorkOrders();
+    assert.equal(await Notification.countDocuments({ title: 'Có phiếu bảo trì mới trong ca' }), 1);
   });
 
   it('BR-E07, MSG-E08: cảnh báo phiếu quá hạn và thiết bị đang theo dõi hết bảo hành trong 30 ngày; không có gì thì không gửi', async () => {

@@ -24,5 +24,16 @@ router.put('/', authenticate, authorize('MANAGER'), validate({ body: updateBody 
   ok(res, result.setting, result.message, 200, { effectiveFrom: result.effectiveFrom });
 });
 
+router.delete(
+  '/:utility/upcoming',
+  authenticate,
+  authorize('MANAGER'),
+  validate({ params: Joi.object({ utility: Joi.string().valid('ELECTRICITY', 'WATER').required() }) }),
+  async (req, res) => {
+    const result = await service.cancelUpcomingSetting(req.user, req.validated.params.utility);
+    ok(res, null, result.message);
+  },
+);
+
 export default router;
 

@@ -14,6 +14,7 @@ import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { DAY_MS, fmtDateVn } from '../../utils/time.js';
+import { pendingFundProposals } from './workOrders.fund.js';
 
 
 const TECHNICIAN = { role: ROLES.STAFF, roleTitle: ROLE_TITLES.TECHNICIAN, isActive: true };
@@ -63,7 +64,9 @@ export async function listWorkOrders(user, query) {
   const result = await paginate(WorkOrder, filter, query, {
     populate: [ASSET_POPULATE, { path: 'assignedTo', select: 'fullName phone' }],
   });
-  result.items = result.items.map((wo) => withOverdue(wo, now));
+  // UC10: phiếu chờ duyệt sửa nguồn Quỹ đang có đề xuất chờ biểu quyết → client khóa nút Quyết định
+  const pendingFunds = await pendingFundProposals(result.items);
+  result.items = result.items.map((wo) => ({ ...withOverdue(wo, now), pendingFund: pendingFunds.get(String(wo._id)) ?? null }));
   return result;
 }
 
