@@ -5,6 +5,9 @@ import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { startOfVnDay, toVnYmd, vnDayStart } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { Apartment, Building, Contract, Resident, Vehicle } from '../../models/index.js';
+import { linkedRecords, touchInventory } from '../buildings/inventory.service.js';
+import { apartmentAreaView } from './managementArea.js';
+import { currentOccupants, effectiveOccupancy, findLegacyDeclarations, occupancyResidentSort } from '../residents/residentOccupancy.js';
 
 function validateProperties(building, { blockId, grossArea, netArea }) {
   if (blockId && !building?.blocks?.id(blockId)) {
@@ -46,9 +49,10 @@ export async function listApartments(query = {}) {
     filter.code = new RegExp(escapeRegex(query.q.trim()), 'i');
   }
 
-  return paginate(Apartment, filter, query, {
-    populate: { path: 'buildingId', select: 'code name totalFloors blocks' },
+  const result = await paginate(Apartment, filter, query, {
+    populate: { path: 'buildingId', select: 'code name totalFloors blocks floorInventory inventoryConfirmedAt' },
   });
+  return { ...result, items: result.items.map(apartmentAreaView) };
 }
 
 /**
@@ -56,25 +60,29 @@ export async function listApartments(query = {}) {
  */
 export async function getApartmentById(id) {
   const apartment = await Apartment.findById(id)
-    .populate('buildingId', 'code name address totalFloors blocks')
+    .populate('buildingId', 'code name address totalFloors blocks floorInventory inventoryConfirmedAt')
     .lean();
 
   if (!apartment) {
     throw ApiError.notFound('Căn hộ không tồn tại');
   }
 
-  const [activeContracts, activeResidentsCount, approvedVehiclesCount] = await Promise.all([
+  const [activeContracts, residents, approvedVehiclesCount] = await Promise.all([
     Contract.find({ apartmentId: id, status: CONTRACT_STATUS.ACTIVE })
       .populate('ownerId', 'fullName email phone activatedAt isActive')
       .populate('ownerAccountIssuedBy', 'fullName')
       .populate('tenantId', 'fullName email phone')
       .lean(),
-    Resident.countDocuments({ apartmentId: id, isActive: true }),
+    Resident.find({ apartmentId: id, isActive: true,
+      $or: [{ moveInDate: { $lte: new Date() } }, { moveInDate: null }] }).sort(occupancyResidentSort).lean(),
     Vehicle.countDocuments({ apartmentId: id, status: VEHICLE_STATUS.APPROVED }),
   ]);
 
+  const legacyDeclarations = await findLegacyDeclarations(residents);
+  const activeResidentsCount = currentOccupants(effectiveOccupancy(apartment), residents, legacyDeclarations).length;
   return {
-    ...apartment,
+    ...apartmentAreaView(apartment),
+    identityLocked: (await linkedRecords('Apartment', id)).length > 0,
     building: apartment.buildingId,
     activeContracts,
     activeResidentsCount,
@@ -86,14 +94,22 @@ export async function getApartmentById(id) {
  * Tạo căn hộ mới (Trưởng BQL) — BR-A4
  */
 export async function createApartment(data, managerUser, ip) {
+  return withTransaction(async (session) => {
   const { buildingId, code, floor, blockId, type, grossArea, netArea, technicalShaft } = data;
   const area = data.area ?? netArea;
   const handoverDate = parseHandoverDate(data.handoverDate);
-  const building = await Building.findById(buildingId);
+  const building = await Building.findById(buildingId).session(session);
   if (!building) {
     throw ApiError.notFound('Tòa nhà không tồn tại');
   }
 
+  if (building.inventoryConfirmedAt) {
+    throw new ApiError('STATUS_CONFLICT', 'Bổ sung căn hộ qua Đối chiếu danh mục để cập nhật số căn theo hồ sơ');
+  }
+  if (!data.sourceReference?.trim() || !data.reason?.trim()) {
+    throw ApiError.badRequest('Cần lý do và tài liệu đối chiếu để bổ sung căn hộ');
+  }
+  await touchInventory(building, session);
   validateProperties(building, data);
   const normalizedCode = code.trim().toUpperCase();
 
@@ -116,7 +132,7 @@ export async function createApartment(data, managerUser, ip) {
   }
 
   // Giữ trạng thái hợp đồng độc lập với trạng thái vận hành trên sơ đồ.
-  const apartment = await Apartment.create({
+  const [apartment] = await Apartment.create([{
     buildingId,
     code: normalizedCode,
     floor,
@@ -129,7 +145,7 @@ export async function createApartment(data, managerUser, ip) {
     handoverDate,
     occupancyStatus: handoverDate ? APARTMENT_OCCUPANCY.VACANT : APARTMENT_OCCUPANCY.NOT_HANDED_OVER,
     status: APARTMENT_STATUS.VACANT,
-  });
+  }], { session });
 
   await logAudit({
     action: AUDIT_ACTIONS.APARTMENT_CHANGED,
@@ -138,6 +154,7 @@ export async function createApartment(data, managerUser, ip) {
     targetId: apartment._id,
     metadata: {
       action: 'CREATE',
+      reason: data.reason, sourceReference: data.sourceReference,
       code: apartment.code,
       buildingId,
       floor,
@@ -147,9 +164,10 @@ export async function createApartment(data, managerUser, ip) {
       occupancyStatus: apartment.occupancyStatus,
     },
     ip,
-  });
+  }, { session });
 
   return apartment;
+  });
 }
 
 /**
@@ -166,6 +184,11 @@ export async function updateApartment(id, data, managerUser, ip) {
     throw ApiError.notFound('Căn hộ không tồn tại');
   }
 
+  for (const field of ['code', 'floor', 'area', 'netArea', 'grossArea', 'type', 'blockId']) {
+    if (data[field] !== undefined && String(data[field]) !== String(apartment[field])) {
+      throw new ApiError('STATUS_CONFLICT', 'Dùng Điều chỉnh thông tin căn hộ để ghi lý do, căn cứ và kỳ áp dụng');
+    }
+  }
   const building = await Building.findById(apartment.buildingId);
   const changes = {};
   validateProperties(building, {
@@ -313,37 +336,28 @@ export function confirmMoveIn(id, receptionist, ip) {
 /**
  * Xóa căn hộ (Trưởng BQL) — BR-A4
  */
-export async function deleteApartment(id, managerUser, ip) {
-  const apartment = await Apartment.findById(id);
-  if (!apartment) {
-    throw ApiError.notFound('Căn hộ không tồn tại');
-  }
-
-  // BR-A4: Xóa căn đã có contract/resident/vehicle → VALIDATION_ERROR
-  const [contractCount, residentCount, vehicleCount] = await Promise.all([
-    Contract.countDocuments({ apartmentId: id }),
-    Resident.countDocuments({ apartmentId: id }),
-    Vehicle.countDocuments({ apartmentId: id }),
-  ]);
-
-  if (contractCount > 0 || residentCount > 0 || vehicleCount > 0) {
-    throw new ApiError('STATUS_CONFLICT', 'Không thể xóa căn hộ đã có hợp đồng, cư dân hoặc phương tiện liên kết');
-  }
-
-  await Apartment.findByIdAndDelete(id);
-
-  await logAudit({
-    action: AUDIT_ACTIONS.APARTMENT_CHANGED,
-    user: managerUser,
-    targetType: AUDIT_TARGETS.APARTMENT,
-    targetId: apartment._id,
-    metadata: {
-      action: 'DELETE',
-      code: apartment.code,
-      buildingId: apartment.buildingId,
-    },
-    ip,
+export async function deleteApartment(id, managerUser, ip, correction = {}) {
+  return withTransaction(async (session) => {
+    const apartment = await Apartment.findById(id).session(session);
+    if (!apartment) throw ApiError.notFound('Căn hộ không tồn tại');
+    const building = await Building.findById(apartment.buildingId).session(session);
+    if (building) await touchInventory(building, session);
+    if ((await linkedRecords('Apartment', id, session)).length) {
+      throw new ApiError('STATUS_CONFLICT', 'Không thể xóa căn hộ đã có hồ sơ sở hữu, cư trú, thẻ, xe, tài chính hoặc dữ liệu liên quan');
+    }
+    if (!correction.reason?.trim() || !correction.sourceReference?.trim()) {
+      throw ApiError.badRequest('Cần lý do nhập nhầm và tài liệu đối chiếu trước khi xóa');
+    }
+    if (building?.inventoryConfirmedAt) {
+      const floors = building.floorInventory.map((row) => ({ floor: row.floor,
+        expectedCount: row.expectedCount - (row.floor === apartment.floor ? 1 : 0) })).filter((row) => row.expectedCount > 0);
+      await Building.updateOne({ _id: building._id }, { $set: { floorInventory: floors } }, { session });
+    }
+    await Apartment.deleteOne({ _id: id }, { session });
+    await logAudit({ action: AUDIT_ACTIONS.APARTMENT_CHANGED, user: managerUser,
+      targetType: AUDIT_TARGETS.APARTMENT, targetId: id, ip,
+      metadata: { action: 'DELETE', code: apartment.code, buildingId: apartment.buildingId,
+        reason: correction.reason, sourceReference: correction.sourceReference } }, { session });
+    return { message: 'Đã xóa căn hộ thành công' };
   });
-
-  return { message: 'Đã xóa căn hộ thành công' };
 }

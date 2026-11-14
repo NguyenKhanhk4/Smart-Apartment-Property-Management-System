@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { Alert, Button, Form, Input, Steps } from 'antd';
-import { ArrowRightOutlined, HomeOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons';
+import { ArrowRightOutlined, HomeOutlined, LockOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons';
 import { authApi } from '../../api/auth.api';
 import { PHONE_RULES } from '../../utils/phone';
 import PersonalDataTerms from './PersonalDataTerms';
+import VerificationCodeField from './VerificationCodeField';
 
 const RESEND_SECONDS = 60;
 const icon = (Icon) => <Icon className="text-ink-3" />;
@@ -50,6 +51,7 @@ export default function ActivationPage() {
   const sendOtp = async (values) => {
     const res = await run(() => authApi.startActivation(values));
     if (!res) return;
+    if (step === 0) setCredentials(null);
     setIdentity(values);
     setResendIn(RESEND_SECONDS);
     setStep(1);
@@ -118,6 +120,7 @@ export default function ActivationPage() {
             onClick={() => {
               setError(null);
               setIdentity(null);
+              setCredentials(null);
               setStep(1);
             }}
           >
@@ -130,7 +133,7 @@ export default function ActivationPage() {
         <Form
           layout="vertical"
           requiredMark={false}
-          initialValues={{ phone: identity?.phone, ...credentials }}
+          initialValues={{ phone: identity?.phone ?? prefillPhone, ...credentials }}
           onFinish={(values) => {
             setError(null);
             setCredentials(values);
@@ -143,9 +146,7 @@ export default function ActivationPage() {
           <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
             <Input size="large" prefix={icon(PhoneOutlined)} disabled={Boolean(identity)} />
           </Form.Item>
-          <Form.Item name="code" label="Mã xác minh" rules={[{ required: true, message: 'Vui lòng nhập mã xác minh' }]}>
-            <Input size="large" prefix={icon(SafetyOutlined)} placeholder="6 số trong email hoặc mã in tại quầy" autoComplete="one-time-code" />
-          </Form.Item>
+          <VerificationCodeField desk={!identity} />
           <Form.Item name="password" label="Mật khẩu" rules={PASSWORD_RULES}>
             <Input.Password size="large" prefix={icon(LockOutlined)} autoComplete="new-password" />
           </Form.Item>

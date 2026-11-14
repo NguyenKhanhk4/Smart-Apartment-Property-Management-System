@@ -15,6 +15,7 @@ const STATUS = {
 };
 const PURPOSE = { ACTIVATION: 'kích hoạt tài khoản', PASSWORD_RESET: 'đặt lại mật khẩu' };
 const formatCode = (code) => code.replace(/(.{4})(?=.)/g, '$1-');
+const deskCodePage = (purpose) => purpose === 'PASSWORD_RESET' ? 'Quên mật khẩu' : 'Kích hoạt tài khoản';
 
 /** Mở cửa sổ in chỉ gồm phiếu mã; dựng bằng DOM để tên người dùng không bị hiểu là HTML */
 function printSlip(issued) {
@@ -34,7 +35,7 @@ function printSlip(issued) {
   line('SĐT: ' + issued.phone);
   line(formatCode(issued.code), 'font-size: 28px; letter-spacing: 4px; font-weight: 700; margin: 24px 0;');
   line('Có hiệu lực đến ' + formatDateTime(issued.expiresAt) + '. Mã chỉ dùng 1 lần.');
-  line('Vào trang Kích hoạt tài khoản, chọn "Tôi đã có mã in tại quầy", nhập SĐT, mã này và mật khẩu mới.');
+  line(`Vào trang ${deskCodePage(issued.purpose)}, chọn "Tôi đã có mã in tại quầy", nhập SĐT, mã này và mật khẩu mới.`);
   win.focus();
   win.print();
 }
@@ -45,15 +46,9 @@ export default function IssueActivationCodePage() {
   const [checked, setChecked] = useState(false);
   const [issued, setIssued] = useState(null);
   const [phoneError, setPhoneError] = useState(null);
+  const [looking, setLooking] = useState(false);
   const [changingPhone, setChangingPhone] = useState(false);
 
-  const [lookup, looking] = useAction((phone) => activationCodeApi.lookup(phone), {
-    success: () => null, // kết quả hiện ngay trên trang, không cần thông báo
-    onDone: (res) => {
-      setAccount(res.data);
-      setChecked(false);
-    },
-  });
   const [issue, issuing] = useAction(() => activationCodeApi.issue(account.userId), {
     success: () => null, // kết quả hiện ngay trên trang, không cần thông báo
     onDone: (res) => {
@@ -74,15 +69,32 @@ export default function IssueActivationCodePage() {
     },
   });
 
-  const search = (value) => {
+  const clearLookup = () => {
+    setAccount(null);
+    setChecked(false);
+    setIssued(null);
+    setPhoneError(null);
+  };
+
+  const search = async (value) => {
+    clearLookup();
     const phone = value.trim();
     if (!isValidPhone(phone)) {
-      setPhoneError('Số điện thoại không hợp lệ');
+      setPhoneError('Số điện thoại không hợp lệ.');
       return;
     }
-    setPhoneError(null);
-    setAccount(null);
-    lookup(phone).catch(() => {});
+
+    setLooking(true);
+    try {
+      const { data } = await activationCodeApi.lookup(phone);
+      setAccount(data);
+    } catch (error) {
+      setPhoneError(error.errorCode === 'NOT_FOUND'
+        ? 'Chưa có tài khoản hoặc mã kích hoạt cho số điện thoại này.'
+        : error.message);
+    } finally {
+      setLooking(false);
+    }
   };
 
   return (
@@ -97,18 +109,21 @@ export default function IssueActivationCodePage() {
           size="large"
           placeholder="Số điện thoại của người cần cấp mã"
           enterButton="Tra cứu"
+          inputMode="tel"
           loading={looking}
+          disabled={looking || issuing}
+          onChange={clearLookup}
           onSearch={search}
           status={phoneError ? 'error' : undefined}
         />
-        {phoneError && <Typography.Text type="danger">{phoneError}</Typography.Text>}
+        {phoneError && <Typography.Text type="danger" role="alert">{phoneError}</Typography.Text>}
 
         {account && (
           <div className="mt-6">
             <Descriptions column={1} size="small" bordered>
               <Descriptions.Item label="Họ tên">{account.fullName}</Descriptions.Item>
               <Descriptions.Item label="Số điện thoại">{account.phone}</Descriptions.Item>
-              <Descriptions.Item label="Vai trò">{roleLabelOf(account)}</Descriptions.Item>
+              <Descriptions.Item label="Vai trò">{roleLabelOf(account)?.label ?? account.role}</Descriptions.Item>
               <Descriptions.Item label="Trạng thái">
                 <Tag color={STATUS[account.status].color}>{STATUS[account.status].label}</Tag>
               </Descriptions.Item>
@@ -195,6 +210,7 @@ export default function IssueActivationCodePage() {
             <Typography.Title level={2} copyable={{ text: issued.code }} className="tracking-widest">
               {formatCode(issued.code)}
             </Typography.Title>
+            <p>Trên màn đăng nhập, chọn <b>{deskCodePage(issued.purpose)}</b> → <b>Tôi đã có mã in tại quầy</b>.</p>
             <Typography.Text type="secondary">
               Mã chỉ hiện một lần. Đóng hộp thoại này thì phải cấp mã mới.
             </Typography.Text>
