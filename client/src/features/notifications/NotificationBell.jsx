@@ -30,6 +30,14 @@ export default function NotificationBell({ area, variant }) {
   const canSeeTicketAlerts = hasRole('MANAGER', 'STAFF:TECHNICIAN');
   const isTechnician = hasRole('STAFF:TECHNICIAN');
   const [ticketAlerts, setTicketAlerts] = useState([]);
+  // Bấm "Xem phiếu" → điều hướng sang trang chi tiết, không giữ modal che màn hình đó nữa (phiếu vẫn
+  // active ở BE, chưa claim/ack); còn sự cố khẩn mới (chưa xem) vẫn phải chặn như cũ.
+  const [viewedTicketIds, setViewedTicketIds] = useState(() => new Set());
+  const viewTicket = (id) => {
+    navigate(`/app/tickets/${id}`);
+    setViewedTicketIds((prev) => new Set(prev).add(id));
+  };
+  const pendingTicketAlerts = ticketAlerts.filter((t) => !viewedTicketIds.has(t._id));
   // KTV: nhận = claim thật (gán phiếu cho mình), không chỉ tắt chuông — tránh nhầm với "Đã tiếp nhận" (chỉ ack cảnh báo)
   const claimTicket = async (id) => {
     setReceiving(id);
@@ -86,8 +94,8 @@ export default function NotificationBell({ area, variant }) {
 
   const ticketModal = (
     <Modal
-      open={ticketAlerts.length > 0}
-      title={`KHẨN CẤP · ${ticketAlerts.length} sự cố chưa có người nhận`}
+      open={pendingTicketAlerts.length > 0}
+      title={`KHẨN CẤP · ${pendingTicketAlerts.length} sự cố chưa có người nhận`}
       closable={false}
       maskClosable={false}
       footer={null}
@@ -95,7 +103,7 @@ export default function NotificationBell({ area, variant }) {
       zIndex={1200}
     >
       <div className="flex flex-col gap-3">
-        {ticketAlerts.map((t) => (
+        {pendingTicketAlerts.map((t) => (
           <Alert
             key={t._id}
             type="error"
@@ -104,7 +112,7 @@ export default function NotificationBell({ area, variant }) {
             description={`${t.title}${t.location ? ` — ${t.location}` : ''}${t.apartmentId?.code ? ` (căn ${t.apartmentId.code})` : ''}`}
             action={
               <span className="flex flex-col gap-2">
-                <Button onClick={() => navigate(`/app/tickets/${t._id}`)}>Xem phiếu</Button>
+                <Button onClick={() => viewTicket(t._id)}>Xem phiếu</Button>
                 {t.canAcknowledge && isTechnician && (
                   <Button type="primary" danger loading={receiving === t._id} onClick={() => claimTicket(t._id)}>
                     Nhận xử lý
