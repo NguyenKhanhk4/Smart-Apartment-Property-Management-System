@@ -57,8 +57,8 @@ export default function ForgotPasswordPage() {
 
   return (
     <>
-      <h2 className="m-0 text-lg font-semibold tracking-tight text-ink">Quên mật khẩu</h2>
-      <p className="mt-1 mb-6 text-[13px] text-ink-2">
+      <h2 id="auth-form-title" className="auth-form-title">Quên mật khẩu</h2>
+      <p className="auth-form-subtitle">
         {desk
           ? 'Nhập số điện thoại và mã in tại quầy để đặt mật khẩu mới.'
           : phone
