@@ -6,6 +6,7 @@ import { completeBookings } from '../../src/modules/bookings/bookings.jobs.js';
 import { markOverdueInvoices } from '../../src/modules/invoices/invoices.jobs.js';
 import { runTrackedJob } from '../../src/jobs/cronRunner.js';
 import { JOBS } from '../../src/jobs/index.js';
+import { purgeGuestLogs, remindParcels } from '../../src/modules/guests/guests.service.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { createHousehold } from '../helpers/fixtures.js';
 import { createAmenity, createBooking, createInvoice } from '../helpers/fixtures.moduleBDE.js';
@@ -59,6 +60,18 @@ test('jobs/index: đăng ký BOOKING_COMPLETE và INVOICE_OVERDUE', () => {
   const names = JOBS.map((j) => j.name);
   assert.ok(names.includes('BOOKING_COMPLETE'));
   assert.ok(names.includes('INVOICE_OVERDUE'));
+});
+
+test('UC51: lịch nhắc bưu kiện 09:00, tách khỏi job cảnh báo mỗi phút', () => {
+  assert.deepEqual(JOBS.find((job) => job.name === 'PARCEL_REMIND'), {
+    name: 'PARCEL_REMIND', schedule: '0 9 * * *', handler: remindParcels,
+  });
+});
+
+test('UC50: lịch dọn sổ khách hết hạn lúc 02:00', () => {
+  assert.deepEqual(JOBS.find((job) => job.name === 'GUEST_PURGE'), {
+    name: 'GUEST_PURGE', schedule: '0 2 * * *', handler: purgeGuestLogs,
+  });
 });
 
 test('cronRunner: lỗi một phần vẫn giữ số bản ghi đã xử lý, trạng thái FAILED kèm lỗi', async () => {

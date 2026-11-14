@@ -86,10 +86,10 @@ export default function ResidentGuestsPage() {
                 </Flex>
                 <Flex vertical align="end" gap={4}>
                   <EnumTag map={GUEST_STATUS} value={g.status} />
-                  {g.isWalkIn && g.residentConfirmation !== 'PENDING' && <Typography.Text type="secondary">
+                  {g.isWalkIn && ['CONFIRMED', 'DECLINED'].includes(g.residentConfirmation) && <Typography.Text type="secondary">
                     {g.residentConfirmation === 'CONFIRMED' ? 'Bạn cùng căn đã xác nhận' : 'Căn hộ đã từ chối'}
                   </Typography.Text>}
-                  {g.isWalkIn && g.status !== 'CHECKED_OUT' && g.residentConfirmation === 'PENDING' && <Flex gap={4} wrap>
+                  {g.isWalkIn && g.status === 'EXPECTED' && g.residentConfirmation === 'PENDING' && <Flex gap={4} wrap>
                     <Button size="small" loading={confirming} onClick={() => confirm(g._id, true).catch(() => {})}>Xác nhận có khách</Button>
                     <Button size="small" danger loading={confirming} onClick={() => confirm(g._id, false).catch(() => {})}>Không xác nhận</Button>
                   </Flex>}

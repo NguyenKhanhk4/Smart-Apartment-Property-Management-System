@@ -69,8 +69,9 @@ function GuestOperations() {
   const [scanTour, setScanTour] = useState(null);
   const [qrPoint, setQrPoint] = useState(null);
   const canvasRef = useRef(null);
-  const drawingRef = useRef(false);
+  const drawingRef = useRef(null);
   const signedRef = useRef(false);
+  const [signatureError, setSignatureError] = useState('');
   const incidentRequestRef = useRef(null);
   const [opsPage, setOpsPage] = useState(1);
   const [parcelStatus, setParcelStatus] = useState();
@@ -85,7 +86,8 @@ function GuestOperations() {
   const clearSignature = () => {
     canvasRef.current?.getContext('2d').clearRect(0, 0, 420, 180);
     signedRef.current = false;
-    drawingRef.current = false;
+    drawingRef.current = null;
+    setSignatureError('');
   };
   const openOperation = (kind, id) => {
     opsForm.resetFields();
@@ -101,7 +103,10 @@ function GuestOperations() {
     switch (operation.kind) {
       case 'parcel': return guestApi.receiveParcel(body, files);
       case 'handover':
-        if (!signedRef.current) throw new Error('Người nhận cần ký tên trên màn hình');
+        if (!signedRef.current) {
+          setSignatureError('Vui lòng ký trước khi xác nhận');
+          throw new Error('Người nhận cần ký tên trên màn hình');
+        }
         return guestApi.handover(operation.id, { recipientId: values.recipientId, signature: canvasRef.current.toDataURL('image/png') });
       case 'checkpoint': return guestApi.checkpoint(values);
       case 'tour': return guestApi.tour({ ...values, startAt: values.startAt.toISOString(), endAt: values.endAt.toISOString() });
@@ -164,6 +169,7 @@ function GuestOperations() {
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [walkInOpen, setWalkInOpen] = useState(false);
+  const [guestToCheckIn, setGuestToCheckIn] = useState(null);
 
   const params = useMemo(
     () => ({
@@ -177,10 +183,12 @@ function GuestOperations() {
     [date, status, q, page],
   );
   const { data = [], pagination, loading, reload, error } = useApi(() => guestApi.list(params), [params], { enabled: tab === 'guests' });
-  const [checkIn, checkingIn] = useAction((id) => guestApi.checkIn(id), { success: 'Đã ghi nhận khách đến', onDone: reload });
+  const [checkIn, checkingIn] = useAction(({ id, body }) => guestApi.checkIn(id, body), {
+    success: 'Đã ghi nhận khách đến', onDone: () => { setWalkInOpen(false); reload(); },
+  });
   const [checkOut, checkingOut] = useAction((id) => guestApi.checkOut(id), { success: 'Đã ghi nhận khách rời', onDone: reload });
   const [walkIn, walking] = useAction((v) => guestApi.walkIn(v), {
-    success: 'Đã gửi yêu cầu xác nhận đến cư dân',
+    success: 'Đã ghi nhận khách vào',
     onDone: () => (setWalkInOpen(false), reload()),
   });
 
@@ -213,7 +221,13 @@ function GuestOperations() {
             width: 110,
             render: (_, r) =>
               r.status === 'EXPECTED' ? (
-                <Button loading={checkingIn} disabled={checkingOut || (r.isWalkIn && r.residentConfirmation !== 'CONFIRMED')} type="primary" icon={<LoginOutlined />} onClick={() => checkIn(r._id).catch(() => {})}>
+                <Button disabled={checkingOut} type="primary" icon={<LoginOutlined />} onClick={() => {
+                  form.resetFields();
+                  form.setFieldsValue({ guestName: r.guestName, guestPhone: r.guestPhone, numberOfGuests: r.numberOfGuests,
+                    purpose: r.purpose, apartmentId: r.apartmentId?._id, idType: r.idType || 'CCCD', idNumber: '' });
+                  setGuestToCheckIn(r);
+                  setWalkInOpen(true);
+                }}>
                   Vào
                 </Button>
               ) : r.status === 'CHECKED_IN' ? (
@@ -253,7 +267,9 @@ function GuestOperations() {
       title="Sổ khách ra vào"
       extra={
         isGate && (
-          <Button type="primary" icon={<UserAddOutlined />} onClick={() => setWalkInOpen(true)}>
+          <Button type="primary" icon={<UserAddOutlined />} onClick={() => {
+            setGuestToCheckIn(null); form.resetFields(); setWalkInOpen(true);
+          }}>
             Khách vãng lai
           </Button>
         )
@@ -277,7 +293,7 @@ function GuestOperations() {
         <Button loading={loading} onClick={reload}>Làm mới</Button>
       </Flex>
       {error && <Alert type="error" title={error.message} action={<Button onClick={reload}>Thử lại</Button>} />}
-      <Typography.Paragraph type="secondary">{date ? `Khách dự kiến đến hoặc đã vào ngày ${date.format('DD/MM/YYYY')}.` : 'Đang xem tất cả ngày, bao gồm khách đã đăng ký trước.'} Khách vãng lai cần cư dân đồng ý trước khi vào.</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">{date ? `Khách dự kiến đến hoặc đã vào ngày ${date.format('DD/MM/YYYY')}.` : 'Đang xem tất cả ngày, bao gồm khách đã đăng ký trước.'} Bảo vệ đang trực đối chiếu giấy tờ và ghi nhận giờ vào tại sảnh.</Typography.Paragraph>
       <Table
         rowKey="_id"
         loading={loading}
@@ -290,35 +306,47 @@ function GuestOperations() {
       />
 
       <Modal
-        title="Ghi nhận khách vãng lai"
+        title={guestToCheckIn ? 'Đối chiếu và ghi nhận khách vào' : 'Ghi nhận khách vãng lai'}
         open={walkInOpen}
-        onCancel={() => setWalkInOpen(false)}
+        onCancel={() => !(walking || checkingIn) && setWalkInOpen(false)}
         onOk={() => form.submit()}
-        okText="Gửi cư dân xác nhận"
-        confirmLoading={walking}
-        destroyOnHidden
+        okText="Ghi nhận khách vào"
+        confirmLoading={walking || checkingIn}
+        mask={{ closable: !(walking || checkingIn) }}
+        forceRender
       >
-        <Form form={form} layout="vertical" preserve={false} initialValues={{ numberOfGuests: 1 }} onFinish={(v) => walkIn(v).catch(() => {})}>
+        <Form form={form} layout="vertical" preserve={false} initialValues={{ numberOfGuests: 1, idType: 'CCCD' }} onFinish={(v) => {
+          const request = guestToCheckIn
+            ? checkIn({ id: guestToCheckIn._id, body: { idType: v.idType, idNumber: v.idNumber } })
+            : walkIn(v);
+          request.catch(() => {});
+        }}>
           <Form.Item name="guestName" label="Tên khách" rules={[{ required: true, min: 2, message: 'Bắt buộc nhập tên khách' }]}>
-            <Input maxLength={100} />
+            <Input maxLength={100} disabled={Boolean(guestToCheckIn)} />
           </Form.Item>
           <Form.Item name="apartmentId" label="Căn hộ đến thăm" rules={[{ required: true, message: 'Bắt buộc chọn căn hộ' }]}>
-            <ApartmentSelect />
+            <ApartmentSelect disabled={Boolean(guestToCheckIn)} />
           </Form.Item>
           <Flex gap={12}>
             <Form.Item name="guestPhone" label="Số điện thoại" style={{ flex: 1 }}>
-              <Input maxLength={15} />
-            </Form.Item>
-            <Form.Item name="idNumber" label="4 số cuối CCCD" style={{ flex: 1 }} rules={[{ pattern: /^\d{4}$/, message: 'Chỉ nhập đúng 4 chữ số cuối' }]}>
-              <Input maxLength={4} inputMode="numeric" />
+              <Input maxLength={15} disabled={Boolean(guestToCheckIn)} />
             </Form.Item>
             <Form.Item name="numberOfGuests" label="Số người" style={{ width: 100 }}>
-              <InputNumber min={1} max={50} style={{ width: '100%' }} />
+              <InputNumber min={1} max={50} disabled={Boolean(guestToCheckIn)} style={{ width: '100%' }} />
             </Form.Item>
           </Flex>
-          <Alert type="info" title="Thông tin được dùng để ghi nhận khách đến thăm và bảo đảm an ninh; không thu toàn bộ số CCCD." style={{ marginBottom: 12 }} />
+          <Form.Item name="idType" label="Loại giấy tờ" rules={[{ required: true, message: 'Chọn loại giấy tờ' }]}>
+            <Select options={[{ value: 'CCCD', label: 'CCCD / Căn cước' }, { value: 'CMND', label: 'CMND' }, { value: 'PASSPORT', label: 'Hộ chiếu' }, { value: 'OTHER', label: 'Giấy tờ khác' }]} />
+          </Form.Item>
+          <Form.Item name="idNumber" label="Số giấy tờ đã đối chiếu" rules={[
+            { required: true, message: 'Nhập số giấy tờ' },
+            { pattern: /^[A-Za-z0-9-]{6,30}$/, message: 'Nhập từ 6 đến 30 chữ cái, chữ số hoặc dấu gạch ngang' },
+          ]}>
+            <Input maxLength={30} autoComplete="off" />
+          </Form.Item>
+          <Alert type="info" title="Số giấy tờ được mã hóa khi lưu và che khi hiển thị trong sổ khách." style={{ marginBottom: 12 }} />
           <Form.Item name="purpose" label="Mục đích">
-            <Input maxLength={200} />
+            <Input maxLength={200} disabled={Boolean(guestToCheckIn)} />
           </Form.Item>
         </Form>
       </Modal>
@@ -341,12 +369,31 @@ function GuestOperations() {
           {recipients.error && <Alert type="error" title={recipients.error.message} action={<Button onClick={recipients.reload}>Thử lại</Button>} />}
           {!recipients.loading && !recipients.error && !recipients.data?.length && <Alert type="warning" title="Căn hộ chưa có thành viên đủ điều kiện nhận. Vui lòng liên hệ BQL, không chọn người của căn khác." />}
           <Form.Item name="recipientId" label="Thành viên nhận hàng" rules={[{ required: true }]}><Select onChange={clearSignature} loading={recipients.loading} options={(recipients.data || []).map((p) => ({ value: p._id, label: p.fullName }))} /></Form.Item>
-          <Typography.Paragraph>Người nhận ký tay vào vùng dưới đây:</Typography.Paragraph>
-          <canvas ref={canvasRef} width={420} height={180} aria-label="Vùng ký nhận bưu kiện" style={{ width: '100%', height: 180, border: '1px solid #d9d9d9', touchAction: 'none' }}
-            onPointerDown={(e) => { drawingRef.current = true; e.currentTarget.setPointerCapture(e.pointerId); const r = e.currentTarget.getBoundingClientRect(); const ctx = e.currentTarget.getContext('2d'); ctx.beginPath(); ctx.moveTo((e.clientX - r.left) * 420 / r.width, e.clientY - r.top); }}
-            onPointerMove={(e) => { if (!drawingRef.current) return; const r = e.currentTarget.getBoundingClientRect(); const ctx = e.currentTarget.getContext('2d'); ctx.lineWidth = 2; ctx.lineTo((e.clientX - r.left) * 420 / r.width, e.clientY - r.top); ctx.stroke(); signedRef.current = true; }}
-            onPointerUp={() => { drawingRef.current = false; }} onPointerCancel={() => { drawingRef.current = false; }} />
-          <Button onClick={clearSignature}>Ký lại</Button>
+          <Form.Item label="Chữ ký người nhận" validateStatus={signatureError ? 'error' : undefined} help={signatureError || undefined}>
+            <canvas ref={canvasRef} width={420} height={180} aria-label="Vùng ký nhận bưu kiện" style={{ width: '100%', height: 180, border: '1px solid #d9d9d9', touchAction: 'none' }}
+              onPointerDown={(e) => {
+                if (performing || drawingRef.current !== null) return;
+                drawingRef.current = e.pointerId;
+                e.currentTarget.setPointerCapture(e.pointerId);
+                const bounds = e.currentTarget.getBoundingClientRect();
+                const context = e.currentTarget.getContext('2d');
+                context.beginPath();
+                context.moveTo((e.clientX - bounds.left) * 420 / bounds.width, (e.clientY - bounds.top) * 180 / bounds.height);
+              }}
+              onPointerMove={(e) => {
+                if (drawingRef.current !== e.pointerId) return;
+                const bounds = e.currentTarget.getBoundingClientRect();
+                const context = e.currentTarget.getContext('2d');
+                context.lineWidth = 2;
+                context.lineCap = 'round';
+                context.lineTo((e.clientX - bounds.left) * 420 / bounds.width, (e.clientY - bounds.top) * 180 / bounds.height);
+                context.stroke();
+                signedRef.current = true;
+                setSignatureError('');
+              }}
+              onLostPointerCapture={() => { drawingRef.current = null; }} />
+            <Button disabled={performing} onClick={clearSignature}>Ký lại</Button>
+          </Form.Item>
         </>}
         {['checkpoint', 'tour'].includes(operation?.kind) && <Form.Item name="name" label="Tên" rules={[{ required: true }]}><Input maxLength={100} /></Form.Item>}
         {operation?.kind === 'checkpoint' && <Form.Item name="location" label="Vị trí" rules={[{ required: true }]}><Input maxLength={200} /></Form.Item>}
@@ -376,6 +423,8 @@ function GuestOperations() {
         { key: 'home', label: 'Căn hộ', children: detail.record.apartmentId?.code },
         { key: 'people', label: 'Số người', children: detail.record.numberOfGuests },
         { key: 'phone', label: 'Điện thoại', children: detail.record.guestPhone || '—' },
+        { key: 'idType', label: 'Loại giấy tờ', children: detail.record.idType || 'Chưa ghi nhận' },
+        { key: 'idNumber', label: 'Số giấy tờ (che)', children: detail.record.idNumber || 'Chưa ghi nhận' },
         { key: 'purpose', label: 'Mục đích', children: detail.record.purpose || '—' },
         { key: 'expected', label: 'Dự kiến', children: formatDateTime(detail.record.expectedTime) },
         { key: 'in', label: 'Vào / Rời', children: `${formatDateTime(detail.record.checkInTime)} / ${formatDateTime(detail.record.checkOutTime)}` },
