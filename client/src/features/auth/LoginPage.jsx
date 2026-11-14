@@ -158,10 +158,10 @@ function DevQuickLogin({ portal, onEnter }) {
   const accounts = all.filter((u) => belongsToPortal(u, portal)); // chỉ tài khoản của cổng đang đứng
   const [busy, setBusy] = useState(null);
 
-  const pick = async (email) => {
-    setBusy(email);
+  const pick = async (id) => {
+    setBusy(id);
     try {
-      const { data } = await authApi.devLogin(email);
+      const { data } = await authApi.devLogin(id);
       onEnter(data);
     } finally {
       setBusy(null);
@@ -180,12 +180,13 @@ function DevQuickLogin({ portal, onEnter }) {
             key={u._id}
             type="button"
             disabled={Boolean(busy)}
-            onClick={() => pick(u.email)}
+            onClick={() => pick(u._id)}
             className="cursor-pointer rounded-lg border border-line bg-white p-2 text-left text-xs transition-colors hover:border-navy hover:bg-navy-bg disabled:opacity-60"
           >
             <div className="truncate font-medium text-ink">{u.fullName}</div>
             <div className="truncate text-[11px] text-ink-3">
-              {roleLabelOf(u)?.label} · {u.email}
+              {roleLabelOf(u)?.label} · {u.email ?? u.phone}
+              {!u.activatedAt && ' · chưa kích hoạt'}
             </div>
           </button>
         ))}
