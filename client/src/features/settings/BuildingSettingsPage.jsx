@@ -1011,6 +1011,10 @@ function DeadlinesTab() {
   );
 }
 
+// Tạm ẩn tab Thu hộ: module tính phí chưa dùng công tắc thu hộ / định mức nước.
+// Đổi thành true để hiện lại (code tab và API vẫn giữ nguyên).
+const SHOW_COLLECTION_TAB = false;
+
 // ==========================================
 // TRANG CHÍNH: THÔNG TIN TÒA NHÀ & BIỂU PHÍ
 // ==========================================
@@ -1044,6 +1048,7 @@ export default function BuildingSettingsPage() {
         </span>
       ),
       children: <CollectionTab />,
+      hidden: !SHOW_COLLECTION_TAB,
     },
     {
       key: 'deadlines',
@@ -1054,13 +1059,13 @@ export default function BuildingSettingsPage() {
       ),
       children: <DeadlinesTab />,
     },
-  ];
+  ].filter((tab) => !tab.hidden);
 
   return (
     <>
       <PageHeader
         title="Thông tin tòa nhà & Biểu phí"
-        subtitle="Hồ sơ pháp lý, tài khoản thanh toán, biểu phí dịch vụ, công tắc thu hộ và thời hạn hệ thống"
+        subtitle="Hồ sơ pháp lý, tài khoản thanh toán, biểu phí dịch vụ và thời hạn hệ thống"
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Tòa nhà & biểu phí' }]}
       />
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} size="large" />
