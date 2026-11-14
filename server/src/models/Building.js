@@ -1,4 +1,4 @@
-import { Schema, model, schemaOptions } from './_shared.js';
+import { ObjectId, Schema, model, schemaOptions } from './_shared.js';
 
 const blockSchema = new Schema({
   code: { type: String, required: true, trim: true, uppercase: true },
@@ -13,6 +13,12 @@ const buildingSchema = new Schema(
     address: String,
     blocks: { type: [blockSchema], default: undefined },
     totalFloors: { type: Number, min: 1 },
+    // Không có confirmedAt: dữ liệu cũ cần đối chiếu, vẫn giữ liên kết và nghiệp vụ đang chạy.
+    inventorySource: { type: String, trim: true, maxlength: 500 },
+    floorInventory: { type: [{ floor: Number, expectedCount: Number, _id: false }], default: undefined },
+    inventoryConfirmedAt: Date,
+    inventoryConfirmedBy: { type: ObjectId, ref: 'User' },
+    inventoryRevision: { type: Number, default: 0 },
   },
   schemaOptions('buildings'),
 );

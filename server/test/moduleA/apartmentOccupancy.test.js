@@ -36,6 +36,7 @@ test('UC13: tạo block, bàn giao, đổi trạng thái và xem sơ đồ theo 
   const properties = {
     buildingId: String(building._id), blockId, floor: 2, code: 'A-201',
     type: 'RESIDENTIAL', grossArea: 75, netArea: 68, technicalShaft: 'Hành lang',
+    sourceReference: 'MB-A-201', reason: 'Bổ sung theo hồ sơ tòa cũ',
   };
   const otherBuilding = await createBuilding({ totalFloors: 3 });
   const foreignBlock = await app.request('POST', '/apartments', {
@@ -84,7 +85,7 @@ test('UC13: căn cũ thiếu ngày bàn giao giữ dữ liệu gốc khi cập n
   const building = await createBuilding({ totalFloors: 3 });
   const legacy = await createApartment(building, { floor: 2, area: 70 });
   const result = await app.request('PUT', `/apartments/${legacy._id}`, {
-    user: manager, body: { grossArea: 75, netArea: 68, handoverDate: null },
+    user: manager, body: { technicalShaft: 'Ghi chú đối chiếu căn cũ', handoverDate: null },
   });
   assert.equal(result.status, 200, JSON.stringify(result.body));
   assert.equal(result.body.data.area, 70);

@@ -2,6 +2,8 @@ import { AUDIT_ACTIONS, AUDIT_TARGETS } from '../../constants/enums.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { Apartment, Building } from '../../models/index.js';
+import { createInventory, linkedRecords, touchInventory } from './inventory.service.js';
+import { withTransaction } from '../../utils/transaction.js';
 
 /**
  * Danh sách toàn bộ tòa nhà kèm số lượng căn hộ mỗi tòa (UC-A05)
@@ -86,65 +88,31 @@ export async function saveBlock(buildingId, blockId, { code, name }, managerUser
 /**
  * Tạo tòa nhà mới (Trưởng BQL) — BR-A4
  */
-export async function createBuilding({ code, name, address, totalFloors }, managerUser, ip) {
-  const normalizedCode = code.trim().toUpperCase();
-  const normalizedName = name.trim();
-
-  // Kiểm tra trùng mã hoặc tên tòa
-  const [existingCode, existingName] = await Promise.all([
-    Building.findOne({ code: normalizedCode }),
-    Building.findOne({ name: normalizedName }),
-  ]);
-
-  if (existingCode) {
-    throw new ApiError('DUPLICATE_VALUE', 'Mã tòa nhà đã tồn tại');
-  }
-  if (existingName) {
-    throw new ApiError('DUPLICATE_VALUE', 'Tên tòa nhà đã tồn tại');
-  }
-
-  const building = await Building.create({
-    code: normalizedCode,
-    name: normalizedName,
-    address: address?.trim() || '',
-    totalFloors,
-  });
-
-  await logAudit({
-    action: AUDIT_ACTIONS.BUILDING_CHANGED,
-    user: managerUser,
-    targetType: AUDIT_TARGETS.BUILDING,
-    targetId: building._id,
-    metadata: {
-      action: 'CREATE',
-      code: building.code,
-      name: building.name,
-      totalFloors: building.totalFloors,
-    },
-    ip,
-  });
-
-  return building;
-}
+export const createBuilding = createInventory;
 
 /**
  * Cập nhật thông tin tòa nhà (Trưởng BQL) — BR-A4
  */
 export async function updateBuilding(id, data, managerUser, ip) {
-  const building = await Building.findById(id);
+  if (!data.reason?.trim() || !data.sourceReference?.trim()) {
+    throw ApiError.badRequest('Cần lý do và tài liệu đối chiếu khi cập nhật tòa nhà');
+  }
+  return withTransaction(async (session) => {
+  const building = await Building.findById(id).session(session);
   if (!building) {
     throw ApiError.notFound('Tòa nhà không tồn tại');
   }
 
+  await touchInventory(building, session);
   const changes = {};
 
   // Mã tòa: không được đổi khi tòa đã có căn hộ
   if (data.code !== undefined) {
     const normalizedCode = data.code.trim().toUpperCase();
     if (normalizedCode !== building.code) {
-      const aptCount = await Apartment.countDocuments({ buildingId: id });
-      if (aptCount > 0) {
-        throw new ApiError('STATUS_CONFLICT', 'Không thể đổi mã tòa khi tòa đã có căn hộ');
+      const links = await linkedRecords('Building', id, session);
+      if (links.length > 0) {
+        throw new ApiError('STATUS_CONFLICT', 'Không thể đổi mã tòa đã có dữ liệu liên quan');
       }
 
       const existingCode = await Building.findOne({ code: normalizedCode, _id: { $ne: id } });
@@ -180,6 +148,9 @@ export async function updateBuilding(id, data, managerUser, ip) {
 
   // Tổng số tầng: không được giảm xuống dưới tầng cao nhất đang có căn hộ
   if (data.totalFloors !== undefined && data.totalFloors !== building.totalFloors) {
+    if (building.inventoryConfirmedAt) {
+      throw new ApiError('STATUS_CONFLICT', 'Hãy điều chỉnh số tầng trong bước đối chiếu danh mục');
+    }
     const maxFloorApt = await Apartment.findOne({ buildingId: id })
       .sort({ floor: -1 })
       .select('floor')
@@ -194,7 +165,7 @@ export async function updateBuilding(id, data, managerUser, ip) {
     building.totalFloors = data.totalFloors;
   }
 
-  await building.save();
+  await building.save({ session });
 
   if (Object.keys(changes).length > 0) {
     await logAudit({
@@ -202,43 +173,29 @@ export async function updateBuilding(id, data, managerUser, ip) {
       user: managerUser,
       targetType: AUDIT_TARGETS.BUILDING,
       targetId: building._id,
-      metadata: { action: 'UPDATE', changes },
+      metadata: { action: 'UPDATE', changes, reason: data.reason, sourceReference: data.sourceReference },
       ip,
-    });
+    }, { session });
   }
 
   return building;
+  });
 }
 
 /**
  * Xóa tòa nhà (Trưởng BQL) — BR-A4
  */
 export async function deleteBuilding(id, managerUser, ip) {
-  const building = await Building.findById(id);
-  if (!building) {
-    throw ApiError.notFound('Tòa nhà không tồn tại');
-  }
-
-  // BR-A4: Không xóa tòa khi còn căn hộ
-  const aptCount = await Apartment.countDocuments({ buildingId: id });
-  if (aptCount > 0) {
-    throw ApiError.badRequest('Không thể xóa tòa nhà khi vẫn còn căn hộ');
-  }
-
-  await Building.findByIdAndDelete(id);
-
-  await logAudit({
-    action: AUDIT_ACTIONS.BUILDING_CHANGED,
-    user: managerUser,
-    targetType: AUDIT_TARGETS.BUILDING,
-    targetId: building._id,
-    metadata: {
-      action: 'DELETE',
-      code: building.code,
-      name: building.name,
-    },
-    ip,
+  return withTransaction(async (session) => {
+    const building = await Building.findById(id).session(session);
+    if (!building) throw ApiError.notFound('Tòa nhà không tồn tại');
+    await touchInventory(building, session);
+    const links = await linkedRecords('Building', id, session);
+    if (links.length) throw new ApiError('STATUS_CONFLICT', 'Không thể xóa tòa nhà đã có căn hộ hoặc dữ liệu liên quan');
+    await Building.deleteOne({ _id: id }, { session });
+    await logAudit({ action: AUDIT_ACTIONS.BUILDING_CHANGED, user: managerUser,
+      targetType: AUDIT_TARGETS.BUILDING, targetId: id,
+      metadata: { action: 'DELETE', code: building.code, name: building.name }, ip }, { session });
+    return { message: 'Đã xóa tòa nhà thành công' };
   });
-
-  return { message: 'Đã xóa tòa nhà thành công' };
 }

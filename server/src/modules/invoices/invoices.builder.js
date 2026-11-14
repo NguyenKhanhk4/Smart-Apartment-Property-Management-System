@@ -17,6 +17,7 @@ import { Booking, Invoice, InvoiceAdjustment, RepairQuote } from '../../models/i
 import { getPayer } from '../contracts/contracts.queries.js';
 import { getPriceTable } from '../feeTypes/feeTypes.queries.js';
 import { getBillableVehicles } from '../vehicles/vehicles.queries.js';
+import { managementAreaAt } from '../apartments/managementArea.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { DAY_MS, fmtDateVn, periodEnd, periodLabel, periodStart, shiftPeriod, startOfVnDay } from '../../utils/time.js';
 
@@ -45,19 +46,19 @@ const item = (feeCategory, feeCode, description, quantity, unitPrice, refId = nu
 });
 
 /** Dòng phí theo căn: mọi mức giá không phải gửi xe (PER_M2 theo diện tích, PER_APARTMENT cố định) — BR-F4 */
-function apartmentItems(apartment, prices, daysInPeriod, billableDays) {
+function apartmentItems(apartment, prices, daysInPeriod, billableDays, managementArea) {
   const items = [];
   for (const fee of prices.values()) {
     if (fee.feeCategory === FEE_CATEGORIES.MANAGEMENT) {
       if (!apartment.handoverDate || fee.code !== `MANAGEMENT_${apartment.type}`) continue;
-      if (!(apartment.netArea > 0)) {
-        throw ApiError.field('netArea', 'Cần diện tích thông thủy để tính phí quản lý');
+      if (!(managementArea > 0)) {
+        throw ApiError.field('netArea', 'Cần diện tích tính phí quản lý');
       }
       items.push(item(
         fee.feeCategory,
         fee.code,
-        `${fee.name} (${apartment.netArea} m² × ${billableDays}/${daysInPeriod} ngày)`,
-        apartment.netArea * billableDays / daysInPeriod,
+        `${fee.name} (${managementArea} m² × ${billableDays}/${daysInPeriod} ngày)`,
+        managementArea * billableDays / daysInPeriod,
         fee.unitPrice,
       ));
     } else if (fee.calcMethod === FEE_CALC_METHODS.PER_M2) {
@@ -316,7 +317,7 @@ export async function buildInvoiceDraft(apartment, period, prices, { invoiceId =
     parkingCorrections(apartment, period, prices),
   ]);
   const items = [
-    ...apartmentItems(apartment, prices, (end - start) / DAY_MS, (end - billFrom) / DAY_MS),
+    ...apartmentItems(apartment, prices, (end - start) / DAY_MS, (end - billFrom) / DAY_MS, managementAreaAt(apartment, start)),
     ...parking,
     ...parkingFix,
     ...charges.items,

@@ -27,6 +27,9 @@ export const buildingsApi = {
   update: (id, body) => http.put(`/buildings/${id}`, body),
   delete: (id) => http.delete(`/buildings/${id}`),
   floorPlan: (id, params) => http.get(`/buildings/${id}/floor-plan`, { params }),
+  inventory: (id) => http.get(`/buildings/${id}/inventory`),
+  confirmInventory: (id, body) => http.post(`/buildings/${id}/inventory/confirm`, body),
+  inventoryHistory: (id) => http.get(`/buildings/${id}/inventory/history`),
 };
 
 export const apartmentsApi = {
@@ -34,7 +37,8 @@ export const apartmentsApi = {
   getById: (id) => http.get(`/apartments/${id}`),
   create: (body) => http.post('/apartments', body),
   update: (id, body) => http.put(`/apartments/${id}`, body),
-  delete: (id) => http.delete(`/apartments/${id}`),
+  delete: (id, body) => http.delete(`/apartments/${id}`, { data: body }),
+  correctCatalog: (id, body) => http.patch(`/apartments/${id}/catalog`, body),
   setOccupancy: (id, body) => http.patch(`/apartments/${id}/occupancy-status`, body),
   confirmMoveIn: (id) => http.patch(`/apartments/${id}/confirm-move-in`),
   issueOwnerAccount: (id, body) => http.post(`/apartments/${id}/owner-account`, body),
