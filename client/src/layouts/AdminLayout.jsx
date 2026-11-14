@@ -17,6 +17,7 @@ import SlidingIndicator from '../motion/SlidingIndicator';
 import PageTransition from '../motion/PageTransition';
 import { springConfig } from '../motion/presets';
 import { activeMenuKey } from './activeMenu';
+import { useMenuBadges } from './menuBadges';
 
 const WIDE = 248;
 const WIDE_RECEPTION = 260;
@@ -36,7 +37,9 @@ function useGroupedMenu() {
 function SidebarNav({ collapsed, onNavigate }) {
   const { pathname } = useLocation();
   const groups = useGroupedMenu();
-  const activeKey = activeMenuKey(pathname, groups.flatMap((g) => g.items));
+  const allItems = groups.flatMap((g) => g.items);
+  const activeKey = activeMenuKey(pathname, allItems);
+  const badges = useMenuBadges(new Set(allItems.map((i) => i.key)));
 
   return (
     <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-4" aria-label="Menu chính">
@@ -49,6 +52,8 @@ function SidebarNav({ collapsed, onNavigate }) {
           )}
           {items.map((item) => {
             const active = activeKey === item.key;
+            const badge = badges[item.key];
+            const count = badge?.count ?? 0;
             const link = (
               <Link
                 key={item.key}
@@ -68,7 +73,15 @@ function SidebarNav({ collapsed, onNavigate }) {
                       {createElement(item.icon)}
                     </span>
                   )}
-                  {!collapsed && <span className="truncate">{item.label}</span>}
+                  {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
+                  {count > 0 && (
+                    <span
+                      className={`${collapsed ? 'absolute top-0.5 right-1 min-w-4 h-4 px-1 text-[10px]' : 'min-w-5 h-5 px-1.5 text-[11px]'} rounded-full bg-gold text-[#1A2440] font-bold flex items-center justify-center`}
+                      aria-label={`${count} việc đang chờ`}
+                    >
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
                 </span>
                 {active && (
                   <SlidingIndicator
@@ -79,7 +92,11 @@ function SidebarNav({ collapsed, onNavigate }) {
               </Link>
             );
             return collapsed ? (
-              <Tooltip key={item.key} title={item.label} placement="right">
+              <Tooltip key={item.key} title={count > 0 ? `${item.label} (${badge.title})` : item.label} placement="right">
+                {link}
+              </Tooltip>
+            ) : count > 0 ? (
+              <Tooltip key={item.key} title={badge.title} placement="right">
                 {link}
               </Tooltip>
             ) : (

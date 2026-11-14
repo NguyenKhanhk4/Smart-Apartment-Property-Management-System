@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Button, Card, Flex, Input, Select, Switch, Table, Tabs, Tag, Typography } from 'antd';
+import { Button, Card, Flex, Input, Select, Switch, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import { workOrderApi } from '../../api/equipment.api';
 import { lookupApi } from '../../api/moduleE.api';
 import { useApi } from '../../hooks/useApi';
@@ -98,6 +98,9 @@ export default function WorkOrdersPage() {
       render: (_, r) => {
         // UC10: quyết định sửa / gửi yêu cầu sửa lại phiếu hoãn; Q12: nghiệm thu
         if (r.status === 'AWAITING_REPAIR_APPROVAL') {
+          if (r.pendingFund) {
+            return <Tooltip title={`Đề xuất ${r.pendingFund.code} đang chờ Ban quản trị biểu quyết`}><Button size="small" disabled>Chờ biểu quyết</Button></Tooltip>;
+          }
           return <Button size="small" type="primary" danger onClick={() => setReviewing({ mode: 'approve', wo: r })}>Quyết định</Button>;
         }
         if (r.status === 'REPAIR_POSTPONED') {

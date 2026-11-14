@@ -599,6 +599,13 @@ export async function confirmTicket(user, id, { accepted, rating, comment, reaso
   if (!myApartments.includes(String(ticket.apartmentId))) {
     throw ApiError.forbidden('Phản ánh không thuộc căn hộ của bạn');
   }
+  // BR-X7: ảnh minh chứng khi chưa đạt cũng cần đồng ý điều khoản dữ liệu cá nhân (giống lúc gửi phiếu)
+  if (files?.length) {
+    const me = await User.findById(user.id).select('consents').lean();
+    if (!consentState(me?.consents).accepted) {
+      throw new ApiError('CONSENT_REQUIRED', 'Cần đồng ý điều khoản dữ liệu cá nhân để đính kèm ảnh. Bạn vẫn gửi được lý do không kèm ảnh.');
+    }
+  }
   // Phản ánh đã được BQL đóng: đánh giá sau xử lý không mở lại hoặc thay đổi ngày đóng.
   if (ticket.type === COMPLAINT && ticket.status === CLOSED) {
     if (ticket.rating != null) throw ApiError.badRequest('Phản ánh đã được đánh giá');

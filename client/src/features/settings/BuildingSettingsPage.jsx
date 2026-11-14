@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -39,8 +40,25 @@ import FeeTypesPage from '../feeTypes/FeeTypesPage';
 import { formatMoney } from '../../utils/format';
 import { IMAGE_ACCEPT, checkImageFile } from '../../utils/imageUpload';
 import { useApi, useAction } from '../../hooks/useApi';
+import { CONFIG_GROUPS, CONFIG_METADATA, cleanConfigDescription } from './deadlineConfigs';
 
 const { Text, Title } = Typography;
+
+/** "Ban quản lý Đông Á" → "BAN QUAN LY DONG A" (tên chủ tài khoản dùng cho mã QR chuyển khoản) */
+const toBankAccountName = (s) =>
+  s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toUpperCase();
+
+/** 1678 → "1.678" (định dạng Việt Nam cho ô đơn giá) */
+const formatVnNumber = (val) => (val === undefined || val === null || val === '' ? '' : `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.'));
+const parseVnNumber = (val) => (val ? val.replace(/\./g, '') : '');
+
+/** "2027-12" → "12/2027" */
+const periodText = (p) => (p ? `${p.slice(5, 7)}/${p.slice(0, 4)}` : '');
 
 // ==========================================
 // TAB 1: THÔNG TIN TÒA NHÀ
@@ -51,10 +69,9 @@ function BuildingProfileTab() {
   const [fileList, setFileList] = useState([]);
   const [userLogoUrl, setUserLogoUrl] = useState(null);
 
-  const profile = useApi(async () => {
-    const res = await buildingProfileApi.get();
-    return res.data;
-  }, []);
+  // useApi tự lấy .data của response → không được bóc .data thêm lần nữa ở đây
+  // Không tự làm mới ngầm: đang nhập dở mà form bị dựng lại thì mất chữ
+  const profile = useApi(() => buildingProfileApi.get(), [], { autoRefresh: false });
 
   const previewLogo = userLogoUrl !== null ? userLogoUrl : (profile.data?.logoUrl || '');
 
@@ -64,14 +81,18 @@ function BuildingProfileTab() {
       Object.entries(values).forEach(([k, v]) => {
         formData.append(k, v || '');
       });
-      if (fileList.length > 0 && fileList[0].originFileObj) {
-        formData.append('logo', fileList[0].originFileObj);
-      }
+      // beforeUpload lưu thẳng File gốc vào fileList (không có originFileObj)
+      const file = fileList[0]?.originFileObj ?? fileList[0];
+      if (file) formData.append('logo', file);
       return buildingProfileApi.update(formData);
     },
     {
-      success: 'Đã lưu cấu hình. Thay đổi phí áp dụng từ kỳ tính phí sau.',
-      onDone: profile.reload,
+      success: 'Đã lưu thông tin tòa nhà',
+      onDone: async () => {
+        setFileList([]);
+        setUserLogoUrl(null);
+        await profile.reload();
+      },
     },
   );
 
@@ -91,7 +112,7 @@ function BuildingProfileTab() {
       <Form
         form={form}
         layout="vertical"
-        key={profile.data?._id || 'new'}
+        key={`${profile.data?._id || 'new'}-${profile.data?.updatedAt || ''}`}
         initialValues={{
           name: profile.data?.name || '',
           address: profile.data?.address || '',
@@ -205,7 +226,12 @@ function BuildingProfileTab() {
             <Form.Item
               name="bankAccountName"
               label="Chủ tài khoản"
-              rules={[{ required: true, message: 'Nhập tên chủ tài khoản' }]}
+              rules={[
+                { required: true, message: 'Nhập tên chủ tài khoản' },
+                { pattern: /^[A-Z0-9 .,&()-]+$/, message: 'Chữ in hoa không dấu, giống tên in trên tài khoản ngân hàng' },
+              ]}
+              normalize={(v) => (v ? toBankAccountName(v) : v)}
+              extra="Tự chuyển sang chữ in hoa không dấu để mã QR chuyển khoản đọc được"
             >
               <Input placeholder="Ví dụ: BAN QUAN LY TOA NHA..." maxLength={200} />
             </Form.Item>
@@ -226,7 +252,6 @@ function BuildingProfileTab() {
 // TAB 2: BIỂU PHÍ (ĐIỆN, NƯỚC, PHÍ CỐ ĐỊNH)
 // ==========================================
 function TariffModal({ open, utility, onClose, onDone }) {
-  const { message } = App.useApp();
   const [form] = Form.useForm();
   const isWater = utility === 'WATER';
 
@@ -246,25 +271,32 @@ function TariffModal({ open, utility, onClose, onDone }) {
           unitPrice: t.unitPrice,
         })),
       };
-      return utilityTariffsApi.create(payload);
+      return utilityTariffsApi.create(payload).catch((err) => {
+        // Lỗi gắn với field (tiers.2.upTo, fromPeriod) → tô đỏ đúng ô
+        const fields = (err.details || [])
+          .filter((d) => d.field)
+          .map((d) => ({ name: d.field.split('.').map((p) => (/^\d+$/.test(p) ? Number(p) : p)), errors: [d.message] }));
+        if (fields.length) form.setFields(fields);
+        throw err;
+      });
     },
     {
-      onDone: (res) => {
-        if (res?.message) message.info(res.message);
+      // useAction đã tự báo res.message → không báo thêm lần nữa
+      onDone: () => {
         onClose();
         onDone();
       },
     },
   );
 
-  // Tính thử tiền realtime
-  const runCalculator = () => {
+  // Tính thử tiền. Truyền giá trị mới vào thẳng vì setState chưa kịp cập nhật trong cùng onChange
+  const runCalculator = ({ consumption = testConsumption, occupants = testOccupants } = {}) => {
     const values = form.getFieldsValue();
     const tiers = values.tiers || [];
     const perOccupant = isWater && values.perOccupant;
-    const nOccupants = perOccupant ? Math.max(1, Number(testOccupants) || 1) : 1;
+    const nOccupants = perOccupant ? Math.max(1, Number(occupants) || 1) : 1;
 
-    let remaining = Number(testConsumption) || 0;
+    let remaining = Number(consumption) || 0;
     let prevLimit = 0;
     let total = 0;
 
@@ -327,7 +359,7 @@ function TariffModal({ open, utility, onClose, onDone }) {
           perOccupant: isWater,
           tiers: initialTiers,
         }}
-        onValuesChange={runCalculator}
+        onValuesChange={() => runCalculator()}
         onFinish={(v) => create(v).catch(() => {})}
       >
         <Row gutter={16}>
@@ -350,7 +382,7 @@ function TariffModal({ open, utility, onClose, onDone }) {
                 name="perOccupant"
                 label="Định mức nước theo đầu người"
                 valuePropName="checked"
-                extra="Mức bậc thang nhân với số người ở trong căn (BR-F03)"
+                extra="Mức bậc thang nhân với số người ở trong căn"
               >
                 <Switch />
               </Form.Item>
@@ -371,8 +403,8 @@ function TariffModal({ open, utility, onClose, onDone }) {
               {fields.map(({ key, name, ...restField }, index) => {
                 const isLast = index === fields.length - 1;
                 return (
-                  <Flex key={key} gap={12} align="center">
-                    <Text strong style={{ width: 60 }}>
+                  <Flex key={key} gap={12} align="flex-start">
+                    <Text strong style={{ width: 60, lineHeight: '32px' }}>
                       Bậc {index + 1}:
                     </Text>
                     {isLast ? (
@@ -385,8 +417,20 @@ function TariffModal({ open, utility, onClose, onDone }) {
                       <Form.Item
                         {...restField}
                         name={[name, 'upTo']}
-                        noStyle
-                        rules={[{ required: true, message: 'Nhập mức' }]}
+                        style={{ marginBottom: 0 }}
+                        dependencies={index > 0 ? [['tiers', index - 1, 'upTo']] : []}
+                        rules={[
+                          { required: true, message: 'Nhập mức' },
+                          ({ getFieldValue }) => ({
+                            validator(_, value) {
+                              const prev = index > 0 ? getFieldValue(['tiers', index - 1, 'upTo']) : null;
+                              if (value != null && prev != null && value <= prev) {
+                                return Promise.reject(new Error(`Phải lớn hơn mức bậc ${index} (${prev})`));
+                              }
+                              return Promise.resolve();
+                            },
+                          }),
+                        ]}
                       >
                         <InputNumber
                           min={1}
@@ -398,7 +442,7 @@ function TariffModal({ open, utility, onClose, onDone }) {
                     <Form.Item
                       {...restField}
                       name={[name, 'unitPrice']}
-                      noStyle
+                      style={{ marginBottom: 0 }}
                       rules={[{ required: true, message: 'Nhập đơn giá' }]}
                     >
                       <InputNumber
@@ -406,10 +450,11 @@ function TariffModal({ open, utility, onClose, onDone }) {
                         step={100}
                         placeholder="Đơn giá (VNĐ)"
                         style={{ width: 180 }}
-                        formatter={(val) => `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                        formatter={formatVnNumber}
+                        parser={parseVnNumber}
                       />
                     </Form.Item>
-                    <Text type="secondary">VNĐ/{isWater ? 'm³' : 'kWh'}</Text>
+                    <Text type="secondary" style={{ lineHeight: '32px' }}>VNĐ/{isWater ? 'm³' : 'kWh'}</Text>
                     {fields.length > 1 && !isLast && (
                       <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(name)} />
                     )}
@@ -453,7 +498,7 @@ function TariffModal({ open, utility, onClose, onDone }) {
                 value={testConsumption}
                 onChange={(val) => {
                   setTestConsumption(val || 0);
-                  runCalculator();
+                  runCalculator({ consumption: val || 0 });
                 }}
                 style={{ width: 100 }}
               />
@@ -467,7 +512,7 @@ function TariffModal({ open, utility, onClose, onDone }) {
                   value={testOccupants}
                   onChange={(val) => {
                     setTestOccupants(val || 1);
-                    runCalculator();
+                    runCalculator({ occupants: val || 1 });
                   }}
                   style={{ width: 80 }}
                 />
@@ -514,7 +559,7 @@ function UtilityTariffsSection() {
       title: 'Kỳ áp dụng',
       dataIndex: 'fromPeriod',
       width: 160,
-      render: (v, r) => `${v} → ${r.toPeriod ? r.toPeriod : 'nay'}`,
+      render: (v, r) => (r.toPeriod ? `${periodText(v)} → ${periodText(r.toPeriod)}` : `Từ ${periodText(v)}`),
     },
     {
       title: 'Số bậc',
@@ -624,7 +669,7 @@ function FeeScheduleTab() {
     <div>
       <Typography.Paragraph type="secondary">
         Biểu phí bao gồm Phí quản lý, Phí vệ sinh, Phí gửi xe và Biểu giá điện nước bậc thang. Mọi thay đổi đơn giá luôn
-        được tự động áp dụng từ kỳ kế tiếp (BR-S08).
+        được tự động áp dụng từ kỳ kế tiếp.
       </Typography.Paragraph>
       {/* Tái sử dụng bảng phí sẵn có cho Quản lý / Vệ sinh / Gửi xe */}
       <FeeTypesPage embedded />
@@ -637,115 +682,204 @@ function FeeScheduleTab() {
 // ==========================================
 // TAB 3: CÔNG TẮC THU HỘ
 // ==========================================
+/** Định mức nước theo đầu người (m³/người/tháng) của kỳ hiện tại và kỳ sau; sửa thì áp dụng từ kỳ sau */
+function WaterQuotaEditor({ row, nextPeriod, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(null);
+  const current = row?.current?.waterQuotaPerOccupant ?? null;
+  const next = row?.upcoming ? (row.upcoming.waterQuotaPerOccupant ?? null) : current;
+  const text = (q) => (q == null ? 'Không áp định mức' : `${q} m³/người/tháng`);
+
+  return (
+    <div style={{ marginTop: 12, padding: 12, borderRadius: 6, border: '1px solid #f0f0f0' }}>
+      <Text strong style={{ display: 'block' }}>
+        Định mức nước theo đầu người
+      </Text>
+      {editing ? (
+        <Flex gap={8} align="center" wrap="wrap" style={{ marginTop: 8 }}>
+          <InputNumber
+            min={0.1}
+            max={100}
+            step={0.5}
+            value={value}
+            onChange={setValue}
+            placeholder="Để trống = không áp"
+            style={{ width: 170 }}
+          />
+          <Text type="secondary">m³/người/tháng</Text>
+          <Button
+            size="small"
+            type="primary"
+            onClick={async () => {
+              if (await onSave(value ?? null)) setEditing(false);
+            }}
+          >
+            Lưu
+          </Button>
+          <Button size="small" onClick={() => setEditing(false)}>
+            Hủy
+          </Button>
+        </Flex>
+      ) : (
+        <Flex justify="space-between" align="center" gap={8} wrap="wrap" style={{ marginTop: 4 }}>
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            Hiện tại: {text(current)}
+            {next !== current && ` · Từ ${periodText(nextPeriod)}: ${text(next)}`}
+          </Text>
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => {
+              setValue(next);
+              setEditing(true);
+            }}
+          >
+            Đổi định mức
+          </Button>
+        </Flex>
+      )}
+    </div>
+  );
+}
+
 function CollectionTab() {
-  const { message } = App.useApp();
+  const { modal } = App.useApp();
   const settings = useApi(() => collectionSettingsApi.get(), []);
+  const tariffs = useApi(() => utilityTariffsApi.list(), []);
 
-  const [updateSetting] = useAction((payload) => collectionSettingsApi.update(payload), {
-    onDone: (res) => {
-      if (res?.message) message.info(res.message);
-      settings.reload();
-    },
-  });
+  // useAction tự báo res.message → không báo thêm lần nữa
+  const [updateSetting] = useAction((payload) => collectionSettingsApi.update(payload), { onDone: settings.reload });
+  const [cancelUpcoming] = useAction((utility) => collectionSettingsApi.cancelUpcoming(utility), { onDone: settings.reload });
 
-  const handleToggle = (utility, nextEnabled, currentQuota) => {
-    Modal.confirm({
-      title: `Xác nhận ${nextEnabled ? 'BẬT' : 'TẮT'} thu hộ tiền ${utility === 'ELECTRICITY' ? 'ĐIỆN' : 'NƯỚC'}?`,
-      content:
-        'Theo quy tắc BR-S09, thay đổi này sẽ có hiệu lực từ đầu kỳ tính phí tiếp theo. Kỳ hiện tại vẫn giữ nguyên trạng thái cũ.',
-      okText: 'Xác nhận đổi',
-      cancelText: 'Hủy',
+  // Định mức nước (m³/người/tháng): như công tắc, có hiệu lực từ kỳ sau; giữ nguyên trạng thái BẬT
+  const saveQuota = (quota) =>
+    new Promise((resolve) => {
+      modal.confirm({
+        title: 'Đổi định mức nước theo đầu người?',
+        content: `Định mức mới (${quota == null ? 'không áp định mức' : `${quota} m³/người/tháng`}) có hiệu lực từ kỳ ${periodText(settings.data?.nextPeriod)}. Kỳ hiện tại giữ nguyên.`,
+        okText: 'Lưu',
+        cancelText: 'Đóng',
+        onOk: () => updateSetting({ utility: 'WATER', enabled: true, waterQuotaPerOccupant: quota }).then(() => resolve(true), () => resolve(false)),
+        onCancel: () => resolve(false),
+      });
+    });
+
+  const data = settings.data?.settings;
+  const hasTariff =(utility) => (tariffs.data || []).some((t) => t.utility === utility && t.state !== 'EXPIRED');
+
+  const handleToggle = (utility, nextEnabled, row) => {
+    const name = utility === 'ELECTRICITY' ? 'ĐIỆN' : 'NƯỚC';
+    // Chọn lại đúng trạng thái kỳ hiện tại = hủy lịch hẹn
+    const backToCurrent = nextEnabled === Boolean(row?.current?.enabled);
+    modal.confirm({
+      title: backToCurrent
+        ? `Hủy lịch hẹn đổi thu hộ tiền ${name}?`
+        : `Xác nhận ${nextEnabled ? 'BẬT' : 'TẮT'} thu hộ tiền ${name}?`,
+      content: backToCurrent
+        ? 'Kỳ sau sẽ giữ nguyên trạng thái thu hộ như kỳ hiện tại.'
+        : `Thay đổi có hiệu lực từ đầu kỳ tính phí tiếp theo (${periodText(settings.data?.nextPeriod)}). Kỳ hiện tại vẫn giữ nguyên trạng thái cũ.` +
+          (nextEnabled && !hasTariff(utility) ? ` Lưu ý: chưa có biểu giá ${name.toLowerCase()} nào, cần thêm ở tab Biểu phí trước kỳ tính phí.` : ''),
+      okText: backToCurrent ? 'Hủy lịch hẹn' : 'Xác nhận đổi',
+      cancelText: 'Đóng',
       onOk: () =>
-        updateSetting({
-          utility,
-          enabled: nextEnabled,
-          waterQuotaPerOccupant: currentQuota,
-        }).catch(() => {}),
+        (backToCurrent
+          ? cancelUpcoming(utility)
+          : updateSetting({ utility, enabled: nextEnabled, waterQuotaPerOccupant: row?.current?.waterQuotaPerOccupant ?? null })
+        ).catch(() => {}),
     });
   };
 
-  const data = settings.data?.settings;
+  const renderUtility = (utility, title) => {
+    const row = data?.[utility];
+    const currentOn = Boolean(row?.current?.enabled);
+    const upcoming = row?.upcoming;
+    // Công tắc thể hiện trạng thái của kỳ sau (đã tính lịch hẹn) để bấm lại là hủy được hẹn
+    const nextOn = upcoming ? Boolean(upcoming.enabled) : currentOn;
+    const missingTariff = !tariffs.loading && (currentOn || nextOn) && !hasTariff(utility);
+    return (
+      <Card type="inner" title={title}>
+        <Flex justify="space-between" align="center" style={{ marginBottom: 16 }} gap={12}>
+          <div>
+            <Text strong style={{ display: 'block' }}>
+              Kỳ hiện tại ({periodText(settings.data?.currentPeriod)}):
+            </Text>
+            <Tag color={currentOn ? 'green' : 'default'} style={{ marginTop: 4 }}>
+              {currentOn ? 'ĐANG BẬT THU HỘ' : 'ĐANG TẮT (Không thu hộ)'}
+            </Tag>
+          </div>
+          <Flex vertical align="end" gap={4}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Từ kỳ sau
+            </Text>
+            <Switch
+              checked={nextOn}
+              checkedChildren="Bật"
+              unCheckedChildren="Tắt"
+              onChange={(checked) => handleToggle(utility, checked, row)}
+            />
+          </Flex>
+        </Flex>
+
+        {upcoming && Boolean(upcoming.enabled) !== currentOn && (
+          <Flex
+            justify="space-between"
+            align="center"
+            gap={8}
+            wrap="wrap"
+            style={{ background: '#f6ffed', padding: 12, borderRadius: 6, border: '1px solid #b7eb8f' }}
+          >
+            <span>
+              <Text type="success" strong>
+                Đã hẹn từ kỳ {periodText(upcoming.fromPeriod)}:{' '}
+              </Text>
+              <Text>{upcoming.enabled ? 'Sẽ BẬT thu hộ' : 'Sẽ TẮT thu hộ'}</Text>
+            </span>
+            <Popconfirm title="Hủy lịch hẹn này?" description="Kỳ sau giữ nguyên trạng thái hiện tại." onConfirm={() => cancelUpcoming(utility).catch(() => {})}>
+              <Button size="small">Hủy lịch hẹn</Button>
+            </Popconfirm>
+          </Flex>
+        )}
+
+        {utility === 'WATER' && nextOn && <WaterQuotaEditor row={row} nextPeriod={settings.data?.nextPeriod} onSave={saveQuota} />}
+
+        {missingTariff && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginTop: 12 }}
+            message={`Chưa có biểu giá ${utility === 'ELECTRICITY' ? 'điện' : 'nước'}`}
+            description="Đang bật thu hộ nhưng chưa có biểu giá nào. Thêm biểu giá ở tab Biểu phí, nếu không Kế toán sẽ thiếu giá khi tính phí."
+          />
+        )}
+      </Card>
+    );
+  };
 
   return (
     <Card title="Cấu hình BQL thu hộ Điện & Nước" loading={settings.loading}>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 24 }}>
         Khi bật thu hộ, hệ thống sẽ mở màn hình ghi chỉ số đồng hồ và đưa dòng phí vào thông báo phí hàng tháng của cư
-        dân. Nếu tắt, màn hình ghi chỉ số và các dòng phí tương ứng sẽ tự động ẩn đi (BR-S09).
+        dân. Nếu tắt, màn hình ghi chỉ số và các dòng phí tương ứng sẽ tự động ẩn đi. Mọi thay đổi có hiệu lực từ kỳ sau.
       </Typography.Paragraph>
 
       <Row gutter={[24, 24]}>
-        {/* Thu hộ Điện */}
         <Col xs={24} md={12}>
-          <Card
-            type="inner"
-            title={
-              <Space>
-                <ThunderboltOutlined style={{ color: '#faad14' }} />
-                <span>Thu tiền Điện</span>
-              </Space>
-            }
-          >
-            <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
-              <div>
-                <Text strong style={{ display: 'block' }}>
-                  Trạng thái kỳ hiện tại:
-                </Text>
-                <Tag color={data?.ELECTRICITY?.current?.enabled ? 'green' : 'default'} style={{ marginTop: 4 }}>
-                  {data?.ELECTRICITY?.current?.enabled ? 'ĐANG BẬT THU HỘ' : 'ĐANG TẮT (Không thu hộ)'}
-                </Tag>
-              </div>
-              <Switch
-                checked={data?.ELECTRICITY?.current?.enabled}
-                onChange={(checked) => handleToggle('ELECTRICITY', checked, null)}
-              />
-            </Flex>
-
-            {data?.ELECTRICITY?.upcoming && (
-              <div style={{ background: '#f6ffed', padding: 12, borderRadius: 6, border: '1px solid #b7eb8f' }}>
-                <Text type="success" strong>
-                  Đã hẹn từ kỳ {data.ELECTRICITY.upcoming.fromPeriod}:{' '}
-                </Text>
-                <Text>{data.ELECTRICITY.upcoming.enabled ? 'Sẽ BẬT thu hộ' : 'Sẽ TẮT thu hộ'}</Text>
-              </div>
-            )}
-          </Card>
+          {renderUtility(
+            'ELECTRICITY',
+            <Space>
+              <ThunderboltOutlined style={{ color: '#faad14' }} />
+              <span>Thu tiền Điện</span>
+            </Space>,
+          )}
         </Col>
-
-        {/* Thu hộ Nước */}
         <Col xs={24} md={12}>
-          <Card
-            type="inner"
-            title={
-              <Space>
-                <span style={{ color: '#1890ff' }}>💧</span>
-                <span>Thu tiền Nước</span>
-              </Space>
-            }
-          >
-            <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
-              <div>
-                <Text strong style={{ display: 'block' }}>
-                  Trạng thái kỳ hiện tại:
-                </Text>
-                <Tag color={data?.WATER?.current?.enabled ? 'green' : 'default'} style={{ marginTop: 4 }}>
-                  {data?.WATER?.current?.enabled ? 'ĐANG BẬT THU HỘ' : 'ĐANG TẮT (Không thu hộ)'}
-                </Tag>
-              </div>
-              <Switch
-                checked={data?.WATER?.current?.enabled}
-                onChange={(checked) => handleToggle('WATER', checked, data?.WATER?.current?.waterQuotaPerOccupant)}
-              />
-            </Flex>
-
-            {data?.WATER?.upcoming && (
-              <div style={{ background: '#f6ffed', padding: 12, borderRadius: 6, border: '1px solid #b7eb8f' }}>
-                <Text type="success" strong>
-                  Đã hẹn từ kỳ {data.WATER.upcoming.fromPeriod}:{' '}
-                </Text>
-                <Text>{data.WATER.upcoming.enabled ? 'Sẽ BẬT thu hộ' : 'Sẽ TẮT thu hộ'}</Text>
-              </div>
-            )}
-          </Card>
+          {renderUtility(
+            'WATER',
+            <Space>
+              <span style={{ color: '#1890ff' }}>💧</span>
+              <span>Thu tiền Nước</span>
+            </Space>,
+          )}
         </Col>
       </Row>
     </Card>
@@ -753,82 +887,42 @@ function CollectionTab() {
 }
 
 // ==========================================
-// TAB 4: LỊCH & THỜI HẠN (BR-X8)
+// TAB 4: LỊCH & THỜI HẠN
 // ==========================================
-const CONFIG_GROUPS = [
-  {
-    title: 'Thu phí & Thanh toán',
-    keys: ['BILLING_REMIND_DAY', 'PAYMENT_TERM_DAYS', 'INVOICE_APPROVAL_REMIND_DAYS', 'DEBT_REMINDER_INTERVAL_DAYS', 'DEBT_REMINDER_MAX'],
-  },
-  {
-    title: 'Chờ cư dân & Khách hàng phản hồi (BR-X8)',
-    keys: ['OWNER_CONFIRM_REMIND_DAYS', 'OWNER_CONFIRM_AUTO_CANCEL_DAYS', 'QUOTE_REMIND_DAYS', 'QUOTE_AUTO_CLOSE_DAYS'],
-  },
-  {
-    title: 'Bảo trì & Quỹ',
-    keys: ['FUND_APPROVAL_REMIND_DAYS', 'REPAIR_REVIEW_REPEAT_DAYS', 'REPAIR_POSTPONE_MAX_DAYS', 'REPAIR_ACCEPTANCE_REMIND_DAYS'],
-  },
-  {
-    title: 'Cảnh báo khẩn cấp & An toàn',
-    keys: ['EMERGENCY_REPEAT_MINUTES'],
-  },
-  {
-    title: 'Hệ thống & Tải file',
-    keys: ['UPLOAD_MAX_SIZE_MB'],
-  },
-];
-
-const CONFIG_METADATA = {
-  BILLING_REMIND_DAY: { label: 'Ngày nhắc lập thông báo phí', unit: 'Hàng tháng', max: 28 },
-  PAYMENT_TERM_DAYS: { label: 'Hạn nộp phí sau khi phát hành', unit: 'ngày' },
-  INVOICE_APPROVAL_REMIND_DAYS: { label: 'Nhắc duyệt thông báo phí sau', unit: 'ngày' },
-  DEBT_REMINDER_INTERVAL_DAYS: { label: 'Khoảng cách giữa các lần nhắc nợ', unit: 'ngày' },
-  DEBT_REMINDER_MAX: { label: 'Số lần nhắc nợ tối đa trước khi báo Trưởng BQL', unit: 'lần' },
-  OWNER_CONFIRM_REMIND_DAYS: { label: 'Chủ nhà chưa xác nhận yêu cầu: nhắc sau', unit: 'ngày' },
-  OWNER_CONFIRM_AUTO_CANCEL_DAYS: { label: 'Chủ nhà không phản hồi: tự hủy sau', unit: 'ngày' },
-  QUOTE_REMIND_DAYS: { label: 'Nhắc cư dân đồng ý báo giá sau', unit: 'ngày' },
-  QUOTE_AUTO_CLOSE_DAYS: { label: 'Cư dân không đồng ý báo giá: tự đóng sau', unit: 'ngày' },
-  FUND_APPROVAL_REMIND_DAYS: { label: 'Nhắc Ban quản trị duyệt chi quỹ sau', unit: 'ngày' },
-  REPAIR_REVIEW_REPEAT_DAYS: { label: 'Phiếu hoãn đến hạn xem lại: nhắc lại mỗi', unit: 'ngày' },
-  REPAIR_POSTPONE_MAX_DAYS: { label: 'Tạm hoãn sửa chữa tối đa', unit: 'ngày' },
-  REPAIR_ACCEPTANCE_REMIND_DAYS: { label: 'Chờ nghiệm thu quá hạn nhắc Trưởng BQL sau', unit: 'ngày' },
-  EMERGENCY_REPEAT_MINUTES: { label: 'Khoảng thời gian lặp lại cảnh báo khẩn cấp', unit: 'phút' },
-  UPLOAD_MAX_SIZE_MB: { label: 'Dung lượng ảnh tối đa tải lên', unit: 'MB', max: 20 },
-};
-
 function DeadlinesTab() {
-  const { message } = App.useApp();
   const configs = useApi(() => systemConfigApi.list(), []);
   const [editingKey, setEditingKey] = useState(null);
   const [editValue, setEditValue] = useState(null);
 
+  // Server trả cả tham số chưa có trong DB kèm giá trị mặc định (isDefault)
   const configMap = new Map((configs.data || []).map((c) => [c.key, c]));
 
-  const handleSave = async (key) => {
-    try {
-      await systemConfigApi.update(key, editValue);
-      message.success('Đã cập nhật tham số');
+  const [save, saving] = useAction((key) => systemConfigApi.update(key, editValue), {
+    success: 'Đã cập nhật tham số',
+    onDone: async () => {
       setEditingKey(null);
-      configs.reload();
-    } catch (err) {
-      message.error(err.message || 'Lỗi cập nhật tham số');
-    }
-  };
+      await configs.reload();
+    },
+  });
 
   return (
     <Flex vertical gap={24}>
       {CONFIG_GROUPS.map((group) => (
-        <Card key={group.title} title={group.title} size="small">
+        <Card key={group.title} title={group.title} size="small" loading={configs.loading}>
           <Flex vertical gap={12}>
             {group.keys.map((key) => {
               const cfg = configMap.get(key);
               const meta = CONFIG_METADATA[key] || { label: key, unit: '' };
+              const min = meta.min ?? 1; // số ngày / phút / lần phải > 0
               const isEditing = editingKey === key;
+              const invalid = editValue == null || editValue < min || (meta.max != null && editValue > meta.max);
               return (
                 <Flex
                   key={key}
                   justify="space-between"
                   align="center"
+                  gap={12}
+                  wrap="wrap"
                   style={{
                     padding: '8px 12px',
                     borderRadius: 6,
@@ -836,44 +930,61 @@ function DeadlinesTab() {
                     borderBottom: '1px solid #f0f0f0',
                   }}
                 >
-                  <div style={{ maxWidth: '65%' }}>
+                  <div style={{ flex: '1 1 280px', minWidth: 0 }}>
                     <Text strong style={{ display: 'block' }}>
                       {meta.label}
                     </Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {cfg?.description || key}
-                    </Text>
+                    {cfg?.description && (
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {cleanConfigDescription(cfg.description)}
+                      </Text>
+                    )}
                   </div>
 
                   {isEditing ? (
-                    <Flex gap={8} align="center">
-                      <InputNumber
-                        min={0}
-                        max={meta.max}
-                        value={editValue}
-                        onChange={setEditValue}
-                        style={{ width: 120 }}
-                      />
-                      <Text type="secondary">{meta.unit}</Text>
-                      <Button size="small" type="primary" onClick={() => handleSave(key)}>
-                        Lưu
-                      </Button>
-                      <Button size="small" onClick={() => setEditingKey(null)}>
-                        Hủy
-                      </Button>
+                    <Flex vertical gap={4} align="end">
+                      <Flex gap={8} align="center">
+                        <InputNumber
+                          min={min}
+                          max={meta.max}
+                          precision={0}
+                          value={editValue}
+                          onChange={setEditValue}
+                          status={invalid ? 'error' : undefined}
+                          style={{ width: 120 }}
+                        />
+                        <Text type="secondary">{meta.unit}</Text>
+                        <Button
+                          size="small"
+                          type="primary"
+                          loading={saving}
+                          disabled={invalid}
+                          onClick={() => save(key).catch(() => {})}
+                        >
+                          Lưu
+                        </Button>
+                        <Button size="small" onClick={() => setEditingKey(null)}>
+                          Hủy
+                        </Button>
+                      </Flex>
+                      <Text type={invalid ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>
+                        {meta.max != null ? `Từ ${min} đến ${meta.max}` : `Tối thiểu ${min}`}
+                      </Text>
                     </Flex>
                   ) : (
                     <Flex gap={12} align="center">
                       <Text strong style={{ fontSize: 15 }}>
                         {cfg ? cfg.value : '—'} {meta.unit}
                       </Text>
+                      {cfg?.isDefault && <Tag>Mặc định</Tag>}
                       <Button
                         size="small"
                         type="text"
                         icon={<EditOutlined />}
+                        disabled={!cfg}
                         onClick={() => {
                           setEditingKey(key);
-                          setEditValue(cfg?.value ?? 0);
+                          setEditValue(cfg?.value);
                         }}
                       />
                     </Flex>
@@ -901,7 +1012,7 @@ function DeadlinesTab() {
 }
 
 // ==========================================
-// TRANG CHÍNH: CẤU HÌNH TÒA NHÀ & BIỂU PHÍ (UC05)
+// TRANG CHÍNH: THÔNG TIN TÒA NHÀ & BIỂU PHÍ
 // ==========================================
 export default function BuildingSettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
@@ -949,7 +1060,7 @@ export default function BuildingSettingsPage() {
     <>
       <PageHeader
         title="Thông tin tòa nhà & Biểu phí"
-        subtitle="Hồ sơ pháp lý, tài khoản thanh toán, biểu phí dịch vụ, công tắc thu hộ và thời hạn hệ thống (UC05)"
+        subtitle="Hồ sơ pháp lý, tài khoản thanh toán, biểu phí dịch vụ, công tắc thu hộ và thời hạn hệ thống"
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Tòa nhà & biểu phí' }]}
       />
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} size="large" />

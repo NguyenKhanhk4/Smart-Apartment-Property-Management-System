@@ -22,7 +22,7 @@ import { paginate } from '../../utils/pagination.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { DAY_MS, endOfVnDay, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { computeNextMaintenance } from '../assets/assets.service.js';
-import { hasPendingFundProposal } from './workOrders.fund.js';
+import { countAwaitingVote, hasPendingFundProposal, pendingFundProposals } from './workOrders.fund.js';
 
 const S = WORK_ORDER_STATUS;
 const step = (action, user, now, extra = {}) => ({ action, by: user?.id ?? null, at: now, ...extra });
@@ -286,6 +286,7 @@ export async function listRepairs({ tab = 'pending', ...query }, now = new Date(
   const { filter, sort } = TABS[tab] ?? TABS.pending;
   const endToday = endOfVnDay(now);
   const result = await paginate(WorkOrder, filter, { ...query, sort }, { populate: LIST_POPULATE });
+  const pendingFunds = await pendingFundProposals(result.items);
   result.items = result.items.map((wo) => {
     const review = wo.repair?.reviewDate ? new Date(wo.repair.reviewDate) : null;
     const due = wo.status === S.REPAIR_POSTPONED && review && review <= endToday;
@@ -293,15 +294,20 @@ export async function listRepairs({ tab = 'pending', ...query }, now = new Date(
       ...wo,
       isReviewDue: Boolean(due),
       reviewOverdueDays: due ? Math.floor((startOfVnDay(now) - startOfVnDay(review)) / DAY_MS) : 0,
+      // Đề xuất chi quỹ đang chờ Ban quản trị biểu quyết → không quyết định lại được (WORKORDER_FUND_PENDING)
+      pendingFund: pendingFunds.get(String(wo._id)) ?? null,
     };
   });
-  const [pending, postponed, reviewDue, settings] = await Promise.all([
+  const [pending, postponed, reviewDue, awaitingVote, settings] = await Promise.all([
     WorkOrder.countDocuments(TABS.pending.filter),
     WorkOrder.countDocuments(TABS.postponed.filter),
     WorkOrder.countDocuments({ status: S.REPAIR_POSTPONED, 'repair.reviewDate': { $lte: endToday } }),
+    countAwaitingVote(TABS.pending.filter),
     repairSettings(),
   ]);
-  return { ...result, counts: { pending, postponed, reviewDue }, settings };
+  // awaitingVote: phiếu chờ quyết định nhưng đang chờ Ban quản trị biểu quyết (Trưởng BQL chưa làm gì được) —
+  // số việc cần xử lý trên menu = pending − awaitingVote + reviewDue
+  return { ...result, counts: { pending, postponed, reviewDue, awaitingVote }, settings };
 }
 
 // ===== Job REPAIR_REVIEW: nhắc Trưởng BQL xem lại phiếu tạm hoãn (MSG-E12) =====

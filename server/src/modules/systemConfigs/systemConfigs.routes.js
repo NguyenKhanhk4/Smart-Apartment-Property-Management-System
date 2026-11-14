@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { AUDIT_ACTIONS, AUDIT_TARGETS, CONFIG_KEYS } from '../../constants/enums.js';
+import { AUDIT_ACTIONS, AUDIT_TARGETS, CONFIG_DEFAULTS, CONFIG_KEYS, DEFAULT_CONFIGS } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
@@ -21,7 +21,11 @@ const router = Router();
  *     summary: Toàn bộ tham số hệ thống cho Trưởng BQL — UC-E01
  */
 router.get('/', authenticate, authorize('MANAGER'), async (_req, res) => {
-  ok(res, await SystemConfig.find().sort({ key: 1 }).lean());
+  // Tham số chưa có trong DB (chưa chạy db:sync) vẫn trả về với giá trị mặc định mà job đang dùng
+  const docs = await SystemConfig.find().sort({ key: 1 }).lean();
+  const have = new Set(docs.map((d) => d.key));
+  const missing = DEFAULT_CONFIGS.filter((c) => !have.has(c.key)).map((c) => ({ ...c, isDefault: true }));
+  ok(res, [...docs, ...missing].sort((a, b) => a.key.localeCompare(b.key)));
 });
 
 /**
@@ -45,8 +49,14 @@ router.patch(
     body: Joi.object({ value: Joi.any().required() }),
   }),
   async (req, res) => {
-    const config = await SystemConfig.findOne({ key: req.validated.params.key });
-    if (!config) throw ApiError.notFound('Không tìm thấy tham số');
+    const { key } = req.validated.params;
+    let config = await SystemConfig.findOne({ key });
+    // Tham số có mặc định trong code nhưng DB chưa có → tạo mới từ mặc định rồi sửa
+    if (!config) {
+      const def = DEFAULT_CONFIGS.find((c) => c.key === key);
+      if (!def) throw ApiError.notFound('Không tìm thấy tham số');
+      config = new SystemConfig({ ...def });
+    }
     assertValidValue(config.key, config.value, req.body.value);
 
     // Kiểm tra chéo giữa các cặp thời hạn (BR-X8)
@@ -58,7 +68,9 @@ router.patch(
     ];
     if (relatedKeys.includes(config.key)) {
       const allConfigs = await SystemConfig.find({ key: { $in: relatedKeys } }).lean();
-      const currentValues = Object.fromEntries(allConfigs.map((c) => [c.key, c.value]));
+      // Tham số chưa có trong DB thì so với giá trị mặc định
+      const currentValues = Object.fromEntries(relatedKeys.map((k) => [k, CONFIG_DEFAULTS[k]]));
+      allConfigs.forEach((c) => (currentValues[c.key] = c.value));
       assertCrossValidation(config.key, req.body.value, currentValues);
     }
 

@@ -1,4 +1,4 @@
-import { Form, Input, Modal, Radio, Rate, Select } from 'antd';
+import { Alert, Form, Input, Modal, Radio, Rate, Select } from 'antd';
 import { ticketApi } from '../../api/moduleE.api';
 import { QuoteItems } from '../repairQuotes/QuotePanel';
 import { formatMoney } from '../../utils/format';
@@ -7,6 +7,8 @@ import { PRIORITIES, TICKET_SCOPES, TICKET_STATUS, TICKET_TYPES, enumOptions } f
 import { keysOf } from '../../utils/status';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
 import { toFiles } from '../../utils/upload';
+import { useAuth } from '../../hooks/useAuth';
+import { isConsentLocked } from '../../utils/consent';
 import { progressOptions } from './ticketActions';
 
 const TS = keysOf(TICKET_STATUS);
@@ -164,6 +166,8 @@ export function ComplaintResponseModal({ ticket, open, onClose, onDone }) {
 
 // UC-E05 — Cư dân xác nhận + đánh giá sao, hoặc báo chưa đạt
 export function ConfirmModal({ ticket, open, onClose, onDone }) {
+  const { user } = useAuth();
+  const photoLocked = isConsentLocked(user); // BR-X7: chưa đồng ý điều khoản thì không gửi kèm ảnh
   const ratingOnly = ticket.type === 'COMPLAINT' && ticket.status === TS.CLOSED;
   return (
     <ActionModal
@@ -175,7 +179,7 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
       success={(res) => (res.data.status === TS.CLOSED ? 'Cảm ơn bạn đã đánh giá' : 'Đã gửi lại cho kỹ thuật viên')}
       initialValues={{ accepted: true, rating: 5 }}
       action={({ accepted, rating, comment, reason, images }) =>
-        ticketApi.confirm(ticket._id, accepted ? { accepted, rating, comment } : { accepted, reason }, accepted ? [] : toFiles(images))
+        ticketApi.confirm(ticket._id, accepted ? { accepted, rating, comment } : { accepted, reason }, accepted || photoLocked ? [] : toFiles(images))
       }
     >
       <Form.Item name="accepted" label="Kết quả xử lý" hidden={ratingOnly}>
@@ -203,7 +207,16 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
                 <Input.TextArea rows={3} maxLength={500} />
               </Form.Item>
               {/* UC49: ảnh minh chứng kết quả chưa đạt (tùy chọn) */}
-              <EvidencePhotosField name="images" label="Ảnh minh chứng (nếu có)" required={false} />
+              {photoLocked ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  title="Chưa đính kèm ảnh được"
+                  description="Bạn cần đồng ý điều khoản dữ liệu cá nhân (trong Hồ sơ cá nhân) để gửi ảnh. Vẫn gửi được lý do không kèm ảnh."
+                />
+              ) : (
+                <EvidencePhotosField name="images" label="Ảnh minh chứng (nếu có)" required={false} />
+              )}
             </>
           )
         }
