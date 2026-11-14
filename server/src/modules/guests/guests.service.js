@@ -7,12 +7,12 @@ import { notify, notifyRoles, notifyApartment } from '../../services/notificatio
 import { logAudit } from '../../services/auditLog.service.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { getConfig } from '../../services/systemConfig.service.js';
-import { getOnDuty } from '../dutyShifts/dutyShifts.service.js';
+import { getOnDuty, isUserOnDuty } from '../dutyShifts/dutyShifts.service.js';
 import { getActiveApartmentIds, resolveResidentApartment } from '../../services/residency.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { DAY_MS, HOUR_MS, endOfVnDay, fmtTimeVn, startOfVnDay } from '../../utils/time.js';
-import { decryptIdNumber, maskIdNumber } from '../residents/idCrypto.js';
+import { buildIdNumberFields, decryptIdNumber, maskIdNumber } from '../residents/idCrypto.js';
 
 const POPULATE = [
   { path: 'apartmentId', select: 'code buildingId', populate: { path: 'buildingId', select: 'name' } },
@@ -20,12 +20,9 @@ const POPULATE = [
   { path: 'recordedBy', select: 'fullName' },
 ];
 
-/**
- * Khách mới chỉ lưu 4 số cuối CCCD; tiếp tục che bản ghi cũ từng lưu toàn bộ số/mã hóa.
- * Không trả dữ liệu mã hóa/hash cho frontend và không yêu cầu khóa mã hóa cho khách mới.
- */
+// UC50/NFR-12: số giấy tờ mới được mã hóa; API tiếp tục che cả dữ liệu cũ.
 const withIdFields = ({ idNumber, ...data }) => ({
-  ...data, ...(idNumber ? { idLast4: String(idNumber).replace(/\D/g, '').slice(-4) } : {}),
+  ...data, ...buildIdNumberFields(idNumber),
 });
 
 export function presentGuest(log) {
@@ -33,7 +30,7 @@ export function presentGuest(log) {
   const { idNumberEnc, ...rest } = plain;
   delete rest.idNumberHash;
   const idNumber = idNumberEnc ? decryptIdNumber(idNumberEnc) : plain.idNumber;
-  return { ...rest, idNumber: plain.idLast4 ? `********${plain.idLast4}` : maskIdNumber(idNumber) };
+  return { ...rest, idNumber: idNumber ? maskIdNumber(idNumber) : plain.idLast4 ? `********${plain.idLast4}` : null };
 }
 
 async function findOr404(id) {
@@ -63,7 +60,7 @@ export async function cancelRegistration(user, id) {
   const log = await findOr404(id);
   const mine = await getActiveApartmentIds(user.id);
   if (!mine.includes(String(log.apartmentId))) throw ApiError.forbidden('Không phải khách của căn hộ bạn');
-  if (log.isWalkIn) throw ApiError.badRequest('Khách do Bảo vệ tạo cần được xác nhận hoặc từ chối, không xóa nhật ký');
+  if (log.isWalkIn) throw ApiError.badRequest('Không thể xóa nhật ký do Bảo vệ ghi nhận');
   if (log.status !== GUEST_STATUS.EXPECTED) {
     throw ApiError.badRequest('Khách đã đến, không thể hủy đăng ký');
   }
@@ -106,9 +103,9 @@ export async function listGuests(user, query) {
 export async function confirmGuest(user, id, confirmed) {
   const log = await findOr404(id);
   if (!(await getActiveApartmentIds(user.id)).includes(String(log.apartmentId))) throw ApiError.forbidden();
-  if (log.status === GUEST_STATUS.CHECKED_OUT) throw ApiError.badRequest('Khách đã rời tòa nhà');
+  if (log.status !== GUEST_STATUS.EXPECTED) throw ApiError.badRequest('Khách đã được ghi nhận vào tòa nhà');
   const updated = await GuestLog.findOneAndUpdate(
-    { _id: id, residentConfirmation: 'PENDING', status: { $ne: GUEST_STATUS.CHECKED_OUT } },
+    { _id: id, residentConfirmation: 'PENDING', status: GUEST_STATUS.EXPECTED },
     { $set: { residentConfirmation: confirmed ? 'CONFIRMED' : 'DECLINED', confirmedBy: user.id }, $inc: { __v: 1 } },
     { new: true },
   );
@@ -123,6 +120,11 @@ function requireStaff(user, title) {
   if (!(user.role === ROLES.STAFF && user.roleTitle === title)) throw ApiError.forbidden();
 }
 function requireManager(user) { if (!isManager(user)) throw ApiError.forbidden(); }
+
+async function requireGuardOnDuty(user, now) {
+  requireStaff(user, 'SECURITY');
+  if (!(await isUserOnDuty(user.id, 'SECURITY', now))) throw ApiError.forbidden('Chỉ Bảo vệ đang trong ca trực được ghi nhận khách');
+}
 
 // Một API dữ liệu phân trang cho các tab vận hành; chữ ký và token không select mặc định.
 export async function listOperations(user, kind, query = {}) {
@@ -399,9 +401,6 @@ export async function remindParcels(now = new Date()) {
 // Job mỗi phút giữ việc chốt tuần tra và nhắc cảnh báo khẩn.
 export async function runOperationsJobs(now = new Date()) {
   let affected = 0;
-  const retention = Number(await getConfig('GUEST_RETENTION_MONTHS', 12));
-  const cutoff = new Date(now); cutoff.setUTCMonth(cutoff.getUTCMonth() - Math.max(1, retention));
-  affected += (await GuestLog.deleteMany({ createdAt: { $lt: cutoff } })).deletedCount;
   const tours = await PatrolTour.find({ endAt: { $lte: now }, missedNotifiedAt: null }).lean();
   for (const tour of tours) {
     const missed = tour.checkpoints.filter((p) => !tour.scans.some((s) => String(s.checkpointId) === String(p.checkpointId)));
@@ -431,44 +430,68 @@ export async function runOperationsJobs(now = new Date()) {
   return affected;
 }
 
-// ===== UC-E08: Bảo vệ ghi nhận khách đến/rời =====
-export async function checkIn(user, id, { note }) {
-  const log = await findOr404(id);
-  if (log.status !== GUEST_STATUS.EXPECTED) throw ApiError.badRequest('Khách đã được ghi nhận đến trước đó');
-  if (log.isWalkIn && log.residentConfirmation !== 'CONFIRMED') throw ApiError.badRequest('Cần cư dân đồng ý trước khi cho khách vào');
-  log.status = GUEST_STATUS.CHECKED_IN;
-  log.checkInTime = new Date();
-  log.recordedBy = user.id;
-  if (note) log.note = note;
-  await log.save();
-
-  await notifyApartment(log.apartmentId, {
-    type: NOTIFICATION_TYPES.GUEST,
-    title: 'Khách của bạn đã đến',
-    content: `${log.guestName} đã vào tòa nhà lúc ${fmtTimeVn(log.checkInTime)}.`,
-    refId: log._id,
-    link: '/r/guests',
+// UC50: tính tháng theo lịch Việt Nam, kể cả tháng ngắn và năm nhuận.
+export async function purgeGuestLogs(now = new Date()) {
+  const months = Math.max(1, Math.trunc(Number(await getConfig('GUEST_RETENTION_MONTHS', 12))));
+  const result = await GuestLog.deleteMany({
+    $or: [{ checkInTime: { $type: 'date' } }, { createdAt: { $type: 'date' } }],
+    $expr: { $lte: [{ $dateAdd: {
+      startDate: { $ifNull: ['$checkInTime', '$createdAt'] }, unit: 'month', amount: months, timezone: 'Asia/Ho_Chi_Minh',
+    } }, now] },
   });
-  return presentGuest(log);
+  return result.deletedCount;
 }
 
-/** BR-O10: khách vãng lai — bắt buộc tên khách + căn hộ đến thăm */
+// UC50: khách đăng ký trước được đối chiếu giấy tờ tại sảnh khi vào.
+export async function checkIn(user, id, data = {}) {
+  const now = new Date();
+  await requireGuardOnDuty(user, now);
+  const log = await findOr404(id);
+  if (log.status !== GUEST_STATUS.EXPECTED) throw ApiError.badRequest('Khách đã được ghi nhận đến trước đó');
+  if (!data.idType && !log.idType) throw ApiError.field('idType', 'Chọn loại giấy tờ đã đối chiếu');
+  if (!data.idNumber && !log.idNumberEnc && !log.idNumber) throw ApiError.field('idNumber', 'Nhập số giấy tờ đã đối chiếu');
+  const fields = { status: GUEST_STATUS.CHECKED_IN, checkInTime: now, recordedBy: user.id,
+    idType: data.idType || log.idType, ...(data.note && { note: data.note }),
+    ...(data.idNumber && buildIdNumberFields(data.idNumber)) };
+  const updated = await withTransaction(async (session) => {
+    const result = await GuestLog.findOneAndUpdate({ _id: id, status: GUEST_STATUS.EXPECTED },
+      { $set: fields, $inc: { __v: 1 }, ...(data.idNumber && { $unset: { idLast4: 1 } }) },
+      { returnDocument: 'after', runValidators: true, session }).select('+idNumberEnc');
+    if (!result) throw ApiError.badRequest('Khách đã được ghi nhận đến trước đó');
+    await logAudit({ action: AUDIT_ACTIONS.GUEST_CHECKED_IN, user, targetType: 'guest_logs', targetId: result._id,
+      before: { status: log.status }, after: { status: result.status } }, { session });
+    return result;
+  });
+  await notifyApartment(updated.apartmentId, {
+    type: NOTIFICATION_TYPES.GUEST,
+    title: 'Khách của bạn đã đến',
+    content: `${updated.guestName} đã vào tòa nhà lúc ${fmtTimeVn(updated.checkInTime)}.`,
+    refId: updated._id,
+    link: '/r/guests',
+  });
+  return presentGuest(updated);
+}
+
+/** UC50: Bảo vệ đối chiếu giấy tờ và ghi nhận giờ vào ngay tại sảnh. */
 export async function walkIn(user, data) {
+  const now = new Date();
+  await requireGuardOnDuty(user, now);
+  if (!data.idType || !data.idNumber) throw ApiError.badRequest('Cần loại và số giấy tờ đã đối chiếu');
   const apartment = await Apartment.findById(data.apartmentId).lean();
   if (!apartment) throw ApiError.badRequest('Căn hộ đến thăm không tồn tại');
-  const now = new Date();
-  const log = await GuestLog.create({
-    ...withIdFields(data),
-    buildingId: apartment.buildingId,
-    status: GUEST_STATUS.EXPECTED,
-    isWalkIn: true,
-    expectedTime: now,
-    recordedBy: user.id,
+  const log = await withTransaction(async (session) => {
+    const [created] = await GuestLog.create([{
+      ...withIdFields(data), buildingId: apartment.buildingId, status: GUEST_STATUS.CHECKED_IN,
+      isWalkIn: true, expectedTime: now, checkInTime: now, recordedBy: user.id, residentConfirmation: null,
+    }], { session });
+    await logAudit({ action: AUDIT_ACTIONS.GUEST_CHECKED_IN, user, targetType: 'guest_logs', targetId: created._id,
+      after: { status: created.status }, metadata: { apartmentId: created.apartmentId } }, { session });
+    return created;
   });
   await notifyApartment(apartment._id, {
     type: NOTIFICATION_TYPES.GUEST,
-    title: 'Có khách đến thăm',
-    content: `${log.guestName} đang chờ ở sảnh để thăm căn ${apartment.code}. Vui lòng đồng ý hoặc từ chối trước khi Bảo vệ cho vào.`,
+    title: 'Khách của bạn đã đến',
+    content: `${log.guestName} đã vào tòa nhà lúc ${fmtTimeVn(now)} để thăm căn ${apartment.code}.`,
     refId: log._id,
     link: '/r/guests',
   });
@@ -476,11 +499,18 @@ export async function walkIn(user, data) {
 }
 
 export async function checkOut(user, id) {
+  const now = new Date();
+  await requireGuardOnDuty(user, now);
   const log = await findOr404(id);
   if (log.status !== GUEST_STATUS.CHECKED_IN) throw ApiError.badRequest('Khách chưa vào hoặc đã rời');
-  log.status = GUEST_STATUS.CHECKED_OUT;
-  log.checkOutTime = new Date();
-  log.recordedBy ??= user.id;
-  await log.save();
-  return presentGuest(log);
+  const updated = await withTransaction(async (session) => {
+    const result = await GuestLog.findOneAndUpdate({ _id: id, status: GUEST_STATUS.CHECKED_IN },
+      { $set: { status: GUEST_STATUS.CHECKED_OUT, checkOutTime: now }, $inc: { __v: 1 } },
+      { returnDocument: 'after', session }).select('+idNumberEnc');
+    if (!result) throw ApiError.badRequest('Khách chưa vào hoặc đã rời');
+    await logAudit({ action: AUDIT_ACTIONS.GUEST_CHECKED_OUT, user, targetType: 'guest_logs', targetId: result._id,
+      before: { status: log.status }, after: { status: result.status } }, { session });
+    return result;
+  });
+  return presentGuest(updated);
 }

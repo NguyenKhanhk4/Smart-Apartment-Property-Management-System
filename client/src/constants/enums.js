@@ -404,6 +404,7 @@ export const PARKING_CARD_STATUS = {
 export const CRON_JOBS = {
   OPERATIONS_SECURITY: { label: 'Vận hành & an ninh (Module 7)' },
   PARCEL_REMIND: { label: 'Nhắc nhận bưu kiện' },
+  GUEST_PURGE: { label: 'Dọn sổ khách hết hạn lưu' },
   INVOICE_GENERATE: { label: 'Tạo hóa đơn định kỳ', color: 'green' },
   INVOICE_OVERDUE: { label: 'Quét hóa đơn quá hạn', color: 'red' },
   BILLING_REMIND: { label: 'Nhắc tính phí / duyệt thông báo phí', color: 'gold' },

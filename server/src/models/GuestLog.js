@@ -9,6 +9,7 @@ const guestLogSchema = new Schema(
     buildingId: { type: ObjectId, ref: 'Building' },
     guestName: { type: String, required: true, trim: true },
     guestPhone: String,
+    idType: { type: String, trim: true, maxlength: 30 },
     idNumber: { type: String, default: null }, // dữ liệu cũ (CCCD dạng rõ); bản ghi mới luôn null
     idNumberEnc: { type: String, default: null, select: false }, // CCCD mã hóa AES-256-GCM (modules/residents/idCrypto)
     idNumberHash: { type: String, default: null, select: false }, // HMAC để tra cứu trùng

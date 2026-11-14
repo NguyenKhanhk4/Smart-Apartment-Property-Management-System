@@ -1,4 +1,4 @@
-// Kiểm thử Module 7: khách phải được đồng ý, bưu kiện chống bàn giao trùng, tuần tra đúng ca và cảnh báo khẩn đúng người.
+// Kiểm thử Module 7: khách đúng ca, giấy tờ mã hóa, bưu kiện chống bàn giao trùng và cảnh báo đúng người.
 import { randomUUID } from 'node:crypto';
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,7 +14,8 @@ import * as guests from '../../src/modules/guests/guests.service.js';
 import { uploadImages } from '../../src/services/upload.service.js';
 import { errorHandler } from '../../src/middlewares/errorHandler.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
-import { asUser, createApartment, createBuilding, createHousehold, createSecurity, createManager, createReceptionist, createTechnician, createTicket } from '../helpers/fixtures.js';
+import { asUser, createApartment, createBuilding, createHousehold, createOnDutySecurity, createSecurity, createManager, createReceptionist, createTechnician, createTicket } from '../helpers/fixtures.js';
+import { decryptIdNumber } from '../../src/modules/residents/idCrypto.js';
 import { createAmenity } from '../helpers/fixtures.moduleBDE.js';
 import { startApp, tokenFor } from '../helpers/http.js';
 
@@ -22,21 +23,24 @@ before(connectTestDB);
 afterEach(clearTestDB);
 after(closeTestDB);
 
+const IDENTITY = { idType: 'CCCD', idNumber: '012345678901' };
+
 test('tham số: BOOKING_PAYMENT_HOLD_MINUTES đặt về 0 được; tham số khác vẫn phải > 0', () => {
   assert.doesNotThrow(() => assertValidValue('BOOKING_PAYMENT_HOLD_MINUTES', 15, 0));
   assert.throws(() => assertValidValue('BOOKING_PAYMENT_HOLD_MINUTES', 15, -1), { errorCode: 'VALIDATION_ERROR' });
   assert.throws(() => assertValidValue('SLA_HOURS_URGENT', 24, 0), { errorCode: 'VALIDATION_ERROR' });
 });
 
-test('khách vãng lai: chỉ giữ 4 số cuối, dữ liệu mới không lưu toàn bộ CCCD', async () => {
+test('UC50: lưu số giấy tờ mã hóa, API chỉ trả số đã che và loại giấy tờ', async () => {
   const { apartment } = await createHousehold();
-  const guard = asUser(await createSecurity());
-  const log = await guests.walkIn(guard, { apartmentId: apartment._id, guestName: 'Khách A', idNumber: '8901' });
+  const guard = asUser(await createOnDutySecurity());
+  const log = await guests.walkIn(guard, { apartmentId: apartment._id, guestName: 'Khách A', ...IDENTITY });
   const raw = await GuestLog.findById(log._id).select('+idNumberEnc +idNumberHash').lean();
   assert.equal(raw.idNumber ?? null, null, 'không lưu CCCD dạng rõ');
-  assert.equal(raw.idNumberEnc, null);
-  assert.equal(raw.idNumberHash, null);
-  assert.equal(raw.idLast4, '8901');
+  assert.equal(decryptIdNumber(raw.idNumberEnc), IDENTITY.idNumber);
+  assert.match(raw.idNumberHash, /^[a-f0-9]{64}$/);
+  assert.equal(raw.idLast4, undefined);
+  assert.equal(raw.idType, 'CCCD');
   assert.equal(log.idNumber, '********8901');
 
   const { items } = await guests.listGuests(guard, { page: 1, limit: 20 });
@@ -45,22 +49,50 @@ test('khách vãng lai: chỉ giữ 4 số cuối, dữ liệu mới không lưu
   assert.equal(items[0].idNumberHash, undefined);
 });
 
-test('Module 7: khách chờ cư dân đúng căn đồng ý; từ chối không được check-in', async () => {
+test('UC50: Bảo vệ trong ca ghi khách vào trực tiếp, ngoài ca và sai vai trò bị chặn', async () => {
   const home = await createHousehold();
-  const other = await createHousehold();
-  const guard = asUser(await createSecurity());
-  const log = await guests.walkIn(guard, { apartmentId: home.apartment._id, guestName: 'Khách chờ' });
-  assert.equal(log.status, 'EXPECTED');
-  assert.equal(log.checkInTime, null);
-  await assert.rejects(guests.checkIn(guard, log._id, {}), /cư dân đồng ý/);
-  await assert.rejects(guests.confirmGuest(asUser(other.user), log._id, true), { status: 403 });
-  await guests.confirmGuest(asUser(home.user), log._id, true);
-  assert.equal((await guests.checkIn(guard, log._id, {})).status, 'CHECKED_IN');
-  assert.equal((await guests.checkOut(guard, log._id)).status, 'CHECKED_OUT');
+  const guard = asUser(await createOnDutySecurity());
+  const offDuty = asUser(await createSecurity());
+  const data = { apartmentId: home.apartment._id, guestName: 'Khách tại sảnh', ...IDENTITY };
+  await assert.rejects(guests.walkIn(offDuty, data), { status: 403 });
+  await assert.rejects(guests.walkIn(asUser(home.user), data), { status: 403 });
+  const log = await guests.walkIn(guard, data);
+  assert.equal(log.status, 'CHECKED_IN');
+  assert.ok(log.checkInTime);
+  assert.equal(log.residentConfirmation, null);
+  await assert.rejects(guests.checkOut(offDuty, log._id), { status: 403 });
+  const results = await Promise.allSettled([guests.checkOut(guard, log._id), guests.checkOut(guard, log._id)]);
+  assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+  const saved = await GuestLog.findById(log._id);
+  assert.equal(saved.status, 'CHECKED_OUT');
+  assert.ok(saved.checkOutTime >= saved.checkInTime);
+  assert.equal(await AuditLog.countDocuments({ targetId: log._id, action: 'GUEST_CHECKED_OUT' }), 1);
   await assert.rejects(guests.checkOut(guard, log._id));
-  const denied = await guests.walkIn(guard, { apartmentId: home.apartment._id, guestName: 'Khách bị từ chối' });
-  await guests.confirmGuest(asUser(home.user), denied._id, false);
-  await assert.rejects(guests.checkIn(guard, denied._id, {}), /cư dân đồng ý/);
+});
+
+test('UC50: khách đăng ký trước phải đối chiếu giấy tờ, hai request chỉ ghi nhận vào một lần', async () => {
+  const home = await createHousehold();
+  const guard = asUser(await createOnDutySecurity());
+  const log = await guests.registerGuest(asUser(home.user), { apartmentId: home.apartment._id, guestName: 'Khách đăng ký', expectedTime: new Date(Date.now() + 3600000) });
+  await assert.rejects(guests.checkIn(guard, log._id, {}), /giấy tờ/);
+  const results = await Promise.allSettled([guests.checkIn(guard, log._id, IDENTITY), guests.checkIn(guard, log._id, IDENTITY)]);
+  assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+  assert.equal(await Notification.countDocuments({ refId: log._id }), 1);
+  assert.equal(await AuditLog.countDocuments({ targetId: log._id, action: 'GUEST_CHECKED_IN' }), 1);
+});
+
+test('UC50: lỗi ghi audit hoàn tác check-in và check-out', async (t) => {
+  const home = await createHousehold();
+  const guard = asUser(await createOnDutySecurity());
+  const data = { apartmentId: home.apartment._id, guestName: 'Khách rollback', ...IDENTITY };
+  const failIntake = t.mock.method(AuditLog, 'create', async () => { throw new Error('Lỗi audit'); });
+  await assert.rejects(guests.walkIn(guard, data), /Lỗi audit/);
+  assert.equal(await GuestLog.countDocuments(), 0);
+  failIntake.mock.restore();
+  const log = await guests.walkIn(guard, data);
+  t.mock.method(AuditLog, 'create', async () => { throw new Error('Lỗi audit'); });
+  await assert.rejects(guests.checkOut(guard, log._id), /Lỗi audit/);
+  assert.equal((await GuestLog.findById(log._id)).status, 'CHECKED_IN');
 });
 
 test('Module 7: bưu kiện chỉ giao thành viên đúng căn, hai request chỉ một lần bàn giao, chữ ký không lộ', async () => {
@@ -228,22 +260,29 @@ test('N5-01: HTTP chặn thiếu/giả ảnh trước upload, ảnh hợp lệ l
   } finally { await new Promise((resolve) => server.close(resolve)); }
 });
 
-test('Module 7: HTTP chặn sai quyền, CCCD dài, ảnh thiếu và dữ liệu scan sai', async () => {
+test('Module 7: HTTP kiểm tra quyền, giấy tờ bắt buộc, ca trực và ảnh bưu kiện', async () => {
   const app = await startApp();
   try {
-    const guard = asUser(await createSecurity());
+    const guard = asUser(await createOnDutySecurity());
     const receptionist = asUser(await createReceptionist());
     const home = await createHousehold();
     const request = (method, url, user, body) => app.request(method, url, { user, body });
     assert.equal((await request('POST', '/guests/parcels', guard, {})).status, 403);
     assert.equal((await request('POST', '/guests/parcels', receptionist, { apartmentId: String(home.apartment._id), trackingCode: 'AB', carrier: 'A' })).status, 400);
     assert.equal((await request('POST', '/guests/walk-in', guard, { apartmentId: String(home.apartment._id), guestName: 'Khách', idNumber: '012345678901' })).status, 400);
+    const data = { apartmentId: String(home.apartment._id), guestName: 'Khách HTTP', ...IDENTITY };
+    const created = await request('POST', '/guests/walk-in', guard, data);
+    assert.equal(created.status, 201);
+    assert.equal(created.body.data.status, 'CHECKED_IN');
+    assert.equal(created.body.data.idNumber, '********8901');
+    assert.equal(created.body.data.idNumberEnc, undefined);
+    assert.equal((await request('POST', '/guests/walk-in', asUser(await createSecurity()), data)).status, 403);
     assert.equal((await request('GET', '/guests/operations/incidents', asUser(home.user))).status, 403);
     assert.equal((await request('GET', '/guests/alerts', asUser(home.user))).status, 200);
   } finally { await app.close(); }
 });
 
-test('Module 7: sự cố kỹ thuật dùng ticket gốc, tiếp nhận ở ticket dừng banner; retention đọc cấu hình', async () => {
+test('Module 7: sự cố kỹ thuật dùng ticket gốc, nhận ticket dừng banner', async () => {
   const home = await createHousehold();
   const manager = asUser(await createManager());
   const technician = await createTechnician();
@@ -254,18 +293,38 @@ test('Module 7: sự cố kỹ thuật dùng ticket gốc, tiếp nhận ở tic
   ticket.assignedTo = technician._id; ticket.status = 'IN_PROGRESS'; await ticket.save();
   await guests.runOperationsJobs();
   assert.equal((await guests.activeAlerts(manager)).length, 0);
+});
+
+test('UC50: retention theo ngày vào, cấu hình tháng và dữ liệu cũ không có giờ vào', async () => {
+  const home = await createHousehold();
   await SystemConfig.create({ key: 'GUEST_RETENTION_MONTHS', value: 1, scope: 'BUSINESS' });
-  await GuestLog.collection.insertOne({ apartmentId: home.apartment._id, guestName: 'Khách cũ', createdAt: new Date(Date.now() - 62 * 86400000) });
-  await guests.runOperationsJobs();
+  const now = new Date('2026-11-14T02:00:00Z');
+  await GuestLog.collection.insertMany([
+    { apartmentId: home.apartment._id, guestName: 'Khách cũ', createdAt: new Date('2026-09-01T00:00:00Z') },
+    { apartmentId: home.apartment._id, guestName: 'Vừa vào', checkInTime: new Date('2026-11-13T00:00:00Z'), createdAt: new Date('2026-09-01T00:00:00Z') },
+  ]);
+  assert.equal(await guests.purgeGuestLogs(now), 1);
   assert.equal(await GuestLog.countDocuments({ guestName: 'Khách cũ' }), 0);
+  assert.equal(await GuestLog.countDocuments({ guestName: 'Vừa vào' }), 1);
+  assert.equal(await guests.purgeGuestLogs(now), 0);
+});
+
+test('UC50: hết hạn cuối tháng được tính theo lịch Việt Nam, không xóa sớm', async () => {
+  const home = await createHousehold();
+  await SystemConfig.create({ key: 'GUEST_RETENTION_MONTHS', value: 1, scope: 'BUSINESS' });
+  await GuestLog.collection.insertOne({ apartmentId: home.apartment._id, guestName: 'Cuối tháng', checkInTime: new Date('2026-01-31T02:00:00Z'), createdAt: new Date('2026-01-01T00:00:00Z') });
+  assert.equal(await guests.purgeGuestLogs(new Date('2026-02-28T01:59:59Z')), 0);
+  assert.equal(await guests.purgeGuestLogs(new Date('2026-02-28T02:00:00Z')), 1);
 });
 
 test('sổ khách: dữ liệu cũ còn CCCD dạng rõ vẫn hiển thị đã che', async () => {
   const { apartment } = await createHousehold();
   const guard = asUser(await createSecurity());
   await GuestLog.collection.insertOne({ apartmentId: apartment._id, guestName: 'Cũ', idNumber: '079912345678', status: 'CHECKED_IN', createdAt: new Date() });
+  await GuestLog.collection.insertOne({ apartmentId: apartment._id, guestName: 'Chỉ còn 4 số', idLast4: '1234', status: 'CHECKED_IN', createdAt: new Date() });
   const { items } = await guests.listGuests(guard, { page: 1, limit: 20 });
-  assert.equal(items[0].idNumber, '********5678');
+  assert.equal(items.find((item) => item.guestName === 'Cũ').idNumber, '********5678');
+  assert.equal(items.find((item) => item.guestName === 'Chỉ còn 4 số').idNumber, '********1234');
 });
 
 test('lookup tiện ích: cư dân chỉ thấy tiện ích đang mở, dùng chung hoặc thuộc tòa của mình', async () => {

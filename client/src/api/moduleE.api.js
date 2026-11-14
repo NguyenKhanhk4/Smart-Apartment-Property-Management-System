@@ -84,7 +84,7 @@ export const guestApi = {
   register: (body) => http.post('/guests', body),
   cancel: (id) => http.delete(`/guests/${id}`),
   walkIn: (body) => http.post('/guests/walk-in', body),
-  checkIn: (id, note) => http.patch(`/guests/${id}/check-in`, note ? { note } : {}),
+  checkIn: (id, body = {}) => http.patch(`/guests/${id}/check-in`, typeof body === 'string' ? { note: body } : body),
   checkOut: (id) => http.patch(`/guests/${id}/check-out`),
 };
 

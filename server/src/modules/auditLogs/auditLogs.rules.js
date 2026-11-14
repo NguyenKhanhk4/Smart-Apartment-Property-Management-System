@@ -46,6 +46,8 @@ export const auditExportQuery = auditQuery
 export const LABELS = {
   PARCEL_RECEIVED: 'Tiếp nhận bưu kiện',
   PARCEL_HANDED_OVER: 'Bàn giao hoặc trả bưu kiện',
+  GUEST_CHECKED_IN: 'Ghi nhận khách vào',
+  GUEST_CHECKED_OUT: 'Ghi nhận khách rời',
   // Tài khoản (Mô đun 1)
   ROLE_ASSIGNED: 'Gán vai trò tài khoản',
   ACCOUNT_LOCKED: 'Khóa tài khoản',
@@ -161,6 +163,7 @@ export const auditActionLabel = (action) => LABELS[action] ?? action.replaceAll(
 
 const TARGET_LABELS = {
   parcels: 'Bưu kiện',
+  guest_logs: 'Sổ khách',
   maintenance_fund: 'Quỹ bảo trì', fund_transactions: 'Giao dịch quỹ', fund_proposals: 'Đề xuất chi quỹ',
   operating_expenses: 'Chi phí vận hành', users: 'Tài khoản', buildings: 'Tòa nhà', apartments: 'Căn hộ',
   contracts: 'Hợp đồng', residents: 'Cư dân', vehicles: 'Phương tiện',

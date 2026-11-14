@@ -15,6 +15,10 @@ import * as service from './guests.service.js';
 const router = Router();
 const GATE = ['STAFF:SECURITY'];
 const VIEWERS = ['RESIDENT', 'STAFF:SECURITY', 'STAFF:RECEPTIONIST', 'MANAGER'];
+const identityFields = {
+  idType: Joi.string().valid('CCCD', 'CMND', 'PASSPORT', 'OTHER'),
+  idNumber: Joi.string().trim().pattern(/^[A-Za-z0-9-]{6,30}$/),
+};
 
 router.get('/alerts', authenticate, authorize(...VIEWERS, 'STAFF:TECHNICIAN'), async (req, res) => ok(res, await service.activeAlerts(req.user)));
 router.get('/operations/summary', authenticate, authorize('MANAGER', 'BOARD'), validate({ query: Joi.object({
@@ -144,7 +148,7 @@ router.post(
  * /guests/walk-in:
  *   post:
  *     tags: [Sổ khách]
- *     summary: Bảo vệ ghi khách vãng lai chưa đăng ký — bắt buộc tên + căn hộ (UC-E08, BR-O10)
+ *     summary: UC50 — Bảo vệ đang trực đối chiếu giấy tờ và ghi nhận khách vào
  */
 router.post(
   '/walk-in',
@@ -154,10 +158,11 @@ router.post(
     body: Joi.object({
       ...guestFields,
       apartmentId: objectId().required(),
-      idNumber: Joi.string().trim().pattern(/^\d{4}$/).allow(''),
+      idType: identityFields.idType.required(),
+      idNumber: identityFields.idNumber.required(),
     }),
   }),
-  async (req, res) => created(res, await service.walkIn(req.user, req.body), 'Đã gửi yêu cầu, chờ cư dân đồng ý'),
+  async (req, res) => created(res, await service.walkIn(req.user, req.body), 'Đã ghi nhận khách vào'),
 );
 
 /**
@@ -182,7 +187,7 @@ router.patch(
   '/:id/check-in',
   authenticate,
   authorize(...GATE),
-  validate({ params: idParams, body: Joi.object({ note: guestFields.note }) }),
+  validate({ params: idParams, body: Joi.object({ note: guestFields.note, ...identityFields }) }),
   async (req, res) => ok(res, await service.checkIn(req.user, req.params.id, req.body ?? {}), 'Đã ghi nhận khách đến'),
 );
 
