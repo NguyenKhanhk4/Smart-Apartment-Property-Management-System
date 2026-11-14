@@ -1,67 +1,78 @@
 import { Link, Outlet } from 'react-router';
-import { CheckCircleFilled } from '@ant-design/icons';
+import { ConfigProvider } from 'antd';
+import { AppstoreOutlined, DatabaseOutlined, MessageOutlined, TeamOutlined, ToolOutlined, WalletOutlined } from '@ant-design/icons';
 import BrandLogo from '../components/BrandLogo';
+import { getAntdTheme } from '../config/theme';
 import { AuthPortalContext, PORTALS, portalPath } from '../features/auth/authPortal';
+import './AuthLayout.css';
 
-const HIGHLIGHTS = [
-  'Hóa đơn, quỹ bảo trì minh bạch cho cư dân và Ban quản trị',
-  'Tự động nhắc bảo trì thiết bị, leo thang phản ánh quá hạn',
-  'Đặt tiện ích, sổ khách, bảng tin trên cùng một ứng dụng',
-];
+// Ảnh minh họa tạo từ hai bản thiết kế đã duyệt, lưu cùng project để không phụ thuộc URL bên ngoài.
+const PORTAL_CONTENT = {
+  resident: {
+    image: '/images/auth/resident-courtyard-v1.jpg',
+    badge: 'Cổng cư dân',
+    title: ['Chào mừng bạn về nhà.'],
+    description: 'Theo dõi phí dịch vụ, gửi phản ánh và sử dụng tiện ích ngay tại nơi bạn sống.',
+    features: [
+      { icon: WalletOutlined, label: 'Phí dịch vụ' },
+      { icon: MessageOutlined, label: 'Phản ánh' },
+      { icon: AppstoreOutlined, label: 'Tiện ích' },
+    ],
+  },
+  staff: {
+    image: '/images/auth/staff-evening-v1.jpg',
+    badge: 'Cổng nội bộ',
+    title: ['Vận hành tòa nhà,', 'kết nối cộng đồng.'],
+    description: 'Quản lý thông tin cư trú, công việc vận hành và tài chính trên SAPMS.',
+    features: [
+      { icon: TeamOutlined, label: 'Cư trú' },
+      { icon: ToolOutlined, label: 'Vận hành' },
+      { icon: DatabaseOutlined, label: 'Tài chính' },
+    ],
+  },
+};
 
-// Khung trang đăng nhập / đăng ký: cột trái thương hiệu (nền midnight), cột phải là form (Outlet).
-// Logo có view-transition-name "brand-logo" → đăng nhập xong logo bay lên góc sidebar.
 export default function AuthLayout({ portal = 'resident' }) {
+  const content = PORTAL_CONTENT[portal];
   const otherPortal = PORTALS[portal].other;
   return (
-    <div
-      className="min-h-screen flex flex-col md:flex-row"
-      style={{ background: 'linear-gradient(160deg, #0F1B2D 0%, #1E3A5F 100%)' }}
-    >
-      <section className="relative overflow-hidden md:w-5/12 p-8 md:p-14 flex flex-col justify-between text-white">
-        <div
-          className="absolute inset-0 opacity-[0.06] pointer-events-none"
-          style={{ backgroundImage: 'radial-gradient(circle, #C9A35B 1px, transparent 1px)', backgroundSize: '28px 28px' }}
-        />
-        <div className="relative">
-          <div className="flex items-center gap-3 mb-10 md:mb-14">
-            <BrandLogo size={48} />
+    <ConfigProvider theme={getAntdTheme(false)}>
+      <div className={`auth-shell auth-shell--${portal}`}>
+        <section className="auth-hero" aria-labelledby="auth-hero-title">
+          <img className="auth-hero-image" src={content.image} alt="" fetchPriority="high" decoding="async" />
+          <div className="auth-hero-shade" aria-hidden="true" />
+          <div className="auth-brand">
+            <BrandLogo size={54} />
             <div className="vt-brand-title">
-              <div className="text-2xl font-bold tracking-tight">SAPMS</div>
-              <div className="text-xs text-gold font-medium tracking-wider uppercase">Smart Apartment Property Management</div>
+              <div className="auth-brand-name">SAPMS</div>
+              <div className="auth-brand-caption">Smart Apartment Property Management</div>
             </div>
           </div>
-          <h1 className="font-serif-luxury text-3xl md:text-4xl leading-tight m-0 mb-4">
-            Vận hành chung cư tinh gọn, minh bạch.
-          </h1>
-          <div className="w-8 h-0.5 bg-gold mb-4" />
-          <p className="text-side-text text-sm leading-relaxed max-w-md m-0">
-            Một nền tảng kết nối Ban quản lý, Ban quản trị, kỹ thuật viên, lễ tân và cư dân.
-          </p>
-        </div>
-        <ul className="relative mt-10 pt-8 border-t border-white/10 space-y-3 list-none p-0 m-0 hidden md:block">
-          {HIGHLIGHTS.map((h) => (
-            <li key={h} className="flex items-center gap-2.5 text-xs text-[#E8EEF5]">
-              <CheckCircleFilled className="text-gold" />
-              {h}
-            </li>
-          ))}
-        </ul>
-      </section>
+          <div className="auth-hero-content">
+            <h1 id="auth-hero-title" className="auth-hero-title">
+              {content.title.map((line) => <span key={line}>{line}</span>)}
+            </h1>
+            <p className="auth-hero-description">{content.description}</p>
+            <ul className="auth-feature-list">
+              {content.features.map(({ icon: Icon, label }) => (
+                <li key={label}><Icon aria-hidden="true" /><span>{label}</span></li>
+              ))}
+            </ul>
+          </div>
+        </section>
 
-      <section className="flex-1 flex items-center justify-center p-6 md:p-14">
-        <div className="w-full max-w-md rounded-[14px] border border-line bg-white p-8 md:p-10 shadow-[0_8px_24px_rgba(15,27,45,0.12)]">
-          <AuthPortalContext.Provider value={portal}>
-            <Outlet />
-          </AuthPortalContext.Provider>
-          {/* Lối tắt sang cổng kia: chỉ khi chạy dev; bản chính thức mỗi bên dùng đúng đường dẫn của mình */}
-          {import.meta.env.DEV && (
-            <Link to={portalPath(otherPortal, '/login')} className="mt-4 block text-center text-[13px] font-semibold text-navy hover:text-gold">
-              Sang {PORTALS[otherPortal].label}
+        <main className="auth-content-pane" aria-labelledby="auth-form-title">
+          <div className="auth-form-wrap">
+            <div className="auth-portal-badge">{content.badge}</div>
+            <AuthPortalContext.Provider value={portal}>
+              <Outlet />
+            </AuthPortalContext.Provider>
+            <Link className="auth-portal-switch" to={portalPath(otherPortal, '/login')}>
+              {otherPortal === 'staff' ? 'Sang cổng Ban quản lý' : 'Sang cổng cư dân'}
             </Link>
-          )}
-        </div>
-      </section>
-    </div>
+          </div>
+        </main>
+      </div>
+    </ConfigProvider>
   );
 }
