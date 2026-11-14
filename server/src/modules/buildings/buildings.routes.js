@@ -6,13 +6,15 @@ import { validate } from '../../middlewares/validate.js';
 import { created, ok } from '../../utils/response.js';
 import { idParams, objectId } from '../../utils/validators.js';
 import * as service from './buildings.service.js';
+import * as inventory from './inventory.service.js';
+import { sourceReference, changeReason, floorInventory, inventoryRows, inventoryBody } from './inventory.rules.js';
 
 // Module A — UC13: Quản lý tòa nhà, block và sơ đồ tầng
 const router = Router();
 const VIEWERS = ['MANAGER', 'STAFF:RECEPTIONIST'];
 
 const buildingFields = {
-  code: Joi.string().trim().uppercase().max(20),
+  code: Joi.string().trim().uppercase().pattern(/^[A-Z0-9_-]+$/).max(20),
   name: Joi.string().trim().min(1).max(100),
   address: Joi.string().trim().max(200).allow(''),
   totalFloors: Joi.number().integer().min(1).max(200),
@@ -21,11 +23,16 @@ const buildingFields = {
 const createBuildingBody = Joi.object({
   code: buildingFields.code.required(),
   name: buildingFields.name.required(),
-  address: buildingFields.address,
+  address: Joi.string().trim().min(1).max(200).required(),
   totalFloors: buildingFields.totalFloors.required(),
+  sourceReference: sourceReference.required(),
+  floors: floorInventory,
+  apartments: inventoryRows,
 });
 
-const updateBuildingBody = Joi.object(buildingFields).min(1);
+const updateBuildingBody = Joi.object({ ...buildingFields,
+  reason: changeReason.required(), sourceReference: sourceReference.required(),
+}).min(3);
 
 /**
  * @openapi
@@ -169,5 +176,16 @@ router.put(
     ok(res, await service.saveBlock(id, blockId, req.validated.body, req.user, req.ip));
   },
 );
+
+router.get('/:id/inventory', authenticate, authorize(...VIEWERS), validate({ params: idParams }), async (req, res) => {
+  ok(res, await inventory.getInventory(req.validated.params.id));
+});
+router.post('/:id/inventory/confirm', authenticate, authorize('MANAGER'),
+  validate({ params: idParams, body: inventoryBody }), async (req, res) => {
+    ok(res, await inventory.confirmInventory(req.validated.params.id, req.validated.body, req.user, req.ip));
+  });
+router.get('/:id/inventory/history', authenticate, authorize('MANAGER'), validate({ params: idParams }), async (req, res) => {
+  ok(res, await inventory.inventoryHistory(req.validated.params.id));
+});
 
 export default router;

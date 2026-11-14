@@ -6,8 +6,10 @@ import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
-import { idParams, objectId, phoneVn, ymd } from '../../utils/validators.js';
+import { idParams, objectId, phoneVn, ymd, period } from '../../utils/validators.js';
 import * as service from './apartments.service.js';
+import { correctApartment } from './apartmentCorrections.service.js';
+import { sourceReference, changeReason } from '../buildings/inventory.rules.js';
 import { listApartmentResidents } from '../residents/residents.service.js';
 import { issueOwnerAccount } from '../contracts/contracts.service.js';
 
@@ -44,6 +46,7 @@ const propertyFields = {
 
 const createApartmentBody = Joi.object({
   ...propertyFields,
+  sourceReference: sourceReference.required(), reason: changeReason.required(),
   buildingId: apartmentFields.buildingId.required(),
   code: apartmentFields.code.required(),
   floor: apartmentFields.floor.required(),
@@ -224,11 +227,24 @@ router.delete(
   '/:id',
   authenticate,
   authorize('MANAGER'),
-  validate({ params: idParams }),
+  validate({ params: idParams, body: Joi.object({ reason: changeReason.required(), sourceReference: sourceReference.required() }) }),
   async (req, res) => {
-    const result = await service.deleteApartment(req.validated.params.id, req.user, req.ip);
+    const result = await service.deleteApartment(req.validated.params.id, req.user, req.ip, req.validated.body);
     ok(res, result);
   },
 );
+
+router.patch('/:id/catalog', authenticate, authorize('MANAGER'), validate({ params: idParams,
+  body: Joi.object({
+    code: Joi.string().trim().uppercase().pattern(/^[A-Z0-9_-]+$/).max(20),
+    floor: Joi.number().integer().min(1).max(200),
+    managementArea: Joi.number().min(1).max(100000).precision(2),
+    effectivePeriod: period(),
+    reason: changeReason.required(), sourceReference: sourceReference.required(),
+    expectedUpdatedAt: Joi.string().isoDate().required(),
+  }).or('code', 'floor', 'managementArea'),
+}), async (req, res) => {
+  ok(res, await correctApartment(req.validated.params.id, req.validated.body, req.user, req.ip));
+});
 
 export default router;

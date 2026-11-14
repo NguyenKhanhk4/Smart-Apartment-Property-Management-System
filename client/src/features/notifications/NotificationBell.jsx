@@ -1,8 +1,9 @@
-// Module 8: chuông và thông báo trình duyệt khi được cấp quyền, giữ banner khẩn Module 7 theo quyền backend.
+// Module 8: chuông và thông báo trình duyệt khi được cấp quyền.
+// An ninh (guest alerts) giữ dạng banner nổi; sự cố khẩn cấp (BR-X6) hiện modal chặn để không bị bỏ sót.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
-import { Alert, App, Badge, Button } from 'antd';
+import { Alert, App, Badge, Button, Modal } from 'antd';
 import { BellOutlined } from '@ant-design/icons';
 import { guestApi, notificationApi, ticketApi } from '../../api/moduleE.api';
 import { usePolling } from '../../hooks/usePolling';
@@ -22,10 +23,28 @@ export default function NotificationBell({ area, variant }) {
   const [receiving, setReceiving] = useState(null);
   const { hasRole } = useAuth();
   const { message } = App.useApp();
-  const canSeeAlerts = hasRole('MANAGER', 'RESIDENT', 'STAFF:SECURITY', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN');
-  // BR-X6 (Người 4): sự cố khẩn cấp quá hạn nhận chưa ai nhận — chung banner với cảnh báo an ninh
-  const canSeeTicketAlerts = hasRole('MANAGER', 'STAFF:SECURITY', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN');
+  // Mỗi role chỉ nhận đúng 1 loại cảnh báo khẩn, không chồng nhau: Bảo vệ/Lễ tân → an ninh (banner);
+  // Trưởng BQL/KTV → sự cố khẩn cấp ticket (modal). Cư dân chỉ xem được broadcast an ninh.
+  const canSeeAlerts = hasRole('RESIDENT', 'STAFF:SECURITY', 'STAFF:RECEPTIONIST');
+  // BR-X6 (Người 4): sự cố khẩn cấp quá hạn nhận chưa ai nhận — hiện modal riêng, không tự đóng được
+  const canSeeTicketAlerts = hasRole('MANAGER', 'STAFF:TECHNICIAN');
+  const isTechnician = hasRole('STAFF:TECHNICIAN');
   const [ticketAlerts, setTicketAlerts] = useState([]);
+  // Bấm "Xem phiếu" → điều hướng sang trang chi tiết, không giữ modal che màn hình đó nữa (phiếu vẫn
+  // active ở BE, chưa claim/ack); còn sự cố khẩn mới (chưa xem) vẫn phải chặn như cũ.
+  const [viewedTicketIds, setViewedTicketIds] = useState(() => new Set());
+  const viewTicket = (id) => {
+    navigate(`/app/tickets/${id}`);
+    setViewedTicketIds((prev) => new Set(prev).add(id));
+  };
+  const pendingTicketAlerts = ticketAlerts.filter((t) => !viewedTicketIds.has(t._id));
+  // KTV: nhận = claim thật (gán phiếu cho mình), không chỉ tắt chuông — tránh nhầm với "Đã tiếp nhận" (chỉ ack cảnh báo)
+  const claimTicket = async (id) => {
+    setReceiving(id);
+    try { await ticketApi.claim(id); setTicketAlerts((items) => items.filter((a) => a._id !== id)); message.success('Đã nhận sự cố'); }
+    catch (error) { message.error(error.message); }
+    finally { setReceiving(null); }
+  };
   const receiveTicket = async (id) => {
     setReceiving(id);
     try { await ticketApi.emergencyAck(id); setTicketAlerts((items) => items.filter((a) => a._id !== id)); message.success('Đã tiếp nhận cảnh báo'); }
@@ -57,7 +76,7 @@ export default function NotificationBell({ area, variant }) {
     if (canSeeTicketAlerts) ticketApi.emergencyAlerts().then((res) => setTicketAlerts(res.data)).catch(() => {});
   }, [canSeeAlerts, canSeeTicketAlerts]);
 
-  usePolling(refresh, canSeeAlerts ? 15000 : POLL_MS);
+  usePolling(refresh, canSeeAlerts || canSeeTicketAlerts ? 15000 : POLL_MS);
   useEffect(() => {
     refresh();
     window.addEventListener(NOTIFICATIONS_CHANGED, refresh);
@@ -68,18 +87,52 @@ export default function NotificationBell({ area, variant }) {
     };
   }, [refresh]);
 
-  const banner = alerts.length || ticketAlerts.length ? createPortal(<div role="region" aria-label="Cảnh báo khẩn cấp" style={{ position: 'fixed', bottom: 76, left: 12, right: 12, zIndex: 1100, maxHeight: '30vh', overflowY: 'auto' }}>
+  const banner = alerts.length ? createPortal(<div role="region" aria-label="Cảnh báo khẩn cấp" style={{ position: 'fixed', bottom: 76, left: 12, right: 12, zIndex: 1100, maxHeight: '30vh', overflowY: 'auto' }}>
     {alerts.map((a) => <Alert key={a._id} type="error" showIcon title={`KHẨN CẤP · ${a.location}`} description={a.description}
       action={a.canAcknowledge && <Button loading={receiving === a._id} onClick={() => receive(a._id)}>Đã tiếp nhận</Button>} />)}
-    {ticketAlerts.map((t) => <Alert key={t._id} type="error" showIcon className="mt-2"
-      title={`KHẨN CẤP · Sự cố ${t.code} chưa có người nhận`}
-      description={`${t.title}${t.location ? ` — ${t.location}` : ''}${t.apartmentId?.code ? ` (căn ${t.apartmentId.code})` : ''}`}
-      action={<span className="flex gap-2"><Button onClick={() => navigate(`/app/tickets/${t._id}`)}>Xem phiếu</Button>
-        {t.canAcknowledge && <Button danger loading={receiving === t._id} onClick={() => receiveTicket(t._id)}>Đã tiếp nhận</Button>}</span>} />)}
   </div>, document.body) : null;
+
+  const ticketModal = (
+    <Modal
+      open={pendingTicketAlerts.length > 0}
+      title={`KHẨN CẤP · ${pendingTicketAlerts.length} sự cố chưa có người nhận`}
+      closable={false}
+      maskClosable={false}
+      footer={null}
+      width={520}
+      zIndex={1200}
+    >
+      <div className="flex flex-col gap-3">
+        {pendingTicketAlerts.map((t) => (
+          <Alert
+            key={t._id}
+            type="error"
+            showIcon
+            title={`Sự cố ${t.code}`}
+            description={`${t.title}${t.location ? ` — ${t.location}` : ''}${t.apartmentId?.code ? ` (căn ${t.apartmentId.code})` : ''}`}
+            action={
+              <span className="flex flex-col gap-2">
+                <Button onClick={() => viewTicket(t._id)}>Xem phiếu</Button>
+                {t.canAcknowledge && isTechnician && (
+                  <Button type="primary" danger loading={receiving === t._id} onClick={() => claimTicket(t._id)}>
+                    Nhận xử lý
+                  </Button>
+                )}
+                {t.canAcknowledge && !isTechnician && (
+                  <Button danger loading={receiving === t._id} onClick={() => receiveTicket(t._id)}>
+                    Đã tiếp nhận
+                  </Button>
+                )}
+              </span>
+            }
+          />
+        ))}
+      </div>
+    </Modal>
+  );
   if (variant === 'resident') {
     return (
-      <>{banner}<button
+      <>{banner}{ticketModal}<button
         type="button"
         aria-label={count > 0 ? `Thông báo, ${count} chưa đọc` : 'Thông báo'}
         onClick={() => navigate(`/${area}/notifications`, { viewTransition: true })}
@@ -96,7 +149,7 @@ export default function NotificationBell({ area, variant }) {
   }
 
   return (
-    <>{banner}<Badge count={count} size="small" offset={[-4, 4]}>
+    <>{banner}{ticketModal}<Badge count={count} size="small" offset={[-4, 4]}>
       <Button
         type="text"
         aria-label="Thông báo"
