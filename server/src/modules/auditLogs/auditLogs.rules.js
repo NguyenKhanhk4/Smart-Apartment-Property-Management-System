@@ -44,6 +44,8 @@ export const auditExportQuery = auditQuery
 
 // Nhãn tiếng Việt của mọi hành động; test kiểm tra hành động mới thêm vào AUDIT_ACTIONS phải có nhãn
 export const LABELS = {
+  PARCEL_RECEIVED: 'Tiếp nhận bưu kiện',
+  PARCEL_HANDED_OVER: 'Bàn giao hoặc trả bưu kiện',
   // Tài khoản (Mô đun 1)
   ROLE_ASSIGNED: 'Gán vai trò tài khoản',
   ACCOUNT_LOCKED: 'Khóa tài khoản',
@@ -158,6 +160,7 @@ export const LABELS = {
 export const auditActionLabel = (action) => LABELS[action] ?? action.replaceAll('_', ' ');
 
 const TARGET_LABELS = {
+  parcels: 'Bưu kiện',
   maintenance_fund: 'Quỹ bảo trì', fund_transactions: 'Giao dịch quỹ', fund_proposals: 'Đề xuất chi quỹ',
   operating_expenses: 'Chi phí vận hành', users: 'Tài khoản', buildings: 'Tòa nhà', apartments: 'Căn hộ',
   contracts: 'Hợp đồng', residents: 'Cư dân', vehicles: 'Phương tiện',

@@ -1,6 +1,6 @@
 // Đăng ký cron toàn hệ thống và lịch nhắc khách, bưu kiện, tuần tra, cảnh báo khẩn Module 7.
 import cron from 'node-cron';
-import { runOperationsJobs } from '../modules/guests/guests.service.js';
+import { remindParcels, runOperationsJobs } from '../modules/guests/guests.service.js';
 import { env } from '../config/env.js';
 import { CRON_JOBS } from '../constants/enums.js';
 import { runTrackedJob } from './cronRunner.js';
@@ -21,6 +21,7 @@ import { remindProposals } from '../modules/fund/fund.service.js';
  */
 export const JOBS = [
   { name: CRON_JOBS.OPERATIONS_SECURITY, schedule: '* * * * *', handler: runOperationsJobs },
+  { name: CRON_JOBS.PARCEL_REMIND, schedule: '0 9 * * *', handler: remindParcels },
   // UC-E06 / BR-O8 — 09:00 hằng ngày
   { name: CRON_JOBS.TICKET_ESCALATE, schedule: '0 9 * * *', handler: escalateOverdueTickets },
   // Người 4 — mỗi phút: cảnh báo sự cố quá hạn nhận / phản ánh quá hạn phản hồi + cảnh báo khẩn lặp 15 phút (BR-X6)

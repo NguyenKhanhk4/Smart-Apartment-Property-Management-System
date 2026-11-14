@@ -7,7 +7,7 @@ import { Writable } from 'node:stream';
 import { v2 as cloudinary } from 'cloudinary';
 import { env } from '../../src/config/env.js';
 import guestsRouter from '../../src/modules/guests/guests.routes.js';
-import { GuestLog, SystemConfig, DutyShift, Notification } from '../../src/models/index.js';
+import { AuditLog, GuestLog, SystemConfig, DutyShift, Notification, User } from '../../src/models/index.js';
 import { Parcel, PatrolTour, SecurityIncident } from '../../src/models/GuestLog.js';
 import { assertValidValue } from '../../src/modules/systemConfigs/configRules.js';
 import * as guests from '../../src/modules/guests/guests.service.js';
@@ -69,13 +69,20 @@ test('Module 7: bưu kiện chỉ giao thành viên đúng căn, hai request ch�
   const receptionist = asUser(await createReceptionist());
   const parcel = await guests.receiveParcel(receptionist, { apartmentId: home.apartment._id, trackingCode: 'VAN-DON-1', carrier: 'Đơn vị A' }, ['https://example.test/photo.png']);
   const signature = 'data:image/png;base64,' + Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(120, 1)]).toString('base64');
+  await assert.rejects(guests.handOverParcel(receptionist, parcel._id, { recipientId: home.user._id, signature: '' }), /chữ ký/);
+  await assert.rejects(guests.handOverParcel(asUser(home.user), parcel._id, { recipientId: home.user._id, signature }), { status: 403 });
   await assert.rejects(guests.handOverParcel(receptionist, parcel._id, { recipientId: other.user._id, signature }), /đúng căn/);
+  await User.updateOne({ _id: home.user._id }, { $set: { isActive: false } });
+  await assert.rejects(guests.handOverParcel(receptionist, parcel._id, { recipientId: home.user._id, signature }), /đúng căn/);
+  await User.updateOne({ _id: home.user._id }, { $set: { isActive: true } });
   const results = await Promise.allSettled([1, 2].map(() => guests.handOverParcel(receptionist, parcel._id, { recipientId: home.user._id, signature })));
   assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
   assert.equal((await Parcel.findById(parcel._id)).status, 'COLLECTED');
   const listed = await guests.listOperations(asUser(home.user), 'parcels');
   assert.equal(listed.items[0].signature, undefined);
   assert.equal((await guests.parcelReceipt(receptionist, parcel._id)).signature, signature);
+  assert.equal(await AuditLog.countDocuments({ action: 'PARCEL_RECEIVED', targetId: parcel._id }), 1);
+  assert.equal(await AuditLog.countDocuments({ action: 'PARCEL_HANDED_OVER', targetId: parcel._id }), 1);
   await assert.rejects(guests.parcelReceipt(asUser(home.user), parcel._id), { status: 403 });
   assert.equal((await guests.listOperations(asUser(other.user), 'parcels')).items.length, 0);
   await assert.rejects(guests.listOperations(asUser(other.user), 'parcels', { apartmentId: String(home.apartment._id) }), { status: 403 });
@@ -101,19 +108,52 @@ test('Module 7: tuần tra chỉ nhận QR thuộc lượt, đúng người/ca; 
   assert.equal((await guests.listOperations(guard, 'checkpoints')).items[0].token, undefined);
 });
 
-test('Module 7: cron nhắc bưu kiện 3 ngày một lần duy nhất, quá 14 ngày chờ trả rồi xác nhận trả thật', async () => {
+test('UC51/61: lỗi ghi nhật ký hoàn tác nhận kiện và bàn giao, có thể thử lại an toàn', async (t) => {
   const home = await createHousehold();
   const receptionist = asUser(await createReceptionist());
-  const now = new Date();
+  const data = { apartmentId: home.apartment._id, trackingCode: 'ROLLBACK', carrier: 'Vận chuyển' };
+  const failedAudit = t.mock.method(AuditLog, 'create', async () => { throw new Error('Lỗi audit giả lập'); });
+  await assert.rejects(guests.receiveParcel(receptionist, data, ['https://example.test/p.png']), /Lỗi audit/);
+  assert.equal(await Parcel.countDocuments(), 0);
+  assert.equal(await Notification.countDocuments(), 0);
+  failedAudit.mock.restore();
+  const parcel = await guests.receiveParcel(receptionist, data, ['https://example.test/p.png']);
+  const signature = 'data:image/png;base64,' + Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(120, 1)]).toString('base64');
+  t.mock.method(AuditLog, 'create', async () => { throw new Error('Lỗi audit giả lập'); });
+  await assert.rejects(guests.handOverParcel(receptionist, parcel._id, { recipientId: home.user._id, signature }), /Lỗi audit/);
+  assert.equal((await Parcel.findById(parcel._id)).status, 'STORED');
+});
+
+test('UC51: nhắc kiện quá 3 ngày một lần mỗi ngày, giữ kiện quá 14 ngày và dừng nhắc sau bàn giao', async () => {
+  const home = await createHousehold();
+  const receptionist = asUser(await createReceptionist());
+  const now = new Date('2026-11-14T02:00:00Z'); // 09:00 Việt Nam
   const parcel = await Parcel.create({ apartmentId: home.apartment._id, trackingCode: 'OLD', carrier: 'Vận chuyển', imageUrls: ['https://example.test/p.png'], receivedBy: receptionist.id });
   await Parcel.collection.updateOne({ _id: parcel._id }, { $set: { createdAt: new Date(+now - 4 * 86400000) } });
-  await guests.runOperationsJobs(now);
-  await guests.runOperationsJobs(now);
+  await Promise.all([guests.remindParcels(now), guests.remindParcels(now)]);
   assert.equal(await Notification.countDocuments({ refId: parcel._id, title: 'Nhắc nhận bưu kiện' }), 1);
-  await guests.runOperationsJobs(new Date(+now + 11 * 86400000));
-  assert.equal((await Parcel.findById(parcel._id)).status, 'AWAITING_RETURN');
-  assert.equal((await guests.handOverParcel(receptionist, parcel._id, { returned: true })).status, 'RETURNED');
-  await assert.rejects(guests.handOverParcel(receptionist, parcel._id, { returned: true }));
+  const later = new Date(+now + 11 * 86400000);
+  await guests.remindParcels(later);
+  assert.equal(await Notification.countDocuments({ refId: parcel._id, title: 'Nhắc nhận bưu kiện' }), 2);
+  assert.equal((await Parcel.findById(parcel._id)).status, 'STORED');
+  await Parcel.updateOne({ _id: parcel._id }, { $set: { status: 'COLLECTED' } });
+  await guests.remindParcels(new Date(+later + 86400000));
+  assert.equal(await Notification.countDocuments({ refId: parcel._id, title: 'Nhắc nhận bưu kiện' }), 2);
+});
+
+test('UC51: không nhắc trước mốc 3 ngày; kiện Chờ trả cũ vẫn được theo dõi và xác nhận trả', async () => {
+  const home = await createHousehold();
+  const receptionist = asUser(await createReceptionist());
+  const now = new Date('2026-11-14T02:00:00Z');
+  const recent = await Parcel.create({ apartmentId: home.apartment._id, trackingCode: 'RECENT', carrier: 'Vận chuyển', imageUrls: ['https://example.test/p.png'], receivedBy: receptionist.id });
+  const legacy = await Parcel.create({ apartmentId: home.apartment._id, trackingCode: 'LEGACY', carrier: 'Vận chuyển', imageUrls: ['https://example.test/p.png'], receivedBy: receptionist.id, status: 'AWAITING_RETURN' });
+  await Parcel.collection.updateOne({ _id: recent._id }, { $set: { createdAt: new Date(+now - 3 * 86400000) } });
+  await Parcel.collection.updateOne({ _id: legacy._id }, { $set: { createdAt: new Date(+now - 20 * 86400000) } });
+  await guests.remindParcels(now);
+  assert.equal(await Notification.countDocuments({ refId: recent._id }), 0);
+  assert.equal(await Notification.countDocuments({ refId: legacy._id }), 1);
+  assert.equal((await guests.handOverParcel(receptionist, legacy._id, { returned: true })).status, 'RETURNED');
+  await assert.rejects(guests.handOverParcel(receptionist, legacy._id, { returned: true }));
 });
 
 test('Module 7: cảnh báo khẩn nhắc sau 15 phút, chỉ người đang trực/manager tiếp nhận và dừng nhắc', async () => {

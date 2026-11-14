@@ -1,9 +1,11 @@
 // Module 7: xử lý khách, bưu kiện, tuần tra và cảnh báo khẩn với kiểm tra quyền/phạm vi ở backend.
 import { randomUUID } from 'node:crypto';
-import { GUEST_STATUS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
+import { AUDIT_ACTIONS, GUEST_STATUS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
 import { Apartment, GuestLog, Resident, User, DutyShift, Ticket } from '../../models/index.js';
 import { Parcel, PatrolCheckpoint, PatrolTour, SecurityIncident } from '../../models/GuestLog.js';
 import { notify, notifyRoles, notifyApartment } from '../../services/notification.service.js';
+import { logAudit } from '../../services/auditLog.service.js';
+import { withTransaction } from '../../utils/transaction.js';
 import { getConfig } from '../../services/systemConfig.service.js';
 import { getOnDuty } from '../dutyShifts/dutyShifts.service.js';
 import { getActiveApartmentIds, resolveResidentApartment } from '../../services/residency.service.js';
@@ -155,10 +157,15 @@ export async function receiveParcel(user, data, imageUrls) {
   requireStaff(user, 'RECEPTIONIST');
   if (!(await Apartment.exists({ _id: data.apartmentId }))) throw ApiError.badRequest('Căn hộ không tồn tại');
   if (!imageUrls?.length) throw ApiError.badRequest('Cần ảnh bưu kiện');
-  const parcel = await Parcel.create({ apartmentId: data.apartmentId, trackingCode: data.trackingCode,
-    carrier: data.carrier, imageUrls, receivedBy: user.id });
+  const parcel = await withTransaction(async (session) => {
+    const [received] = await Parcel.create([{ apartmentId: data.apartmentId, trackingCode: data.trackingCode,
+      carrier: data.carrier, imageUrls, receivedBy: user.id }], { session });
+    await logAudit({ action: AUDIT_ACTIONS.PARCEL_RECEIVED, user, targetType: 'parcels', targetId: received._id,
+      metadata: { trackingCode: received.trackingCode, apartmentId: received.apartmentId } }, { session });
+    return received;
+  });
   await notifyApartment(parcel.apartmentId, { type: NOTIFICATION_TYPES.GUEST, title: 'Bưu kiện đang lưu quầy',
-    content: `Mã ${parcel.trackingCode} (${parcel.carrier}). Vui lòng xuống quầy nhận và ký tên.`, refId: parcel._id, link: '/r/guests' });
+    content: `Mã ${parcel.trackingCode} (${parcel.carrier}). Vui lòng xuống quầy nhận và ký tên.`, refId: parcel._id, link: '/r/guests', email: true });
   return parcel;
 }
 
@@ -181,10 +188,15 @@ export async function handOverParcel(user, id, data) {
     if (png.length < 100 || !png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) throw ApiError.badRequest('Chữ ký không phải ảnh PNG');
     Object.assign(fields, { status: 'COLLECTED', collectedBy: data.recipientId, recipientName: recipient.fullName, signature: data.signature });
   }
-  const result = await Parcel.findOneAndUpdate({ _id: id, status: { $in: data.returned ? ['AWAITING_RETURN'] : ['STORED', 'AWAITING_RETURN'] } },
-    { $set: fields }, { new: true });
-  if (!result) throw ApiError.badRequest('Bưu kiện đã bàn giao hoặc đã trả');
-  return result;
+  return withTransaction(async (session) => {
+    const result = await Parcel.findOneAndUpdate({ _id: id, status: { $in: data.returned ? ['AWAITING_RETURN'] : ['STORED', 'AWAITING_RETURN'] } },
+      { $set: fields }, { returnDocument: 'after', session });
+    if (!result) throw ApiError.badRequest('Bưu kiện đã bàn giao hoặc đã trả');
+    await logAudit({ action: AUDIT_ACTIONS.PARCEL_HANDED_OVER, user, targetType: 'parcels', targetId: result._id,
+      before: { status: parcel.status }, after: { status: result.status },
+      metadata: { recipientId: result.collectedBy, trackingCode: result.trackingCode } }, { session });
+    return result;
+  });
 }
 
 export async function parcelRecipients(user, id) {
@@ -363,21 +375,33 @@ export async function operationsSummary(user, query = {}) {
     missingCheckpoints: tours.reduce((sum, t) => sum + t.checkpoints.length - t.scans.length, 0) };
 }
 
-// Dùng job hiện có: retention khách, nhắc bưu kiện, điểm bỏ sót và nhắc khẩn; không phụ thuộc DB thật khi test.
+// UC51: 09:00 hằng ngày; mỗi kiện chỉ được nhắc một lần trong cùng ngày Việt Nam.
+export async function remindParcels(now = new Date()) {
+  let affected = 0;
+  const dayStart = startOfVnDay(now);
+  const due = { status: { $in: ['STORED', 'AWAITING_RETURN'] }, createdAt: { $lt: new Date(now.getTime() - 3 * DAY_MS) },
+    $or: [{ remindedAt: null }, { remindedAt: { $lt: dayStart } }] };
+  const waiting = await Parcel.find(due).select('_id apartmentId trackingCode remindedAt').lean();
+  for (const parcel of waiting) {
+    if (!(await Parcel.updateOne({ ...due, _id: parcel._id }, { $set: { remindedAt: now } })).modifiedCount) continue;
+    try {
+      await notifyApartment(parcel.apartmentId, { type: NOTIFICATION_TYPES.GUEST, title: 'Nhắc nhận bưu kiện',
+        content: `Bưu kiện ${parcel.trackingCode} đã lưu quầy quá 3 ngày.`, link: '/r/guests', refId: parcel._id, email: true });
+      affected++;
+    } catch (error) {
+      await Parcel.updateOne({ _id: parcel._id, remindedAt: now }, { $set: { remindedAt: parcel.remindedAt ?? null } });
+      throw error;
+    }
+  }
+  return affected;
+}
+
+// Job mỗi phút giữ việc chốt tuần tra và nhắc cảnh báo khẩn.
 export async function runOperationsJobs(now = new Date()) {
   let affected = 0;
   const retention = Number(await getConfig('GUEST_RETENTION_MONTHS', 12));
   const cutoff = new Date(now); cutoff.setUTCMonth(cutoff.getUTCMonth() - Math.max(1, retention));
   affected += (await GuestLog.deleteMany({ createdAt: { $lt: cutoff } })).deletedCount;
-  affected += (await Parcel.updateMany({ status: 'STORED', createdAt: { $lte: new Date(now.getTime() - 14 * DAY_MS) } }, { $set: { status: 'AWAITING_RETURN' } })).modifiedCount;
-  const waiting = await Parcel.find({ status: 'STORED', remindedAt: null, createdAt: { $lte: new Date(now.getTime() - 3 * DAY_MS) } }).select('_id apartmentId trackingCode').lean();
-  for (const parcel of waiting) {
-    if (!(await Parcel.updateOne({ _id: parcel._id, status: 'STORED', remindedAt: null }, { $set: { remindedAt: now } })).modifiedCount) continue;
-    try {
-      await notifyApartment(parcel.apartmentId, { type: NOTIFICATION_TYPES.GUEST, title: 'Nhắc nhận bưu kiện', content: `Bưu kiện ${parcel.trackingCode} đã lưu quầy quá 3 ngày.`, link: '/r/guests', refId: parcel._id });
-      affected++;
-    } catch (error) { await Parcel.updateOne({ _id: parcel._id }, { $unset: { remindedAt: 1 } }); throw error; }
-  }
   const tours = await PatrolTour.find({ endAt: { $lte: now }, missedNotifiedAt: null }).lean();
   for (const tour of tours) {
     const missed = tour.checkpoints.filter((p) => !tour.scans.some((s) => String(s.checkpointId) === String(p.checkpointId)));

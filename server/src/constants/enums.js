@@ -507,6 +507,7 @@ export const CRON_TRIGGERS = Object.freeze({ SCHEDULE: 'SCHEDULE', MANUAL: 'MANU
 
 export const CRON_JOBS = Object.freeze({
   OPERATIONS_SECURITY: 'OPERATIONS_SECURITY',
+  PARCEL_REMIND: 'PARCEL_REMIND',
   INVOICE_GENERATE: 'INVOICE_GENERATE',
   INVOICE_OVERDUE: 'INVOICE_OVERDUE',
   BILLING_REMIND: 'BILLING_REMIND', // nhắc Kế toán đến kỳ tính phí + nhắc Trưởng BQL duyệt quá hạn (X8)
@@ -530,6 +531,8 @@ export const CRON_JOBS = Object.freeze({
 
 // Hành động ghi audit log (BR-O11, NFR-05). Module khác bổ sung thêm khi cần.
 export const AUDIT_ACTIONS = Object.freeze({
+  PARCEL_RECEIVED: 'PARCEL_RECEIVED',
+  PARCEL_HANDED_OVER: 'PARCEL_HANDED_OVER',
   ROLE_ASSIGNED: 'ROLE_ASSIGNED',
   INVOICE_GENERATED: 'INVOICE_GENERATED',
   INVOICE_ADJUSTED: 'INVOICE_ADJUSTED',
@@ -634,6 +637,7 @@ export const AUDIT_ACTIONS = Object.freeze({
 
 // targetType của audit_logs = tên collection (index { targetType, targetId } tra lịch sử một bản ghi)
 export const AUDIT_TARGETS = Object.freeze({
+  PARCEL: 'parcels',
   MAINTENANCE_FUND: 'maintenance_fund',
   OPERATING_EXPENSE: 'operating_expenses',
   AUDIT_LOG: 'audit_logs',

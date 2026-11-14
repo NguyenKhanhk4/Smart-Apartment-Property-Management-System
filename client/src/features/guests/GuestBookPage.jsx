@@ -69,8 +69,9 @@ function GuestOperations() {
   const [scanTour, setScanTour] = useState(null);
   const [qrPoint, setQrPoint] = useState(null);
   const canvasRef = useRef(null);
-  const drawingRef = useRef(false);
+  const drawingRef = useRef(null);
   const signedRef = useRef(false);
+  const [signatureError, setSignatureError] = useState('');
   const incidentRequestRef = useRef(null);
   const [opsPage, setOpsPage] = useState(1);
   const [parcelStatus, setParcelStatus] = useState();
@@ -85,7 +86,8 @@ function GuestOperations() {
   const clearSignature = () => {
     canvasRef.current?.getContext('2d').clearRect(0, 0, 420, 180);
     signedRef.current = false;
-    drawingRef.current = false;
+    drawingRef.current = null;
+    setSignatureError('');
   };
   const openOperation = (kind, id) => {
     opsForm.resetFields();
@@ -101,7 +103,10 @@ function GuestOperations() {
     switch (operation.kind) {
       case 'parcel': return guestApi.receiveParcel(body, files);
       case 'handover':
-        if (!signedRef.current) throw new Error('Người nhận cần ký tên trên màn hình');
+        if (!signedRef.current) {
+          setSignatureError('Vui lòng ký trước khi xác nhận');
+          throw new Error('Người nhận cần ký tên trên màn hình');
+        }
         return guestApi.handover(operation.id, { recipientId: values.recipientId, signature: canvasRef.current.toDataURL('image/png') });
       case 'checkpoint': return guestApi.checkpoint(values);
       case 'tour': return guestApi.tour({ ...values, startAt: values.startAt.toISOString(), endAt: values.endAt.toISOString() });
@@ -341,12 +346,31 @@ function GuestOperations() {
           {recipients.error && <Alert type="error" title={recipients.error.message} action={<Button onClick={recipients.reload}>Thử lại</Button>} />}
           {!recipients.loading && !recipients.error && !recipients.data?.length && <Alert type="warning" title="Căn hộ chưa có thành viên đủ điều kiện nhận. Vui lòng liên hệ BQL, không chọn người của căn khác." />}
           <Form.Item name="recipientId" label="Thành viên nhận hàng" rules={[{ required: true }]}><Select onChange={clearSignature} loading={recipients.loading} options={(recipients.data || []).map((p) => ({ value: p._id, label: p.fullName }))} /></Form.Item>
-          <Typography.Paragraph>Người nhận ký tay vào vùng dưới đây:</Typography.Paragraph>
-          <canvas ref={canvasRef} width={420} height={180} aria-label="Vùng ký nhận bưu kiện" style={{ width: '100%', height: 180, border: '1px solid #d9d9d9', touchAction: 'none' }}
-            onPointerDown={(e) => { drawingRef.current = true; e.currentTarget.setPointerCapture(e.pointerId); const r = e.currentTarget.getBoundingClientRect(); const ctx = e.currentTarget.getContext('2d'); ctx.beginPath(); ctx.moveTo((e.clientX - r.left) * 420 / r.width, e.clientY - r.top); }}
-            onPointerMove={(e) => { if (!drawingRef.current) return; const r = e.currentTarget.getBoundingClientRect(); const ctx = e.currentTarget.getContext('2d'); ctx.lineWidth = 2; ctx.lineTo((e.clientX - r.left) * 420 / r.width, e.clientY - r.top); ctx.stroke(); signedRef.current = true; }}
-            onPointerUp={() => { drawingRef.current = false; }} onPointerCancel={() => { drawingRef.current = false; }} />
-          <Button onClick={clearSignature}>Ký lại</Button>
+          <Form.Item label="Chữ ký người nhận" validateStatus={signatureError ? 'error' : undefined} help={signatureError || undefined}>
+            <canvas ref={canvasRef} width={420} height={180} aria-label="Vùng ký nhận bưu kiện" style={{ width: '100%', height: 180, border: '1px solid #d9d9d9', touchAction: 'none' }}
+              onPointerDown={(e) => {
+                if (performing || drawingRef.current !== null) return;
+                drawingRef.current = e.pointerId;
+                e.currentTarget.setPointerCapture(e.pointerId);
+                const bounds = e.currentTarget.getBoundingClientRect();
+                const context = e.currentTarget.getContext('2d');
+                context.beginPath();
+                context.moveTo((e.clientX - bounds.left) * 420 / bounds.width, (e.clientY - bounds.top) * 180 / bounds.height);
+              }}
+              onPointerMove={(e) => {
+                if (drawingRef.current !== e.pointerId) return;
+                const bounds = e.currentTarget.getBoundingClientRect();
+                const context = e.currentTarget.getContext('2d');
+                context.lineWidth = 2;
+                context.lineCap = 'round';
+                context.lineTo((e.clientX - bounds.left) * 420 / bounds.width, (e.clientY - bounds.top) * 180 / bounds.height);
+                context.stroke();
+                signedRef.current = true;
+                setSignatureError('');
+              }}
+              onLostPointerCapture={() => { drawingRef.current = null; }} />
+            <Button disabled={performing} onClick={clearSignature}>Ký lại</Button>
+          </Form.Item>
         </>}
         {['checkpoint', 'tour'].includes(operation?.kind) && <Form.Item name="name" label="Tên" rules={[{ required: true }]}><Input maxLength={100} /></Form.Item>}
         {operation?.kind === 'checkpoint' && <Form.Item name="location" label="Vị trí" rules={[{ required: true }]}><Input maxLength={200} /></Form.Item>}
