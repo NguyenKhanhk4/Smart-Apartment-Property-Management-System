@@ -11,7 +11,8 @@ import { ok } from '../../utils/response.js';
 import { assertCrossValidation, assertValidValue } from './configRules.js';
 
 const router = Router();
-
+// Chỉ các khóa còn dùng trong code; bản ghi cũ còn sót trong DB (vd SLA_HOURS_* đã bỏ) không hiện / không sửa được
+const KNOWN_KEYS = new Set(Object.values(CONFIG_KEYS));
 
 /**
  * @openapi
@@ -22,7 +23,7 @@ const router = Router();
  */
 router.get('/', authenticate, authorize('MANAGER'), async (_req, res) => {
   // Tham số chưa có trong DB (chưa chạy db:sync) vẫn trả về với giá trị mặc định mà job đang dùng
-  const docs = await SystemConfig.find().sort({ key: 1 }).lean();
+  const docs = await SystemConfig.find({ key: { $in: [...KNOWN_KEYS] } }).sort({ key: 1 }).lean();
   const have = new Set(docs.map((d) => d.key));
   const missing = DEFAULT_CONFIGS.filter((c) => !have.has(c.key)).map((c) => ({ ...c, isDefault: true }));
   ok(res, [...docs, ...missing].sort((a, b) => a.key.localeCompare(b.key)));
@@ -34,7 +35,7 @@ router.get('/', authenticate, authorize('MANAGER'), async (_req, res) => {
  *   patch:
  *     tags: [Tham số hệ thống]
  *     summary: Cập nhật giá trị 1 tham số, ghi audit log CONFIG_CHANGED (NFR-08)
- *     parameters: [{ in: path, name: key, required: true, schema: { type: string, example: SLA_HOURS_URGENT } }]
+ *     parameters: [{ in: path, name: key, required: true, schema: { type: string, example: TICKET_AUTO_CLOSE_DAYS } }]
  *     requestBody:
  *       content:
  *         application/json:
@@ -50,6 +51,7 @@ router.patch(
   }),
   async (req, res) => {
     const { key } = req.validated.params;
+    if (!KNOWN_KEYS.has(key)) throw ApiError.notFound('Không tìm thấy tham số');
     let config = await SystemConfig.findOne({ key });
     // Tham số có mặc định trong code nhưng DB chưa có → tạo mới từ mặc định rồi sửa
     if (!config) {

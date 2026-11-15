@@ -49,16 +49,15 @@ test('lịch sử ticket: hành động phải thuộc TICKET_HISTORY_ACTIONS', 
   await assert.rejects(t.save(), /action/);
 });
 
-test('SLA: tạo theo slaHours của loại phản ánh; đổi ưu tiên thì tính lại từ lúc đổi theo SLA_HOURS_<ưu tiên>', async () => {
+test('SLA: hạn hoàn thành theo slaHours của loại phản ánh; đổi ưu tiên không đổi hạn', async () => {
   const { user, apartment } = await createHousehold();
   const manager = asUser(await createManager());
   const tech = await createTechnician();
   const category = await createCategory({ slaHours: 10 });
   const ticket = await createTicket({ apartment, createdBy: user, category });
-  const before = Date.now();
   const updated = await service.assignTicket(manager, ticket._id, { assignedTo: tech._id, priority: 'URGENT' });
-  const hours = (updated.dueDate.getTime() - before) / 3_600_000;
-  assert.ok(Math.abs(hours - 24) < 0.01, `hạn mới phải là 24h (SLA_HOURS_URGENT), được ${hours}`);
+  assert.equal(updated.priority, 'URGENT');
+  assert.equal(new Date(updated.dueDate).getTime(), new Date(ticket.dueDate).getTime(), 'đổi ưu tiên giữ nguyên hạn theo loại phản ánh');
 });
 
 test('ghi đè trên bản đã cũ bị chặn: lưu ticket đọc trước lần sửa khác → VersionError (errorHandler trả 409)', async () => {

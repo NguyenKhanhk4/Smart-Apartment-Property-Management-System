@@ -19,12 +19,12 @@ const TABS = [
   { value: 'done', label: 'Đã đóng', status: TICKET_FINAL_STATUSES.join(',') },
 ];
 
-// Các bước xử lý một phản ánh (cột phải trên máy tính)
-const STEPS = [
+// Các bước xử lý một phản ánh (cột phải trên máy tính). Số ngày tự đóng lấy từ server (TICKET_AUTO_CLOSE_DAYS)
+const stepsOf = (autoCloseDays) => [
   { icon: <SendOutlined />, title: 'Bạn gửi phản ánh', desc: 'Kèm ảnh, mô tả vị trí' },
   { icon: <UserOutlined />, title: 'Ban quản lý tiếp nhận', desc: 'Phân loại, giao kỹ thuật viên' },
   { icon: <ToolOutlined />, title: 'Kỹ thuật viên xử lý', desc: 'Theo hạn xử lý (SLA)' },
-  { icon: <CheckCircleOutlined />, title: 'Bạn nghiệm thu', desc: 'Tự đóng sau 3 ngày nếu không phản hồi' },
+  { icon: <CheckCircleOutlined />, title: 'Bạn nghiệm thu', desc: autoCloseDays ? `Tự đóng sau ${autoCloseDays} ngày nếu không phản hồi` : 'Tự đóng nếu không phản hồi' },
 ];
 
 /** Số phản ánh của một tab (gọi limit 1 chỉ để lấy tổng) */
@@ -44,6 +44,8 @@ export default function ResidentTicketsPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const status = TABS.find((t) => t.value === tab).status;
   const { data = [], pagination, loading, reload } = useApi(() => ticketApi.list({ status, page, limit: 10 }), [status, page, reloadKey]);
+  const { data: rules } = useApi(() => ticketApi.rules(), []);
+  const steps = stepsOf(rules?.autoCloseDays);
   const counts = {
     open: useCount(TABS[0].status, reloadKey),
     confirm: useCount(TABS[1].status, reloadKey),
@@ -157,9 +159,9 @@ export default function ResidentTicketsPage() {
         <SurfaceCard as="aside" className="hidden xl:flex flex-col gap-4 p-5 sticky top-[84px]">
           <div className="text-[14.5px] font-semibold">Quy trình xử lý</div>
           <ol className="list-none m-0 p-0 flex flex-col">
-            {STEPS.map((s, i) => (
+            {steps.map((s, i) => (
               <li key={s.title} className="relative flex gap-3 pb-4 last:pb-0">
-                {i < STEPS.length - 1 && <span className="absolute left-[15px] top-8 bottom-0 w-px bg-r-border" aria-hidden />}
+                {i < steps.length - 1 && <span className="absolute left-[15px] top-8 bottom-0 w-px bg-r-border" aria-hidden />}
                 <span className="w-8 h-8 shrink-0 rounded-full bg-r-ok-bg text-r-navy flex items-center justify-center text-sm">{s.icon}</span>
                 <span className="pt-1">
                   <span className="block text-[13.5px] font-medium">{s.title}</span>

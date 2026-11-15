@@ -736,10 +736,6 @@ export const AUDIT_TARGETS = Object.freeze({
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
 export const CONFIG_KEYS = Object.freeze({
   GUEST_RETENTION_MONTHS: "GUEST_RETENTION_MONTHS",
-  SLA_HOURS_URGENT: "SLA_HOURS_URGENT",
-  SLA_HOURS_HIGH: "SLA_HOURS_HIGH",
-  SLA_HOURS_MEDIUM: "SLA_HOURS_MEDIUM",
-  SLA_HOURS_LOW: "SLA_HOURS_LOW",
   TICKET_AUTO_CLOSE_DAYS: "TICKET_AUTO_CLOSE_DAYS",
   PAYMENT_TERM_DAYS: "PAYMENT_TERM_DAYS",
   DEBT_REMINDER_INTERVAL_DAYS: "DEBT_REMINDER_INTERVAL_DAYS",
@@ -788,30 +784,6 @@ export const DEFAULT_CONFIGS = Object.freeze([
     description: "Thời hạn lưu dữ liệu khách vãng lai (tháng) — Module 7",
   },
   // BUSINESS — Manager sửa (UC-E01)
-  {
-    key: CONFIG_KEYS.SLA_HOURS_URGENT,
-    value: 24,
-    scope: CONFIG_SCOPES.BUSINESS,
-    description: "SLA ticket Khẩn cấp (giờ) — BR-O7",
-  },
-  {
-    key: CONFIG_KEYS.SLA_HOURS_HIGH,
-    value: 72,
-    scope: CONFIG_SCOPES.BUSINESS,
-    description: "SLA ticket Cao (giờ) — BR-O7",
-  },
-  {
-    key: CONFIG_KEYS.SLA_HOURS_MEDIUM,
-    value: 168,
-    scope: CONFIG_SCOPES.BUSINESS,
-    description: "SLA ticket Thường (giờ) — BR-O7",
-  },
-  {
-    key: CONFIG_KEYS.SLA_HOURS_LOW,
-    value: 168,
-    scope: CONFIG_SCOPES.BUSINESS,
-    description: "SLA ticket Thấp (giờ)",
-  },
   {
     key: CONFIG_KEYS.TICKET_AUTO_CLOSE_DAYS,
     value: 3,
@@ -957,7 +929,7 @@ export const DEFAULT_CONFIGS = Object.freeze([
   },
   {
     key: CONFIG_KEYS.TICKET_ACK_MINUTES,
-    value: 1,
+    value: 30,
     scope: CONFIG_SCOPES.BUSINESS,
     description: "Hạn kỹ thuật viên nhận sự cố kể từ lúc gửi (phút)",
   },
@@ -1038,7 +1010,7 @@ export const DEFAULT_CONFIGS = Object.freeze([
   },
   {
     key: CONFIG_KEYS.EMERGENCY_REPEAT_MINUTES,
-    value: 1,
+    value: 15,
     scope: CONFIG_SCOPES.BUSINESS,
     description: "Khoảng thời gian lặp lại cảnh báo khẩn cấp (phút) — BR-X8",
   },
