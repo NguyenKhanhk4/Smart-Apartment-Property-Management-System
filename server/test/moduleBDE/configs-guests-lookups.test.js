@@ -28,7 +28,7 @@ const IDENTITY = { idType: 'CCCD', idNumber: '012345678901' };
 test('tham số: BOOKING_PAYMENT_HOLD_MINUTES đặt về 0 được; tham số khác vẫn phải > 0', () => {
   assert.doesNotThrow(() => assertValidValue('BOOKING_PAYMENT_HOLD_MINUTES', 15, 0));
   assert.throws(() => assertValidValue('BOOKING_PAYMENT_HOLD_MINUTES', 15, -1), { errorCode: 'VALIDATION_ERROR' });
-  assert.throws(() => assertValidValue('SLA_HOURS_URGENT', 24, 0), { errorCode: 'VALIDATION_ERROR' });
+  assert.throws(() => assertValidValue('TICKET_AUTO_CLOSE_DAYS', 3, 0), { errorCode: 'VALIDATION_ERROR' });
 });
 
 test('UC50: lưu số giấy tờ mã hóa, API chỉ trả số đã che và loại giấy tờ', async () => {

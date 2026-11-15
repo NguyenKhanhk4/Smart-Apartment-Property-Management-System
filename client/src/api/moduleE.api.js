@@ -26,6 +26,7 @@ function toForm(body, files) {
 // ===== UC-E02..E06: Ticket =====
 export const ticketApi = {
   list: (params) => http.get('/tickets', { params }),
+  rules: () => http.get('/tickets/rules'),
   get: (id) => http.get(`/tickets/${id}`),
   /** body: { categoryId, title, description, type, scope, apartmentId? }, files: File[] */
   create: (body, files = []) => http.post('/tickets', toForm(body, files)),
