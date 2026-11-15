@@ -40,7 +40,6 @@ const propertyFields = {
   type: Joi.string().valid(...values(APARTMENT_TYPES)),
   grossArea: Joi.number().positive(),
   netArea: Joi.number().min(1),
-  technicalShaft: Joi.string().trim().max(200).allow(''),
   handoverDate: ymd().allow(null),
 };
 

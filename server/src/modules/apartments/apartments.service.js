@@ -95,7 +95,7 @@ export async function getApartmentById(id) {
  */
 export async function createApartment(data, managerUser, ip) {
   return withTransaction(async (session) => {
-  const { buildingId, code, floor, blockId, type, grossArea, netArea, technicalShaft } = data;
+  const { buildingId, code, floor, blockId, type, grossArea, netArea } = data;
   const area = data.area ?? netArea;
   const handoverDate = parseHandoverDate(data.handoverDate);
   const building = await Building.findById(buildingId).session(session);
@@ -141,7 +141,6 @@ export async function createApartment(data, managerUser, ip) {
     type,
     grossArea,
     netArea,
-    technicalShaft,
     handoverDate,
     occupancyStatus: handoverDate ? APARTMENT_OCCUPANCY.VACANT : APARTMENT_OCCUPANCY.NOT_HANDED_OVER,
     status: APARTMENT_STATUS.VACANT,
@@ -231,7 +230,7 @@ export async function updateApartment(id, data, managerUser, ip) {
     apartment.area = data.area;
   }
 
-  for (const field of ['blockId', 'type', 'grossArea', 'netArea', 'technicalShaft']) {
+  for (const field of ['blockId', 'type', 'grossArea', 'netArea']) {
     if (data[field] === undefined || String(data[field]) === String(apartment[field])) continue;
     changes[field] = { from: apartment[field], to: data[field] };
     apartment[field] = data[field];
