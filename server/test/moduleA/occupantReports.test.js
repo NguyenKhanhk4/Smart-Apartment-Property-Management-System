@@ -1,6 +1,7 @@
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
+import { buildIdNumberFields } from '../../src/modules/residents/idCrypto.js';
 import { AuditLog, Resident } from '../../src/models/index.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import {
@@ -37,7 +38,7 @@ test('UC21: đếm chủ hộ hiện tại và người do họ khai báo, xuấ
   const formerResidence = await linkResident(formerTenant, apartmentB, { relationType: 'TENANT', isActive: false });
   await linkResident(landlord, vacant, { relationType: 'OWNER' });
   const upstairsOwner = await createResidentUser({ fullName: 'Chủ hộ tầng 2' });
-  await linkResident(upstairsOwner, upperFloor, { relationType: 'OWNER' });
+  await linkResident(upstairsOwner, upperFloor, { relationType: 'OWNER', ...buildIdNumberFields('001200001234') });
 
   const family = (apartment, fullName, extra = {}) => Resident.create({
     apartmentId: apartment._id, fullName, relationType: 'FAMILY_MEMBER', ...extra,
@@ -93,10 +94,14 @@ test('UC21: đếm chủ hộ hiện tại và người do họ khai báo, xuấ
   assert.equal(workbookPreview.body.data.sheets.length, 1);
   const [previewSheet] = workbookPreview.body.data.sheets;
   assert.deepEqual(previewSheet.rows.map((row) => row.fullName), ['Chủ hộ tầng 2']);
+  assert.equal(scoped.body.data[0].apartments[0].residents[0].idNumber, '001200001234');
+  assert.equal(previewSheet.rows[0].idNumber, '001200001234');
+  assert.equal(workbookPreview.body.data.columns.find((column) => column.key === 'idNumber').header, 'CCCD');
 
   const filteredExport = await download(exportPath + scopedQuery);
   assert.deepEqual(filteredExport.worksheets.map((sheet) => sheet.name), [previewSheet.name]);
   const [sheet] = filteredExport.worksheets;
+  assert.equal(sheet.getCell('F4').value, '001200001234');
   assert.equal(sheet.getCell('A1').value, previewSheet.title);
   assert.equal(sheet.getCell('A2').value, previewSheet.summary);
   assert.match(previewSheet.summary, /Tầng 2/);

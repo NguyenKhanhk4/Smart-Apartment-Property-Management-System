@@ -6,7 +6,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { findUserByPhone, phoneTakenError, uniqueConflictError } from '../users/userLookup.js';
 import { recordContactChange } from '../users/contactChanges.js';
 import { normalizePhone } from '../../utils/validators.js';
-import { decryptIdNumber, maskIdNumber } from '../residents/idCrypto.js';
+import { decryptIdNumber } from '../residents/idCrypto.js';
 import { createDeskCode, voidAllCodes } from './verification.service.js';
 
 /**
@@ -42,7 +42,7 @@ const accountStatus = (user) => {
   return user.activatedAt ? 'ACTIVE' : 'PENDING';
 };
 
-/** Thông tin đã che để lễ tân đối chiếu với giấy tờ; không trả mã cũ */
+/** Thông tin đầy đủ để lễ tân đối chiếu với giấy tờ; không trả mã cũ */
 export async function lookupForDeskCode(actor, phone) {
   const user = await findUserByPhone(phone).select('fullName phone email role roleTitle boardTitle activatedAt isActive').lean();
   if (!user) throw ApiError.notFound('Không có tài khoản với số điện thoại này');
@@ -61,7 +61,7 @@ export async function lookupForDeskCode(actor, phone) {
     boardTitle: user.boardTitle ?? null,
     status: accountStatus(user),
     hasEmail: Boolean(user.email),
-    idNumber: maskIdNumber(decryptIdNumber(withId?.idNumberEnc)),
+    idNumber: decryptIdNumber(withId?.idNumberEnc),
     apartments: apartments.map((a) => a.code).sort(),
     purpose: user.activatedAt ? VERIFICATION_PURPOSES.PASSWORD_RESET : VERIFICATION_PURPOSES.ACTIVATION,
     canIssue: !blockReason,

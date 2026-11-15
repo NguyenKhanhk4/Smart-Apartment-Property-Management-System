@@ -13,6 +13,7 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { withTransaction } from '../../utils/transaction.js';
+import { isRole } from '../../middlewares/authorize.js';
 import { normalizePhone } from '../../utils/validators.js';
 import { getHousehold } from '../household/household.service.js';
 import { revokeDepartedResidentServices } from './residentExit.service.js';
@@ -36,8 +37,7 @@ import { findUserByPhone, maskEmail } from '../users/userLookup.js';
 /**
  * Danh sách hồ sơ đang hoạt động trong căn hộ (UC-A07, BR-A8)
  * - occupancyRole xác định người đang ở theo cùng quy tắc với UC21.
- * - Trả CCCD dạng che (********1234) cho mọi vai trò.
- * - Muốn xem đầy đủ CCCD dùng endpoint riêng GET /residents/:id/id-number (STAFF:RECEPTIONIST, MANAGER).
+ * - BQL/lễ tân xem đầy đủ CCCD; dữ liệu trả cho cư dân vẫn theo phạm vi hiện có.
  */
 export async function listApartmentResidents(apartmentId, viewer) {
   const apartment = await Apartment.findById(apartmentId)
@@ -92,7 +92,7 @@ export async function listApartmentResidents(apartmentId, viewer) {
       relationType: r.relationType,
       contractId: r.contractId,
       moveInDate: r.moveInDate,
-      idNumber: maskIdNumber(plainId),
+      idNumber: isRole(viewer, 'MANAGER', 'STAFF:RECEPTIONIST') ? plainId : maskIdNumber(plainId),
       hasIdNumber: Boolean(plainId),
       isHead,
       occupancyRole: occupancyRoles.get(String(r._id)) ?? null,
@@ -107,7 +107,7 @@ export async function listApartmentResidents(apartmentId, viewer) {
 
 /**
  * Tra tài khoản theo SĐT để lễ tân đối chiếu trước khi gắn vào căn hộ (BR-X5).
- * Chỉ trả thông tin đã che; tài khoản nội bộ không trả danh tính.
+ * CCCD đầy đủ cho màn nội bộ được phân quyền; email che, tài khoản nội bộ không trả danh tính.
  */
 export async function lookupAccountByPhone(phone) {
   const user = await findUserByPhone(phone).select('fullName email phone role').lean();
@@ -125,7 +125,7 @@ export async function lookupAccountByPhone(phone) {
     userId: user._id,
     fullName: user.fullName,
     email: maskEmail(user.email),
-    idNumber: maskIdNumber(decryptIdNumber(resident?.idNumberEnc)),
+    idNumber: decryptIdNumber(resident?.idNumberEnc),
   };
 }
 
@@ -260,7 +260,7 @@ export async function addMember(receptionistUser, data, ip) {
   await syncMemberCodes(apartmentId);
 
   const resident = savedResident.toObject();
-  resident.idNumber = maskIdNumber(decryptIdNumber(resident.idNumberEnc));
+  resident.idNumber = decryptIdNumber(resident.idNumberEnc);
   delete resident.idNumberEnc;
   delete resident.idNumberHash;
   return { resident, user: account ? toPublicUser(account.user) : null, activationInviteSent };
@@ -334,7 +334,7 @@ export async function updateMember(residentId, data, receptionistUser, ip) {
   if (dobChanged) await syncMemberCodes(updated.apartmentId);
 
   const obj = updated.toObject();
-  obj.idNumber = maskIdNumber(decryptIdNumber(updated.idNumberEnc));
+  obj.idNumber = decryptIdNumber(updated.idNumberEnc);
   delete obj.idNumberEnc;
   delete obj.idNumberHash;
   return obj;

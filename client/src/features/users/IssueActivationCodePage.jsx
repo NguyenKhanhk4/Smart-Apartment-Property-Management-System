@@ -127,7 +127,7 @@ export default function IssueActivationCodePage() {
               <Descriptions.Item label="Trạng thái">
                 <Tag color={STATUS[account.status].color}>{STATUS[account.status].label}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="CCCD (4 số cuối)">{account.idNumber ?? 'Chưa có trên hệ thống'}</Descriptions.Item>
+              <Descriptions.Item label="CCCD">{account.idNumber ?? 'Chưa có trên hệ thống'}</Descriptions.Item>
               {account.apartments.length > 0 && (
                 <Descriptions.Item label="Căn hộ">{account.apartments.join(', ')}</Descriptions.Item>
               )}

@@ -277,7 +277,7 @@ export default function ApartmentDetailPage() {
         return (
           <Space size={4}>
             <code className="text-xs">{displayVal}</code>
-            {canRevealIdNumber && !revealedIds[r._id] && (
+            {canRevealIdNumber && displayVal.includes('*') && !revealedIds[r._id] && (
               <Tooltip title="Xem đầy đủ CCCD (có ghi Audit Log)">
                 <Button
                   type="text"

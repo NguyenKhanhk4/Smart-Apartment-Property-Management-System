@@ -16,7 +16,7 @@ const DESK = authorize('STAFF:RECEPTIONIST', 'MANAGER');
  * /activation-codes/lookup:
  *   get:
  *     tags: [Xác thực & Tài khoản]
- *     summary: Tra tài khoản theo SĐT, trả CCCD đã che để đối chiếu trước khi cấp mã — UC02
+ *     summary: Tra tài khoản theo SĐT, trả CCCD đầy đủ để đối chiếu trước khi cấp mã — UC02
  */
 router.get('/lookup', authenticate, DESK, validate({ query: Joi.object({ phone: phoneVn().required() }) }), async (req, res) => {
   ok(res, await service.lookupForDeskCode(req.user, req.validated.query.phone));

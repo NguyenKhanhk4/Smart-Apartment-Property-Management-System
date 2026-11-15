@@ -253,7 +253,6 @@ export default function BuildingsPage() {
     async (values) => {
       const { buildingId, ...properties } = values;
       const body = {
-        technicalShaft: properties.technicalShaft,
         handoverDate: properties.handoverDate || null,
       };
       if (editingApartment) {
@@ -287,7 +286,6 @@ export default function BuildingsPage() {
         code: apt.code,
         floor: apt.floor,
         netArea: apt.managementArea ?? apt.netArea ?? apt.area,
-        technicalShaft: apt.technicalShaft,
         handoverDate: handoverDay(apt.handoverDate),
       });
     } else if (activeTab === 'floorPlan') {
@@ -865,9 +863,6 @@ export default function BuildingsPage() {
             <InputNumber disabled={Boolean(editingApartment)} min={1} step={0.1} className="!w-full" />
           </Form.Item>
           <p className="text-gray-500 mb-3">Dùng nút Điều chỉnh trong danh sách căn để sửa mã, tầng hoặc diện tích có căn cứ.</p>
-          <Form.Item name="technicalShaft" label="Vị trí hộp kỹ thuật điện/nước">
-            <Input maxLength={200} />
-          </Form.Item>
           <Form.Item name="handoverDate" label="Ngày bàn giao thực tế"
             extra="Để trống nếu căn mới chưa bàn giao."
             rules={[{ required: Boolean(editingApartment?.handoverDate), message: 'Vui lòng giữ ngày bàn giao đã ghi nhận' }]}
@@ -953,7 +948,6 @@ export default function BuildingsPage() {
               <Descriptions.Item label="Ngày bàn giao">
                 {handoverDay(selectedApartment.handoverDate).split('-').reverse().join('/') || '—'}
               </Descriptions.Item>
-              <Descriptions.Item label="Hộp kỹ thuật">{selectedApartment.technicalShaft || '—'}</Descriptions.Item>
               <Descriptions.Item label="Địa chỉ tòa">
                 {selectedApartment.building?.address || '—'}
               </Descriptions.Item>

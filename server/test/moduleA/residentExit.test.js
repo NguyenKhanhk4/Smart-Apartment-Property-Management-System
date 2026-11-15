@@ -141,7 +141,7 @@ test('nhân khẩu không tài khoản: không được lách để gắn tài k
   assert.equal(await Resident.countDocuments({ userId: null }), 0);
 });
 
-test('thêm tài khoản không email: chờ kích hoạt tại quầy và chỉ trả CCCD đã che', async () => {
+test('thêm tài khoản không email: chờ kích hoạt tại quầy, nội bộ thấy CCCD đầy đủ', async () => {
   const { user: owner, apartment } = await createHousehold();
   await createContract({ apartment, owner });
   const actor = asUser(await createReceptionist());
@@ -154,7 +154,12 @@ test('thêm tài khoản không email: chờ kích hoạt tại quầy và chỉ
   const { user, resident, activationInviteSent } = res.body.data;
   assert.equal(user.email, null);
   assert.equal(activationInviteSent, false);
-  assert.equal(resident.idNumber, '********8901');
+  assert.equal(resident.idNumber, '012345678901');
+  const internal = await app.request('GET', `/apartments/${apartment.id}/residents`, { user: actor });
+  assert.equal(internal.status, 200);
+  assert.equal(internal.body.data.find((row) => row._id === resident._id).idNumber, '012345678901');
+  const householdView = await listApartmentResidents(apartment.id, asUser(owner));
+  assert.equal(householdView.find((row) => String(row._id) === resident._id).idNumber, '********8901');
   assert.equal(resident.idNumberEnc, undefined);
   assert.equal(resident.idNumberHash, undefined);
 });
