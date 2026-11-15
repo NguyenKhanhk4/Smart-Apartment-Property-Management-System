@@ -84,7 +84,7 @@ test('đặt lại: mã sai 5 lần thì hủy; mã kích hoạt không dùng đ
   await assert.rejects(reset(other, otherOtp), { errorCode: 'ACTIVATION_CODE_INVALID' });
 });
 
-test('tra cứu tại quầy: CCCD đã che, căn hộ, trạng thái; không trả mã; SĐT lạ → 404', async () => {
+test('tra cứu tại quầy: CCCD đầy đủ, căn hộ, trạng thái; không trả mã; SĐT lạ → 404', async () => {
   const receptionist = asUser(await createReceptionist());
   const user = await createUser('RESIDENT', { passwordHash: undefined, email: null });
   const apartment = await createApartment(null, { code: 'D-7' });
@@ -95,7 +95,7 @@ test('tra cứu tại quầy: CCCD đã che, căn hộ, trạng thái; không tr
   assert.equal(info.status, 'PENDING');
   assert.equal(info.purpose, 'ACTIVATION');
   assert.equal(info.hasEmail, false);
-  assert.equal(info.idNumber, '********5678');
+  assert.equal(info.idNumber, '079012345678');
   assert.deepEqual(info.apartments, ['D-7']);
   assert.equal(info.canIssue, true);
   assert.equal('code' in info, false);

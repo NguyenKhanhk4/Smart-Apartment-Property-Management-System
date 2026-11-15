@@ -18,7 +18,6 @@ const apartmentSchema = new Schema(
       reason: String, sourceReference: String,
       changedBy: { type: ObjectId, ref: 'User' }, changedAt: Date, _id: false,
     }], default: [] },
-    technicalShaft: String,
     handoverDate: Date,
     // Hồ sơ cũ chưa có ngày bàn giao giữ giá trị undefined để BQL đối chiếu.
     occupancyStatus: { type: String, enum: values(APARTMENT_OCCUPANCY) },

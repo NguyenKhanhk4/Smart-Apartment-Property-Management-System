@@ -228,7 +228,7 @@ test('addMember: tài khoản có sẵn đã xác nhận → thêm vào căn, kh
   assert.equal(saved.dateOfBirth.getTime(), new Date('1990-01-01').getTime());
 });
 
-test('lookupAccountByPhone: chưa có / cư dân (đã che email, CCCD) / nội bộ (không lộ danh tính)', async () => {
+test('lookupAccountByPhone: chưa có / cư dân (che email, CCCD đầy đủ) / nội bộ (không lộ danh tính)', async () => {
   const receptionist = asUser(await createReceptionist());
   const { apartment } = await saleWithOwner();
   await residents.addMember(receptionist, {
@@ -247,7 +247,7 @@ test('lookupAccountByPhone: chưa có / cư dân (đã che email, CCCD) / nội 
   assert.equal(found.isResident, true);
   assert.equal(found.fullName, 'Thành Viên');
   assert.equal(found.email, 't***@example.com');
-  assert.equal(found.idNumber, '********1234');
+  assert.equal(found.idNumber, '001200001234');
 
   assert.deepEqual(await residents.lookupAccountByPhone(manager.phone), { phone: manager.phone, exists: true, isResident: false });
 });

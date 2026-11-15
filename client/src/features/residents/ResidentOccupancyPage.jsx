@@ -16,7 +16,7 @@ const relationLabels = {
 const residentColumns = [
   { title: 'Họ và tên', dataIndex: 'fullName' },
   { title: 'Ngày sinh', dataIndex: 'dateOfBirth', render: (value) => value ? formatDate(value) : '—' },
-  { title: 'CCCD (che)', dataIndex: 'idNumber', render: (value) => value || '—' },
+  { title: 'CCCD', dataIndex: 'idNumber', render: (value) => value || '—' },
   {
     title: 'Vai trò tại căn',
     render: (_, resident) => (

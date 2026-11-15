@@ -4,7 +4,7 @@ import { Apartment, Building, Resident } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { fmtDateVn, toVnYmd } from '../../utils/time.js';
-import { decryptIdNumber, maskIdNumber } from '../residents/idCrypto.js';
+import { decryptIdNumber } from '../residents/idCrypto.js';
 import {
   currentOccupants,
   effectiveOccupancy,
@@ -30,7 +30,7 @@ function reportPerson(row, isHead) {
     _id: row._id,
     fullName: row.userId?.fullName || row.fullName || '—',
     dateOfBirth: row.userId?.dateOfBirth ?? row.dateOfBirth ?? null,
-    idNumber: maskIdNumber(decryptIdNumber(row.idNumberEnc)),
+    idNumber: decryptIdNumber(row.idNumberEnc),
     relationType: row.relationType,
     isHead,
   };
@@ -81,7 +81,7 @@ const SHEET_COLUMNS = [
   { header: 'Trạng thái căn', key: 'status', width: 22 },
   { header: 'Họ và tên', key: 'fullName', width: 28 },
   { header: 'Ngày sinh', key: 'dateOfBirth', width: 15 },
-  { header: 'CCCD (che)', key: 'idNumber', width: 17 },
+  { header: 'CCCD', key: 'idNumber', width: 17 },
   { header: 'Vai trò tại căn', key: 'relation', width: 28 },
 ];
 
