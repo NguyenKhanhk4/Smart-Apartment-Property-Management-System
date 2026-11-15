@@ -20,7 +20,13 @@ const router = Router();
 const BILLING_ROLES = ['ACCOUNTANT', 'MANAGER'];
 
 const previewQuery = Joi.object({ period: period().required(), apartmentId: objectId(), buildingId: objectId() });
-const generateBody = Joi.object({ period: period().required(), apartmentId: objectId() });
+// apartmentId: 1 căn | apartmentIds: các căn đã chọn | buildingId: cả 1 tòa | không có gì: cả kỳ toàn bộ tòa
+const generateBody = Joi.object({
+  period: period().required(),
+  apartmentId: objectId(),
+  apartmentIds: Joi.array().items(objectId()).min(1).max(2000).unique(),
+  buildingId: objectId(),
+}).oxor('apartmentId', 'apartmentIds');
 const MAX_ITEM_AMOUNT = 10_000_000_000; // 10 tỷ: chặn gõ nhầm số
 const otherItemBody = Joi.object({
   description: Joi.string().trim().min(3).max(200).required(),
@@ -97,7 +103,7 @@ router.get('/preview', authenticate, authorize(...BILLING_ROLES), validate({ que
  * /invoices/generate:
  *   post:
  *     tags: [Phí & hóa đơn]
- *     summary: Tính phí tới kỳ hiện tại → thông báo phí NHÁP (chưa gửi cư dân, chưa có hạn đóng). Có apartmentId → 1 căn (đã có → INVOICE_ALREADY_EXISTS). Không có → cả kỳ (ghi cron_runs, trigger MANUAL), căn đã có thông báo được bỏ qua
+ *     summary: Tính phí tới kỳ hiện tại → thông báo phí NHÁP (chưa gửi cư dân, chưa có hạn đóng). Có apartmentId → 1 căn (đã có → INVOICE_ALREADY_EXISTS). Không có → lập tất cả (cả kỳ, hoặc giới hạn theo buildingId / apartmentIds; ghi cron_runs, trigger MANUAL), căn đã có thông báo được bỏ qua
  *     requestBody:
  *       content:
  *         application/json:
@@ -107,6 +113,8 @@ router.get('/preview', authenticate, authorize(...BILLING_ROLES), validate({ que
  *             properties:
  *               period: { type: string, example: '2026-10' }
  *               apartmentId: { type: string }
+ *               apartmentIds: { type: array, items: { type: string }, description: 'Lập tất cả các căn đã chọn' }
+ *               buildingId: { type: string, description: 'Lập tất cả căn của 1 tòa' }
  */
 router.post('/generate', authenticate, authorize(...BILLING_ROLES), validate({ body: generateBody }), async (req, res) => {
   if (req.body.apartmentId) {
