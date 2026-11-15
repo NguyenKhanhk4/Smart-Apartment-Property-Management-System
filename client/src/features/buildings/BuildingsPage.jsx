@@ -472,14 +472,6 @@ export default function BuildingsPage() {
           </Button>
           {isManager && (
             <>
-              <Button
-                size="small"
-                type="text"
-                icon={<EditOutlined />}
-                onClick={() => handleOpenApartmentModal(record)}
-              >
-                Sửa
-              </Button>
               <Button size="small" type="text" onClick={() => openCorrection(record)}>Điều chỉnh</Button>
               <Popconfirm
                 title="Xóa căn hộ"

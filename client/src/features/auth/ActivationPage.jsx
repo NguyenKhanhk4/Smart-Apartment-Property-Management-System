@@ -78,8 +78,8 @@ export default function ActivationPage() {
 
   return (
     <>
-      <h2 className="m-0 text-lg font-semibold tracking-tight text-ink">Kích hoạt tài khoản</h2>
-      <p className="mt-1 mb-5 text-[13px] text-ink-2">
+      <h2 id="auth-form-title" className="auth-form-title">Kích hoạt tài khoản</h2>
+      <p className="auth-form-subtitle">
         {step === 0 && 'Nhập số điện thoại, mã căn hộ và email đã đăng ký với Ban quản lý.'}
         {step === 1 && (identity ? 'Nhập mã đã gửi tới email và tự đặt mật khẩu.' : 'Nhập mã in tại quầy lễ tân và tự đặt mật khẩu.')}
         {step === 2 && 'Đọc điều khoản dữ liệu cá nhân rồi chọn đồng ý hoặc không đồng ý.'}
