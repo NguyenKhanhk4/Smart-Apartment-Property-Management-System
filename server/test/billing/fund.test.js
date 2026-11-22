@@ -123,6 +123,8 @@ test('Kế toán trả lại (bắt buộc lý do) → Trưởng BQL sửa, gử
   assert.match((await Notification.findOne({ userId: managerDoc._id, title: /trả lại/ }).lean()).content, /Thiếu báo giá thứ 2/);
   await assert.rejects(verifyProposal(accountant, p._id, {}, { now: NOW }), { errorCode: 'PROPOSAL_NOT_AWAITING_VERIFY' });
 
+  await assert.rejects(resubmitProposal(manager, p._id, { amount: 90_000_000 }, [], { now: later(1) }), (e) => e.details?.[0]?.field === 'note');
+  await assert.rejects(resubmitProposal(manager, p._id, { note: 'abc' }, [], { now: later(1) }), (e) => e.details?.[0]?.field === 'note');
   const again = await resubmitProposal(manager, p._id, { amount: 90_000_000, note: 'Đã bổ sung báo giá' }, [], { now: later(1) });
   assert.equal(again.status, 'PENDING_VERIFY');
   assert.equal(again.amount, 90_000_000);

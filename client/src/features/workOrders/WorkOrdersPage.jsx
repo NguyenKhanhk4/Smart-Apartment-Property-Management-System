@@ -32,7 +32,7 @@ export default function WorkOrdersPage() {
   const set = (patch) => setFilters((f) => ({ ...f, page: 1, ...patch }));
 
   const showTable = !isTech || tab === 'done';
-  const { data = [], pagination, loading, reload } = useApi(() => workOrderApi.list(filters), [filters], { enabled: showTable });
+  const { data = [], pagination, raw, loading, reload } = useApi(() => workOrderApi.list(filters), [filters], { enabled: showTable });
   const { data: buildings = [] } = useApi(() => lookupApi.buildings(), [], { enabled: !isTech });
   const { data: techs = [] } = useApi(() => workOrderApi.assignees(), [], { enabled: !isTech });
 
@@ -226,7 +226,8 @@ export default function WorkOrdersPage() {
         )}
         {viewing && <WorkOrderReportModal workOrder={viewing} open onClose={() => setViewing(null)} />}
         {reviewing?.mode === 'approve' && (
-          <RepairDecisionModal workOrder={reviewing.wo} open onClose={() => setReviewing(null)} onDone={reload} />
+          // policy (cộng dồn, bảo hành) + settings (ngưỡng, ngày hoãn tối đa) server gắn sẵn như trang Duyệt sửa chữa
+          <RepairDecisionModal workOrder={reviewing.wo} settings={raw?.settings} open onClose={() => setReviewing(null)} onDone={reload} />
         )}
         {reviewing?.mode === 'request' && (
           <RepairRequestModal workOrder={reviewing.wo} open onClose={() => setReviewing(null)} onDone={reload} />

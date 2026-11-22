@@ -54,7 +54,7 @@ function useFundBadge(enabled) {
     const a = acceptances.data;
     return badge([
       [o.pendingCount ?? 0, 'đề xuất chờ biểu quyết'],
-      [(a?.workOrders?.length ?? 0) + (a?.proposals?.length ?? 0), 'chờ xác nhận nghiệm thu'],
+      [a?.readyCount ?? 0, 'chờ xác nhận nghiệm thu'],
       [configs.data?.length ?? 0, 'thay đổi tham số chờ xác nhận'],
     ]);
   }

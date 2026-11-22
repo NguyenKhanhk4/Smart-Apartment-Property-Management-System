@@ -221,7 +221,11 @@ export default function FundPage() {
 
         {(isBoard || isManager) && (acceptances.data?.workOrders?.length > 0 || acceptances.data?.proposals?.length > 0) && (
           <Card
-            title={`Chờ Ban quản trị xác nhận nghiệm thu (${(acceptances.data.workOrders?.length ?? 0) + (acceptances.data.proposals?.length ?? 0)})`}
+            title={(() => {
+              const ready = acceptances.data.readyCount ?? 0;
+              const waiting = (acceptances.data.workOrders?.length ?? 0) + (acceptances.data.proposals?.length ?? 0) - ready;
+              return `Chờ Ban quản trị xác nhận nghiệm thu (${ready})${waiting > 0 ? ` · ${waiting} chờ duyệt đề xuất` : ''}`;
+            })()}
             extra={<Typography.Text type="secondary">Trưởng BQL đã nghiệm thu kỹ thuật</Typography.Text>}
           >
             <Table
@@ -236,19 +240,33 @@ export default function FundPage() {
                   proposal: w.proposal,
                   acceptedAt: w.repair?.acceptedAt,
                   emergency: w.repair?.isEmergency,
+                  ready: w.ready,
                 })),
-                ...(acceptances.data.proposals ?? []).map((p) => ({ _id: p._id, item: p.title, proposal: p, acceptedAt: p.workAcceptedAt })),
+                ...(acceptances.data.proposals ?? []).map((p) => ({ _id: p._id, item: p.title, proposal: p, acceptedAt: p.workAcceptedAt, ready: true })),
               ]}
               columns={[
                 { title: 'Hạng mục', render: (_, r) => <>{r.item}{r.emergency && <Tag color="red" style={{ marginLeft: 6 }}>Khẩn cấp</Tag>}</> },
-                { title: 'Đề xuất', render: (_, r) => (r.proposal ? `${r.proposal.code} · ${formatMoney(r.proposal.amount)}` : 'Chưa có đề xuất được duyệt') },
+                {
+                  title: 'Đề xuất',
+                  render: (_, r) => (
+                    <Flex vertical gap={2}>
+                      <span>{r.proposal ? `${r.proposal.code} · ${formatMoney(r.proposal.amount)}` : 'Chưa lập đề xuất chi quỹ'}</span>
+                      {!r.ready && (
+                        // Sửa khẩn cấp (sửa trước, hồ sơ sau): đề xuất phải qua Kế toán và biểu quyết rồi mới xác nhận nghiệm thu được
+                        <Typography.Text type="warning" style={{ fontSize: 12 }}>
+                          {r.proposal ? <>Đề xuất <EnumTag map={FUND_PROPOSAL_STATUS} value={r.proposal.status} />, chưa xác nhận được</> : 'Trưởng BQL cần lập đề xuất'}
+                        </Typography.Text>
+                      )}
+                    </Flex>
+                  ),
+                },
                 { title: 'Nghiệm thu kỹ thuật', width: 150, render: (_, r) => formatDate(r.acceptedAt) },
                 {
                   title: '',
                   width: 110,
                   render: (_, r) => r.proposal && (
-                    <Button size="small" type={isBoard ? 'primary' : 'default'} onClick={() => navigate(`/app/fund/proposals/${r.proposal._id}`)}>
-                      {isBoard ? 'Xem, xác nhận' : 'Xem'}
+                    <Button size="small" type={isBoard && r.ready ? 'primary' : 'default'} onClick={() => navigate(`/app/fund/proposals/${r.proposal._id}`)}>
+                      {isBoard && r.ready ? 'Xem, xác nhận' : 'Xem'}
                     </Button>
                   ),
                 },
@@ -457,6 +475,9 @@ function OperatingExpenseModal({ workOrder, onClose, onDone }) {
   const [run, loading] = useAction(({ images, ...v }) => workOrderApi.recordExpense(workOrder._id, v, toFiles(images)), {
     onDone: async () => (onClose(), await onDone?.()),
   });
+  const actual = Form.useWatch('actualCost', form);
+  const estimated = workOrder.repair?.estimatedCost;
+  const diff = actual != null && estimated != null ? actual - estimated : 0;
   return (
     <Modal open title={`Ghi chi phí vận hành — ${workOrder.assetId?.code ?? workOrder.title}`} okText="Ghi chi" confirmLoading={loading} onCancel={onClose} onOk={() => form.submit()} destroyOnHidden>
       <Alert className="mb-3" type="info" showIcon message={`Chi phí dự kiến khi duyệt: ${formatMoney(workOrder.repair?.estimatedCost)}`} />
@@ -467,8 +488,13 @@ function OperatingExpenseModal({ workOrder, onClose, onDone }) {
         <Form.Item name="invoiceNo" label="Số hóa đơn" rules={[{ required: true, whitespace: true, message: 'Nhập số hóa đơn' }]}>
           <Input maxLength={100} />
         </Form.Item>
-        <Form.Item name="note" label="Ghi chú">
-          <Input.TextArea rows={2} maxLength={1000} />
+        {/* Thực tế khác dự kiến → ghi chú thành lý do chênh lệch bắt buộc (server cũng chặn) */}
+        <Form.Item
+          name="note"
+          label={diff ? `Lý do chênh lệch (${diff > 0 ? 'cao' : 'thấp'} hơn dự kiến ${formatMoney(Math.abs(diff))})` : 'Ghi chú'}
+          rules={diff ? [{ required: true, whitespace: true, min: 5, message: 'Ghi lý do chênh lệch tối thiểu 5 ký tự' }] : []}
+        >
+          <Input.TextArea rows={2} maxLength={1000} placeholder={diff ? 'Vd: phát sinh thay thêm bạc đạn, nhà thầu giảm giá' : undefined} />
         </Form.Item>
         <EvidencePhotosField name="images" label="Ảnh hóa đơn" message="Tải lên ít nhất 1 ảnh hóa đơn" />
       </Form>
@@ -536,10 +562,10 @@ export function ProposalModal({ open, available, prefill, editing, onClose, onDo
         <Form.Item name="workOrderId" hidden>
           <Input />
         </Form.Item>
-        <Form.Item name="title" label="Hạng mục" rules={[{ required: true, min: 3, message: 'Nhập hạng mục' }]}>
+        <Form.Item name="title" label="Hạng mục" rules={[{ required: true, min: 3, message: 'Hạng mục tối thiểu 3 ký tự' }]}>
           <Input maxLength={200} placeholder="Vd: Thay cáp thang máy Block A" />
         </Form.Item>
-        <Form.Item name="description" label="Mô tả, lý do cần chi" rules={[{ required: true, min: 3, message: 'Nhập mô tả' }]}>
+        <Form.Item name="description" label="Mô tả, lý do cần chi" rules={[{ required: true, min: 3, message: 'Mô tả tối thiểu 3 ký tự' }]}>
           <Input.TextArea rows={3} maxLength={2000} />
         </Form.Item>
         <Form.Item name="amount" label="Số tiền đề xuất" rules={[{ required: true, message: 'Nhập số tiền' }]}>
@@ -564,7 +590,7 @@ export function ProposalModal({ open, available, prefill, editing, onClose, onDo
           <Checkbox disabled={Boolean(linked) || Boolean(editing)}>Sửa chữa lớn</Checkbox>
         </Form.Item>
         {editing && (
-          <Form.Item name="note" label="Đã sửa gì">
+          <Form.Item name="note" label="Đã sửa gì" rules={[{ required: true, whitespace: true, min: 5, message: 'Ghi rõ đã sửa gì (tối thiểu 5 ký tự)' }]}>
             <Input.TextArea rows={2} maxLength={1000} placeholder="Vd: bổ sung báo giá thứ 2, giảm số tiền" />
           </Form.Item>
         )}

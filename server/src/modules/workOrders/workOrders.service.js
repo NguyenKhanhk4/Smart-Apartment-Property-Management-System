@@ -14,6 +14,7 @@ import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { DAY_MS, fmtDateVn } from '../../utils/time.js';
+import { repairPolicy, repairSettings } from './workOrders.decision.js';
 import { pendingFundProposals } from './workOrders.fund.js';
 
 
@@ -66,7 +67,20 @@ export async function listWorkOrders(user, query) {
   });
   // UC10: phiếu chờ duyệt sửa nguồn Quỹ đang có đề xuất chờ biểu quyết → client khóa nút Quyết định
   const pendingFunds = await pendingFundProposals(result.items);
-  result.items = result.items.map((wo) => ({ ...withOverdue(wo, now), pendingFund: pendingFunds.get(String(wo._id)) ?? null }));
+  // BR-E08, BR-E10: phiếu chờ quyết định kèm chính sách nguồn chi (cộng dồn, ngưỡng, bảo hành) như trang Duyệt sửa chữa,
+  // để form Quyết định mở từ đây cũng khóa / gợi ý đúng. KTV không quyết định nên không tính.
+  const deciding = !isTechnician(user) && result.items.some((wo) => wo.status === WORK_ORDER_STATUS.AWAITING_REPAIR_APPROVAL && wo.repair);
+  const settings = deciding ? await repairSettings() : null;
+  const policies = deciding
+    ? await Promise.all(result.items.map((wo) => (
+      wo.status === WORK_ORDER_STATUS.AWAITING_REPAIR_APPROVAL && wo.repair ? repairPolicy(wo, now, settings) : null)))
+    : [];
+  result.items = result.items.map((wo, i) => ({
+    ...withOverdue(wo, now),
+    pendingFund: pendingFunds.get(String(wo._id)) ?? null,
+    ...(policies[i] && { policy: policies[i] }),
+  }));
+  if (settings) result.settings = settings;
   return result;
 }
 

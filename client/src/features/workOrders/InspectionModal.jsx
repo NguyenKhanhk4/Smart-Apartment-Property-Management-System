@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Alert, Flex, Form, Input, InputNumber, Modal, Radio, Tag, Typography } from 'antd';
 import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import { workOrderApi } from '../../api/equipment.api';
@@ -30,6 +31,12 @@ export default function InspectionModal({ workOrder, open, onClose, onDone }) {
   const result = Form.useWatch('result', form);
   const failing = failingRequired(checklist, inputs);
   const faulty = result === 'FAULTY' || failing.length > 0; // Đạt bị khóa thì chỉ còn Có sự cố
+  // Có mục bắt buộc không đạt mà đang chọn Đạt (mặc định) → tự chuyển sang Có sự cố, để nút chọn khớp với ô Mô tả sự cố
+  // và dòng hướng dẫn bên dưới (trước đây ô Đạt bị khóa nhưng vẫn hiện là đang chọn)
+  const hasFailing = failing.length > 0;
+  useEffect(() => {
+    if (hasFailing && form.getFieldValue('result') === 'PASSED') form.setFieldValue('result', 'FAULTY');
+  }, [hasFailing, form]);
 
   const [save, saving] = useAction(
     (v) => workOrderApi.submitInspection(

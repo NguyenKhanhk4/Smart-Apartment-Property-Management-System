@@ -70,7 +70,8 @@ function progressOf(p) {
   if (status === 'RETURNED') return { items, current: 1, status: 'error' };
   if (status === 'PENDING') return { items, current: 2, status: 'process' };
   if (status === 'REJECTED') return { items, current: 2, status: 'error' };
-  if (status === 'APPROVED') return { items, current: 3, status: 'process' };
+  // Sửa chữa lớn: Ban quản trị đã xác nhận nghiệm thu → xong bước 4, đang chờ Kế toán chi
+  if (status === 'APPROVED') return { items, current: p.largeRepair && p.boardAcceptedAt ? 4 : 3, status: 'process' };
   if (status === 'PAID') return { items, current: 4, status: 'finish' };
   return { items, current: p.verifiedAt ? 2 : 1, status: 'error' }; // CANCELLED
 }
@@ -169,6 +170,15 @@ export default function FundProposalPage() {
                 ? 'Phiếu bảo trì đang sửa. Nhà thầu sửa xong, Trưởng BQL nghiệm thu kỹ thuật trên phiếu, Ban quản trị xác nhận, rồi Kế toán mới lập phiếu chi.'
                 : 'Sửa chữa lớn: chờ Trưởng BQL nghiệm thu và Ban quản trị xác nhận rồi Kế toán mới lập phiếu chi.'
             }
+          />
+        )}
+        {wo?.status === 'AWAITING_BOARD_ACCEPTANCE' && !approved && ['PENDING_VERIFY', 'RETURNED', 'PENDING'].includes(p.status) && (
+          // Sửa khẩn cấp: phiếu đã sửa xong và nghiệm thu kỹ thuật trước khi đề xuất được duyệt
+          <Alert
+            type="warning"
+            showIcon
+            message="Phiếu bảo trì đã sửa xong và được Trưởng BQL nghiệm thu kỹ thuật"
+            description="Đây là sửa chữa khẩn cấp (sửa trước, hồ sơ sau). Đề xuất phải được Kế toán xác nhận và Ban quản trị biểu quyết duyệt, sau đó Ban quản trị mới xác nhận nghiệm thu."
           />
         )}
         {boardAccepting && !isBoard && (
@@ -454,9 +464,17 @@ function ExpenseModal({ open, proposal, onClose, onDone }) {
           name="amount"
           label="Số tiền chi thực tế"
           extra={`Không vượt số được duyệt ${formatMoney(proposal.amount)}; vượt thì lập đề xuất bổ sung.`}
-          rules={[{ required: true, message: 'Nhập số tiền' }]}
+          rules={[
+            { required: true, message: 'Nhập số tiền' },
+            // Không dùng max của InputNumber: nó tự hạ số về mức duyệt khi rời ô mà không báo → báo lỗi rõ thay vì sửa ngầm
+            {
+              validator: (_, v) => (v == null || v <= proposal.amount
+                ? Promise.resolve()
+                : Promise.reject(new Error(`Vượt số được duyệt ${formatMoney(proposal.amount)} (${formatMoney(v - proposal.amount)}). Phần vượt phải lập đề xuất bổ sung.`))),
+            },
+          ]}
         >
-          <InputNumber {...moneyInputProps} min={1} max={proposal.amount} style={{ width: '100%' }} />
+          <InputNumber {...moneyInputProps} min={1} style={{ width: '100%' }} />
         </Form.Item>
         {lower && (
           <Form.Item

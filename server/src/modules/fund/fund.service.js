@@ -294,6 +294,7 @@ export async function createProposal(user, body, files = [], { now = new Date() 
       proposedBy: user.id,
       status: PENDING_VERIFY,
       submittedAt: now,
+      createdAt: now, // Ngày lập = lúc gửi (seed / test truyền now lùi ngày thì lịch sử không bị trước ngày lập)
       history: [hist('SUBMITTED', user, now)],
     })
       .then((d) => d.toObject())
@@ -398,6 +399,8 @@ export async function resubmitProposal(user, id, body, files = [], { now = new D
   const cur = await FundProposal.findById(id).lean();
   if (!cur) throw ApiError.notFound('Không tìm thấy đề xuất chi');
   if (cur.status !== RETURNED) throw new ApiError('PROPOSAL_NOT_RETURNED');
+  // Kế toán cần biết đã sửa gì so với lần bị trả lại
+  if ((body.note?.trim().length ?? 0) < 5) throw ApiError.field('note', 'Ghi rõ đã sửa gì (tối thiểu 5 ký tự)');
   const next = {
     title: body.title ?? cur.title,
     description: body.description ?? cur.description,

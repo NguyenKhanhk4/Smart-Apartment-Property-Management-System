@@ -141,7 +141,7 @@ export function FaultReportModal({ workOrder, open, onClose, onDone }) {
         <Form.Item name="vendorName" label="Nhà thầu đề xuất">
           <Input maxLength={150} placeholder="Tên đơn vị sửa chữa (nếu có)" />
         </Form.Item>
-        <Form.Item name="vendorProposal" label="Phương án sửa chữa" rules={[{ required: true, whitespace: true, min: 5, message: 'Nhập phương án sửa' }]}>
+        <Form.Item name="vendorProposal" label="Phương án sửa chữa" rules={[{ required: true, whitespace: true, min: 5, message: 'Phương án sửa tối thiểu 5 ký tự' }]}>
           <Input.TextArea rows={2} maxLength={2000} showCount placeholder="Thay thế / sửa gì, vật tư cần dùng…" />
         </Form.Item>
         <Form.Item name="estimatedCost" label="Chi phí dự kiến (VNĐ)" rules={[{ required: true, message: 'Nhập chi phí dự kiến' }]}>
