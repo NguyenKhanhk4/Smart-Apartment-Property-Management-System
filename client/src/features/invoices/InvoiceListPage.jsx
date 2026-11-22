@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import dayjs from 'dayjs';
-import { Alert, Button, Card, DatePicker, Flex, Input, Popconfirm, Segmented, Select, Space, Table, Typography } from 'antd';
-import { BankOutlined, CheckOutlined, RollbackOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, DatePicker, Flex, Input, Popconfirm, Segmented, Select, Table, Typography } from 'antd';
+import { BankOutlined, CheckOutlined } from '@ant-design/icons';
 import { invoiceApi } from '../../api/moduleB.api';
 import { lookupApi } from '../../api/moduleE.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
-import ReasonModal from '../../components/ReasonModal';
 import { INVOICE_STATUS, PAYER_SOURCES } from '../../constants/enums';
 import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
@@ -16,9 +15,8 @@ import { formatDate, formatMoney } from '../../utils/format';
 import AdjustmentsPanel from './AdjustmentsPanel';
 import { aptLabel, OUTSTANDING_STATUSES, outstandingOf, periodLabel } from './invoiceShared';
 
-// Mô đun 4 — UC27/UC28: danh sách thông báo phí theo kỳ. Kế toán trình duyệt Nháp; Trưởng BQL Duyệt & Phát hành / Trả lại.
-// Trạng thái lấy từ ?status= để link trong thông báo (vd /app/invoices?status=PENDING_APPROVAL) mở đúng tab.
-const TABS = ['ALL', 'DRAFT', 'PENDING_APPROVAL', 'UNPAID', 'PARTIALLY_PAID', 'OVERDUE', 'PAID', 'CANCELLED'];
+// Mô đun 4 — UC27/UC28: danh sách thông báo phí theo kỳ. Kế toán rà soát Nháp và phát hành trực tiếp.
+const TABS = ['ALL', 'DRAFT', 'UNPAID', 'PARTIALLY_PAID', 'OVERDUE', 'PAID', 'CANCELLED'];
 
 export default function InvoiceListPage() {
   const navigate = useNavigate();
@@ -35,7 +33,6 @@ export default function InvoiceListPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selected, setSelected] = useState([]);
-  const [returning, setReturning] = useState(null); // selector đang trả lại
   const period = month?.format('YYYY-MM');
 
   const { data: buildings = [] } = useApi(() => lookupApi.buildings(), []);
@@ -115,10 +112,10 @@ export default function InvoiceListPage() {
     { title: 'Trạng thái', dataIndex: 'status', width: 170, render: (s) => <EnumTag map={INVOICE_STATUS} value={s} /> },
   ];
 
-  // Chỉ chọn dòng khi đang ở tab có thao tác hàng loạt cho vai trò này
-  const selectable = (isAccountant && status === 'DRAFT') || (isManager && status === 'PENDING_APPROVAL');
-  // Đang ở tab "Tất cả" / tab khác mà có việc chờ vai trò này → gợi ý chuyển tab (nút chỉ hiện ở tab Nháp / Chờ duyệt)
-  const pendingTab = isAccountant ? 'DRAFT' : isManager ? 'PENDING_APPROVAL' : null;
+  // Chỉ chọn dòng khi đang ở tab Nháp (Kế toán phát hành hàng loạt)
+  const selectable = isAccountant && status === 'DRAFT';
+  // Đang ở tab "Tất cả" / tab khác mà có thông báo Nháp chờ phát hành
+  const pendingTab = isAccountant ? 'DRAFT' : null;
   const pendingCount = pendingTab ? (byStatus?.[pendingTab]?.count ?? 0) : 0;
 
   return (
@@ -128,19 +125,12 @@ export default function InvoiceListPage() {
         subtitle="Kế toán tính phí → Rà soát, thêm phí phát sinh → Phát hành trực tiếp cho cư dân."
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Thông báo phí' }]}
         extra={
-          <Space wrap>
-            {isManager && (
-              // Tài khoản nhận tiền nhập ở hồ sơ tòa nhà (UC05) — một nguồn cho PDF thông báo phí
-              <Button icon={<BankOutlined />} onClick={() => navigate('/app/building-settings')}>
-                Tài khoản nhận tiền
-              </Button>
-            )}
-            {isAccountant && (
-              <Button onClick={() => navigate('/app/invoices/generate')} type="primary">
-                Tính phí
-              </Button>
-            )}
-          </Space>
+          isManager && (
+            // Tài khoản nhận tiền nhập ở hồ sơ tòa nhà (UC05) — một nguồn cho PDF thông báo phí
+            <Button icon={<BankOutlined />} onClick={() => navigate('/app/building-settings')}>
+              Tài khoản nhận tiền
+            </Button>
+          )
         }
       />
 
@@ -195,7 +185,7 @@ export default function InvoiceListPage() {
             />
           )}
 
-          {period && (status === 'DRAFT' || status === 'PENDING_APPROVAL') && <AdjustmentsPanel period={period} />}
+          {period && status === 'DRAFT' && <AdjustmentsPanel period={period} />}
 
           {selectable && (
             <Flex gap={8} wrap align="center">
@@ -220,23 +210,6 @@ export default function InvoiceListPage() {
                   </Button>
                 </Popconfirm>
               )}
-              {isManager && status === 'PENDING_APPROVAL' && (
-                <Space wrap>
-                  <Popconfirm
-                    title={`Duyệt & Phát hành ${scopeText}?`}
-                    description="Cư dân sẽ nhận thông báo và email ngay. Đã phát hành thì không sửa được."
-                    onConfirm={() => publish().catch(() => {})}
-                    disabled={!canBatch}
-                  >
-                    <Button type="primary" icon={<CheckOutlined />} loading={publishing} disabled={!canBatch}>
-                      Duyệt & Phát hành
-                    </Button>
-                  </Popconfirm>
-                  <Button danger icon={<RollbackOutlined />} disabled={!canBatch} onClick={() => setReturning(selector)}>
-                    Trả lại
-                  </Button>
-                </Space>
-              )}
             </Flex>
           )}
 
@@ -260,18 +233,6 @@ export default function InvoiceListPage() {
           />
         </Flex>
       </Card>
-
-
-      <ReasonModal
-        open={Boolean(returning)}
-        title="Trả lại cho Kế toán"
-        hint="Thông báo về trạng thái Nháp để Kế toán sửa và trình duyệt lại."
-        okText="Trả lại"
-        minLength={5}
-        action={(reason) => invoiceApi.returnBack({ ...returning, reason })}
-        onClose={() => setReturning(null)}
-        onDone={() => (setReturning(null), afterAction())}
-      />
     </>
   );
 }

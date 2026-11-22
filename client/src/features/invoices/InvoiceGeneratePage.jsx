@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import { Alert, Button, Card, Col, DatePicker, Flex, Popconfirm, Row, Segmented, Select, Statistic, Table, Typography } from 'antd';
+import { Alert, Button, Card, DatePicker, Flex, Popconfirm, Segmented, Select, Table, Typography } from 'antd';
 import { CheckSquareOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { invoiceApi } from '../../api/moduleB.api';
 import { lookupApi } from '../../api/moduleE.api';
@@ -142,14 +142,6 @@ export default function InvoiceGeneratePage() {
     },
   ];
 
-  const stat = (title, value, opts) => (
-    <Col xs={12} md={8} lg={4}>
-      <Card size="small">
-        <Statistic title={title} value={value ?? 0} loading={preview.loading} {...opts} />
-      </Card>
-    </Col>
-  );
-
   return (
     <>
       <PageHeader
@@ -245,19 +237,6 @@ export default function InvoiceGeneratePage() {
           }
         />
       )}
-
-      <Row gutter={[12, 12]} className="mb-4">
-        {stat('Sẽ lập', summary?.new, { valueStyle: { color: '#1677ff' } })}
-        {stat('Đã có hóa đơn', summary?.existing)}
-        {stat('Chưa bàn giao', summary?.notHandedOver)}
-        {stat('Chưa có HĐ mua bán', summary?.noPayer)}
-        {stat('Lỗi', summary?.error, summary?.error ? { valueStyle: { color: '#cf1322' } } : undefined)}
-        <Col xs={24} md={16} lg={8}>
-          <Card size="small">
-            <Statistic title="Tổng tiền dự kiến (căn sẽ lập)" value={formatMoney(summary?.totalAmount)} loading={preview.loading} />
-          </Card>
-        </Col>
-      </Row>
 
       <Card>
         <Segmented
