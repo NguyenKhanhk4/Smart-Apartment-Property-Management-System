@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import dayjs from 'dayjs';
 import { Alert, Button, Card, DatePicker, Flex, Input, Popconfirm, Segmented, Select, Space, Table, Typography } from 'antd';
-import { BankOutlined, CheckOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
+import { BankOutlined, CheckOutlined, RollbackOutlined } from '@ant-design/icons';
 import { invoiceApi } from '../../api/moduleB.api';
 import { lookupApi } from '../../api/moduleE.api';
 import EnumTag from '../../components/EnumTag';
@@ -76,7 +76,6 @@ export default function InvoiceListPage() {
   const tabCount = byStatus?.[status]?.count ?? 0;
   const canBatch = selected.length > 0 || (Boolean(period) && tabCount > 0);
 
-  const [submit, submitting] = useAction(() => invoiceApi.submit(selector), { onDone: afterAction });
   const [publish, publishing] = useAction(() => invoiceApi.publish(selector), { onDone: afterAction });
 
   const countOf = (s) =>
@@ -126,7 +125,7 @@ export default function InvoiceListPage() {
     <>
       <PageHeader
         title="Thông báo phí"
-        subtitle="Kế toán tính phí → Trình duyệt → Trưởng BQL Duyệt & Phát hành. Cư dân chỉ thấy thông báo đã phát hành."
+        subtitle="Kế toán tính phí → Rà soát, thêm phí phát sinh → Phát hành trực tiếp cho cư dân."
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Thông báo phí' }]}
         extra={
           <Space wrap>
@@ -187,7 +186,7 @@ export default function InvoiceListPage() {
             <Alert
               type="info"
               showIcon
-              message={`Có ${pendingCount} thông báo ${INVOICE_STATUS[pendingTab].label.toLowerCase()} cần bạn ${isAccountant ? 'trình duyệt' : 'duyệt'}.`}
+              message={`Có ${pendingCount} thông báo ${INVOICE_STATUS[pendingTab].label.toLowerCase()} cần bạn ${isAccountant ? 'rà soát & phát hành' : 'duyệt'}.`}
               action={
                 <Button size="small" type="primary" onClick={() => setStatus(pendingTab)}>
                   Mở tab {INVOICE_STATUS[pendingTab].label}
@@ -210,9 +209,14 @@ export default function InvoiceListPage() {
                       : 'Chọn dòng hoặc chọn kỳ'}
               </Typography.Text>
               {isAccountant && status === 'DRAFT' && (
-                <Popconfirm title={`Trình duyệt ${scopeText}?`} onConfirm={() => submit().catch(() => {})} disabled={!canBatch}>
-                  <Button type="primary" icon={<SendOutlined />} loading={submitting} disabled={!canBatch}>
-                    Trình duyệt
+                <Popconfirm
+                  title={`Phát hành ${scopeText}?`}
+                  description="Người nộp phí sẽ nhận thông báo và email ngay. Đã phát hành thì không sửa trực tiếp được."
+                  onConfirm={() => publish().catch(() => {})}
+                  disabled={!canBatch}
+                >
+                  <Button type="primary" icon={<CheckOutlined />} loading={publishing} disabled={!canBatch}>
+                    Phát hành
                   </Button>
                 </Popconfirm>
               )}

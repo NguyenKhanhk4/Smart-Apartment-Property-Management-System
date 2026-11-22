@@ -306,7 +306,7 @@ router.post('/submit', authenticate, authorize('ACCOUNTANT'), validate({ body: s
  * /invoices/publish:
  *   post:
  *     tags: [Phí & hóa đơn]
- *     summary: Trưởng BQL Duyệt & Phát hành thông báo Chờ duyệt → đặt hạn đóng, chụp Nợ các kỳ trước, trừ Số dư trả trước, gửi Email + Web cho Người nộp phí
+ *     summary: Kế toán / Trưởng BQL phát hành thông báo phí (Nháp hoặc Chờ duyệt) → đặt hạn đóng, chụp Nợ các kỳ trước, trừ Số dư trả trước, gửi Email + Web cho Người nộp phí
  *     requestBody:
  *       content:
  *         application/json:
@@ -317,7 +317,7 @@ router.post('/submit', authenticate, authorize('ACCOUNTANT'), validate({ body: s
  *               period: { type: string, example: '2026-10' }
  *               buildingId: { type: string, description: 'Chỉ khi gửi period: chỉ xử lý thông báo của tòa này' }
  */
-router.post('/publish', authenticate, authorize('MANAGER'), validate({ body: selectorBody }), async (req, res) => {
+router.post('/publish', authenticate, authorize('ACCOUNTANT', 'MANAGER'), validate({ body: selectorBody }), async (req, res) => {
   const r = await approval.publishInvoices(req.user, req.body);
   const failed = r.failed.length ? `, lỗi ${r.failed.length}` : '';
   return ok(res, r, `Đã phát hành ${r.count} thông báo phí${failed}${skippedNote(r)}`);

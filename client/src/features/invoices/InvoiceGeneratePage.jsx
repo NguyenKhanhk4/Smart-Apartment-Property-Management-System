@@ -154,7 +154,7 @@ export default function InvoiceGeneratePage() {
     <>
       <PageHeader
         title="Tính phí tháng"
-        subtitle="Xem trước phí quản lý từ ngày bàn giao, phí vệ sinh, gửi xe và phí tiện ích. Kiểm tra thông báo Nháp trước khi trình duyệt."
+        subtitle="Xem trước phí quản lý từ ngày bàn giao, phí vệ sinh, gửi xe và phí tiện ích. Tạo thông báo Nháp để rà soát, thêm phí phát sinh và phát hành."
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Tính phí' }]}
         extra={
           <Flex gap={8} wrap>

@@ -112,13 +112,12 @@ test('xử lý cả kỳ kèm buildingId: chỉ đụng thông báo của tòa �
   assert.equal((await Invoice.findById(other._id).lean()).status, 'DRAFT');
 });
 
-test('không phát hành được thông báo còn Nháp (chưa trình duyệt)', async () => {
-  const { manager, owner, draft } = await setup();
-  const r = await publishInvoices(manager, { invoiceIds: [draft._id] }, { now: NOW });
-  assert.equal(r.count, 0);
-  assert.equal(r.skipped[0].status, 'DRAFT');
-  assert.equal((await Invoice.findById(draft._id).lean()).status, 'DRAFT');
-  assert.equal(await countNotif(owner._id, 'INVOICE'), 0);
+test('phát hành trực tiếp thông báo còn Nháp (Kế toán phát hành luôn không cần qua Chờ duyệt)', async () => {
+  const { accountant, owner, draft } = await setup();
+  const r = await publishInvoices(accountant, { invoiceIds: [draft._id] }, { now: NOW });
+  assert.equal(r.count, 1);
+  assert.equal((await Invoice.findById(draft._id).lean()).status, 'UNPAID');
+  assert.equal(await countNotif(owner._id, 'INVOICE'), 1);
 });
 
 test('phát hành trừ Số dư trả trước: thiếu → Thanh toán một phần; đủ → Đã thanh toán', async () => {

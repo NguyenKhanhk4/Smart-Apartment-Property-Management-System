@@ -25,7 +25,6 @@ import {
   PlusOutlined,
   ReloadOutlined,
   RollbackOutlined,
-  SendOutlined,
 } from '@ant-design/icons';
 import { invoiceApi } from '../../api/moduleB.api';
 import EnumTag from '../../components/EnumTag';
@@ -71,7 +70,6 @@ export default function InvoiceDetailPage() {
   });
   const [removeItem] = useAction((index) => invoiceApi.removeItem(id, index), { onDone: reload });
   const [recalc, recalculating] = useAction(() => invoiceApi.recalculate(id), { onDone: reload });
-  const [submit, submitting] = useAction(() => invoiceApi.submit({ invoiceIds: [id] }), { onDone: reload });
   const [publish, publishing] = useAction(() => invoiceApi.publish({ invoiceIds: [id] }), { onDone: reload });
   const [createAdjustment, creatingAdjustment] = useAction(
     ({ direction, amount, reason }) => invoiceApi.createAdjustment(id, { amount: direction === 'DOWN' ? -amount : amount, reason }),
@@ -180,9 +178,13 @@ export default function InvoiceDetailPage() {
                     Tính lại
                   </Button>
                 </Popconfirm>
-                <Popconfirm title="Trình Trưởng BQL duyệt thông báo này?" onConfirm={() => submit().catch(() => {})}>
-                  <Button type="primary" icon={<SendOutlined />} loading={submitting}>
-                    Trình duyệt
+                <Popconfirm
+                  title="Phát hành thông báo phí này?"
+                  description="Người nộp phí nhận thông báo + email ngay; sau đó không sửa trực tiếp được."
+                  onConfirm={() => publish().catch(() => {})}
+                >
+                  <Button type="primary" icon={<CheckOutlined />} loading={publishing}>
+                    Phát hành
                   </Button>
                 </Popconfirm>
               </>
@@ -254,7 +256,7 @@ export default function InvoiceDetailPage() {
           isAccountant &&
           isDraft && (
             <Button icon={<PlusOutlined />} onClick={() => setAdding(true)}>
-              Thêm khoản thu khác
+              Thêm phí phát sinh
             </Button>
           )
         }
@@ -372,7 +374,7 @@ export default function InvoiceDetailPage() {
 
       <Modal
         open={adding}
-        title="Thêm khoản thu khác"
+        title="Thêm phí phát sinh vào thông báo Nháp"
         okText="Thêm"
         cancelText="Đóng"
         confirmLoading={addingItem}
@@ -381,8 +383,8 @@ export default function InvoiceDetailPage() {
         destroyOnHidden
       >
         <Form form={form} layout="vertical" preserve={false} onFinish={(v) => addItem(v).catch(() => {})}>
-          <Form.Item name="description" label="Nội dung" rules={[{ required: true, whitespace: true, min: 3, max: 200 }]}>
-            <Input placeholder="Vd: Làm lại thẻ xe" maxLength={200} />
+          <Form.Item name="description" label="Nội dung / Tên khoản phí phát sinh" rules={[{ required: true, whitespace: true, min: 3, max: 200 }]}>
+            <Input placeholder="Vd: Làm lại thẻ xe, phí dịch vụ phát sinh..." maxLength={200} />
           </Form.Item>
           <Form.Item name="amount" label="Số tiền (đ)" rules={[{ required: true, type: 'number', min: 1 }]}>
             <InputNumber {...moneyInputProps} min={1} max={10_000_000_000} style={{ width: '100%' }} />
