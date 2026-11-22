@@ -8,7 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
 import { WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES, enumOptions } from '../../constants/enums';
-import { formatDate, formatDateTime } from '../../utils/format';
+import { dateTimeOr, formatDate } from '../../utils/format';
 import { vtName } from '../../motion/viewTransition';
 import AssignWorkOrderModal from './AssignWorkOrderModal';
 import ShiftChecklist from './ShiftChecklist';
@@ -48,7 +48,7 @@ export default function WorkOrdersPage() {
             <Typography.Text strong style={vtName('asset', a._id)}>{a.name}</Typography.Text>
           </Link>
         ) : (
-          '—'
+          'Thiết bị đã xóa'
         )}
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {a?.buildingId?.name}{a?.location ? ` · ${a.location}` : ''}
@@ -127,8 +127,8 @@ export default function WorkOrdersPage() {
   const techColumns = [
     assetColumn,
     ...commonColumns,
-    { title: 'Kiểm tra lúc', dataIndex: 'inspectedAt', width: 160, render: (v, r) => formatDateTime(v ?? r.completedAt) },
-    { title: 'Ghi chú', dataIndex: 'note', width: 240, render: (v) => v || '—' },
+    { title: 'Kiểm tra lúc', dataIndex: 'inspectedAt', width: 160, render: (v, r) => dateTimeOr(v ?? r.completedAt, 'Chưa kiểm tra') },
+    { title: 'Ghi chú', dataIndex: 'note', width: 240, render: (v) => v || 'Không ghi chú' },
     {
       title: '',
       width: 130,

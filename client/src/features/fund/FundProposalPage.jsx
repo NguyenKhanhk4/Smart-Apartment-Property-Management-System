@@ -187,7 +187,7 @@ export default function FundProposalPage() {
               {wo?.repair?.isEmergency && <Tag color="red">Khẩn cấp</Tag>}
             </Descriptions.Item>
             <Descriptions.Item label={p.planType === 'UNSCHEDULED' ? 'Lý do đột xuất' : 'Kế hoạch'}>
-              {p.planType === 'UNSCHEDULED' ? p.urgentReason : (p.planRef ?? '—')}
+              {p.planType === 'UNSCHEDULED' ? p.urgentReason : (p.planRef ?? 'Chưa ghi tham chiếu kế hoạch')}
             </Descriptions.Item>
             {wo && (
               <Descriptions.Item label="Phiếu bảo trì">
@@ -242,7 +242,7 @@ export default function FundProposalPage() {
           <Card title="Biên bản nghiệm thu">
             <Descriptions size="small" column={1}>
               <Descriptions.Item label="Biên bản nhà thầu">
-                {wo.repair.acceptanceImages?.length ? <EvidencePhotos urls={wo.repair.acceptanceImages} /> : '—'}
+                {wo.repair.acceptanceImages?.length ? <EvidencePhotos urls={wo.repair.acceptanceImages} /> : 'Chưa có biên bản'}
               </Descriptions.Item>
               {wo.repair.inspectionCertUrls?.length > 0 && (
                 <Descriptions.Item label="Biên bản kiểm định"><EvidencePhotos urls={wo.repair.inspectionCertUrls} /></Descriptions.Item>
@@ -286,7 +286,7 @@ export default function FundProposalPage() {
                     ),
                   },
                   { title: 'Quyết định', dataIndex: 'decision', width: 140, render: (d) => <EnumTag map={VOTE_DECISIONS} value={d} /> },
-                  { title: 'Ý kiến', dataIndex: 'comment', render: (c) => c ?? '—' },
+                  { title: 'Ý kiến', dataIndex: 'comment', render: (c) => c || 'Không ghi ý kiến' },
                   { title: 'Thời điểm', dataIndex: 'votedAt', width: 150, render: formatDateTime },
                 ]}
               />
@@ -302,7 +302,7 @@ export default function FundProposalPage() {
               </Descriptions.Item>
               <Descriptions.Item label="Số tiền chi">{formatMoney(p.expenseTxId.amount)}</Descriptions.Item>
               <Descriptions.Item label="Ngày chi">{formatDate(p.expenseTxId.occurredAt)}</Descriptions.Item>
-              <Descriptions.Item label="Số hóa đơn / chứng từ">{p.expenseTxId.documentNo ?? '—'}</Descriptions.Item>
+              <Descriptions.Item label="Số hóa đơn / chứng từ">{p.expenseTxId.documentNo ?? 'Không có'}</Descriptions.Item>
               <Descriptions.Item label="Diễn giải">{p.expenseTxId.description}</Descriptions.Item>
               {p.expenseTxId.varianceReason && <Descriptions.Item label="Lý do chênh lệch">{p.expenseTxId.varianceReason}</Descriptions.Item>}
             </Descriptions>

@@ -185,7 +185,7 @@ export default function FundPage() {
               dataSource={readyToPay.data}
               onRow={(r) => ({ onClick: () => navigate(`/app/fund/proposals/${r._id}`), style: { cursor: 'pointer' } })}
               columns={[
-                { title: 'Mã', dataIndex: 'code', width: 160, render: (v) => (v ? <Typography.Text code>{v}</Typography.Text> : '—') },
+                { title: 'Mã', dataIndex: 'code', width: 160, render: (v) => (v ? <Typography.Text code>{v}</Typography.Text> : 'Chưa có mã') },
                 { title: 'Hạng mục', dataIndex: 'title' },
                 { title: 'Số tiền duyệt', dataIndex: 'amount', width: 150, align: 'right', render: (v) => <b>{formatMoney(v)}</b> },
                 { title: 'Duyệt ngày', dataIndex: 'finalizedAt', width: 110, render: formatDate },
@@ -208,7 +208,7 @@ export default function FundPage() {
               dataSource={expenses.data}
               columns={[
                 { title: 'Thiết bị', render: (_, r) => (r.assetId ? `${r.assetId.code} – ${r.assetId.name}` : r.title) },
-                { title: 'Nhà thầu', render: (_, r) => r.repair?.vendorName || '—' },
+                { title: 'Nhà thầu', render: (_, r) => r.repair?.vendorName || 'Chưa có' },
                 { title: 'Dự kiến', width: 140, align: 'right', render: (_, r) => formatMoney(r.repair?.estimatedCost) },
                 { title: 'Hoàn thành', width: 110, render: (_, r) => formatDate(r.completedAt) },
                 { title: '', width: 110, render: (_, r) => <Button size="small" type="primary" onClick={() => setExpenseOf(r)}>Ghi chi</Button> },
@@ -285,7 +285,7 @@ export default function FundPage() {
                 { title: 'Tham số', render: (_, c) => (c.description ? c.description.split(/[.(—]/)[0] : c.key) },
                 { title: 'Đang dùng', width: 140, align: 'right', render: (_, c) => configValue(c.key, c.value) },
                 { title: 'Đề nghị', width: 140, align: 'right', render: (_, c) => <b>{configValue(c.key, c.pendingValue)}</b> },
-                { title: 'Người đề nghị', width: 170, render: (_, c) => <>{c.pendingBy?.fullName ?? '—'} · {formatDate(c.pendingAt)}</> },
+                { title: 'Người đề nghị', width: 170, render: (_, c) => <>{c.pendingBy?.fullName ?? 'Không rõ'} · {formatDate(c.pendingAt)}</> },
                 ...(isBoard
                   ? [
                       {
@@ -338,14 +338,21 @@ export default function FundPage() {
                       pagination={{ current: txPage, pageSize: 15, total: txs.pagination?.total ?? 0, onChange: setTxPage }}
                       columns={[
                         { title: 'Ngày', dataIndex: 'occurredAt', width: 110, render: formatDate },
-                        { title: 'Số phiếu', dataIndex: 'code', width: 160, render: (v) => (v ? <Typography.Text code>{v}</Typography.Text> : '—') },
+                        { title: 'Số phiếu', dataIndex: 'code', width: 160, render: (v) => (v ? <Typography.Text code>{v}</Typography.Text> : 'Chưa có số') },
                         { title: 'Loại', dataIndex: 'type', width: 80, render: (v) => <EnumTag map={FUND_TX_TYPES} value={v} /> },
                         {
                           title: 'Nội dung',
                           render: (_, r) => (
                             <Flex vertical>
-                              <span>{r.description ?? '—'}</span>
-                              {r.incomeSource && <Typography.Text type="secondary">{FUND_INCOME_SOURCES[r.incomeSource]?.label}</Typography.Text>}
+                              {/* Không có diễn giải: phiếu thu lấy nguồn thu làm dòng chính (trước đây hiện "— Lãi tiền gửi") */}
+                              {r.description ? (
+                                <span>{r.description}</span>
+                              ) : !r.incomeSource && !r.proposalId && (
+                                <Typography.Text type="secondary">Không có diễn giải</Typography.Text>
+                              )}
+                              {r.incomeSource && (
+                                <Typography.Text type={r.description ? 'secondary' : undefined}>{FUND_INCOME_SOURCES[r.incomeSource]?.label}</Typography.Text>
+                              )}
                               {r.proposalId && (
                                 <Typography.Link onClick={() => navigate(`/app/fund/proposals/${r.proposalId._id}`)}>
                                   {r.proposalId.code ?? 'Đề xuất'} — {r.proposalId.title}
@@ -354,7 +361,7 @@ export default function FundPage() {
                             </Flex>
                           ),
                         },
-                        { title: 'Chứng từ', dataIndex: 'documentNo', width: 140, render: (v) => v ?? '—' },
+                        { title: 'Chứng từ', dataIndex: 'documentNo', width: 140, render: (v) => v ?? 'Không có' },
                         {
                           title: 'Số tiền',
                           width: 150,
@@ -367,7 +374,7 @@ export default function FundPage() {
                           ),
                         },
                         { title: 'Số dư sau', dataIndex: 'balanceAfter', width: 150, align: 'right', render: formatMoney },
-                        { title: 'Người ghi', width: 150, render: (_, r) => r.createdBy?.fullName ?? '—' },
+                        { title: 'Người ghi', width: 150, render: (_, r) => r.createdBy?.fullName ?? 'Hệ thống' },
                       ]}
                     />
                   </Flex>
@@ -396,7 +403,7 @@ export default function FundPage() {
                       onRow={(r) => ({ onClick: () => navigate(`/app/fund/proposals/${r._id}`), style: { cursor: 'pointer' } })}
                       pagination={{ current: pPage, pageSize: 15, total: proposals.pagination?.total ?? 0, onChange: setPPage }}
                       columns={[
-                        { title: 'Mã', dataIndex: 'code', width: 160, render: (v) => (v ? <Typography.Text code>{v}</Typography.Text> : '—') },
+                        { title: 'Mã', dataIndex: 'code', width: 160, render: (v) => (v ? <Typography.Text code>{v}</Typography.Text> : 'Chưa có mã') },
                         { title: 'Hạng mục', dataIndex: 'title' },
                         { title: 'Loại', dataIndex: 'planType', width: 180, render: (v) => <EnumTag map={FUND_PLAN_TYPES} value={v} /> },
                         { title: 'Số tiền', dataIndex: 'amount', width: 150, align: 'right', render: (v) => <b>{formatMoney(v)}</b> },
