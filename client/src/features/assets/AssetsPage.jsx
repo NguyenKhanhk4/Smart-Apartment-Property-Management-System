@@ -11,7 +11,7 @@ import { cycleText, dueText } from './assetFormat';
 import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
 import { ASSET_CATEGORIES, WORK_ORDER_STATUS, enumOptions } from '../../constants/enums';
-import { formatDate } from '../../utils/format';
+import { dateOr, formatDate } from '../../utils/format';
 import PageHeader from '../../components/PageHeader';
 import { vtName } from '../../motion/viewTransition';
 
@@ -67,14 +67,14 @@ export default function AssetsPage() {
     },
     { title: 'Loại', dataIndex: 'category', width: 110, render: (v) => <EnumTag map={ASSET_CATEGORIES} value={v} /> },
     { title: 'Chu kỳ', dataIndex: 'cycleValue', width: 90, render: (_, r) => cycleText(r) },
-    { title: 'Bảo trì gần nhất', dataIndex: 'lastMaintenanceDate', width: 140, render: formatDate },
+    { title: 'Bảo trì gần nhất', dataIndex: 'lastMaintenanceDate', width: 140, render: (v) => dateOr(v, 'Chưa bảo trì') },
     {
       title: 'Bảo trì tiếp theo',
       dataIndex: 'nextMaintenanceDate',
       width: 180,
       render: (v, r) => {
         const due = r.isActive && dueText(v);
-        return <Typography.Text type={due ? 'danger' : undefined}>{formatDate(v)}{due && ` (${due})`}</Typography.Text>;
+        return <Typography.Text type={due ? 'danger' : undefined}>{dateOr(v, r.isActive ? 'Chưa lên lịch' : 'Đã ngừng theo dõi')}{due && ` (${due})`}</Typography.Text>;
       },
     },
     {
@@ -83,7 +83,7 @@ export default function AssetsPage() {
       width: 150,
       render: (w, r) => (
         <Flex vertical gap={2} align="start">
-          {w ? <EnumTag map={WORK_ORDER_STATUS} value={w.status} /> : !r.postponedRepair && '—'}
+          {w ? <EnumTag map={WORK_ORDER_STATUS} value={w.status} /> : !r.postponedRepair && 'Không có'}
           {r.postponedRepair && <Tag color="purple">Hoãn sửa đến {formatDate(r.postponedRepair.reviewDate)}</Tag>}
         </Flex>
       ),

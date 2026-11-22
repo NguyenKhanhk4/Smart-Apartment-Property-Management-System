@@ -9,7 +9,7 @@ import { useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
 import { ASSET_CATEGORIES, WORK_ORDER_STATUS } from '../../constants/enums';
-import { formatDate, formatDateTime } from '../../utils/format';
+import { dateOr, dateTimeOr, formatDate } from '../../utils/format';
 import PageHeader from '../../components/PageHeader';
 import AssignWorkOrderModal from '../workOrders/AssignWorkOrderModal';
 import WorkOrderReportModal from '../workOrders/WorkOrderReportModal';
@@ -114,26 +114,26 @@ export default function AssetDetailPage() {
               <Descriptions.Item label="Mã"><AssetCode code={a.code} size={15} /></Descriptions.Item>
               <Descriptions.Item label="Loại"><EnumTag map={ASSET_CATEGORIES} value={a.category} /></Descriptions.Item>
               <Descriptions.Item label="Tòa">{a.buildingId?.name}</Descriptions.Item>
-              <Descriptions.Item label="Vị trí">{a.location || '—'}</Descriptions.Item>
-              <Descriptions.Item label="Hãng sản xuất">{a.manufacturer || '—'}</Descriptions.Item>
-              <Descriptions.Item label="Ngày lắp đặt">{formatDate(a.installDate)}</Descriptions.Item>
+              <Descriptions.Item label="Vị trí">{a.location || 'Chưa nhập'}</Descriptions.Item>
+              <Descriptions.Item label="Hãng sản xuất">{a.manufacturer || 'Chưa nhập'}</Descriptions.Item>
+              <Descriptions.Item label="Ngày lắp đặt">{dateOr(a.installDate, 'Chưa nhập')}</Descriptions.Item>
               <Descriptions.Item label="Hết bảo hành">
-                {formatDate(a.warrantyEnd)}
+                {dateOr(a.warrantyEnd, 'Chưa nhập')}
                 {WARRANTY_TAG[warranty] && <Tag color={WARRANTY_TAG[warranty].color} style={{ marginLeft: 8 }}>{WARRANTY_TAG[warranty].label}</Tag>}
               </Descriptions.Item>
               <Descriptions.Item label="Nhà cung cấp">
-                {a.vendorName || '—'}{a.vendorPhone ? ` · ${a.vendorPhone}` : ''}
+                {a.vendorName || (a.vendorPhone ? '' : 'Chưa nhập')}{a.vendorPhone ? `${a.vendorName ? ' · ' : ''}${a.vendorPhone}` : ''}
               </Descriptions.Item>
               <Descriptions.Item label="Chu kỳ bảo trì">{cycleText(a)}</Descriptions.Item>
               <Descriptions.Item label="Số lần đã bảo trì">{a.doneCount}</Descriptions.Item>
-              <Descriptions.Item label="Bảo trì gần nhất">{formatDate(a.lastMaintenanceDate)}</Descriptions.Item>
+              <Descriptions.Item label="Bảo trì gần nhất">{dateOr(a.lastMaintenanceDate, 'Chưa bảo trì lần nào')}</Descriptions.Item>
               <Descriptions.Item label="Bảo trì tiếp theo">
                 <Typography.Text type={a.isActive && dueText(a.nextMaintenanceDate) ? 'danger' : undefined}>
-                  {formatDate(a.nextMaintenanceDate)}
+                  {dateOr(a.nextMaintenanceDate, a.isActive ? 'Chưa lên lịch' : 'Đã ngừng theo dõi')}
                   {a.isActive && dueText(a.nextMaintenanceDate) && ` (${dueText(a.nextMaintenanceDate)})`}
                 </Typography.Text>
               </Descriptions.Item>
-              <Descriptions.Item label="Ghi chú" span={2}>{a.note || '—'}</Descriptions.Item>
+              <Descriptions.Item label="Ghi chú" span={2}>{a.note || 'Không ghi chú'}</Descriptions.Item>
             </Descriptions>
           )}
         </Card>
@@ -225,8 +225,8 @@ export default function AssetDetailPage() {
           pagination={{ current: page, pageSize: 10, total: history.pagination?.total, onChange: setPage, hideOnSinglePage: true }}
           columns={[
             { title: 'Ngày dự kiến', dataIndex: 'scheduledDate', width: 120, render: formatDate },
-            { title: 'Hoàn thành', dataIndex: 'completedAt', width: 160, render: formatDateTime },
-            { title: 'Kỹ thuật viên', dataIndex: ['assignedTo', 'fullName'], width: 150, render: (v) => v ?? '—' },
+            { title: 'Hoàn thành', dataIndex: 'completedAt', width: 160, render: (v) => dateTimeOr(v, 'Chưa hoàn thành') },
+            { title: 'Kỹ thuật viên', dataIndex: ['assignedTo', 'fullName'], width: 150, render: (v) => v ?? 'Chưa phân công' },
             { title: 'Đúng hạn', dataIndex: 'onTime', width: 100, render: (v) => (v ? <Tag color="green">Đúng hạn</Tag> : <Tag color="red">Trễ hạn</Tag>) },
             {
               title: 'Kết quả',
@@ -236,7 +236,7 @@ export default function AssetDetailPage() {
                 return <Tag color={o.color}>{o.label}</Tag>;
               },
             },
-            { title: 'Ghi chú', dataIndex: 'note', ellipsis: true, render: (v) => v || '—' },
+            { title: 'Ghi chú', dataIndex: 'note', ellipsis: true, render: (v) => v || 'Không ghi chú' },
             {
               title: '',
               width: 130,

@@ -61,7 +61,7 @@ export default function MajorRepairApprovalPage() {
   ];
   const byTab = {
     pending: [
-      { title: 'Báo cáo', key: 'reported', width: 170, render: (_, r) => <Flex vertical><span>{r.repair?.reportedBy?.fullName ?? '—'}</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(r.repair?.reportedAt)}</Typography.Text></Flex> },
+      { title: 'Báo cáo', key: 'reported', width: 170, render: (_, r) => <Flex vertical><span>{r.repair?.reportedBy?.fullName ?? 'Không rõ người báo'}</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(r.repair?.reportedAt)}</Typography.Text></Flex> },
       {
         title: 'Nguồn chi',
         key: 'source',
@@ -121,8 +121,8 @@ export default function MajorRepairApprovalPage() {
     ],
     decided: [
       { title: 'Trạng thái', dataIndex: 'status', width: 140, render: (v) => <EnumTag map={WORK_ORDER_STATUS} value={v} /> },
-      { title: 'Nguồn chi', dataIndex: ['repair', 'costSource'], width: 140, render: (v) => (v ? <EnumTag map={REPAIR_COST_SOURCES} value={v} /> : '—') },
-      { title: 'Quyết định', key: 'decided', width: 170, render: (_, r) => <Flex vertical><span>{r.repair?.decidedBy?.fullName ?? '—'}</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(r.repair?.decidedAt)}</Typography.Text></Flex> },
+      { title: 'Nguồn chi', dataIndex: ['repair', 'costSource'], width: 140, render: (v, r) => (v ? <EnumTag map={REPAIR_COST_SOURCES} value={v} /> : r.status === 'CLOSED' ? 'Không sửa (ngừng sử dụng)' : 'Chưa chọn') },
+      { title: 'Quyết định', key: 'decided', width: 170, render: (_, r) => <Flex vertical><span>{r.repair?.decidedBy?.fullName ?? 'Chưa quyết định'}</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(r.repair?.decidedAt)}</Typography.Text></Flex> },
       { title: '', key: 'act', width: 100, fixed: 'right', render: (_, r) => <Button size="small" onClick={() => setActing({ mode: 'view', wo: r })}>Xem</Button> },
     ],
   };

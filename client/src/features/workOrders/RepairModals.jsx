@@ -52,10 +52,10 @@ export function RepairInfo({ workOrder, showHistory = true }) {
     <>
       <Descriptions column={1} size="small" bordered style={{ marginBottom: 12 }}>
         <Descriptions.Item label="Mô tả hư hỏng"><span style={{ whiteSpace: 'pre-wrap' }}>{r.faultDesc}</span></Descriptions.Item>
-        <Descriptions.Item label="Nhà thầu đề xuất">{r.vendorName || '—'}</Descriptions.Item>
+        <Descriptions.Item label="Nhà thầu đề xuất">{r.vendorName || 'Chưa có'}</Descriptions.Item>
         <Descriptions.Item label="Phương án sửa"><span style={{ whiteSpace: 'pre-wrap' }}>{r.vendorProposal}</span></Descriptions.Item>
         <Descriptions.Item label="Chi phí dự kiến">{formatMoney(r.estimatedCost)}</Descriptions.Item>
-        <Descriptions.Item label="Ảnh hư hỏng">{r.faultImages?.length ? <EvidencePhotos urls={r.faultImages} /> : '—'}</Descriptions.Item>
+        <Descriptions.Item label="Ảnh hư hỏng">{r.faultImages?.length ? <EvidencePhotos urls={r.faultImages} /> : 'Không có ảnh'}</Descriptions.Item>
         {r.costSource && (
           <Descriptions.Item label="Nguồn chi phí">
             <EnumTag map={REPAIR_COST_SOURCES} value={r.costSource} />

@@ -6,7 +6,7 @@ import EvidencePhotosField from '../../components/EvidencePhotosField';
 import { useAction } from '../../hooks/useApi';
 import { formatDate } from '../../utils/format';
 import { toFiles } from '../../utils/upload';
-import { failingRequired, isMeasured, itemStatus, rangeText, toPayload } from './inspectionForm';
+import { allowedText, failingRequired, isMeasured, itemStatus, toPayload } from './inspectionForm';
 
 const STATUS_ICON = {
   ok: <CheckCircleFilled style={{ color: 'var(--ant-color-success)' }} aria-label="Đạt" />,
@@ -113,7 +113,7 @@ export default function InspectionModal({ workOrder, open, onClose, onDone }) {
                       {i + 1}. {item.label} {required ? <Tag color="blue">Bắt buộc</Tag> : null}
                     </Typography.Text>
                     {isMeasured(item) && (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>Cho phép: {rangeText(item) || 'không giới hạn'}</Typography.Text>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>Cho phép: {allowedText(item)}</Typography.Text>
                     )}
                   </Flex>
                   {isMeasured(item) ? (
