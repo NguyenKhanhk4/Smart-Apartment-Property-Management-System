@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
-import { Alert, DatePicker, Descriptions, Flex, Form, Input, InputNumber, Modal, Radio, Space, Tag, Timeline, Typography } from 'antd';
+import { useNavigate } from 'react-router';
+import { Alert, DatePicker, Descriptions, Flex, Form, Input, InputNumber, Modal, Radio, Space, Switch, Tag, Timeline, Typography } from 'antd';
 import { assetApi, workOrderApi } from '../../api/equipment.api';
 import EnumTag from '../../components/EnumTag';
 import EvidencePhotos from '../../components/EvidencePhotos';
@@ -14,11 +15,18 @@ const assetText = (wo) => (wo.assetId?.code ? `${wo.assetId.code} – ${wo.asset
 
 const HISTORY_LABEL = {
   REPORTED: 'Báo cáo hư hỏng',
-  APPROVED: 'Duyệt sửa chữa (chi phí vận hành)',
-  FUND_REQUESTED: 'Duyệt bằng Quỹ bảo trì, chờ đề xuất chi',
+  APPROVED: 'Duyệt sửa chữa',
+  FUND_REQUESTED: 'Chọn Quỹ bảo trì, chờ lập đề xuất chi',
+  EMERGENCY_STARTED: 'Sửa khẩn cấp bằng Quỹ (hồ sơ lập sau)',
+  FUND_RETURNED: 'Kế toán trả lại đề xuất chi quỹ',
   FUND_APPROVED: 'Ban quản trị duyệt chi quỹ',
   FUND_REJECTED: 'Ban quản trị từ chối chi quỹ',
-  FUND_CANCELLED: 'Kế toán rút đề xuất chi quỹ',
+  FUND_REJECTED_EMERGENCY: 'Khoản sửa khẩn cấp không được duyệt chi quỹ',
+  FUND_CANCELLED: 'Rút đề xuất chi quỹ',
+  TECH_ACCEPTED: 'Trưởng BQL nghiệm thu kỹ thuật',
+  BOARD_ACCEPTED: 'Ban quản trị xác nhận nghiệm thu',
+  BOARD_RETURNED: 'Ban quản trị trả về nghiệm thu',
+  EXPENSE_RECORDED: 'Kế toán ghi chi phí thực tế',
   POSTPONED: 'Tạm hoãn',
   REQUESTED: 'Gửi yêu cầu sửa lại',
   FOLLOWUP_CHECK: 'Kiểm tra định kỳ',
@@ -27,8 +35,14 @@ const HISTORY_LABEL = {
   ACCEPTED: 'Nghiệm thu',
   RETURNED: 'Yêu cầu sửa lại (nghiệm thu)',
 };
-const HISTORY_COLOR = { RETURNED: 'red', RETIRED: 'red', FUND_REJECTED: 'red', ACCEPTED: 'green', FUND_APPROVED: 'green', POSTPONED: 'purple', FOLLOWUP_CHECK: 'gray' };
-const SHOW_IMAGES = new Set(['ACCEPTANCE_UPLOADED', 'REQUESTED', 'FOLLOWUP_CHECK']);
+const HISTORY_COLOR = {
+  RETURNED: 'red', RETIRED: 'red', FUND_REJECTED: 'red', FUND_REJECTED_EMERGENCY: 'red', BOARD_RETURNED: 'red', FUND_RETURNED: 'orange',
+  ACCEPTED: 'green', FUND_APPROVED: 'green', BOARD_ACCEPTED: 'green', TECH_ACCEPTED: 'green', POSTPONED: 'purple', FOLLOWUP_CHECK: 'gray',
+  EMERGENCY_STARTED: 'red',
+};
+const SHOW_IMAGES = new Set(['ACCEPTANCE_UPLOADED', 'REQUESTED', 'FOLLOWUP_CHECK', 'EXPENSE_RECORDED']);
+// Thiết bị bắt buộc biên bản kiểm định khi nghiệm thu (server: CERT_REQUIRED_CATEGORIES)
+const CERT_REQUIRED = ['ELEVATOR', 'FIRE_SYSTEM'];
 
 /** Thông tin báo cáo hư hỏng + quyết định + lịch sử các bước (dùng ở modal duyệt, nghiệm thu, xem kết quả) */
 export function RepairInfo({ workOrder, showHistory = true }) {
@@ -45,10 +59,16 @@ export function RepairInfo({ workOrder, showHistory = true }) {
         {r.costSource && (
           <Descriptions.Item label="Nguồn chi phí">
             <EnumTag map={REPAIR_COST_SOURCES} value={r.costSource} />
+            {r.isEmergency && <Tag color="red">Khẩn cấp</Tag>}
             {r.costSource === 'FUND' && workOrder.status === 'AWAITING_REPAIR_APPROVAL' && (
-              <Typography.Text type="secondary"> Chờ Ban quản trị duyệt đề xuất chi</Typography.Text>
+              <Typography.Text type="secondary"> Chờ lập / duyệt đề xuất chi quỹ</Typography.Text>
             )}
           </Descriptions.Item>
+        )}
+        {r.isEmergency && r.emergencyReason && <Descriptions.Item label="Lý do khẩn cấp">{r.emergencyReason}</Descriptions.Item>}
+        {r.warrantyOverrideReason && <Descriptions.Item label="Không dùng bảo hành vì">{r.warrantyOverrideReason}</Descriptions.Item>}
+        {r.actualCost != null && (
+          <Descriptions.Item label="Chi thực tế">{formatMoney(r.actualCost)}{r.invoiceNo ? ` · hóa đơn ${r.invoiceNo}` : ''}</Descriptions.Item>
         )}
         {workOrder.status === 'REPAIR_POSTPONED' && (
           <Descriptions.Item label="Tạm hoãn đến">
@@ -67,6 +87,9 @@ export function RepairInfo({ workOrder, showHistory = true }) {
             </Space>
           </Descriptions.Item>
         )}
+        {r.inspectionCertUrls?.length > 0 && (
+          <Descriptions.Item label="Biên bản kiểm định"><EvidencePhotos urls={r.inspectionCertUrls} /></Descriptions.Item>
+        )}
       </Descriptions>
       {showHistory && r.history?.length > 0 && (
         <Timeline
@@ -79,6 +102,7 @@ export function RepairInfo({ workOrder, showHistory = true }) {
                 <Typography.Text type="secondary"> · {formatDateTime(h.at)}</Typography.Text>
                 {h.note && <div style={{ whiteSpace: 'pre-wrap' }}>{h.note}</div>}
                 {h.cost != null && h.action === 'REQUESTED' && <div>Chi phí dự kiến mới: {formatMoney(h.cost)}</div>}
+                {h.cost != null && h.action === 'EXPENSE_RECORDED' && <div>Số tiền: {formatMoney(h.cost)}</div>}
                 {SHOW_IMAGES.has(h.action) && h.images?.length > 0 && <EvidencePhotos urls={h.images} />}
               </>
             ),
@@ -132,17 +156,34 @@ export function FaultReportModal({ workOrder, open, onClose, onDone }) {
 // ===== UC09 bước 4–6 (KTV): tải biên bản nghiệm thu của nhà thầu =====
 export function AcceptanceUploadModal({ workOrder, open, onClose, onDone }) {
   const [form] = Form.useForm();
-  const [save, saving] = useAction((v) => workOrderApi.uploadAcceptance(workOrder._id, v.note?.trim(), toFiles(v.images)), {
-    success: (res) => res.message,
-    onDone: done(onClose, onDone),
-  });
-  const returned = workOrder.repair?.history?.filter((h) => h.action === 'RETURNED').at(-1);
+  const [save, saving] = useAction(
+    (v) => workOrderApi.uploadAcceptance(workOrder._id, v.note?.trim(), toFiles(v.images), toFiles(v.certificates)),
+    { success: (res) => res.message, onDone: done(onClose, onDone) },
+  );
+  const returned = workOrder.repair?.history?.filter((h) => ['RETURNED', 'BOARD_RETURNED'].includes(h.action)).at(-1);
+  const category = workOrder.assetId?.category;
+  const certRequired = CERT_REQUIRED.includes(category);
   return (
     <Modal title="Tải biên bản nghiệm thu" open={open} onCancel={onClose} onOk={() => form.submit()} okText="Gửi nghiệm thu" cancelText="Đóng" confirmLoading={saving} destroyOnHidden width="min(600px, 94vw)">
       <Typography.Paragraph type="secondary">{assetText(workOrder)}. Chụp hoặc quét biên bản nghiệm thu có chữ ký của nhà thầu.</Typography.Paragraph>
-      {returned && <Alert type="warning" showIcon style={{ marginBottom: 12 }} title="Trưởng BQL đã yêu cầu sửa lại" description={returned.note} />}
-      <Form form={form} layout="vertical" onFinish={(v) => save(v).catch(() => {})}>
+      {returned && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={returned.action === 'BOARD_RETURNED' ? 'Ban quản trị đã yêu cầu sửa lại' : 'Trưởng BQL đã yêu cầu sửa lại'}
+          description={returned.note}
+        />
+      )}
+      <Form form={form} layout="vertical" onFinish={(v) => save(v).catch(markFieldErrors(form))}>
         <EvidencePhotosField name="images" label="Ảnh biên bản nghiệm thu" message="Chụp hoặc tải lên ít nhất 1 ảnh biên bản nghiệm thu" />
+        {/* Thang máy, PCCC: bắt buộc biên bản kiểm định; thiết bị khác có thì tải kèm */}
+        <EvidencePhotosField
+          name="certificates"
+          label={certRequired ? 'Biên bản kiểm định (bắt buộc với thang máy, PCCC)' : 'Biên bản kiểm định (nếu có)'}
+          required={certRequired}
+          message="Tải lên ít nhất 1 ảnh biên bản kiểm định"
+        />
         <Form.Item name="note" label="Ghi chú">
           <Input.TextArea rows={2} maxLength={1000} showCount placeholder="Nhà thầu đã làm gì, tình trạng sau sửa…" />
         </Form.Item>
@@ -195,21 +236,52 @@ function RecentMaintenance({ assetId }) {
  */
 export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, settings }) {
   const [form] = Form.useForm();
+  const navigate = useNavigate();
   const maxDays = settings?.postponeMaxDays ?? 90;
+  const policy = workOrder.policy; // BR-E08, BR-E10: server tính sẵn (tổng cộng dồn, ngưỡng, bảo hành)
   const picked = Form.useWatch('decision', form) ?? only ?? 'APPROVE';
   const costSource = Form.useWatch('costSource', form);
+  const emergency = Form.useWatch('emergency', form);
   const [save, saving] = useAction(
     (v) => workOrderApi.repairDecision(workOrder._id, {
       decision: v.decision,
-      ...(v.decision === 'APPROVE' && { costSource: v.costSource }),
+      ...(v.decision === 'APPROVE' && {
+        costSource: v.costSource,
+        ...(v.warrantyOverrideReason?.trim() && { warrantyOverrideReason: v.warrantyOverrideReason.trim() }),
+        ...(v.costSource === 'FUND' && { emergency: Boolean(v.emergency) }),
+        ...(v.costSource === 'FUND' && v.emergency && { emergencyReason: v.emergencyReason?.trim() }),
+      }),
       comment: v.comment?.trim() ?? '',
       ...(v.decision === 'POSTPONE' && { reviewDate: v.reviewDate.format('YYYY-MM-DD') }),
     }),
-    { success: (res) => res.message, onDone: done(onClose, onDone) },
+    {
+      success: (res) => res.message,
+      onDone: (res) => {
+        onClose();
+        onDone?.();
+        // Chọn Quỹ: Trưởng BQL lập đề xuất ngay, form điền sẵn từ báo cáo hư hỏng
+        if (res?.data?.nextStep === 'CREATE_PROPOSAL') navigate(`/app/fund?createFrom=${workOrder._id}`);
+      },
+    },
   );
   const today = dayjs().startOf('day');
   const awaitingFund = workOrder.repair?.costSource === 'FUND' && workOrder.status === 'AWAITING_REPAIR_APPROVAL';
   const assetId = workOrder.assetId?._id ?? workOrder.assetId;
+  const fundRequired = Boolean(policy?.fundRequired);
+  const warrantyActive = Boolean(policy?.warrantyActive);
+  const sourceOptions = [
+    { value: 'OPERATING', label: 'Chi phí vận hành', disabled: fundRequired },
+    { value: 'FUND', label: 'Quỹ bảo trì (Kế toán xác nhận, Ban quản trị duyệt)' },
+    { value: 'WARRANTY', label: 'Bảo hành', disabled: !warrantyActive },
+  ];
+  const defaultSource = warrantyActive ? 'WARRANTY' : fundRequired ? 'FUND' : 'OPERATING';
+  const sourceHint = {
+    OPERATING: 'Phiếu chuyển Đang sửa; bạn liên hệ nhà thầu ngoài hệ thống. Kế toán ghi chi thực tế khi xong.',
+    FUND: emergency
+      ? `Phiếu chuyển Đang sửa ngay. Lập đề xuất chi quỹ trong ${settings?.emergencyDossierDays ?? 3} ngày; Ban quản trị được báo ngay.`
+      : 'Phiếu giữ Chờ duyệt sửa; bạn lập đề xuất chi quỹ ngay sau bước này. Kế toán xác nhận, Ban quản trị duyệt thì mới sửa.',
+    WARRANTY: 'Phiếu chuyển Đang sửa; KTV liên hệ hãng bảo hành, không phát sinh chi.',
+  };
   return (
     <Modal
       title={`${only === 'RETIRE' ? 'Ngừng sử dụng' : 'Quyết định sửa chữa'}: ${assetText(workOrder)}`}
@@ -228,8 +300,8 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          title="Đã duyệt bằng Quỹ bảo trì, đang chờ Kế toán lập đề xuất và Ban quản trị biểu quyết"
-          description="Khi đề xuất đang chờ biểu quyết thì không quyết định lại được. Nếu Kế toán chưa lập đề xuất, bạn vẫn đổi được quyết định."
+          title="Đã chọn Quỹ bảo trì, chưa có đề xuất chi quỹ"
+          description="Lập đề xuất ở trang Quỹ bảo trì. Khi đề xuất đang chờ Kế toán hoặc Ban quản trị thì không quyết định lại được; chưa lập thì bạn vẫn đổi được quyết định."
         />
       )}
       <RepairInfo workOrder={workOrder} showHistory={false} />
@@ -237,7 +309,7 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
       <Form
         form={form}
         layout="vertical"
-        initialValues={{ decision: only ?? 'APPROVE', costSource: 'OPERATING' }}
+        initialValues={{ decision: only ?? 'APPROVE', costSource: defaultSource, emergency: false }}
         onFinish={(v) => save(v).catch(markFieldErrors(form))}
       >
         {!only && (
@@ -245,15 +317,53 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
             <Radio.Group optionType="button" buttonStyle="solid" options={DECISION_OPTIONS} />
           </Form.Item>
         )}
+        {picked === 'APPROVE' && policy && (
+          <Descriptions column={1} size="small" bordered style={{ marginBottom: 12 }} title="Nguồn chi phí">
+            <Descriptions.Item label="Chi phí dự kiến">{formatMoney(policy.estimatedCost)}</Descriptions.Item>
+            <Descriptions.Item label={`Đã chi vận hành cho thiết bị trong ${policy.windowDays} ngày`}>{formatMoney(policy.spentInWindow)}</Descriptions.Item>
+            <Descriptions.Item label="Tổng so với ngưỡng">
+              <Typography.Text strong type={fundRequired ? 'danger' : undefined}>{formatMoney(policy.total)}</Typography.Text>
+              {' / '}{formatMoney(policy.threshold)}
+            </Descriptions.Item>
+          </Descriptions>
+        )}
+        {picked === 'APPROVE' && fundRequired && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            title={`Tổng ${formatMoney(policy.total)} từ ngưỡng ${formatMoney(policy.threshold)} trở lên: bắt buộc dùng Quỹ bảo trì`}
+          />
+        )}
+        {picked === 'APPROVE' && warrantyActive && (
+          <Alert type="warning" showIcon style={{ marginBottom: 12 }} title={`Thiết bị còn bảo hành đến ${formatDate(policy.warrantyEnd)}`} />
+        )}
         {picked === 'APPROVE' && (
+          <Form.Item name="costSource" label="Nguồn chi phí" extra={sourceHint[costSource]}>
+            <Radio.Group options={sourceOptions} />
+          </Form.Item>
+        )}
+        {picked === 'APPROVE' && warrantyActive && costSource !== 'WARRANTY' && (
           <Form.Item
-            name="costSource"
-            label="Nguồn chi phí"
-            extra={costSource === 'FUND'
-              ? 'Phiếu giữ Chờ duyệt sửa; Kế toán lập đề xuất chi quỹ, Ban quản trị duyệt thì mới sửa. Chưa liên hệ nhà thầu.'
-              : 'Phiếu chuyển Đang sửa; bạn liên hệ nhà thầu ngoài hệ thống.'}
+            name="warrantyOverrideReason"
+            label="Lý do không dùng bảo hành"
+            rules={[{ required: true, whitespace: true, min: 5, message: 'Ghi lý do tối thiểu 5 ký tự' }]}
           >
-            <Radio.Group options={[{ value: 'OPERATING', label: 'Chi phí vận hành' }, { value: 'FUND', label: 'Quỹ bảo trì (cần Ban quản trị duyệt)' }]} />
+            <Input.TextArea rows={2} maxLength={500} showCount placeholder="Lỗi ngoài phạm vi bảo hành, hãng từ chối…" />
+          </Form.Item>
+        )}
+        {picked === 'APPROVE' && costSource === 'FUND' && (
+          <Form.Item name="emergency" label="Sự cố khẩn cấp (sửa trước, hồ sơ sau)" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        )}
+        {picked === 'APPROVE' && costSource === 'FUND' && emergency && (
+          <Form.Item
+            name="emergencyReason"
+            label="Lý do khẩn cấp"
+            rules={[{ required: true, whitespace: true, min: 10, message: 'Ghi lý do tối thiểu 10 ký tự' }]}
+          >
+            <Input.TextArea rows={2} maxLength={1000} showCount placeholder="Vd: thang máy kẹt người, mất nước toàn tòa…" />
           </Form.Item>
         )}
         {picked === 'POSTPONE' && (
@@ -331,6 +441,7 @@ export function RepairRequestModal({ workOrder, open, onClose, onDone }) {
 export function AcceptanceReviewModal({ workOrder, open, onClose, onDone }) {
   const [form] = Form.useForm();
   const decision = Form.useWatch('decision', form) ?? 'ACCEPT';
+  const fund = workOrder.repair?.costSource === 'FUND'; // BR-E09: nghiệm thu kỹ thuật, Ban quản trị xác nhận sau
   const [save, saving] = useAction(
     (v) => (v.decision === 'ACCEPT' ? workOrderApi.acceptRepair(workOrder._id) : workOrderApi.returnRepair(workOrder._id, v.comment.trim())),
     { success: (res) => res.message, onDone: done(onClose, onDone) },
@@ -341,7 +452,7 @@ export function AcceptanceReviewModal({ workOrder, open, onClose, onDone }) {
       open={open}
       onCancel={onClose}
       onOk={() => form.submit()}
-      okText={decision === 'ACCEPT' ? 'Xác nhận nghiệm thu' : 'Yêu cầu sửa lại'}
+      okText={decision === 'ACCEPT' ? (fund ? 'Nghiệm thu kỹ thuật, chuyển Ban quản trị' : 'Xác nhận nghiệm thu') : 'Yêu cầu sửa lại'}
       okButtonProps={{ danger: decision !== 'ACCEPT' }}
       cancelText="Đóng"
       confirmLoading={saving}
@@ -359,7 +470,13 @@ export function AcceptanceReviewModal({ workOrder, open, onClose, onDone }) {
           </Form.Item>
         )}
         {decision === 'ACCEPT' && (
-          <Alert type="info" showIcon title="Phiếu hoàn thành, thiết bị hoạt động lại; lịch bảo trì tiếp theo dời nếu đã đến hạn." />
+          <Alert
+            type="info"
+            showIcon
+            title={fund
+              ? 'Sửa bằng Quỹ: phiếu chuyển Chờ Ban quản trị xác nhận nghiệm thu. Ban quản trị xác nhận thì phiếu hoàn thành và Kế toán mới lập phiếu chi.'
+              : 'Phiếu hoàn thành, thiết bị hoạt động lại; lịch bảo trì tiếp theo dời nếu đã đến hạn.'}
+          />
         )}
       </Form>
     </Modal>

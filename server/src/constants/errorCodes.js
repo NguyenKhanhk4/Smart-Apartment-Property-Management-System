@@ -72,7 +72,14 @@ export const ERROR_CODES = Object.freeze({
   WORKORDER_TAKEN: { status: 409, message: 'Phiếu bảo trì đã có kỹ thuật viên khác nhận' },
   WORKORDER_NOT_SCANNED: { status: 409, message: 'Cần quét mã QR trên thiết bị trước khi nộp kết quả kiểm tra' },
   // UC10 duyệt sửa chữa lớn
-  WORKORDER_FUND_PENDING: { status: 409, message: 'Phiếu đang chờ Ban quản trị duyệt đề xuất chi quỹ, chưa quyết định lại được' },
+  WORKORDER_FUND_PENDING: { status: 409, message: 'Phiếu đang có đề xuất chi quỹ đang xử lý (chờ Kế toán hoặc Ban quản trị), chưa quyết định lại được' },
+  WORKORDER_FUND_REQUIRED: { status: 422, message: 'Chi phí (cộng dồn 30 ngày) từ ngưỡng trở lên, bắt buộc dùng Quỹ bảo trì' }, // BR-E08
+  WORKORDER_WARRANTY_REASON_REQUIRED: { status: 422, message: 'Thiết bị còn bảo hành, ghi lý do nếu không dùng bảo hành' }, // BR-E10
+  WORKORDER_NOT_AWAITING_BOARD: { status: 409, message: 'Phiếu không chờ Ban quản trị xác nhận nghiệm thu' }, // BR-E09
+  PROPOSAL_NOT_AWAITING_VERIFY: { status: 409, message: 'Đề xuất không ở trạng thái chờ Kế toán xác nhận' },
+  PROPOSAL_NOT_RETURNED: { status: 409, message: 'Chỉ gửi lại được đề xuất đang bị trả lại' },
+  EXPENSE_VARIANCE_REASON_REQUIRED: { status: 422, message: 'Chi thực tế khác số đã duyệt, ghi lý do' }, // BR-F17
+  CONFIG_AWAITING_BOARD: { status: 409, message: 'Tham số đang chờ Ban quản trị xác nhận thay đổi trước' }, // BR-S12
   WORKORDER_NOT_AWAITING_FUND: { status: 409, message: 'Phiếu bảo trì không chờ đề xuất chi quỹ' },
   WORKORDER_NOT_POSTPONED: { status: 409, message: 'Phiếu bảo trì không ở trạng thái tạm hoãn sửa' },
   WORKORDER_RESULT_CONFLICT: { status: 400, message: 'Có mục không đạt, kết quả phải là Có sự cố' },

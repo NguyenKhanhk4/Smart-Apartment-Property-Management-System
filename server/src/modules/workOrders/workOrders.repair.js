@@ -1,10 +1,12 @@
 // UC09 – Báo cáo hư hỏng và nghiệm thu sửa chữa (quyết định sửa của Trưởng BQL ở workOrders.decision.js, UC10).
 // Luồng (BR-E05, Q12): Đang kiểm tra (Có sự cố) → Chờ duyệt sửa → Đang sửa → Chờ nghiệm thu → Hoàn thành.
+// Sửa bằng Quỹ (BR-E09): Chờ nghiệm thu → Chờ Ban quản trị xác nhận → Hoàn thành (workOrders.board.js).
 // Mọi bước ghi có điều kiện trạng thái cũ nên 2 thao tác cùng lúc không ghi đè nhau; thêm 1 dòng repair.history + audit.
 import {
-  AUDIT_ACTIONS, AUDIT_TARGETS, NOTIFICATION_TYPES, REPAIR_COST_SOURCES, WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES,
+  ASSET_CATEGORIES, AUDIT_ACTIONS, AUDIT_TARGETS, NOTIFICATION_TYPES, REPAIR_COST_SOURCES, ROLES, WORK_ORDER_RESULTS, WORK_ORDER_STATUS,
+  WORK_ORDER_TYPES,
 } from '../../constants/enums.js';
-import { Asset, WorkOrder } from '../../models/index.js';
+import { Asset, User, WorkOrder } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
 import { uploadToCloudinary } from '../../services/upload.service.js';
@@ -75,20 +77,39 @@ export async function reportFault(user, id, { faultDesc, vendorName, vendorPropo
 // UC10 (quyết định duyệt / Quỹ / tạm hoãn / ngừng sử dụng): workOrders.decision.js
 
 // ===== UC09 bước 4–6: KTV tải biên bản nghiệm thu của nhà thầu =====
-/** Đang sửa → Chờ nghiệm thu (không hoàn thành thẳng, Q12); thiết bị vẫn đang sửa; báo Trưởng BQL (MSG-E13) */
+// Thiết bị bắt buộc kiểm định an toàn (thang máy, PCCC): kèm biên bản kiểm định mới được nghiệm thu
+export const CERT_REQUIRED_CATEGORIES = Object.freeze([ASSET_CATEGORIES.ELEVATOR, ASSET_CATEGORIES.FIRE_SYSTEM]);
+
+/**
+ * Đang sửa → Chờ nghiệm thu (không hoàn thành thẳng, Q12); thiết bị vẫn đang sửa; báo Trưởng BQL (MSG-E13).
+ * files: mảng ảnh biên bản, hoặc { images, certificates } khi gửi kèm biên bản kiểm định.
+ */
 export async function uploadAcceptance(user, id, { note }, files = [], now = new Date()) {
   const wo = await load(id);
   if (!sameId(wo.assignedTo, user.id)) throw ApiError.forbidden();
   if (wo.status !== S.UNDER_REPAIR) {
     throw invalid(wo.status === S.AWAITING_REPAIR_APPROVAL ? 'Sửa chữa chưa được duyệt, chưa tải biên bản được' : 'Phiếu không ở trạng thái đang sửa');
   }
-  if (!files.length) throw noImages();
-  const images = await uploadToCloudinary(files, 'work-orders');
+  const reportFiles = Array.isArray(files) ? files : files?.images ?? [];
+  const certFiles = Array.isArray(files) ? [] : files?.certificates ?? [];
+  if (!reportFiles.length) throw noImages();
+  const asset = await Asset.findById(wo.assetId).select('category').lean();
+  if (CERT_REQUIRED_CATEGORIES.includes(asset?.category) && !certFiles.length) {
+    throw ApiError.badRequest('Thang máy / hệ thống PCCC: cần tải biên bản kiểm định', [{ field: 'certificates', message: 'Cần ít nhất 1 ảnh biên bản kiểm định' }]);
+  }
+  const images = await uploadToCloudinary(reportFiles, 'work-orders');
+  const certs = certFiles.length ? await uploadToCloudinary(certFiles, 'work-orders') : [];
   const res = await WorkOrder.updateOne(
     { _id: id, status: S.UNDER_REPAIR, assignedTo: user.id },
     {
-      $set: { status: S.AWAITING_ACCEPTANCE, 'repair.acceptanceImages': images, 'repair.acceptanceNote': note || null, 'repair.acceptanceUploadedAt': now },
-      $push: { 'repair.history': step('ACCEPTANCE_UPLOADED', user, now, { note: note || null, images }) },
+      $set: {
+        status: S.AWAITING_ACCEPTANCE,
+        'repair.acceptanceImages': images,
+        'repair.inspectionCertUrls': certs,
+        'repair.acceptanceNote': note || null,
+        'repair.acceptanceUploadedAt': now,
+      },
+      $push: { 'repair.history': step('ACCEPTANCE_UPLOADED', user, now, { note: note || null, images: [...images, ...certs] }) },
     },
   );
   if (!res.modifiedCount) throw new ApiError('CONCURRENT_UPDATE');
@@ -108,39 +129,75 @@ export async function uploadAcceptance(user, id, { note }, files = [], now = new
 
 // ===== Q12: Trưởng BQL nghiệm thu =====
 /**
- * Chờ nghiệm thu → Hoàn thành, trong 1 transaction cùng cập nhật thiết bị: ghi lần bảo trì hôm nay; lịch kế tiếp chỉ dời khi
- * đã đến hạn (≤ hôm nay thì thành hôm nay + chu kỳ), còn ở tương lai thì giữ. Báo KTV (MSG-E11).
+ * Phiếu hoàn thành → cập nhật thiết bị (trong transaction của bước hoàn thành): ghi lần bảo trì hôm nay; lịch kế tiếp chỉ dời
+ * khi đã đến hạn (≤ hôm nay thì thành hôm nay + chu kỳ), còn ở tương lai thì giữ. Dùng chung với Ban quản trị xác nhận (BR-E09).
+ * @returns {Promise<Date|null>} ngày bảo trì kế tiếp
+ */
+export async function finishRepair(session, wo, now) {
+  if (wo.type !== WORK_ORDER_TYPES.SCHEDULED) return null;
+  const asset = await Asset.findById(wo.assetId).session(session);
+  if (!asset) return null;
+  const today = startOfVnDay(now);
+  asset.lastMaintenanceDate = today;
+  if (asset.nextMaintenanceDate <= today) {
+    asset.nextMaintenanceDate = computeNextMaintenance(today, { cycleValue: asset.cycleValue, cycleUnit: asset.cycleUnit });
+  }
+  await asset.save({ session });
+  return asset.nextMaintenanceDate;
+}
+
+/**
+ * Chờ nghiệm thu →
+ *   - nguồn Quỹ: Chờ Ban quản trị xác nhận (nghiệm thu kỹ thuật; thiết bị chưa đổi lịch, BR-E09); báo Ban quản trị.
+ *   - nguồn khác: Hoàn thành, cập nhật thiết bị (finishRepair); báo KTV (MSG-E11).
  */
 export async function acceptRepair(user, id, now = new Date()) {
   const wo = await load(id);
   if (wo.status !== S.AWAITING_ACCEPTANCE) throw invalid('Phiếu chưa có biên bản nghiệm thu để xác nhận');
+  const fund = wo.repair?.costSource === REPAIR_COST_SOURCES.FUND;
+  const nextStatus = fund ? S.AWAITING_BOARD_ACCEPTANCE : S.DONE;
   const nextDate = await withTransaction(async (session) => {
     const done = await WorkOrder.findOneAndUpdate(
       { _id: id, status: S.AWAITING_ACCEPTANCE },
       {
-        $set: { status: S.DONE, completedAt: now, 'repair.acceptedBy': user.id, 'repair.acceptedAt': now },
-        $push: { 'repair.history': step('ACCEPTED', user, now) },
+        $set: {
+          status: nextStatus,
+          ...(!fund && { completedAt: now }),
+          'repair.acceptedBy': user.id,
+          'repair.acceptedAt': now,
+          'repair.boardReturnNote': null,
+          'repair.boardRemindedAt': null,
+        },
+        $push: { 'repair.history': step(fund ? 'TECH_ACCEPTED' : 'ACCEPTED', user, now) },
       },
       { returnDocument: 'after', session },
     ).lean();
     if (!done) throw new ApiError('CONCURRENT_UPDATE');
-    // Q12: sửa bằng Quỹ → đánh dấu đã nghiệm thu bên đề xuất chi, Kế toán mới lập phiếu chi được
-    if (done.repair?.costSource === REPAIR_COST_SOURCES.FUND) await markFundWorkAccepted(done._id, user, now, session);
-    if (done.type !== WORK_ORDER_TYPES.SCHEDULED) return null;
-    const asset = await Asset.findById(done.assetId).session(session);
-    if (!asset) return null;
-    const today = startOfVnDay(now);
-    asset.lastMaintenanceDate = today;
-    if (asset.nextMaintenanceDate <= today) {
-      asset.nextMaintenanceDate = computeNextMaintenance(today, { cycleValue: asset.cycleValue, cycleUnit: asset.cycleUnit });
+    // Sửa bằng Quỹ → đánh dấu đã nghiệm thu kỹ thuật bên đề xuất chi; chờ Ban quản trị xác nhận
+    if (fund) {
+      await markFundWorkAccepted(done._id, user, now, session);
+      return null;
     }
-    await asset.save({ session });
-    return asset.nextMaintenanceDate;
+    return finishRepair(session, done, now);
   });
   await logAudit({
     action: AUDIT_ACTIONS.WORKORDER_REPAIR_ACCEPTED, user, targetType: AUDIT_TARGETS.WORK_ORDER, targetId: wo._id,
-    before: { status: wo.status }, after: { status: S.DONE }, metadata: { assetId: wo.assetId },
+    before: { status: wo.status }, after: { status: nextStatus }, metadata: { assetId: wo.assetId, ...(fund && { financial: true }) },
   });
+  if (fund) {
+    await safely(async () => {
+      const members = await User.find({ role: ROLES.BOARD, isActive: true }).select('_id').lean();
+      await notify(members.map((m) => m._id), {
+        type: NOTIFICATION_TYPES.FUND_APPROVAL,
+        title: 'Chờ xác nhận nghiệm thu sửa chữa bằng Quỹ',
+        content: `Trưởng BQL đã nghiệm thu kỹ thuật sửa chữa ${await assetLabel(wo.assetId)}. Ban quản trị xem biên bản và xác nhận nghiệm thu để Kế toán lập phiếu chi.`,
+        refId: wo._id,
+        link: '/app/fund',
+        email: true,
+      });
+    });
+    return WorkOrder.findById(id).lean();
+  }
   await safely(async () => notify(wo.assignedTo, {
     type: NOTIFICATION_TYPES.MAINTENANCE,
     title: 'Sửa chữa đã được nghiệm thu',
@@ -158,7 +215,9 @@ export async function returnRepair(user, id, { comment }, now = new Date()) {
   const res = await WorkOrder.updateOne(
     { _id: id, status: S.AWAITING_ACCEPTANCE },
     {
-      $set: { status: S.UNDER_REPAIR, 'repair.acceptanceImages': [], 'repair.acceptanceNote': null, 'repair.acceptanceUploadedAt': null },
+      $set: {
+        status: S.UNDER_REPAIR, 'repair.acceptanceImages': [], 'repair.inspectionCertUrls': [], 'repair.acceptanceNote': null, 'repair.acceptanceUploadedAt': null,
+      },
       $push: { 'repair.history': step('RETURNED', user, now, { note: comment }) },
     },
   );

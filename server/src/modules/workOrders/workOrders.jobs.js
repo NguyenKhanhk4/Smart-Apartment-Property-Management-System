@@ -1,9 +1,10 @@
 import {
-  CONFIG_KEYS, NOTIFICATION_TYPES, ROLE_TITLES, WORK_ORDER_ACTIVE_STATUSES, WORK_ORDER_INSPECTING_STATUSES, WORK_ORDER_STATUS, WORK_ORDER_TYPES,
+  CONFIG_KEYS, FUND_PROPOSAL_STATUS, NOTIFICATION_TYPES, REPAIR_COST_SOURCES, ROLE_TITLES, ROLES, WORK_ORDER_ACTIVE_STATUSES,
+  WORK_ORDER_INSPECTING_STATUSES, WORK_ORDER_STATUS, WORK_ORDER_TYPES,
 } from '../../constants/enums.js';
-import { Asset, WorkOrder } from '../../models/index.js';
+import { Asset, FundProposal, User, WorkOrder } from '../../models/index.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
-import { getConfig } from '../../services/systemConfig.service.js';
+import { getConfig, getConfigs } from '../../services/systemConfig.service.js';
 import { DAY_MS, endOfVnDay, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { listShifts } from '../dutyShifts/dutyShifts.service.js';
 
@@ -172,4 +173,119 @@ export async function warnEquipment(now = new Date()) {
     });
   }
   return overdue + expiring + waitingAcceptance;
+}
+
+// ===== Job REPAIR_FOLLOWUP_REMIND (BR-X8): nhắc, không tự xử lý =====
+/**
+ * Ghi dấu nhắc có điều kiện (field mốc nhắc cũ) nên 2 lần chạy chồng không nhắc trùng.
+ * @returns {Promise<boolean>} true nếu lần này giành được quyền nhắc
+ */
+async function claim(woId, field, previous, now) {
+  const res = await WorkOrder.updateOne({ _id: woId, [field]: previous ?? null }, { $set: { [field]: now } });
+  return res.modifiedCount === 1;
+}
+const label = (wo) => (wo.assetId ? `${wo.assetId.code} – ${wo.assetId.name}` : 'thiết bị');
+const boardIds = async () => (await User.find({ role: ROLES.BOARD, isActive: true }).select('_id').lean()).map((m) => m._id);
+
+/**
+ * [Cron 07:10]
+ * 1. BR-E11: phiếu sửa khẩn cấp quá EMERGENCY_DOSSIER_DAYS ngày chưa có đề xuất chi quỹ (đang xử lý / đã duyệt) → nhắc Trưởng BQL
+ *    + Ban quản trị, mỗi ngày 1 lần.
+ * 2. BR-E09: chờ Ban quản trị xác nhận nghiệm thu quá BOARD_ACCEPTANCE_REMIND_DAYS ngày → nhắc Ban quản trị, N ngày/lần.
+ * 3. Sửa chữa vận hành xong quá OPERATING_EXPENSE_REMIND_DAYS ngày chưa ghi chi → nhắc Kế toán, N ngày/lần.
+ * @returns {Promise<number>} số phiếu đã nhắc
+ */
+export async function remindRepairFollowups(now = new Date()) {
+  const K = CONFIG_KEYS;
+  const c = await getConfigs([K.EMERGENCY_DOSSIER_DAYS, K.BOARD_ACCEPTANCE_REMIND_DAYS, K.OPERATING_EXPENSE_REMIND_DAYS]);
+  const dossierDays = Number(c[K.EMERGENCY_DOSSIER_DAYS]) || 3;
+  const boardDays = Number(c[K.BOARD_ACCEPTANCE_REMIND_DAYS]) || 3;
+  const expenseDays = Number(c[K.OPERATING_EXPENSE_REMIND_DAYS]) || 3;
+  const today = startOfVnDay(now);
+  const ago = (days) => new Date(now.getTime() - days * DAY_MS);
+  let count = 0;
+
+  // 1. Hồ sơ sửa khẩn cấp
+  const emergencies = await WorkOrder.find({
+    'repair.isEmergency': true,
+    'repair.costSource': REPAIR_COST_SOURCES.FUND,
+    'repair.emergencyAt': { $lte: ago(dossierDays) },
+    $or: [{ 'repair.dossierRemindedAt': null }, { 'repair.dossierRemindedAt': { $lt: today } }],
+  }).populate('assetId', 'code name').lean();
+  if (emergencies.length) {
+    const covered = new Set((await FundProposal.distinct('workOrderId', {
+      workOrderId: { $in: emergencies.map((w) => w._id) },
+      $or: [{ isOpen: true }, { status: { $in: [FUND_PROPOSAL_STATUS.APPROVED, FUND_PROPOSAL_STATUS.PAID] } }],
+    })).map(String));
+    const board = await boardIds();
+    for (const wo of emergencies.filter((w) => !covered.has(String(w._id)))) {
+      if (!(await claim(wo._id, 'repair.dossierRemindedAt', wo.repair.dossierRemindedAt, now))) continue;
+      count += 1;
+      const days = Math.floor((now - new Date(wo.repair.emergencyAt)) / DAY_MS);
+      const msg = {
+        type: NOTIFICATION_TYPES.FUND_APPROVAL,
+        title: 'Sửa chữa khẩn cấp chưa có hồ sơ chi quỹ',
+        content: `Sửa chữa khẩn cấp ${label(wo)} bắt đầu ${days} ngày trước (hạn ${dossierDays} ngày) chưa có đề xuất chi quỹ. Trưởng BQL lập đề xuất ngay.`,
+        refId: wo._id,
+        link: '/app/fund',
+      };
+      try {
+        await notifyRoles(['MANAGER'], msg);
+        await notify(board, msg);
+      } catch (err) {
+        console.error('[BR-E11] Lỗi nhắc hồ sơ khẩn cấp:', err);
+      }
+    }
+  }
+
+  // 2. Chờ Ban quản trị xác nhận nghiệm thu
+  const awaitingBoard = await WorkOrder.find({
+    status: WORK_ORDER_STATUS.AWAITING_BOARD_ACCEPTANCE,
+    'repair.acceptedAt': { $lte: ago(boardDays) },
+    $or: [{ 'repair.boardRemindedAt': null }, { 'repair.boardRemindedAt': { $lte: ago(boardDays) } }],
+  }).populate('assetId', 'code name').lean();
+  if (awaitingBoard.length) {
+    const board = await boardIds();
+    for (const wo of awaitingBoard) {
+      if (!(await claim(wo._id, 'repair.boardRemindedAt', wo.repair.boardRemindedAt, now))) continue;
+      count += 1;
+      try {
+        await notify(board, {
+          type: NOTIFICATION_TYPES.FUND_APPROVAL,
+          title: 'Nhắc xác nhận nghiệm thu sửa chữa bằng Quỹ',
+          content: `Sửa chữa ${label(wo)} đã được Trưởng BQL nghiệm thu từ ${fmtDateVn(wo.repair.acceptedAt)}, đang chờ Ban quản trị xác nhận. Hệ thống không tự xác nhận.`,
+          refId: wo._id,
+          link: '/app/fund',
+          email: true,
+        });
+      } catch (err) {
+        console.error('[BR-E09] Lỗi nhắc Ban quản trị:', err);
+      }
+    }
+  }
+
+  // 3. Chờ ghi chi vận hành
+  const awaitingExpense = await WorkOrder.find({
+    status: WORK_ORDER_STATUS.DONE,
+    'repair.costSource': REPAIR_COST_SOURCES.OPERATING,
+    'repair.expenseRecordedAt': null,
+    completedAt: { $lte: ago(expenseDays) },
+    $or: [{ 'repair.expenseRemindedAt': null }, { 'repair.expenseRemindedAt': { $lte: ago(expenseDays) } }],
+  }).populate('assetId', 'code name').lean();
+  for (const wo of awaitingExpense) {
+    if (!(await claim(wo._id, 'repair.expenseRemindedAt', wo.repair.expenseRemindedAt, now))) continue;
+    count += 1;
+    try {
+      await notifyRoles(['ACCOUNTANT'], {
+        type: NOTIFICATION_TYPES.MAINTENANCE,
+        title: 'Sửa chữa chờ ghi chi phí vận hành',
+        content: `Sửa chữa ${label(wo)} hoàn thành ${fmtDateVn(wo.completedAt)} chưa được ghi chi phí thực tế. Ghi số tiền và hóa đơn.`,
+        refId: wo._id,
+        link: '/app/fund',
+      });
+    } catch (err) {
+      console.error('[UC10] Lỗi nhắc Kế toán ghi chi:', err);
+    }
+  }
+  return count;
 }

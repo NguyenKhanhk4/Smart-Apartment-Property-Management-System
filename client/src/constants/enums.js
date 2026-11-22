@@ -241,6 +241,8 @@ export const FUND_PLAN_TYPES = {
 };
 
 export const FUND_PROPOSAL_STATUS = {
+  PENDING_VERIFY: { label: 'Chờ Kế toán xác nhận', color: 'cyan' },
+  RETURNED: { label: 'Bị trả lại', color: 'orange' },
   PENDING: { label: 'Chờ Ban quản trị duyệt', color: 'gold' },
   APPROVED: { label: 'Đã duyệt, chờ chi', color: 'blue' },
   REJECTED: { label: 'Bị từ chối', color: 'red' },
@@ -300,6 +302,7 @@ export const WORK_ORDER_STATUS = {
   AWAITING_REPAIR_APPROVAL: { label: 'Chờ duyệt sửa', color: 'orange' },
   UNDER_REPAIR: { label: 'Đang sửa', color: 'volcano' },
   AWAITING_ACCEPTANCE: { label: 'Chờ nghiệm thu', color: 'gold' },
+  AWAITING_BOARD_ACCEPTANCE: { label: 'Chờ Ban quản trị xác nhận', color: 'purple' }, // BR-E09
   REPAIR_POSTPONED: { label: 'Tạm hoãn sửa', color: 'purple' }, // UC10 (Q5)
   DONE: { label: 'Hoàn thành', color: 'success' },
   CLOSED: { label: 'Đã đóng', color: 'default' }, // UC10: thiết bị ngừng sử dụng
@@ -315,9 +318,12 @@ export const REPAIR_DECISIONS = {
 export const REPAIR_COST_SOURCES = {
   OPERATING: { label: 'Chi phí vận hành', color: 'blue' },
   FUND: { label: 'Quỹ bảo trì', color: 'purple' },
+  WARRANTY: { label: 'Bảo hành', color: 'cyan' },
 };
 
-export const WORK_ORDER_OPEN_STATUSES = ['PENDING', 'IN_PROGRESS', 'AWAITING_REPAIR_APPROVAL', 'UNDER_REPAIR', 'AWAITING_ACCEPTANCE', 'REPAIR_POSTPONED'];
+export const WORK_ORDER_OPEN_STATUSES = ['PENDING', 'IN_PROGRESS', 'AWAITING_REPAIR_APPROVAL', 'UNDER_REPAIR', 'AWAITING_ACCEPTANCE', 'AWAITING_BOARD_ACCEPTANCE', 'REPAIR_POSTPONED'];
+// Đề xuất chi quỹ còn đang xử lý (chưa có kết quả biểu quyết)
+export const FUND_PROPOSAL_OPEN_STATUSES = ['PENDING_VERIFY', 'RETURNED', 'PENDING'];
 
 export const WORK_ORDER_TYPES = {
   SCHEDULED: { label: 'Bảo trì định kỳ', color: 'geekblue' },
@@ -416,6 +422,7 @@ export const CRON_JOBS = {
   WORK_ORDER_GENERATE: { label: 'Tạo work order bảo trì định kỳ', color: 'geekblue' },
   EQUIPMENT_WARNING: { label: 'Cảnh báo bảo trì quá hạn, sắp hết bảo hành', color: 'orange' },
   REPAIR_REVIEW: { label: 'Nhắc xem lại sửa chữa tạm hoãn', color: 'purple' },
+  REPAIR_FOLLOWUP_REMIND: { label: 'Nhắc hồ sơ sửa khẩn cấp, xác nhận nghiệm thu, ghi chi', color: 'magenta' },
   TICKET_ESCALATE: { label: 'Leo thang phản ánh quá hạn', color: 'orange' },
   TICKET_AUTO_CLOSE: { label: 'Tự đóng phản ánh chờ nghiệm thu', color: 'default' },
   CONTRACT_EXPIRE: { label: 'Quét hợp đồng thuê hết hạn', color: 'purple' },

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Badge, Button, Card, Flex, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import { workOrderApi } from '../../api/equipment.api';
 import EnumTag from '../../components/EnumTag';
@@ -11,6 +12,13 @@ import { RepairDecisionModal, RepairRequestModal } from './RepairModals';
 import WorkOrderReportModal from './WorkOrderReportModal';
 
 const PAGE_SIZE = 10;
+
+// Đề xuất chi quỹ đang xử lý của phiếu: đang chờ ai
+const FUND_WAITING = {
+  PENDING_VERIFY: 'chờ Kế toán xác nhận',
+  RETURNED: 'bị Kế toán trả lại, cần sửa và gửi lại',
+  PENDING: 'chờ Ban quản trị biểu quyết',
+};
 
 const assetCell = (_, r) => (
   <Flex vertical>
@@ -39,6 +47,7 @@ const reviewCell = (_, r) => (
 
 // UC10 – Trưởng BQL: danh sách báo cáo hư hỏng chờ quyết định, phiếu đang tạm hoãn (để không bị quên), phiếu đã quyết định
 export default function MajorRepairApprovalPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('pending');
   const [page, setPage] = useState(1);
   const [acting, setActing] = useState(null); // { mode: 'decide' | 'retire' | 'request' | 'view', wo }
@@ -58,19 +67,40 @@ export default function MajorRepairApprovalPage() {
       {
         title: 'Nguồn chi',
         key: 'source',
-        width: 160,
-        render: (_, r) => (r.repair?.costSource === 'FUND'
-          ? <Flex vertical><EnumTag map={REPAIR_COST_SOURCES} value="FUND" /><Typography.Text type="secondary" style={{ fontSize: 12 }}>{r.pendingFund ? `Đề xuất ${r.pendingFund.code} đang chờ biểu quyết` : "Chờ Kế toán lập đề xuất"}</Typography.Text></Flex>
-          : <Tag>Chưa quyết định</Tag>),
+        width: 200,
+        render: (_, r) => {
+          if (r.repair?.costSource !== 'FUND') {
+            return r.policy?.fundRequired
+              ? <Tooltip title={`Tổng ${formatMoney(r.policy.total)} từ ngưỡng ${formatMoney(r.policy.threshold)}`}><Tag color="purple">Bắt buộc Quỹ</Tag></Tooltip>
+              : <Tag>Chưa quyết định</Tag>;
+          }
+          const f = r.pendingFund;
+          return (
+            <Flex vertical>
+              <EnumTag map={REPAIR_COST_SOURCES} value="FUND" />
+              {f ? (
+                <Typography.Link
+                  type={f.status === 'RETURNED' ? 'danger' : undefined}
+                  style={{ fontSize: 12 }}
+                  onClick={() => navigate(`/app/fund/proposals/${f._id}`)}
+                >
+                  {f.code}: {FUND_WAITING[f.status] ?? 'đang xử lý'}
+                </Typography.Link>
+              ) : (
+                <Typography.Link style={{ fontSize: 12 }} onClick={() => navigate(`/app/fund?createFrom=${r._id}`)}>Lập đề xuất chi quỹ</Typography.Link>
+              )}
+            </Flex>
+          );
+        },
       },
       {
         title: '',
         key: 'act',
         width: 120,
         fixed: 'right',
-        // Đề xuất chi quỹ đang chờ biểu quyết thì không quyết định lại được (server trả WORKORDER_FUND_PENDING)
+        // Đề xuất chi quỹ đang xử lý thì không quyết định lại được (server trả WORKORDER_FUND_PENDING)
         render: (_, r) => (
-          <Tooltip title={r.pendingFund ? `Đề xuất ${r.pendingFund.code} đang chờ Ban quản trị biểu quyết` : undefined}>
+          <Tooltip title={r.pendingFund ? `Đề xuất ${r.pendingFund.code} ${FUND_WAITING[r.pendingFund.status] ?? 'đang xử lý'}` : undefined}>
             <Button size="small" type="primary" disabled={Boolean(r.pendingFund)} onClick={() => setActing({ mode: 'decide', wo: r })}>Quyết định</Button>
           </Tooltip>
         ),
