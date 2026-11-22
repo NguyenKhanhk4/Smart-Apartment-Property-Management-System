@@ -154,8 +154,8 @@ export async function boardReturn(user, workOrderId, { comment }, now = new Date
 }
 
 /**
- * Việc chờ Ban quản trị xác nhận nghiệm thu: phiếu bảo trì (kèm thiết bị, biên bản, đề xuất) + đề xuất sửa chữa lớn không gắn
- * phiếu đã được Trưởng BQL nghiệm thu. Cũ nhất trước.
+ * Việc chờ Ban quản trị xác nhận nghiệm thu: phiếu bảo trì (kèm thiết bị, biên bản, đề xuất, cờ ready) + đề xuất sửa chữa lớn
+ * không gắn phiếu đã được Trưởng BQL nghiệm thu. Cũ nhất trước. readyCount: số việc Ban quản trị xác nhận được ngay.
  */
 export async function listAwaitingBoard() {
   const wos = await WorkOrder.find({ status: S.AWAITING_BOARD_ACCEPTANCE })
@@ -166,7 +166,7 @@ export async function listAwaitingBoard() {
     .sort({ 'repair.acceptedAt': 1 })
     .lean();
   const proposals = wos.length
-    ? await FundProposal.find({ workOrderId: { $in: wos.map((w) => w._id) }, status: { $in: [APPROVED, ...[FUND_PROPOSAL_STATUS.PENDING_VERIFY, FUND_PROPOSAL_STATUS.RETURNED, FUND_PROPOSAL_STATUS.PENDING]] } })
+    ? await FundProposal.find({ workOrderId: { $in: wos.map((w) => w._id) }, status: { $in: [APPROVED, FUND_PROPOSAL_STATUS.PENDING_VERIFY, FUND_PROPOSAL_STATUS.RETURNED, FUND_PROPOSAL_STATUS.PENDING] } })
       .select('code title amount status workOrderId')
       .lean()
     : [];
@@ -178,8 +178,15 @@ export async function listAwaitingBoard() {
     .populate('workAcceptedBy', 'fullName')
     .sort({ workAcceptedAt: 1 })
     .lean();
+  // ready: đề xuất đã được Ban quản trị duyệt → xác nhận nghiệm thu được. Phiếu khẩn cấp sửa trước, đề xuất còn chờ Kế toán /
+  // biểu quyết thì chưa xác nhận được (boardAccept chặn) → vẫn trả về để biết, nhưng không tính vào việc cần làm.
+  const items = wos.map((w) => {
+    const proposal = byWo.get(String(w._id)) ?? null;
+    return { ...w, proposal, ready: proposal?.status === APPROVED };
+  });
   return {
-    workOrders: wos.map((w) => ({ ...w, proposal: byWo.get(String(w._id)) ?? null })),
+    workOrders: items,
     proposals: standalone,
+    readyCount: items.filter((w) => w.ready).length + standalone.length,
   };
 }

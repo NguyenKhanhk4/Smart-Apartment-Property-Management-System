@@ -63,8 +63,8 @@ router.get(
   authorize(...VIEWERS),
   validate({ query: listQuery }),
   async (req, res) => {
-    const { items, pagination } = await service.listWorkOrders(req.user, req.validated.query);
-    paginated(res, items, pagination);
+    const { items, pagination, settings } = await service.listWorkOrders(req.user, req.validated.query);
+    paginated(res, items, pagination, settings ? { settings } : {});
   },
 );
 

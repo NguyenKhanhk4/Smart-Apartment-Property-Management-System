@@ -25,6 +25,7 @@ import * as expense from '../../src/modules/workOrders/workOrders.expense.js';
 import * as inspection from '../../src/modules/workOrders/workOrders.inspection.js';
 import { generateMaintenanceWorkOrders, remindRepairFollowups } from '../../src/modules/workOrders/workOrders.jobs.js';
 import * as repair from '../../src/modules/workOrders/workOrders.repair.js';
+import { listWorkOrders } from '../../src/modules/workOrders/workOrders.service.js';
 import { DAY_MS, startOfVnDay } from '../../src/utils/time.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { stubCloudinary } from '../helpers/equipment.js';
@@ -267,6 +268,30 @@ test('BR-E10: còn bảo hành → nguồn khác phải ghi lý do; chọn Bảo
   await assert.rejects(decision.decideRepair(manager, expired.wo._id, { decision: 'APPROVE', costSource: 'WARRANTY' }), (e) => e.details?.[0]?.field === 'costSource');
 });
 
+test('BR-E08, BR-E10: danh sách Phiếu bảo trì (Trưởng BQL) gắn policy như trang Duyệt sửa chữa; KTV không có policy', async () => {
+  const manager = asUser(await createManager());
+  const tech = asUser(await createTechnician());
+  const covered = await faultyOrder(tech, { code: 'CAM-1', name: 'Camera 1', category: 'OTHER', warrantyEnd: new Date(Date.now() + 30 * DAY_MS) });
+  const first = await faultyOrder(tech, { code: 'B-1', name: 'Bơm B', category: 'PUMP', estimatedCost: 35_000_000 });
+  await decision.decideRepair(manager, first.wo._id, { decision: 'APPROVE', costSource: 'OPERATING' });
+  await WorkOrder.updateOne({ _id: first.wo._id }, { status: 'DONE', 'repair.decidedAt': new Date(Date.now() - 5 * DAY_MS) });
+  await Asset.updateOne({ _id: first.asset._id }, { nextMaintenanceDate: new Date(Date.now() - DAY_MS) });
+  const second = await faultyOrder(tech, { assetId: first.asset._id, estimatedCost: 20_000_000 });
+
+  const res = await listWorkOrders(manager, { page: 1, limit: 20 });
+  const byId = (id) => res.items.find((w) => String(w._id) === String(id));
+  assert.equal(byId(covered.wo._id).policy.warrantyActive, true);
+  assert.equal(byId(second.wo._id).policy.total, 55_000_000);
+  assert.equal(byId(second.wo._id).policy.fundRequired, true);
+  assert.equal(byId(first.wo._id).policy, undefined); // phiếu không chờ quyết định thì không tính
+  assert.equal(res.settings.fundThreshold, 50_000_000);
+  assert.ok(res.settings.postponeMaxDays > 0);
+
+  const mine = await listWorkOrders(tech, { page: 1, limit: 20 });
+  assert.ok(mine.items.every((w) => w.policy === undefined));
+  assert.equal(mine.settings, undefined);
+});
+
 test('BR-E11: sửa khẩn cấp → Đang sửa ngay, báo Ban quản trị; đề xuất lập khi đang sửa; Ban quản trị chỉ xác nhận nghiệm thu khi đề xuất đã duyệt', async () => {
   const { manager, accountant, tech, board: members, wo } = await setup({ fund: false });
   await assert.rejects(
@@ -294,11 +319,21 @@ test('BR-E11: sửa khẩn cấp → Đang sửa ngay, báo Ban quản trị; đ
   await repair.acceptRepair(manager, wo._id);
   assert.equal((await reload(wo)).status, 'AWAITING_BOARD_ACCEPTANCE');
   await assert.rejects(board.boardAccept(members[0], wo._id, {}), /chưa có đề xuất chi quỹ được Ban quản trị duyệt/);
+  // Hàng chờ Ban quản trị: vẫn hiện phiếu nhưng chưa tính là việc cần làm (chưa có đề xuất được duyệt)
+  let queue = await board.listAwaitingBoard();
+  assert.equal(queue.workOrders[0].ready, false);
+  assert.equal(queue.readyCount, 0);
 
   const p = await createProposal(manager, body(wo, { urgentReason: prefill.urgentReason }));
+  queue = await board.listAwaitingBoard();
+  assert.equal(queue.workOrders[0].proposal.status, 'PENDING_VERIFY');
+  assert.equal(queue.readyCount, 0);
   await verifyProposal(accountant, p._id, {});
   assert.equal((await approveBy(members, p)).outcome, 'APPROVED');
   assert.equal((await reload(wo)).status, 'AWAITING_BOARD_ACCEPTANCE'); // khẩn cấp: kết quả biểu quyết không đổi trạng thái phiếu
+  queue = await board.listAwaitingBoard();
+  assert.equal(queue.workOrders[0].ready, true);
+  assert.equal(queue.readyCount, 1);
   await board.boardAccept(members[0], wo._id, {});
   const doc = await FundProposal.findById(p._id).lean();
   assert.ok(doc.workAcceptedAt, 'nghiệm thu kỹ thuật trước lúc duyệt được ghi lại khi Ban quản trị xác nhận');
@@ -357,6 +392,11 @@ test('Kế toán ghi chi phí vận hành: chỉ phiếu vận hành đã xong, 
   assert.deepEqual((await expense.listAwaitingExpense()).map((w) => String(w._id)), [String(wo._id)]);
 
   await assert.rejects(expense.recordOperatingExpense(accountant, wo._id, { actualCost: 52_000_000, invoiceNo: 'HD-9' }, []), { errorCode: 'VALIDATION_ERROR' });
+  // Thực tế khác dự kiến (45 → 52 triệu) mà không ghi lý do chênh lệch → 400 field note; bằng dự kiến thì không bắt
+  await assert.rejects(
+    expense.recordOperatingExpense(accountant, wo._id, { actualCost: 52_000_000, invoiceNo: 'HD-9', note: 'abc' }, [PHOTO]),
+    (e) => e.details?.[0]?.field === 'note' && /cao hơn dự kiến 7\.000\.000/.test(e.message),
+  );
   const res = await expense.recordOperatingExpense(accountant, wo._id, { actualCost: 52_000_000, invoiceNo: 'HD-9', note: 'Phát sinh thêm' }, [PHOTO]);
   assert.equal(res.repair.actualCost, 52_000_000);
   assert.equal(res.repair.invoiceUrls.length, 1);

@@ -325,11 +325,12 @@ const proposals = await M.FundProposal.insertMany([
   {
     code: 'DXQ-SEED-00002', fundId: fund._id, title: 'Sơn lại hành lang Block B', description: 'Tường hành lang bong tróc', amount: 95000000,
     planType: 'ANNUAL_PLAN', planRef: 'Kế hoạch bảo trì năm (Hội nghị nhà chung cư)',
-    proposedBy: U.manager._id, submittedAt: daysAgo(66), returnReason: 'Thiếu báo giá thứ 2', returnedAt: daysAgo(65), returnCount: 1, ...verified(daysAgo(64), 1345600000),
+    proposedBy: U.manager._id, submittedAt: daysAgo(68), returnReason: 'Thiếu báo giá thứ 2', returnedAt: daysAgo(67), returnCount: 1, ...verified(daysAgo(64), 1345600000),
     status: 'PAID', paidAt: daysAgo(60), boardSize: 3, finalizedBy: U.bqt1._id, finalizedAt: daysAgo(62), finalNote: '2/3 thành viên đồng ý',
     votes: [U.chairman, U.bqt1].map((u) => ({ memberId: u._id, decision: 'AGREE', votedAt: daysAgo(62) })),
     history: [
-      step('SUBMITTED', U.manager, daysAgo(67)), step('RETURNED', U.accountant, daysAgo(65), 'Thiếu báo giá thứ 2'), step('RESUBMITTED', U.manager, daysAgo(66)),
+      step('SUBMITTED', U.manager, daysAgo(68)), step('RETURNED', U.accountant, daysAgo(67), 'Thiếu báo giá thứ 2'),
+      step('RESUBMITTED', U.manager, daysAgo(66), 'Bổ sung báo giá thứ 2'),
       step('VERIFIED', U.accountant, daysAgo(64)), step('APPROVED', U.bqt1, daysAgo(62), '2/3 thành viên đồng ý'), step('PAID', U.accountant, daysAgo(60)),
     ],
   },
@@ -346,7 +347,7 @@ const proposals = await M.FundProposal.insertMany([
     proposedBy: U.manager._id, submittedAt: daysAgo(1), status: 'PENDING_VERIFY',
     history: [step('SUBMITTED', U.manager, daysAgo(1))],
   },
-]);
+].map((p) => ({ ...p, createdAt: p.submittedAt }))); // Ngày lập = ngày gửi, không lấy giờ chạy seed
 const interest = (amount, at, quarter) =>
   addTx('INCOME', amount, at, `Lãi tiền gửi quý ${quarter}`, { source: 'Lãi tiền gửi', incomeSource: 'INTEREST', documentNo: `SK-LAI-Q${quarter}`, code: fundCode('PTQ', at) });
 const expense = (amount, at, description, proposal, documentNo) =>
