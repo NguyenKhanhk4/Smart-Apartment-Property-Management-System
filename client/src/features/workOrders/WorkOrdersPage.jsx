@@ -67,6 +67,7 @@ export default function WorkOrdersPage() {
         <Flex vertical gap={4} align="flex-start">
           <EnumTag map={WORK_ORDER_STATUS} value={v} />
           {r.result && <EnumTag map={WORK_ORDER_RESULTS} value={r.result} />}
+          {r.repair?.isEmergency && <Tag color="red">Khẩn cấp</Tag>}
         </Flex>
       ),
     },
@@ -99,12 +100,16 @@ export default function WorkOrdersPage() {
         // UC10: quyết định sửa / gửi yêu cầu sửa lại phiếu hoãn; Q12: nghiệm thu
         if (r.status === 'AWAITING_REPAIR_APPROVAL') {
           if (r.pendingFund) {
-            return <Tooltip title={`Đề xuất ${r.pendingFund.code} đang chờ Ban quản trị biểu quyết`}><Button size="small" disabled>Chờ biểu quyết</Button></Tooltip>;
+            const waiting = { PENDING_VERIFY: 'Chờ Kế toán', RETURNED: 'Bị trả lại', PENDING: 'Chờ biểu quyết' }[r.pendingFund.status] ?? 'Đang xử lý';
+            return <Tooltip title={`Đề xuất chi quỹ ${r.pendingFund.code}: ${waiting.toLowerCase()}`}><Button size="small" disabled>{waiting}</Button></Tooltip>;
           }
           return <Button size="small" type="primary" danger onClick={() => setReviewing({ mode: 'approve', wo: r })}>Quyết định</Button>;
         }
         if (r.status === 'REPAIR_POSTPONED') {
           return <Button size="small" onClick={() => setReviewing({ mode: 'request', wo: r })}>Yêu cầu sửa lại</Button>;
+        }
+        if (r.status === 'AWAITING_BOARD_ACCEPTANCE') {
+          return <Tooltip title="Đã nghiệm thu kỹ thuật, chờ Ban quản trị xác nhận"><Button size="small" disabled>Chờ Ban quản trị</Button></Tooltip>;
         }
         if (r.status === 'AWAITING_ACCEPTANCE') {
           return <Button size="small" type="primary" onClick={() => setReviewing({ mode: 'accept', wo: r })}>Nghiệm thu</Button>;

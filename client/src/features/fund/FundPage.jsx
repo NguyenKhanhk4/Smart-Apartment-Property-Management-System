@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import dayjs from 'dayjs';
 import {
   Alert,
@@ -12,15 +12,20 @@ import {
   Input,
   InputNumber,
   Modal,
+  Popconfirm,
   Radio,
   Select,
   Statistic,
   Table,
   Tabs,
+  Tag,
   Typography,
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
+import { workOrderApi } from '../../api/equipment.api';
 import { fundApi } from '../../api/moduleB.api';
+import { systemConfigApi } from '../../api/moduleE.api';
+import ReasonModal from '../../components/ReasonModal';
 import EnumTag from '../../components/EnumTag';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
 import PageHeader from '../../components/PageHeader';
@@ -33,7 +38,8 @@ import EvidencePhotos from '../../components/EvidencePhotos';
 import { ExportButton } from '../reports/components';
 
 // Mô đun 4 — Quỹ bảo trì 2% (UC33, UC34). Hệ thống chỉ theo dõi, quỹ thuộc Ban quản trị.
-// Kế toán: ghi nhận thu quỹ, lập đề xuất chi. Ban quản trị: biểu quyết ở trang chi tiết đề xuất. Trưởng BQL: theo dõi, nghiệm thu.
+// Trưởng BQL: lập / sửa / rút đề xuất chi (kể cả từ phiếu bảo trì duyệt bằng Quỹ). Kế toán: thu quỹ, xác nhận / trả lại đề xuất,
+// lập phiếu chi, ghi chi phí vận hành sửa chữa. Ban quản trị: biểu quyết, xác nhận nghiệm thu, xác nhận đổi tham số tài chính.
 const enumOpts = (map) => Object.entries(map).map(([value, m]) => ({ value, label: m.label }));
 
 export default function FundPage() {
@@ -41,12 +47,17 @@ export default function FundPage() {
   const { hasRole } = useAuth();
   const isAccountant = hasRole('ACCOUNTANT');
   const isManager = hasRole('MANAGER');
-  const [tab, setTab] = useState(hasRole('BOARD') ? 'proposals' : 'transactions');
+  const isBoard = hasRole('BOARD');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState(isBoard || isAccountant ? 'proposals' : 'transactions');
   const [modal, setModal] = useState(null);
   const [prefill, setPrefill] = useState(null); // UC10: dữ liệu điền sẵn từ phiếu bảo trì
   const [txType, setTxType] = useState();
   const [txPage, setTxPage] = useState(1);
-  const [status, setStatus] = useState(hasRole('BOARD') ? ['PENDING'] : []);
+  // Mặc định lọc việc của mình: Ban quản trị chờ biểu quyết, Kế toán chờ xác nhận
+  const [status, setStatus] = useState(isBoard ? ['PENDING'] : isAccountant ? ['PENDING_VERIFY'] : []);
+  const [expenseOf, setExpenseOf] = useState(null); // phiếu vận hành đang ghi chi
+  const [rejecting, setRejecting] = useState(null); // tham số Ban quản trị từ chối
   const [pPage, setPPage] = useState(1);
 
   const overview = useApi(() => fundApi.overview(), []);
@@ -55,10 +66,26 @@ export default function FundPage() {
   const pParams = useMemo(() => ({ page: pPage, limit: 15, status: status.length ? status.join(',') : undefined }), [pPage, status]);
   const proposals = useApi(() => fundApi.proposals(pParams), [pParams]);
   const awaiting = useApi(() => fundApi.awaitingWorkOrders(), [], { enabled: isAccountant || isManager });
+  const expenses = useApi(() => workOrderApi.expenses(), [], { enabled: isAccountant });
+  // Đề xuất đã duyệt, đủ nghiệm thu (sửa chữa lớn): Kế toán lập phiếu chi được ngay
+  const readyToPay = useApi(() => fundApi.proposals({ readyToPay: true, limit: 50 }), [], { enabled: isAccountant });
+  const acceptances = useApi(() => fundApi.acceptances(), [], { enabled: isBoard || isManager });
+  const pendingConfigs = useApi(() => systemConfigApi.pending(), [], { enabled: isBoard || isManager });
   const o = overview.data;
   const reloadAll = () => Promise.all([overview.reload(), txs.reload(), proposals.reload()]);
   const openProposal = (data = null) => (setPrefill(data), setModal('proposal'));
   const [startFromWorkOrder, loadingPrefill] = useAction(async (id) => openProposal((await fundApi.workOrderPrefill(id)).data));
+  const [approveConfig, approvingConfig] = useAction((key) => systemConfigApi.approve(key), { onDone: () => pendingConfigs.reload() });
+
+  // Từ màn Duyệt sửa chữa: /app/fund?createFrom=<phiếu> → mở form đề xuất điền sẵn (Trưởng BQL)
+  const createFrom = searchParams.get('createFrom');
+  const opened = useRef(null);
+  useEffect(() => {
+    if (!createFrom || !isManager || opened.current === createFrom) return;
+    opened.current = createFrom;
+    startFromWorkOrder(createFrom).catch(() => {});
+    setSearchParams({}, { replace: true });
+  }, [createFrom, isManager, startFromWorkOrder, setSearchParams]);
 
   return (
     <>
@@ -74,13 +101,11 @@ export default function FundPage() {
               roles={['ACCOUNTANT', 'MANAGER', 'BOARD']}
               params={{ from: dayjs().startOf('year').toISOString(), to: dayjs().toISOString() }}
             />
-            {isAccountant && (
-              <>
-              <Button onClick={() => setModal('income')}>Ghi nhận thu quỹ</Button>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => openProposal()}>
-                  Lập đề xuất chi
-                </Button>
-              </>
+            {isAccountant && <Button onClick={() => setModal('income')}>Ghi nhận thu quỹ</Button>}
+            {isManager && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => openProposal()}>
+                Lập đề xuất chi
+              </Button>
             )}
           </Flex>
         }
@@ -98,7 +123,10 @@ export default function FundPage() {
                 <Statistic title="Còn có thể đề xuất chi" value={formatMoney(o.available)} />
                 <Statistic title="Thu từ đầu năm" value={formatMoney(o.yearIncome)} valueStyle={{ color: '#389e0d' }} />
                 <Statistic title="Chi từ đầu năm" value={formatMoney(o.yearExpense)} valueStyle={{ color: '#cf1322' }} />
-                <Statistic title="Đề xuất chờ duyệt" value={o.pendingCount} />
+                <Statistic title="Chờ Kế toán xác nhận" value={o.verifyCount ?? 0} />
+                <Statistic title="Chờ Ban quản trị biểu quyết" value={o.pendingCount} />
+                {o.returnedCount > 0 && <Statistic title="Bị trả lại" value={o.returnedCount} valueStyle={{ color: '#d46b08' }} />}
+                {o.emergencyCount > 0 && <Statistic title="Sửa khẩn cấp từ đầu năm" value={o.emergencyCount} valueStyle={{ color: '#cf1322' }} />}
               </Flex>
             </Flex>
           )}
@@ -107,7 +135,7 @@ export default function FundPage() {
         {awaiting.data?.length > 0 && (
           <Card
             title={`Sửa chữa thiết bị chờ lập đề xuất chi (${awaiting.data.length})`}
-            extra={<Typography.Text type="secondary">Trưởng BQL đã duyệt sửa bằng Quỹ bảo trì</Typography.Text>}
+            extra={<Typography.Text type="secondary">Trưởng BQL đã chọn Quỹ bảo trì, chưa có đề xuất</Typography.Text>}
           >
             <Table
               rowKey="_id"
@@ -116,11 +144,19 @@ export default function FundPage() {
               scroll={{ x: 'max-content' }}
               dataSource={awaiting.data}
               columns={[
-                { title: 'Thiết bị', render: (_, r) => (r.assetId ? `${r.assetId.code} – ${r.assetId.name}` : r.title) },
+                {
+                  title: 'Thiết bị',
+                  render: (_, r) => (
+                    <>
+                      {r.assetId ? `${r.assetId.code} – ${r.assetId.name}` : r.title}
+                      {r.repair?.isEmergency && <Tag color="red" style={{ marginLeft: 6 }}>Khẩn cấp</Tag>}
+                    </>
+                  ),
+                },
                 { title: 'Hư hỏng', render: (_, r) => r.repair?.faultDesc },
                 { title: 'Chi phí dự kiến', width: 140, align: 'right', render: (_, r) => formatMoney(r.repair?.estimatedCost) },
                 { title: 'Duyệt ngày', width: 110, render: (_, r) => formatDate(r.repair?.decidedAt) },
-                ...(isAccountant
+                ...(isManager
                   ? [
                       {
                         title: '',
@@ -129,6 +165,123 @@ export default function FundPage() {
                           <Button size="small" type="primary" loading={loadingPrefill} onClick={() => startFromWorkOrder(r._id).catch(() => {})}>
                             Lập đề xuất
                           </Button>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </Card>
+        )}
+
+        {isAccountant && readyToPay.data?.length > 0 && (
+          <Card
+            title={`Đề xuất chờ lập phiếu chi (${readyToPay.data.length})`}
+            extra={<Typography.Text type="secondary">Đã duyệt; sửa chữa lớn đã được Trưởng BQL và Ban quản trị nghiệm thu</Typography.Text>}
+          >
+            <Table
+              rowKey="_id"
+              size="small"
+              pagination={false}
+              scroll={{ x: 'max-content' }}
+              dataSource={readyToPay.data}
+              onRow={(r) => ({ onClick: () => navigate(`/app/fund/proposals/${r._id}`), style: { cursor: 'pointer' } })}
+              columns={[
+                { title: 'Mã', dataIndex: 'code', width: 160, render: (v) => (v ? <Typography.Text code>{v}</Typography.Text> : '—') },
+                { title: 'Hạng mục', dataIndex: 'title' },
+                { title: 'Số tiền duyệt', dataIndex: 'amount', width: 150, align: 'right', render: (v) => <b>{formatMoney(v)}</b> },
+                { title: 'Duyệt ngày', dataIndex: 'finalizedAt', width: 110, render: formatDate },
+                { title: '', width: 120, render: () => <Button size="small" type="primary">Lập phiếu chi</Button> },
+              ]}
+            />
+          </Card>
+        )}
+
+        {isAccountant && expenses.data?.length > 0 && (
+          <Card
+            title={`Sửa chữa chi phí vận hành chờ ghi chi (${expenses.data.length})`}
+            extra={<Typography.Text type="secondary">Ghi số tiền thực tế và hóa đơn</Typography.Text>}
+          >
+            <Table
+              rowKey="_id"
+              size="small"
+              pagination={false}
+              scroll={{ x: 'max-content' }}
+              dataSource={expenses.data}
+              columns={[
+                { title: 'Thiết bị', render: (_, r) => (r.assetId ? `${r.assetId.code} – ${r.assetId.name}` : r.title) },
+                { title: 'Nhà thầu', render: (_, r) => r.repair?.vendorName || '—' },
+                { title: 'Dự kiến', width: 140, align: 'right', render: (_, r) => formatMoney(r.repair?.estimatedCost) },
+                { title: 'Hoàn thành', width: 110, render: (_, r) => formatDate(r.completedAt) },
+                { title: '', width: 110, render: (_, r) => <Button size="small" type="primary" onClick={() => setExpenseOf(r)}>Ghi chi</Button> },
+              ]}
+            />
+          </Card>
+        )}
+
+        {(isBoard || isManager) && (acceptances.data?.workOrders?.length > 0 || acceptances.data?.proposals?.length > 0) && (
+          <Card
+            title={`Chờ Ban quản trị xác nhận nghiệm thu (${(acceptances.data.workOrders?.length ?? 0) + (acceptances.data.proposals?.length ?? 0)})`}
+            extra={<Typography.Text type="secondary">Trưởng BQL đã nghiệm thu kỹ thuật</Typography.Text>}
+          >
+            <Table
+              rowKey="_id"
+              size="small"
+              pagination={false}
+              scroll={{ x: 'max-content' }}
+              dataSource={[
+                ...(acceptances.data.workOrders ?? []).map((w) => ({
+                  _id: w._id,
+                  item: w.assetId ? `${w.assetId.code} – ${w.assetId.name}` : w.title,
+                  proposal: w.proposal,
+                  acceptedAt: w.repair?.acceptedAt,
+                  emergency: w.repair?.isEmergency,
+                })),
+                ...(acceptances.data.proposals ?? []).map((p) => ({ _id: p._id, item: p.title, proposal: p, acceptedAt: p.workAcceptedAt })),
+              ]}
+              columns={[
+                { title: 'Hạng mục', render: (_, r) => <>{r.item}{r.emergency && <Tag color="red" style={{ marginLeft: 6 }}>Khẩn cấp</Tag>}</> },
+                { title: 'Đề xuất', render: (_, r) => (r.proposal ? `${r.proposal.code} · ${formatMoney(r.proposal.amount)}` : 'Chưa có đề xuất được duyệt') },
+                { title: 'Nghiệm thu kỹ thuật', width: 150, render: (_, r) => formatDate(r.acceptedAt) },
+                {
+                  title: '',
+                  width: 110,
+                  render: (_, r) => r.proposal && (
+                    <Button size="small" type={isBoard ? 'primary' : 'default'} onClick={() => navigate(`/app/fund/proposals/${r.proposal._id}`)}>
+                      {isBoard ? 'Xem, xác nhận' : 'Xem'}
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+          </Card>
+        )}
+
+        {(isBoard || isManager) && pendingConfigs.data?.length > 0 && (
+          <Card title="Thay đổi tham số tài chính chờ Ban quản trị xác nhận">
+            <Table
+              rowKey="key"
+              size="small"
+              pagination={false}
+              scroll={{ x: 'max-content' }}
+              dataSource={pendingConfigs.data}
+              columns={[
+                { title: 'Tham số', render: (_, c) => (c.description ? c.description.split(/[.(—]/)[0] : c.key) },
+                { title: 'Đang dùng', width: 140, align: 'right', render: (_, c) => configValue(c.key, c.value) },
+                { title: 'Đề nghị', width: 140, align: 'right', render: (_, c) => <b>{configValue(c.key, c.pendingValue)}</b> },
+                { title: 'Người đề nghị', width: 170, render: (_, c) => <>{c.pendingBy?.fullName ?? '—'} · {formatDate(c.pendingAt)}</> },
+                ...(isBoard
+                  ? [
+                      {
+                        title: '',
+                        width: 170,
+                        render: (_, c) => (
+                          <Flex gap={6}>
+                            <Popconfirm title="Xác nhận áp dụng giá trị mới?" onConfirm={() => approveConfig(c.key).catch(() => {})}>
+                              <Button size="small" type="primary" loading={approvingConfig}>Xác nhận</Button>
+                            </Popconfirm>
+                            <Button size="small" danger onClick={() => setRejecting(c)}>Từ chối</Button>
+                          </Flex>
                         ),
                       },
                     ]
@@ -245,6 +398,16 @@ export default function FundPage() {
       </Flex>
 
       <IncomeModal open={modal === 'income'} onClose={() => setModal(null)} onDone={reloadAll} />
+      {expenseOf && <OperatingExpenseModal workOrder={expenseOf} onClose={() => setExpenseOf(null)} onDone={expenses.reload} />}
+      <ReasonModal
+        open={Boolean(rejecting)}
+        title="Từ chối thay đổi tham số"
+        okText="Từ chối"
+        minLength={5}
+        action={(reason) => systemConfigApi.reject(rejecting.key, reason)}
+        onClose={() => setRejecting(null)}
+        onDone={() => (setRejecting(null), pendingConfigs.reload())}
+      />
       <ProposalModal
         open={modal === 'proposal'}
         available={o?.available}
@@ -286,33 +449,87 @@ function IncomeModal({ open, onClose, onDone }) {
   );
 }
 
-/** prefill (UC10): { workOrderId, title, description, amount, estimatedCost, attachmentUrls } từ báo cáo hư hỏng của phiếu bảo trì */
-function ProposalModal({ open, available, prefill, onClose, onDone }) {
+const configValue = (key, v) => (key === 'FUND_APPROVAL_RATIO' ? `${Math.round(Number(v) * 100)}%` : key === 'REPAIR_FUND_THRESHOLD' ? formatMoney(v) : `${v} ngày`);
+
+/** Kế toán ghi chi phí vận hành thực tế của sửa chữa đã xong (số tiền, số hóa đơn, ảnh hóa đơn) */
+function OperatingExpenseModal({ workOrder, onClose, onDone }) {
+  const [form] = Form.useForm();
+  const [run, loading] = useAction(({ images, ...v }) => workOrderApi.recordExpense(workOrder._id, v, toFiles(images)), {
+    onDone: async () => (onClose(), await onDone?.()),
+  });
+  return (
+    <Modal open title={`Ghi chi phí vận hành — ${workOrder.assetId?.code ?? workOrder.title}`} okText="Ghi chi" confirmLoading={loading} onCancel={onClose} onOk={() => form.submit()} destroyOnHidden>
+      <Alert className="mb-3" type="info" showIcon message={`Chi phí dự kiến khi duyệt: ${formatMoney(workOrder.repair?.estimatedCost)}`} />
+      <Form form={form} layout="vertical" preserve={false} initialValues={{ actualCost: workOrder.repair?.estimatedCost }} onFinish={(v) => run(v).catch(() => {})}>
+        <Form.Item name="actualCost" label="Số tiền thực tế" rules={[{ required: true, message: 'Nhập số tiền' }]}>
+          <InputNumber {...moneyInputProps} min={1} style={{ width: '100%' }} />
+        </Form.Item>
+        <Form.Item name="invoiceNo" label="Số hóa đơn" rules={[{ required: true, whitespace: true, message: 'Nhập số hóa đơn' }]}>
+          <Input maxLength={100} />
+        </Form.Item>
+        <Form.Item name="note" label="Ghi chú">
+          <Input.TextArea rows={2} maxLength={1000} />
+        </Form.Item>
+        <EvidencePhotosField name="images" label="Ảnh hóa đơn" message="Tải lên ít nhất 1 ảnh hóa đơn" />
+      </Form>
+    </Modal>
+  );
+}
+
+/**
+ * Trưởng BQL lập đề xuất, hoặc sửa và gửi lại đề xuất bị trả lại (`editing`).
+ * prefill (UC10): { workOrderId, title, description, amount, estimatedCost, attachmentUrls, isEmergency, planType?, urgentReason? }
+ */
+export function ProposalModal({ open, available, prefill, editing, onClose, onDone }) {
   const [form] = Form.useForm();
   const planType = Form.useWatch('planType', form);
-  const [run, loading] = useAction(({ images, ...v }) => fundApi.createProposal(v, toFiles(images)), {
-    onDone: async (res) => (onClose(), await onDone?.(res)),
-  });
-  const initialValues = prefill
+  const [run, loading] = useAction(
+    ({ images, ...v }) => (editing ? fundApi.resubmit(editing._id, v, toFiles(images)) : fundApi.createProposal(v, toFiles(images))),
+    { onDone: async (res) => (onClose(), await onDone?.(res)) },
+  );
+  const linked = prefill ?? (editing?.workOrderId ? editing : null);
+  const initialValues = editing
     ? {
-        planType: 'UNSCHEDULED', // hư hỏng phát hiện khi kiểm tra định kỳ — thường là bảo trì đột xuất
-        largeRepair: true,
-        workOrderId: prefill.workOrderId,
-        title: prefill.title,
-        description: prefill.description,
-        amount: prefill.amount,
+        title: editing.title,
+        description: editing.description,
+        amount: editing.amount,
+        planType: editing.planType,
+        planRef: editing.planRef,
+        urgentReason: editing.urgentReason,
+        contractNo: editing.contractNo,
+        largeRepair: editing.largeRepair,
       }
-    : { planType: 'ANNUAL_PLAN', largeRepair: false };
+    : prefill
+      ? {
+          planType: 'UNSCHEDULED', // hư hỏng phát hiện khi kiểm tra định kỳ — thường là bảo trì đột xuất
+          urgentReason: prefill.urgentReason, // sửa khẩn cấp: lý do khẩn cấp
+          largeRepair: true,
+          workOrderId: prefill.workOrderId,
+          title: prefill.title,
+          description: prefill.description,
+          amount: prefill.amount,
+        }
+      : { planType: 'ANNUAL_PLAN', largeRepair: false };
   return (
-    <Modal open={open} title="Lập đề xuất chi quỹ" okText="Gửi Ban quản trị" width="min(640px, 94vw)" confirmLoading={loading} onCancel={onClose} onOk={() => form.submit()} destroyOnHidden>
+    <Modal
+      open={open}
+      title={editing ? `Sửa và gửi lại ${editing.code ?? 'đề xuất'}` : 'Lập đề xuất chi quỹ'}
+      okText="Gửi Kế toán xác nhận"
+      width="min(640px, 94vw)"
+      confirmLoading={loading}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+      destroyOnHidden
+    >
+      {editing?.returnReason && <Alert className="mb-3" type="warning" showIcon message="Kế toán trả lại" description={editing.returnReason} />}
       {available != null && <Alert className="mb-3" type="info" showIcon message={`Còn có thể đề xuất chi tối đa ${formatMoney(available)}`} />}
       {prefill && (
         <Alert
           className="mb-3"
-          type="success"
+          type={prefill.isEmergency ? 'warning' : 'success'}
           showIcon
-          message="Lập từ phiếu bảo trì được Trưởng BQL duyệt sửa bằng Quỹ"
-          description={`Chi phí kỹ thuật viên dự kiến ${formatMoney(prefill.estimatedCost)}, sửa theo báo giá thật nếu khác. ${prefill.attachmentUrls?.length ? `${prefill.attachmentUrls.length} ảnh hư hỏng tự đính kèm. ` : ''}Ban quản trị duyệt thì phiếu chuyển Đang sửa; nghiệm thu làm trên phiếu bảo trì.`}
+          message={prefill.isEmergency ? 'Hồ sơ cho sửa chữa khẩn cấp (đã sửa trước)' : 'Lập từ phiếu bảo trì đã chọn Quỹ bảo trì'}
+          description={`Chi phí kỹ thuật viên dự kiến ${formatMoney(prefill.estimatedCost)}, sửa theo báo giá thật nếu khác. ${prefill.attachmentUrls?.length ? `${prefill.attachmentUrls.length} ảnh hư hỏng tự đính kèm. ` : ''}Kế toán xác nhận, Ban quản trị duyệt; nghiệm thu làm trên phiếu bảo trì.`}
         />
       )}
       <Form form={form} layout="vertical" preserve={false} initialValues={initialValues} onFinish={(v) => run(v).catch(() => {})}>
@@ -329,7 +546,7 @@ function ProposalModal({ open, available, prefill, onClose, onDone }) {
           <InputNumber {...moneyInputProps} min={1} style={{ width: '100%' }} />
         </Form.Item>
         <Form.Item name="planType" label="Loại kế hoạch">
-          <Radio.Group options={enumOpts(FUND_PLAN_TYPES)} />
+          <Radio.Group options={enumOpts(FUND_PLAN_TYPES)} disabled={Boolean(linked?.isEmergency)} />
         </Form.Item>
         {planType === 'UNSCHEDULED' ? (
           <Form.Item name="urgentReason" label="Lý do bảo trì đột xuất" rules={[{ required: true, message: 'Bảo trì đột xuất phải ghi lý do' }]}>
@@ -340,10 +557,18 @@ function ProposalModal({ open, available, prefill, onClose, onDone }) {
             <Input maxLength={200} placeholder="Vd: KH bảo trì 2026 — Nghị quyết Hội nghị 03/2026" />
           </Form.Item>
         )}
-        <Form.Item name="largeRepair" valuePropName="checked" extra="Sửa chữa lớn (thiết bị, kết cấu): Kế toán chỉ lập phiếu chi sau khi Trưởng BQL nghiệm thu.">
-          <Checkbox disabled={Boolean(prefill)}>Sửa chữa lớn</Checkbox>
+        <Form.Item name="contractNo" label="Số hợp đồng / báo giá nhà thầu">
+          <Input maxLength={100} />
         </Form.Item>
-        <EvidencePhotosField name="images" label="Ảnh báo giá" required={false} />
+        <Form.Item name="largeRepair" valuePropName="checked" extra="Sửa chữa lớn (thiết bị, kết cấu): Kế toán chỉ lập phiếu chi sau khi Trưởng BQL nghiệm thu và Ban quản trị xác nhận.">
+          <Checkbox disabled={Boolean(linked) || Boolean(editing)}>Sửa chữa lớn</Checkbox>
+        </Form.Item>
+        {editing && (
+          <Form.Item name="note" label="Đã sửa gì">
+            <Input.TextArea rows={2} maxLength={1000} placeholder="Vd: bổ sung báo giá thứ 2, giảm số tiền" />
+          </Form.Item>
+        )}
+        <EvidencePhotosField name="images" label={editing ? 'Ảnh báo giá bổ sung' : 'Ảnh báo giá'} required={false} />
       </Form>
     </Modal>
   );

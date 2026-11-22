@@ -5,13 +5,14 @@ import { runTrackedJob } from '../../jobs/cronRunner.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
-import { uploadImages } from '../../services/upload.service.js';
+import { uploadImageFields, uploadImages } from '../../services/upload.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId } from '../../utils/validators.js';
 import { generateMaintenanceWorkOrders } from './workOrders.jobs.js';
 import * as decision from './workOrders.decision.js';
+import * as expense from './workOrders.expense.js';
 import * as inspection from './workOrders.inspection.js';
 import * as repair from './workOrders.repair.js';
 import * as service from './workOrders.service.js';
@@ -105,6 +106,15 @@ router.get(
     paginated(res, items, pagination, { counts, settings });
   },
 );
+
+/**
+ * @openapi
+ * /work-orders/expenses:
+ *   get:
+ *     tags: [Thiết bị & bảo trì]
+ *     summary: Sửa chữa chi phí vận hành đã hoàn thành, chờ Kế toán ghi chi thực tế
+ */
+router.get('/expenses', authenticate, authorize('ACCOUNTANT'), async (_req, res) => ok(res, await expense.listAwaitingExpense()));
 
 router.get('/assignees', authenticate, authorize('MANAGER'), async (_req, res) =>
   ok(res, await service.listAssignees()),
@@ -282,12 +292,20 @@ router.post(
  *     tags: [Thiết bị & bảo trì]
  *     summary: Trưởng BQL quyết định sửa chữa (UC10, MSG-E07)
  *     description: |
- *       APPROVE + OPERATING → Đang sửa. APPROVE + FUND → chờ đề xuất chi quỹ (báo Kế toán).
+ *       APPROVE + OPERATING → Đang sửa (tổng cộng dồn REPAIR_OPERATING_WINDOW_DAYS ngày ≥ REPAIR_FUND_THRESHOLD → 422 WORKORDER_FUND_REQUIRED).
+ *       APPROVE + WARRANTY → Đang sửa (chỉ khi còn bảo hành). Còn bảo hành mà chọn nguồn khác → bắt buộc warrantyOverrideReason.
+ *       APPROVE + FUND → chờ Trưởng BQL lập đề xuất chi quỹ (nextStep CREATE_PROPOSAL). APPROVE + FUND + emergency (emergencyReason ≥ 10)
+ *       → Đang sửa ngay, đề xuất lập sau (BR-E11).
  *       POSTPONE (comment, reviewDate ≤ REPAIR_POSTPONE_MAX_DAYS) → Tạm hoãn sửa. RETIRE (comment) → Đã đóng, thiết bị ngừng theo dõi.
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
 const DECISION_MESSAGES = {
-  APPROVE: { OPERATING: 'Đã duyệt sửa chữa', FUND: 'Đã duyệt bằng Quỹ bảo trì, đã báo Kế toán lập đề xuất chi' },
+  APPROVE: {
+    OPERATING: 'Đã duyệt sửa chữa',
+    WARRANTY: 'Đã duyệt sửa theo bảo hành',
+    FUND: 'Đã chọn Quỹ bảo trì. Lập đề xuất chi quỹ để Kế toán xác nhận',
+    EMERGENCY: 'Đã cho sửa khẩn cấp. Lập đề xuất chi quỹ trong thời hạn',
+  },
   POSTPONE: 'Đã tạm hoãn sửa chữa',
   RETIRE: 'Đã ngừng sử dụng thiết bị',
 };
@@ -310,12 +328,15 @@ router.patch(
         otherwise: Joi.string().trim().min(5).max(1000).required(),
       }),
       reviewDate: Joi.when('decision', { is: REPAIR_DECISIONS.POSTPONE, then: Joi.date().required(), otherwise: Joi.forbidden() }),
+      warrantyOverrideReason: Joi.when('decision', { is: REPAIR_DECISIONS.APPROVE, then: Joi.string().trim().max(500).allow('', null), otherwise: Joi.forbidden() }),
+      emergency: Joi.when('costSource', { is: REPAIR_COST_SOURCES.FUND, then: Joi.boolean().default(false), otherwise: Joi.forbidden() }),
+      emergencyReason: Joi.when('emergency', { is: true, then: Joi.string().trim().min(10).max(1000).required(), otherwise: Joi.forbidden() }),
     }),
   }),
   async (req, res) => {
     const wo = await decision.decideRepair(req.user, req.params.id, req.body);
     const m = DECISION_MESSAGES[req.body.decision];
-    ok(res, wo, typeof m === 'string' ? m : m[req.body.costSource]);
+    ok(res, wo, typeof m === 'string' ? m : m[req.body.emergency ? 'EMERGENCY' : req.body.costSource]);
   },
 );
 
@@ -346,13 +367,14 @@ router.post(
  *   post:
  *     tags: [Thiết bị & bảo trì]
  *     summary: KTV tải biên bản nghiệm thu của nhà thầu (UC09 bước 4–6) → Chờ nghiệm thu (MSG-E13)
+ *     description: multipart. Ảnh biên bản ở field images; thang máy / PCCC bắt buộc thêm biên bản kiểm định ở field certificates.
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
 router.post(
   '/:id/acceptance',
   authenticate,
   authorize('STAFF:TECHNICIAN'),
-  uploadImages('images', 5),
+  uploadImageFields([{ name: 'images', maxCount: 5 }, { name: 'certificates', maxCount: 5 }]),
   validate({ params: idParams, body: Joi.object({ note: Joi.string().trim().max(1000).allow('').default('') }) }),
   async (req, res) => ok(res, await repair.uploadAcceptance(req.user, req.params.id, req.body, req.files), 'Đã gửi biên bản, chờ Trưởng BQL nghiệm thu'),
 );
@@ -362,12 +384,15 @@ router.post(
  * /work-orders/{id}/accept:
  *   post:
  *     tags: [Thiết bị & bảo trì]
- *     summary: Trưởng BQL xác nhận nghiệm thu sửa chữa (Q12, MSG-E11) → Hoàn thành
+ *     summary: Trưởng BQL xác nhận nghiệm thu sửa chữa (Q12, MSG-E11) → Hoàn thành; nguồn Quỹ → Chờ Ban quản trị xác nhận (BR-E09)
  *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
  */
-router.post('/:id/accept', authenticate, authorize('MANAGER'), validate({ params: idParams }), async (req, res) =>
-  ok(res, await repair.acceptRepair(req.user, req.params.id), 'Đã nghiệm thu. Thiết bị hoạt động lại.'), // MSG-E11
-);
+router.post('/:id/accept', authenticate, authorize('MANAGER'), validate({ params: idParams }), async (req, res) => {
+  const wo = await repair.acceptRepair(req.user, req.params.id);
+  ok(res, wo, wo.status === WORK_ORDER_STATUS.AWAITING_BOARD_ACCEPTANCE
+    ? 'Đã nghiệm thu kỹ thuật, chuyển Ban quản trị xác nhận'
+    : 'Đã nghiệm thu. Thiết bị hoạt động lại.'); // MSG-E11
+});
 
 /**
  * @openapi
@@ -383,6 +408,30 @@ router.post(
   authorize('MANAGER'),
   validate({ params: idParams, body: Joi.object({ comment: Joi.string().trim().min(5).max(1000).required() }) }),
   async (req, res) => ok(res, await repair.returnRepair(req.user, req.params.id, req.body), 'Đã yêu cầu sửa lại'),
+);
+
+/**
+ * @openapi
+ * /work-orders/{id}/expense:
+ *   post:
+ *     tags: [Thiết bị & bảo trì]
+ *     summary: Kế toán ghi chi phí vận hành thực tế (multipart; actualCost, invoiceNo, note, ảnh hóa đơn ở field images). Mỗi phiếu 1 lần
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
+ */
+router.post(
+  '/:id/expense',
+  authenticate,
+  authorize('ACCOUNTANT'),
+  uploadImages('images', 5),
+  validate({
+    params: idParams,
+    body: Joi.object({
+      actualCost: Joi.number().integer().min(1).max(1e12).required(),
+      invoiceNo: Joi.string().trim().min(1).max(100).required(),
+      note: Joi.string().trim().max(1000).allow('', null),
+    }),
+  }),
+  async (req, res) => ok(res, await expense.recordOperatingExpense(req.user, req.params.id, req.body, req.files), 'Đã ghi chi phí vận hành'),
 );
 
 export default router;

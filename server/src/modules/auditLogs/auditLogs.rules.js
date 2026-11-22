@@ -14,10 +14,15 @@ export const FINANCIAL_ACTIONS = [
   'BUILDING_PROFILE_UPDATED', 'UTILITY_TARIFF_CREATED', 'UTILITY_TARIFF_DELETED', 'COLLECTION_SETTING_CHANGED',
   // UC10 – Trưởng BQL duyệt sửa bằng Quỹ bảo trì, kết quả biểu quyết / rút đề xuất báo về phiếu bảo trì
   'WORKORDER_FUND_REQUESTED', 'WORKORDER_FUND_DECIDED',
+  // Luồng quỹ hướng mới: Kế toán xác nhận / trả lại, Ban quản trị xác nhận nghiệm thu, ghi chi vận hành, sửa khẩn cấp, đổi ngưỡng
+  'FUND_PROPOSAL_VERIFIED', 'FUND_PROPOSAL_RETURNED', 'FUND_PROPOSAL_RESUBMITTED', 'FUND_BOARD_ACCEPTED',
+  'WORKORDER_BOARD_ACCEPTED', 'WORKORDER_BOARD_RETURNED', 'WORKORDER_EXPENSE_RECORDED', 'WORKORDER_EMERGENCY_STARTED',
+  'CONFIG_CHANGE_REQUESTED', 'CONFIG_CHANGE_CONFIRMED', 'CONFIG_CHANGE_REJECTED',
 ];
 export const FINANCIAL_CONFIG_KEYS = [
   CONFIG_KEYS.FUND_APPROVAL_RATIO, CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, CONFIG_KEYS.FUND_APPROVAL_REMIND_DAYS,
   CONFIG_KEYS.PAYMENT_TERM_DAYS, CONFIG_KEYS.BILLING_REMIND_DAY,
+  CONFIG_KEYS.REPAIR_FUND_THRESHOLD, CONFIG_KEYS.REPAIR_OPERATING_WINDOW_DAYS,
 ];
 export const financialAuditFilter = () => ({
   $or: [
@@ -143,6 +148,17 @@ export const LABELS = {
   WORKORDER_REPAIR_POSTPONED: 'Tạm hoãn sửa chữa thiết bị',
   WORKORDER_REPAIR_REQUESTED: 'Gửi yêu cầu sửa lại thiết bị đang hoãn',
   WORKORDER_REPAIR_RETIRED: 'Ngừng sử dụng thiết bị hư hỏng',
+  WORKORDER_BOARD_ACCEPTED: 'Ban quản trị xác nhận nghiệm thu sửa chữa',
+  WORKORDER_BOARD_RETURNED: 'Ban quản trị trả về nghiệm thu sửa chữa',
+  WORKORDER_EXPENSE_RECORDED: 'Ghi chi phí vận hành sửa chữa',
+  WORKORDER_EMERGENCY_STARTED: 'Sửa chữa khẩn cấp bằng Quỹ bảo trì',
+  FUND_PROPOSAL_VERIFIED: 'Kế toán xác nhận đề xuất chi quỹ',
+  FUND_PROPOSAL_RETURNED: 'Kế toán trả lại đề xuất chi quỹ',
+  FUND_PROPOSAL_RESUBMITTED: 'Gửi lại đề xuất chi quỹ',
+  FUND_BOARD_ACCEPTED: 'Ban quản trị xác nhận nghiệm thu khoản chi quỹ',
+  CONFIG_CHANGE_REQUESTED: 'Đề nghị đổi tham số tài chính',
+  CONFIG_CHANGE_CONFIRMED: 'Ban quản trị xác nhận đổi tham số',
+  CONFIG_CHANGE_REJECTED: 'Ban quản trị từ chối đổi tham số',
   ASSET_DEACTIVATED: 'Ngừng theo dõi thiết bị',
   ASSET_REACTIVATED: 'Theo dõi lại thiết bị',
   COMPLAINT_CATEGORY_CHANGED: 'Thay đổi danh mục phản ánh',

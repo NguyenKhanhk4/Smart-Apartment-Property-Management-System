@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "db:sync": "node scripts/db-sync.js",
     "db:seed": "node scripts/seed.js",
+    "db:seed-maintenance-demo": "node scripts/seedMaintenanceDemo.js",
     "test": "node --import ./test/setup.js --test \"test/**/*.test.js\"",
     "db:backfill-priority": "node scripts/backfillTicketPriorityRank.js",
     "db:migrate-audit-targets": "node scripts/migrateAuditTargets.js",
