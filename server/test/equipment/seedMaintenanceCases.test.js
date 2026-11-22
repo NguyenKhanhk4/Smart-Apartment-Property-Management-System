@@ -55,18 +55,20 @@ test('chế độ xem không ghi gì; --apply tạo đủ 10 trường hợp đ�
   assert.equal((await wo('TB-001')).status, 'DONE');
   const p1 = await prop('TB-001');
   assert.equal(p1.status, 'PAID');
-  assert.deepEqual(p1.history.map((h) => h.action), ['SUBMITTED', 'RETURNED', 'RESUBMITTED', 'VERIFIED', 'APPROVED', 'BOARD_ACCEPTED', 'PAID']);
+  assert.deepEqual(p1.history.map((h) => h.action), ['SUBMITTED', 'APPROVED', 'BOARD_ACCEPTED', 'PAID']);
   // 2
   assert.equal((await wo('TB-002')).status, 'AWAITING_BOARD_ACCEPTANCE');
   assert.equal((await prop('TB-002')).status, 'APPROVED');
   // 3
-  assert.equal((await wo('TB-004')).status, 'AWAITING_REPAIR_APPROVAL');
-  assert.equal((await prop('TB-004')).status, 'RETURNED');
+  const w3 = await wo('TB-004');
+  assert.equal(w3.status, 'AWAITING_REPAIR_APPROVAL');
+  assert.equal(w3.repair.costSource, null); // rút đề xuất → bỏ nguồn Quỹ, chờ quyết định lại
+  assert.equal((await prop('TB-004')).status, 'CANCELLED');
   // 4
   const w4 = await wo('TB-005');
   assert.equal(w4.status, 'UNDER_REPAIR');
   assert.equal(w4.repair.isEmergency, true);
-  assert.equal((await prop('TB-005')).status, 'PENDING_VERIFY');
+  assert.equal((await prop('TB-005')).status, 'PENDING');
   // 5
   assert.equal((await wo('TB-006', { status: 'DONE' })).repair.actualCost, 40_000_000);
   const w5 = await wo('TB-006', { status: 'AWAITING_REPAIR_APPROVAL' });

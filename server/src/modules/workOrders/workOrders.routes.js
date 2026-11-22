@@ -303,7 +303,7 @@ const DECISION_MESSAGES = {
   APPROVE: {
     OPERATING: 'Đã duyệt sửa chữa',
     WARRANTY: 'Đã duyệt sửa theo bảo hành',
-    FUND: 'Đã chọn Quỹ bảo trì. Lập đề xuất chi quỹ để Kế toán xác nhận',
+    FUND: 'Đã chọn Quỹ bảo trì. Lập đề xuất chi quỹ để Ban quản trị biểu quyết',
     EMERGENCY: 'Đã cho sửa khẩn cấp. Lập đề xuất chi quỹ trong thời hạn',
   },
   POSTPONE: 'Đã tạm hoãn sửa chữa',

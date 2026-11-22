@@ -241,8 +241,6 @@ export const FUND_PLAN_TYPES = {
 };
 
 export const FUND_PROPOSAL_STATUS = {
-  PENDING_VERIFY: { label: 'Chờ Kế toán xác nhận', color: 'cyan' },
-  RETURNED: { label: 'Bị trả lại', color: 'orange' },
   PENDING: { label: 'Chờ Ban quản trị duyệt', color: 'gold' },
   APPROVED: { label: 'Đã duyệt, chờ chi', color: 'blue' },
   REJECTED: { label: 'Bị từ chối', color: 'red' },
@@ -323,7 +321,7 @@ export const REPAIR_COST_SOURCES = {
 
 export const WORK_ORDER_OPEN_STATUSES = ['PENDING', 'IN_PROGRESS', 'AWAITING_REPAIR_APPROVAL', 'UNDER_REPAIR', 'AWAITING_ACCEPTANCE', 'AWAITING_BOARD_ACCEPTANCE', 'REPAIR_POSTPONED'];
 // Đề xuất chi quỹ còn đang xử lý (chưa có kết quả biểu quyết)
-export const FUND_PROPOSAL_OPEN_STATUSES = ['PENDING_VERIFY', 'RETURNED', 'PENDING'];
+export const FUND_PROPOSAL_OPEN_STATUSES = ['PENDING'];
 
 export const WORK_ORDER_TYPES = {
   SCHEDULED: { label: 'Bảo trì định kỳ', color: 'geekblue' },

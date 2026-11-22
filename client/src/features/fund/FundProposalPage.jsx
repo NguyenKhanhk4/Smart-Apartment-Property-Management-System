@@ -34,12 +34,11 @@ import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate, formatDateTime, formatMoney, moneyInputProps } from '../../utils/format';
 import { toFiles } from '../../utils/upload';
-import { ProposalModal } from './FundPage';
 
 // Mô đun 4 — UC33/UC34: chi tiết đề xuất chi quỹ.
-//   Trưởng BQL lập → Kế toán xác nhận tài chính (hoặc trả lại, Trưởng BQL sửa và gửi lại) → Ban quản trị biểu quyết (1 phiếu,
-//   không sửa; đủ tỷ lệ và số dư khả dụng đủ thì tự chốt) → sửa chữa lớn: Trưởng BQL nghiệm thu kỹ thuật + Ban quản trị xác nhận
+//   Trưởng BQL lập → Ban quản trị biểu quyết (1 phiếu, không sửa; đủ tỷ lệ và số dư khả dụng đủ thì tự chốt) → sửa chữa lớn: Trưởng BQL nghiệm thu kỹ thuật + Ban quản trị xác nhận
 //   → Kế toán lập phiếu chi kèm hóa đơn. Đề xuất gắn phiếu bảo trì (UC10): nghiệm thu trên phiếu (biên bản nhà thầu, kiểm định).
+// RETURNED / RESUBMITTED / VERIFIED: chỉ còn ở lịch sử đề xuất cũ (luồng trước có bước Kế toán xác nhận)
 const HISTORY_LABEL = {
   SUBMITTED: 'Trưởng BQL gửi đề xuất',
   RETURNED: 'Kế toán trả lại',
@@ -56,30 +55,33 @@ const HISTORY_LABEL = {
 };
 const HISTORY_COLOR = { RETURNED: 'orange', REJECTED: 'red', CANCELLED: 'gray', BOARD_RETURNED: 'red', APPROVAL_BLOCKED_BALANCE: 'orange', APPROVED: 'green', PAID: 'green', BOARD_ACCEPTED: 'green' };
 
-/** Thanh tiến trình 5 bước: Đề xuất → Kế toán xác nhận → Biểu quyết → Nghiệm thu → Đã chi */
+/** Thanh tiến trình 4 bước: Đề xuất → Biểu quyết → Nghiệm thu / chờ chi → Đã chi */
 function progressOf(p) {
   const { status } = p;
   const items = [
     { title: 'Đề xuất' },
-    { title: 'Kế toán xác nhận' },
     { title: 'Ban quản trị biểu quyết' },
     { title: p.largeRepair ? 'Nghiệm thu (BQL + Ban quản trị)' : 'Chờ chi' },
     { title: 'Đã chi' },
   ];
-  if (status === 'PENDING_VERIFY') return { items, current: 1, status: 'process' };
-  if (status === 'RETURNED') return { items, current: 1, status: 'error' };
-  if (status === 'PENDING') return { items, current: 2, status: 'process' };
-  if (status === 'REJECTED') return { items, current: 2, status: 'error' };
-  // Sửa chữa lớn: Ban quản trị đã xác nhận nghiệm thu → xong bước 4, đang chờ Kế toán chi
-  if (status === 'APPROVED') return { items, current: p.largeRepair && p.boardAcceptedAt ? 4 : 3, status: 'process' };
-  if (status === 'PAID') return { items, current: 4, status: 'finish' };
-  return { items, current: p.verifiedAt ? 2 : 1, status: 'error' }; // CANCELLED
+  if (status === 'PENDING') return { items, current: 1, status: 'process' };
+  if (status === 'REJECTED') {
+    items[1] = { title: 'Ban quản trị không duyệt' };
+    return { items, current: 1, status: 'error' };
+  }
+  // Sửa chữa lớn: Ban quản trị đã xác nhận nghiệm thu → xong bước 3, đang chờ Kế toán chi
+  if (status === 'APPROVED') return { items, current: p.largeRepair && p.boardAcceptedAt ? 3 : 2, status: 'process' };
+  if (status === 'PAID') return { items, current: 3, status: 'finish' };
+  // CANCELLED: Trưởng BQL rút — ghi rõ ở bước bị dừng (không để hiểu nhầm là Ban quản trị từ chối)
+  const at = p.finalizedAt ? 2 : 1;
+  items[at] = { title: 'Trưởng BQL đã rút đề xuất', description: p.cancelReason ?? undefined };
+  return { items, current: at, status: 'error' };
 }
 
 export default function FundProposalPage() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { hasRole, user } = useAuth();
+  const { hasRole } = useAuth();
   const [modal, setModal] = useState(null);
   const { data: p, loading, reload } = useApi(() => fundApi.proposal(id), [id]);
   const [acceptWork, accepting] = useAction(() => fundApi.acceptWork(id), { onDone: reload });
@@ -94,9 +96,6 @@ export default function FundProposalPage() {
   const pending = p.status === 'PENDING';
   const approved = p.status === 'APPROVED';
   const wo = p.workOrderId; // phiếu bảo trì gắn kèm (đã populate) hoặc null
-  const mine = String(p.proposedBy?._id ?? p.proposedBy) === String(user?._id ?? user?.id);
-  const canVerify = isAccountant && p.status === 'PENDING_VERIFY' && !mine;
-  const canResubmit = isManager && p.status === 'RETURNED';
   const canVote = isBoard && pending && !p.myVote;
   const canAccept = isManager && approved && p.largeRepair && !p.workAcceptedAt && !wo;
   // BR-E09: Ban quản trị xác nhận nghiệm thu — phiếu gắn kèm đang chờ, hoặc đề xuất không gắn phiếu đã được Trưởng BQL nghiệm thu
@@ -104,7 +103,7 @@ export default function FundProposalPage() {
     && (wo ? wo.status === 'AWAITING_BOARD_ACCEPTANCE' : Boolean(p.workAcceptedAt));
   const canBoardAccept = isBoard && boardAccepting;
   const canPay = isAccountant && approved && (!p.largeRepair || (p.workAcceptedAt && p.boardAcceptedAt));
-  const canCancel = isManager && (['PENDING_VERIFY', 'RETURNED', 'PENDING'].includes(p.status) || (approved && !wo));
+  const canCancel = isManager && (pending || (approved && !wo));
   const progress = progressOf(p);
 
   return (
@@ -119,13 +118,6 @@ export default function FundProposalPage() {
         ]}
         extra={
           <Flex gap={8} wrap>
-            {canVerify && (
-              <>
-                <Button type="primary" onClick={() => setModal('verify')}>Xác nhận tài chính</Button>
-                <Button onClick={() => setModal('return')}>Trả lại</Button>
-              </>
-            )}
-            {canResubmit && <Button type="primary" onClick={() => setModal('resubmit')}>Sửa và gửi lại</Button>}
             {canVote && <Button type="primary" onClick={() => setModal('vote')}>Biểu quyết</Button>}
             {canAccept && (
               <Popconfirm title="Xác nhận đã nghiệm thu hạng mục sửa chữa?" onConfirm={() => acceptWork().catch(() => {})}>
@@ -147,12 +139,6 @@ export default function FundProposalPage() {
         <Card size="small">
           <Steps size="small" current={progress.current} status={progress.status} items={progress.items} responsive />
         </Card>
-        {p.status === 'RETURNED' && (
-          <Alert type="warning" showIcon message={`Kế toán trả lại (lần ${p.returnCount})`} description={p.returnReason} />
-        )}
-        {p.status === 'PENDING_VERIFY' && isAccountant && mine && (
-          <Alert type="info" showIcon message="Bạn là người lập đề xuất nên không tự xác nhận được." />
-        )}
         {pending && p.approvalBlockedAt && (
           <Alert
             type="warning"
@@ -172,13 +158,13 @@ export default function FundProposalPage() {
             }
           />
         )}
-        {wo?.status === 'AWAITING_BOARD_ACCEPTANCE' && !approved && ['PENDING_VERIFY', 'RETURNED', 'PENDING'].includes(p.status) && (
+        {wo?.status === 'AWAITING_BOARD_ACCEPTANCE' && pending && (
           // Sửa khẩn cấp: phiếu đã sửa xong và nghiệm thu kỹ thuật trước khi đề xuất được duyệt
           <Alert
             type="warning"
             showIcon
             message="Phiếu bảo trì đã sửa xong và được Trưởng BQL nghiệm thu kỹ thuật"
-            description="Đây là sửa chữa khẩn cấp (sửa trước, hồ sơ sau). Đề xuất phải được Kế toán xác nhận và Ban quản trị biểu quyết duyệt, sau đó Ban quản trị mới xác nhận nghiệm thu."
+            description="Đây là sửa chữa khẩn cấp (sửa trước, hồ sơ sau). Đề xuất phải được Ban quản trị biểu quyết duyệt, sau đó Ban quản trị mới xác nhận nghiệm thu."
           />
         )}
         {boardAccepting && !isBoard && (
@@ -220,7 +206,7 @@ export default function FundProposalPage() {
             {p.contractNo && <Descriptions.Item label="Số hợp đồng / báo giá">{p.contractNo}</Descriptions.Item>}
             <Descriptions.Item label="Người lập">{p.proposedBy?.fullName}</Descriptions.Item>
             <Descriptions.Item label="Ngày lập">{formatDateTime(p.createdAt)}</Descriptions.Item>
-            {p.verifiedAt && (
+            {p.verifiedAt && ( // dữ liệu cũ: luồng trước có bước Kế toán xác nhận
               <Descriptions.Item label="Kế toán xác nhận">
                 {p.verifiedBy?.fullName} · {formatDateTime(p.verifiedAt)}
                 {p.balanceAtVerify != null && <> · số dư khả dụng lúc đó {formatMoney(p.balanceAtVerify)}</>}
@@ -342,19 +328,6 @@ export default function FundProposalPage() {
         )}
       </Flex>
 
-      <VerifyModal open={modal === 'verify'} proposal={p} onClose={() => setModal(null)} onDone={reload} />
-      <ReasonModal
-        open={modal === 'return'}
-        title={`Trả lại ${p.code ?? 'đề xuất'} cho Trưởng BQL`}
-        okText="Trả lại"
-        minLength={5}
-        action={(reason) => fundApi.returnProposal(id, reason)}
-        onClose={() => setModal(null)}
-        onDone={() => (setModal(null), reload())}
-      />
-      {canResubmit && (
-        <ProposalModal open={modal === 'resubmit'} editing={p} available={p.available} onClose={() => setModal(null)} onDone={reload} />
-      )}
       <VoteModal open={modal === 'vote'} id={id} onClose={() => setModal(null)} onDone={reload} />
       <BoardAcceptModal open={modal === 'boardAccept'} proposal={p} onClose={() => setModal(null)} onDone={reload} />
       <ReasonModal
@@ -377,29 +350,6 @@ export default function FundProposalPage() {
         onDone={() => (setModal(null), reload())}
       />
     </>
-  );
-}
-
-/** Kế toán xác nhận tài chính: so số đề xuất với số dư khả dụng, kèm nhận xét */
-function VerifyModal({ open, proposal, onClose, onDone }) {
-  const [form] = Form.useForm();
-  const [run, loading] = useAction((v) => fundApi.verify(proposal._id, v.note?.trim() || null), { onDone: async () => (onClose(), await onDone?.()) });
-  const enough = proposal.amount <= proposal.available;
-  return (
-    <Modal open={open} title="Xác nhận tài chính" okText="Xác nhận, chuyển Ban quản trị" okButtonProps={{ disabled: !enough }} confirmLoading={loading} onCancel={onClose} onOk={() => form.submit()} destroyOnHidden>
-      <Alert
-        className="mb-3"
-        type={enough ? 'success' : 'error'}
-        showIcon
-        message={`Đề xuất ${formatMoney(proposal.amount)} · số dư khả dụng ${formatMoney(proposal.available)}`}
-        description={enough ? 'Kiểm tra báo giá, chứng từ trước khi xác nhận.' : 'Số dư khả dụng không đủ: dùng Trả lại kèm lý do.'}
-      />
-      <Form form={form} layout="vertical" preserve={false} onFinish={(v) => run(v).catch(() => {})}>
-        <Form.Item name="note" label="Nhận xét gửi Ban quản trị">
-          <Input.TextArea rows={3} maxLength={1000} placeholder="Vd: báo giá hợp lệ, đã so 2 nhà thầu" />
-        </Form.Item>
-      </Form>
-    </Modal>
   );
 }
 

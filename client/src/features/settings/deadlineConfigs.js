@@ -13,7 +13,7 @@ export const CONFIG_GROUPS = [
   {
     title: 'Bảo trì & Quỹ',
     keys: [
-      'FUND_VERIFY_REMIND_DAYS', 'FUND_APPROVAL_REMIND_DAYS', 'BOARD_ACCEPTANCE_REMIND_DAYS', 'EMERGENCY_DOSSIER_DAYS',
+      'FUND_APPROVAL_REMIND_DAYS', 'BOARD_ACCEPTANCE_REMIND_DAYS', 'EMERGENCY_DOSSIER_DAYS',
       'REPAIR_REVIEW_REPEAT_DAYS', 'REPAIR_POSTPONE_MAX_DAYS', 'REPAIR_ACCEPTANCE_REMIND_DAYS', 'OPERATING_EXPENSE_REMIND_DAYS',
     ],
   },
@@ -41,7 +41,6 @@ export const CONFIG_METADATA = {
   REPAIR_REVIEW_REPEAT_DAYS: { label: 'Phiếu hoãn đến hạn xem lại: nhắc lại mỗi', unit: 'ngày' },
   REPAIR_POSTPONE_MAX_DAYS: { label: 'Tạm hoãn sửa chữa tối đa', unit: 'ngày' },
   REPAIR_ACCEPTANCE_REMIND_DAYS: { label: 'Chờ nghiệm thu quá hạn: nhắc Trưởng BQL sau', unit: 'ngày' },
-  FUND_VERIFY_REMIND_DAYS: { label: 'Nhắc Kế toán xác nhận đề xuất chi quỹ sau', unit: 'ngày' },
   BOARD_ACCEPTANCE_REMIND_DAYS: { label: 'Nhắc Ban quản trị xác nhận nghiệm thu sau', unit: 'ngày' },
   EMERGENCY_DOSSIER_DAYS: { label: 'Sửa khẩn cấp: hạn lập đề xuất chi quỹ', unit: 'ngày' },
   OPERATING_EXPENSE_REMIND_DAYS: { label: 'Nhắc Kế toán ghi chi phí vận hành sau', unit: 'ngày' },

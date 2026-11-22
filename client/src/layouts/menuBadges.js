@@ -14,7 +14,7 @@ const badge = (parts) => {
   return { count: shown.reduce((s, [n]) => s + n, 0), title: shown.map(([n, label]) => `${n} ${label}`).join(', ') };
 };
 
-/** UC10: phiếu cần Trưởng BQL quyết định (trừ phiếu có đề xuất chi quỹ đang chờ Kế toán / Ban quản trị) + phiếu hoãn đến hạn xem lại */
+/** UC10: phiếu cần Trưởng BQL quyết định (trừ phiếu có đề xuất chi quỹ đang chờ Ban quản trị biểu quyết) + phiếu hoãn đến hạn xem lại */
 function useRepairApprovalBadge(enabled) {
   const res = useApi(silent(() => workOrderApi.repairs({ tab: 'pending', limit: 1 })), [], { enabled });
   const c = res.raw?.counts;
@@ -29,7 +29,7 @@ function useRepairApprovalBadge(enabled) {
  * Quỹ bảo trì, theo vai trò:
  *   Kế toán: đề xuất chờ xác nhận + đề xuất chờ lập phiếu chi + sửa chữa vận hành chờ ghi chi.
  *   Ban quản trị: đề xuất chờ biểu quyết + chờ xác nhận nghiệm thu + thay đổi tham số chờ xác nhận.
- *   Trưởng BQL: đề xuất bị trả lại + phiếu bảo trì chờ lập đề xuất.
+ *   Trưởng BQL: phiếu bảo trì chờ lập đề xuất.
  */
 function useFundBadge(enabled) {
   const { hasRole } = useAuth();
@@ -45,7 +45,6 @@ function useFundBadge(enabled) {
   if (!o) return null;
   if (accountant) {
     return badge([
-      [o.verifyCount ?? 0, 'đề xuất chờ xác nhận'],
       [o.readyToPayCount ?? 0, 'đề xuất chờ lập phiếu chi'],
       [expenses.data?.length ?? 0, 'sửa chữa chờ ghi chi'],
     ]);
@@ -58,7 +57,7 @@ function useFundBadge(enabled) {
       [configs.data?.length ?? 0, 'thay đổi tham số chờ xác nhận'],
     ]);
   }
-  if (manager) return badge([[o.returnedCount ?? 0, 'đề xuất bị trả lại'], [awaiting.data?.length ?? 0, 'phiếu chờ lập đề xuất']]);
+  if (manager) return badge([[awaiting.data?.length ?? 0, 'phiếu chờ lập đề xuất']]);
   return null;
 }
 

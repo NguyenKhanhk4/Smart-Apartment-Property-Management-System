@@ -17,8 +17,7 @@ const historySchema = new Schema(
   { _id: false },
 );
 
-// fund_proposals — đề xuất chi Quỹ bảo trì 2% (UC33 Trưởng BQL lập, Kế toán xác nhận tài chính; UC34 Ban quản trị biểu quyết).
-// PENDING_VERIFY → (Kế toán trả lại: RETURNED → Trưởng BQL gửi lại) → PENDING (chờ biểu quyết).
+// fund_proposals — đề xuất chi Quỹ bảo trì 2% (UC33 Trưởng BQL lập; UC34 Ban quản trị biểu quyết). Lập xong là chờ biểu quyết.
 // Mỗi thành viên Ban quản trị 1 phiếu, không sửa; đồng ý > FUND_APPROVAL_RATIO × số thành viên → APPROVED,
 // không còn khả năng đạt → REJECTED. Đã duyệt → nghiệm thu (Trưởng BQL + Ban quản trị với sửa chữa lớn) → Kế toán lập
 // phiếu chi (PAID). Hệ thống không tự duyệt khi quá hạn (X8).
@@ -39,18 +38,9 @@ const fundProposalSchema = new Schema(
     attachmentUrls: [String], // ảnh báo giá
     proposedBy: { type: ObjectId, ref: 'User', required: true }, // Trưởng BQL (dữ liệu cũ: Kế toán)
     contractNo: { type: String, default: null }, // số hợp đồng / báo giá với nhà thầu
-    submittedAt: { type: Date, default: null }, // lần gửi gần nhất (tạo / gửi lại) — mốc nhắc Kế toán
-    // Kế toán xác nhận tài chính (số dư khả dụng, chứng từ) hoặc trả lại
-    verifiedBy: { type: ObjectId, ref: 'User', default: null },
-    verifiedAt: { type: Date, default: null },
-    verifyNote: { type: String, default: null },
-    balanceAtVerify: { type: Number, default: null }, // số dư khả dụng lúc xác nhận
-    returnReason: { type: String, default: null },
-    returnedAt: { type: Date, default: null },
-    returnCount: { type: Number, default: 0 },
     votes: [voteSchema],
     boardSize: { type: Number, default: null }, // số thành viên Ban quản trị lúc chốt
-    status: { type: String, enum: values(FUND_PROPOSAL_STATUS), required: true, default: FUND_PROPOSAL_STATUS.PENDING_VERIFY },
+    status: { type: String, enum: values(FUND_PROPOSAL_STATUS), required: true, default: FUND_PROPOSAL_STATUS.PENDING },
     // true khi status thuộc FUND_PROPOSAL_OPEN_STATUSES. Mọi chỗ đổi status phải set cùng lúc (xem openFlag ở fund.service)
     isOpen: { type: Boolean, default: true },
     finalizedBy: { type: ObjectId, ref: 'User', default: null }, // người bỏ phiếu quyết định kết quả
@@ -76,7 +66,7 @@ fundProposalSchema.pre('validate', function syncOpen() {
 });
 
 fundProposalSchema.index({ status: 1, createdAt: -1 });
-// Mỗi phiếu bảo trì chỉ 1 đề xuất đang xử lý (chờ Kế toán / bị trả lại / chờ biểu quyết) — chặn cả 2 request song song.
+// Mỗi phiếu bảo trì chỉ 1 đề xuất đang chờ biểu quyết — chặn cả 2 request song song.
 // Dùng cờ isOpen thay vì status $in: partial index hỗ trợ $in từ MongoDB 6.0
 fundProposalSchema.index(
   { workOrderId: 1 },

@@ -13,9 +13,6 @@ import {
   listAwaitingWorkOrders,
   recordExpense,
   recordIncome,
-  resubmitProposal,
-  returnProposal,
-  verifyProposal,
   vote,
   workOrderPrefill,
 } from '../../src/modules/fund/fund.service.js';
@@ -81,6 +78,7 @@ const body = (wo, extra = {}) => ({
   amount: 13_000_000,
   planType: 'UNSCHEDULED',
   urgentReason: 'Thang máy dừng, ảnh hưởng cư dân',
+  contractNo: 'BG-TM-01',
   workOrderId: String(wo._id),
   ...extra,
 });
@@ -90,7 +88,7 @@ const approveBy = async (members, p) => {
   return vote(members[1], p._id, { decision: 'AGREE' });
 };
 
-test('duyệt: Trưởng BQL lập đề xuất gắn phiếu → Kế toán xác nhận → biểu quyết → Đang sửa → nghiệm thu kỹ thuật → Ban quản trị xác nhận → phiếu chi', async () => {
+test('duyệt: Trưởng BQL lập đề xuất gắn phiếu → Ban quản trị biểu quyết → Đang sửa → nghiệm thu kỹ thuật → Ban quản trị xác nhận → phiếu chi', async () => {
   const { manager, accountant, tech, board: members, wo, asset } = await setup();
 
   const awaiting = await listAwaitingWorkOrders();
@@ -102,17 +100,16 @@ test('duyệt: Trưởng BQL lập đề xuất gắn phiếu → Kế toán xá
 
   const p = await createProposal(manager, body(wo, { largeRepair: false }), [PHOTO]);
   assert.equal(String(p.workOrderId), String(wo._id));
-  assert.equal(p.status, 'PENDING_VERIFY');
+  assert.equal(p.status, 'PENDING');
   assert.equal(p.largeRepair, true); // sửa chữa thiết bị luôn là sửa chữa lớn
   assert.equal(p.attachmentUrls.length, prefill.attachmentUrls.length + 1); // ảnh hư hỏng + báo giá
   assert.deepEqual(await listAwaitingWorkOrders(), []); // đã có đề xuất đang xử lý → không còn trong danh sách
   await assert.rejects(createProposal(manager, body(wo)), { errorCode: 'WORKORDER_FUND_PENDING' });
   await assert.rejects(workOrderPrefill(wo._id), { errorCode: 'WORKORDER_FUND_PENDING' });
-  // Đang chờ Kế toán: Trưởng BQL cũng không quyết định lại
+  // Đang chờ biểu quyết: Trưởng BQL không quyết định lại
   await assert.rejects(decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'OPERATING' }), { errorCode: 'WORKORDER_FUND_PENDING' });
-  assert.equal((await decision.listRepairs({ tab: 'pending' })).items[0].pendingFund.status, 'PENDING_VERIFY');
+  assert.equal((await decision.listRepairs({ tab: 'pending' })).items[0].pendingFund.status, 'PENDING');
 
-  await verifyProposal(accountant, p._id, { note: 'Đủ báo giá' });
   assert.equal((await approveBy(members, p)).outcome, 'APPROVED');
   let w = await reload(wo);
   assert.equal(w.status, 'UNDER_REPAIR');
@@ -152,17 +149,11 @@ test('duyệt: Trưởng BQL lập đề xuất gắn phiếu → Kế toán xá
   assert.equal((await FundProposal.findById(p._id).lean()).status, 'PAID');
 });
 
-test('Kế toán trả lại → phiếu vẫn chờ (ghi lịch sử, không bỏ nguồn Quỹ) → Trưởng BQL gửi lại; từ chối / rút → phiếu bỏ nguồn Quỹ', async () => {
-  const { manager, accountant, board: members, wo } = await setup();
+test('từ chối / rút → phiếu bỏ nguồn Quỹ, Trưởng BQL quyết định lại; rút rồi lập lại được', async () => {
+  const { manager, board: members, wo } = await setup();
 
   const p1 = await createProposal(manager, body(wo));
-  await returnProposal(accountant, p1._id, { reason: 'Thiếu báo giá thứ 2' });
-  let w = await reload(wo);
-  assert.equal(w.repair.costSource, 'FUND');
-  assert.equal(w.repair.history.at(-1).action, 'FUND_RETURNED');
-  await assert.rejects(createProposal(manager, body(wo)), { errorCode: 'WORKORDER_FUND_PENDING' }); // đề xuất bị trả lại vẫn đang xử lý
-  await resubmitProposal(manager, p1._id, { note: 'Đã bổ sung' }, [PHOTO]);
-  await verifyProposal(accountant, p1._id, {});
+  let w;
 
   await vote(members[0], p1._id, { decision: 'DISAGREE', comment: 'Báo giá cao' });
   const { outcome } = await vote(members[1], p1._id, { decision: 'DISAGREE', comment: 'Lấy thêm báo giá' });
@@ -172,6 +163,8 @@ test('Kế toán trả lại → phiếu vẫn chờ (ghi lịch sử, không b�
   assert.equal(w.repair.costSource, null);
   assert.equal(w.repair.history.at(-1).action, 'FUND_REJECTED');
   assert.equal(await Notification.countDocuments({ userId: manager.id, title: 'Ban quản trị từ chối chi quỹ' }), 1);
+  // Phiếu 12,5tr (dưới ngưỡng): gợi ý được cả chi phí vận hành
+  assert.match((await Notification.findOne({ userId: manager.id, title: 'Ban quản trị từ chối chi quỹ' }).lean()).content, /chi phí vận hành/);
   // Trưởng BQL chỉ nhận 1 thông báo từ chối (từ phiếu bảo trì), không nhận thêm bản của quỹ
   assert.equal(await Notification.countDocuments({ userId: manager.id, title: /không duyệt chi quỹ/ }), 0);
   await assert.rejects(createProposal(manager, body(wo)), { errorCode: 'WORKORDER_NOT_AWAITING_FUND' });
@@ -326,11 +319,15 @@ test('BR-E11: sửa khẩn cấp → Đang sửa ngay, báo Ban quản trị; đ
 
   const p = await createProposal(manager, body(wo, { urgentReason: prefill.urgentReason }));
   queue = await board.listAwaitingBoard();
-  assert.equal(queue.workOrders[0].proposal.status, 'PENDING_VERIFY');
+  assert.equal(queue.workOrders[0].proposal.status, 'PENDING');
   assert.equal(queue.readyCount, 0);
-  await verifyProposal(accountant, p._id, {});
   assert.equal((await approveBy(members, p)).outcome, 'APPROVED');
   assert.equal((await reload(wo)).status, 'AWAITING_BOARD_ACCEPTANCE'); // khẩn cấp: kết quả biểu quyết không đổi trạng thái phiếu
+  // Thông báo duyệt ghi đúng bước tiếp theo (đã nghiệm thu kỹ thuật) và báo Ban quản trị xác nhận
+  const approvedMsg = await Notification.findOne({ userId: manager.id, title: /đã duyệt chi quỹ/ }).lean();
+  assert.match(approvedMsg.content, /đã sửa xong và được Trưởng BQL nghiệm thu kỹ thuật: Ban quản trị xác nhận nghiệm thu/);
+  assert.doesNotMatch(approvedMsg.content, /Nhà thầu sửa xong/);
+  for (const m of members) assert.ok(await Notification.exists({ userId: m.id, title: /^Chờ xác nhận nghiệm thu/ }));
   queue = await board.listAwaitingBoard();
   assert.equal(queue.workOrders[0].ready, true);
   assert.equal(queue.readyCount, 1);
@@ -341,11 +338,22 @@ test('BR-E11: sửa khẩn cấp → Đang sửa ngay, báo Ban quản trị; đ
   assert.equal(tx.amount, 13_000_000);
 });
 
+test('bị từ chối khi phiếu bắt buộc Quỹ (≥ ngưỡng): thông báo không gợi ý chi phí vận hành', async () => {
+  const { manager, board: members, wo } = await setup({ estimatedCost: 60_000_000 });
+  const p = await createProposal(manager, body(wo, { amount: 60_000_000 }));
+  await vote(members[0], p._id, { decision: 'DISAGREE', comment: 'Xin thêm báo giá' });
+  await vote(members[1], p._id, { decision: 'DISAGREE', comment: 'Xin thêm báo giá' });
+  const msg = await Notification.findOne({ userId: manager.id, title: 'Ban quản trị từ chối chi quỹ' }).lean();
+  assert.doesNotMatch(msg.content, /chi phí vận hành/);
+  assert.ok(msg.content.includes('lập lại đề xuất chi quỹ (chi phí từ ngưỡng, bắt buộc dùng Quỹ), tạm hoãn hoặc ngừng sử dụng'));
+  // Thực tế: chọn vận hành bị chặn, khớp với gợi ý
+  await assert.rejects(decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'OPERATING' }), { errorCode: 'WORKORDER_FUND_REQUIRED' });
+});
+
 test('BR-E11: khoản khẩn cấp bị từ chối → phiếu giữ nguyên, báo Ban quản trị + Trưởng BQL xử lý', async () => {
-  const { manager, accountant, board: members, wo } = await setup({ fund: false });
+  const { manager, board: members, wo } = await setup({ fund: false });
   await decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'FUND', emergency: true, emergencyReason: 'Thang máy kẹt người trong cabin' });
   const p = await createProposal(manager, body(wo));
-  await verifyProposal(accountant, p._id, {});
   await vote(members[0], p._id, { decision: 'DISAGREE', comment: 'Giá cao' });
   await vote(members[1], p._id, { decision: 'DISAGREE', comment: 'Giá cao' });
   const w = await reload(wo);
@@ -357,9 +365,8 @@ test('BR-E11: khoản khẩn cấp bị từ chối → phiếu giữ nguyên, b
 });
 
 test('BR-E09: Ban quản trị trả về → Đang sửa, biên bản xóa (giữ lịch sử), bỏ dấu nghiệm thu kỹ thuật; nghiệm thu lại được', async () => {
-  const { manager, accountant, tech, board: members, wo } = await setup();
+  const { manager, tech, board: members, wo } = await setup();
   const p = await createProposal(manager, body(wo));
-  await verifyProposal(accountant, p._id, {});
   await approveBy(members, p);
   await repair.uploadAcceptance(tech, wo._id, {}, DOCS);
   await repair.acceptRepair(manager, wo._id);
@@ -445,14 +452,11 @@ test('job tạo phiếu: thiết bị đang chờ Ban quản trị xác nhận n
   assert.equal(await generateMaintenanceWorkOrders(), 0);
 });
 
-test('E2E WF1-38: thang máy 180 triệu — Vận hành bị chặn → Quỹ → trả lại → gửi lại → xác nhận → 2/3 đồng ý → nghiệm thu 2 lớp → chi 175 triệu có lý do', async () => {
+test('E2E WF1-38: thang máy 180 triệu — Vận hành bị chặn → Quỹ → lập đề xuất → 2/3 đồng ý → nghiệm thu 2 lớp → chi 175 triệu có lý do', async () => {
   const { manager, accountant, tech, board: members, wo } = await setup({ fund: false, balance: 200_000_000, estimatedCost: 180_000_000 });
   await assert.rejects(decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'OPERATING' }), { errorCode: 'WORKORDER_FUND_REQUIRED' });
   await decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'FUND' });
   const p = await createProposal(manager, body(wo, { amount: 180_000_000 }));
-  await returnProposal(accountant, p._id, { reason: 'Thiếu báo giá thứ 2' });
-  await resubmitProposal(manager, p._id, { note: 'Đã bổ sung báo giá' }, [PHOTO]);
-  await verifyProposal(accountant, p._id, { note: 'Số dư đủ' });
   await vote(members[0], p._id, { decision: 'AGREE' });
   await vote(members[1], p._id, { decision: 'AGREE' });
   assert.equal((await reload(wo)).status, 'UNDER_REPAIR');
@@ -464,11 +468,10 @@ test('E2E WF1-38: thang máy 180 triệu — Vận hành bị chặn → Quỹ �
   assert.equal((await reload(wo)).status, 'DONE');
   assert.equal((await MaintenanceFund.findOne().lean()).balance, 25_000_000);
   const doc = await FundProposal.findById(p._id).lean();
-  assert.deepEqual(doc.history.map((h) => h.action), ['SUBMITTED', 'RETURNED', 'RESUBMITTED', 'VERIFIED', 'APPROVED', 'BOARD_ACCEPTED', 'PAID']);
+  assert.deepEqual(doc.history.map((h) => h.action), ['SUBMITTED', 'APPROVED', 'BOARD_ACCEPTED', 'PAID']);
   const actions = (await AuditLog.find({}).sort({ createdAt: 1, _id: 1 }).lean()).map((l) => `${l.action}:${String(l.performedBy)}`);
   for (const [action, user] of [
-    ['WORKORDER_FUND_REQUESTED', manager], ['FUND_PROPOSAL_CREATED', manager], ['FUND_PROPOSAL_RETURNED', accountant],
-    ['FUND_PROPOSAL_RESUBMITTED', manager], ['FUND_PROPOSAL_VERIFIED', accountant], ['FUND_PROPOSAL_APPROVED', members[1]],
+    ['WORKORDER_FUND_REQUESTED', manager], ['FUND_PROPOSAL_CREATED', manager], ['FUND_PROPOSAL_APPROVED', members[1]],
     ['WORKORDER_REPAIR_ACCEPTED', manager], ['WORKORDER_BOARD_ACCEPTED', members[2]], ['FUND_EXPENSE_RECORDED', accountant],
   ]) {
     assert.ok(actions.includes(`${action}:${user.id}`), `thiếu ${action} của đúng người`);

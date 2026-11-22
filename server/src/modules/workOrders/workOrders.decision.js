@@ -120,7 +120,7 @@ const notifyTech = (wo, title, content) => safely(async () => {
 /**
  * @param {{ decision: 'APPROVE'|'POSTPONE'|'RETIRE', costSource?: 'OPERATING'|'FUND'|'WARRANTY', comment?: string, reviewDate?: Date,
  *   warrantyOverrideReason?: string, emergency?: boolean, emergencyReason?: string }} body
- * Còn đề xuất chi quỹ đang xử lý (chờ Kế toán / bị trả lại / chờ Ban quản trị) thì không quyết định lại được (WORKORDER_FUND_PENDING).
+ * Còn đề xuất chi quỹ đang chờ Ban quản trị biểu quyết thì không quyết định lại được (WORKORDER_FUND_PENDING).
  */
 export async function decideRepair(user, id, body, now = new Date()) {
   const { decision, costSource, comment = '', reviewDate, warrantyOverrideReason, emergency = false, emergencyReason } = body;
@@ -208,7 +208,7 @@ async function approveDirect(user, wo, note, now, source, { warrantyNote, policy
 
 /**
  * UC10 bước 5: giữ Chờ duyệt sửa, ghi nguồn Quỹ. Trưởng BQL lập đề xuất chi ngay sau đó (UC33, form điền sẵn từ báo cáo
- * hư hỏng) → trả nextStep để client mở form. Không còn báo Kế toán ở bước này: Kế toán nhận đề xuất để xác nhận.
+ * hư hỏng) → trả nextStep để client mở form. Ban quản trị được báo khi đề xuất được lập.
  */
 async function approveFund(user, wo, note, now, { warrantyNote }) {
   const res = await WorkOrder.updateOne(
@@ -450,8 +450,8 @@ export async function listRepairs({ tab = 'pending', ...query }, now = new Date(
     WorkOrder.countDocuments({ status: S.REPAIR_POSTPONED, 'repair.reviewDate': { $lte: endToday } }),
     countAwaitingFund(TABS.pending.filter),
   ]);
-  // awaitingFund: phiếu chờ quyết định đã có đề xuất đang chờ Kế toán / Ban quản trị (Trưởng BQL chưa làm gì được; đề xuất
-  // bị trả lại không tính vì Trưởng BQL phải sửa) — số việc trên menu = pending − awaitingFund + reviewDue
+  // awaitingFund: phiếu chờ quyết định đã có đề xuất đang chờ Ban quản trị biểu quyết (Trưởng BQL chưa làm gì được)
+  // — số việc trên menu = pending − awaitingFund + reviewDue
   return { ...result, counts: { pending, postponed, reviewDue, awaitingFund }, settings };
 }
 

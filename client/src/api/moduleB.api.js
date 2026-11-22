@@ -108,7 +108,7 @@ export const debtApi = {
   downloadNotice: (id) => downloadFile(`/debts/cases/${id}/notice.pdf`, 'thong-bao-no-qua-han.pdf'),
 };
 
-// ===== Mô đun 4: Quỹ bảo trì 2% (UC33 Trưởng BQL lập, Kế toán xác nhận; UC34 Ban quản trị biểu quyết, xác nhận nghiệm thu) =====
+// ===== Mô đun 4: Quỹ bảo trì 2% (UC33 Trưởng BQL lập; UC34 Ban quản trị biểu quyết, xác nhận nghiệm thu; Kế toán thu chi) =====
 // Form có ảnh (chứng từ, báo giá, hóa đơn) gửi multipart, ảnh ở field `images`
 function toMultipart(body, files = []) {
   if (!files.length) return body;
@@ -129,11 +129,6 @@ export const fundApi = {
   proposal: (id) => http.get(`/fund/proposals/${id}`),
   /** Trưởng BQL — body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair?, workOrderId?, contractNo? } */
   createProposal: (body, files) => http.post('/fund/proposals', toMultipart(body, files)),
-  /** Trưởng BQL sửa đề xuất bị trả lại và gửi lại */
-  resubmit: (id, body, files) => http.patch(`/fund/proposals/${id}`, toMultipart(body, files)),
-  /** Kế toán xác nhận tài chính / trả lại */
-  verify: (id, note) => http.post(`/fund/proposals/${id}/verify`, { note }),
-  returnProposal: (id, reason) => http.post(`/fund/proposals/${id}/return`, { reason }),
   /** UC10: phiếu bảo trì Trưởng BQL duyệt sửa bằng Quỹ, chờ lập đề xuất */
   awaitingWorkOrders: () => http.get('/fund/work-orders'),
   workOrderPrefill: (id) => http.get(`/fund/work-orders/${id}/prefill`),

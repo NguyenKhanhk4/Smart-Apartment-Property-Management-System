@@ -15,8 +15,6 @@ const PAGE_SIZE = 10;
 
 // Đề xuất chi quỹ đang xử lý của phiếu: đang chờ ai
 const FUND_WAITING = {
-  PENDING_VERIFY: 'chờ Kế toán xác nhận',
-  RETURNED: 'bị Kế toán trả lại, cần sửa và gửi lại',
   PENDING: 'chờ Ban quản trị biểu quyết',
 };
 
@@ -80,7 +78,6 @@ export default function MajorRepairApprovalPage() {
               <EnumTag map={REPAIR_COST_SOURCES} value="FUND" />
               {f ? (
                 <Typography.Link
-                  type={f.status === 'RETURNED' ? 'danger' : undefined}
                   style={{ fontSize: 12 }}
                   onClick={() => navigate(`/app/fund/proposals/${f._id}`)}
                 >

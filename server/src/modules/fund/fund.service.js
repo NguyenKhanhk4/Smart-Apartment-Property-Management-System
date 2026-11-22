@@ -1,15 +1,14 @@
 // Mô đun 4 — Quỹ bảo trì 2% (UC33, UC34). Hệ thống chỉ theo dõi, quỹ thuộc Ban quản trị.
 //   • Kế toán ghi nhận thu quỹ có chứng từ (số dư ban đầu CĐT bàn giao, lãi tiền gửi — M4-7).
-//   • Trưởng BQL lập Đề xuất chi (hạng mục, số tiền, báo giá; Kế hoạch bảo trì năm hoặc Đột xuất kèm lý do)
-//     → Chờ Kế toán xác nhận tài chính. Kế toán kiểm số dư khả dụng, chứng từ: Xác nhận → Chờ Ban quản trị biểu quyết;
-//     Trả lại (lý do) → Trưởng BQL sửa và gửi lại. Người lập không tự xác nhận.
+//   • Trưởng BQL lập Đề xuất chi (hạng mục, số tiền, báo giá; Kế hoạch bảo trì năm hoặc Đột xuất kèm lý do) → Chờ Ban quản
+//     trị biểu quyết ngay, báo Ban quản trị. Không có bước Kế toán xác nhận: hệ thống tự kiểm số dư khả dụng lúc lập và lúc chốt.
 //   • Mỗi thành viên Ban quản trị bỏ 1 phiếu kèm ý kiến. Đồng ý > FUND_APPROVAL_RATIO × số thành viên → Đã duyệt nếu số dư
 //     khả dụng còn đủ (BR-F16, kiểm lại lúc chốt; không đủ thì giữ chờ, báo Kế toán + Trưởng BQL); không còn khả năng đạt
 //     → Từ chối (báo Trưởng BQL chọn phương án khác — M10-2). Quá N ngày chỉ nhắc, không tự duyệt (X8).
 //   • Đã duyệt → Kế toán lập Phiếu chi thực tế kèm hóa đơn, trừ số dư (không cho âm, không vượt số duyệt; thấp hơn phải ghi lý
 //     do — BR-F17). Sửa chữa lớn: chỉ chi sau khi Trưởng BQL nghiệm thu và Ban quản trị xác nhận nghiệm thu (BR-E09).
-//   • UC10: Trưởng BQL duyệt sửa bằng Quỹ → lập đề xuất gắn workOrderId (điền sẵn từ báo cáo hư hỏng); kết quả trả lại /
-//     biểu quyết / rút báo lại phiếu qua onFundDecision; nghiệm thu làm trên phiếu bảo trì (workOrders.repair.js, .board.js).
+//   • UC10: Trưởng BQL duyệt sửa bằng Quỹ → lập đề xuất gắn workOrderId (điền sẵn từ báo cáo hư hỏng); kết quả biểu quyết /
+//     rút báo lại phiếu qua onFundDecision; nghiệm thu làm trên phiếu bảo trì (workOrders.repair.js, .board.js).
 import mongoose from 'mongoose';
 import {
   AUDIT_ACTIONS,
@@ -38,10 +37,9 @@ import { withTransaction } from '../../utils/transaction.js';
 import { formatVnd } from '../amenities/pricing.js';
 import { FUND_DECISIONS, assertAwaitingFund, fundPrefill, onFundDecision } from '../workOrders/workOrders.fund.js';
 
-const { PENDING_VERIFY, RETURNED, PENDING, APPROVED, REJECTED, PAID, CANCELLED } = FUND_PROPOSAL_STATUS;
+const { PENDING, APPROVED, REJECTED, PAID, CANCELLED } = FUND_PROPOSAL_STATUS;
 const oid = (id) => new mongoose.Types.ObjectId(String(id));
 const proposalLink = (p) => `/app/fund/proposals/${p._id}`;
-const sameId = (a, b) => a != null && b != null && String(a?._id ?? a) === String(b?._id ?? b);
 
 /** Đổi status luôn đi kèm cờ isOpen (index "mỗi phiếu bảo trì 1 đề xuất đang xử lý" dựa vào cờ này) */
 export const statusSet = (status) => ({ status, isOpen: FUND_PROPOSAL_OPEN_STATUSES.includes(status) });
@@ -95,16 +93,13 @@ const insufficient = (available) =>
 export async function getOverview({ now = new Date() } = {}) {
   const fund = await getFund();
   const yearStart = periodStart(`${vnPeriod(now).slice(0, 4)}-01`);
-  const [totals, committed, byStatus, threshold, readyToPayCount, emergencyCount] = await Promise.all([
+  const [totals, committed, pendingCount, threshold, readyToPayCount, emergencyCount] = await Promise.all([
     FundTransaction.aggregate([
       { $match: { fundId: fund._id, occurredAt: { $gte: yearStart } } },
       { $group: { _id: '$type', amount: { $sum: '$amount' }, count: { $sum: 1 } } },
     ]),
     committedAmount(fund._id),
-    FundProposal.aggregate([
-      { $match: { fundId: fund._id, status: { $in: [PENDING_VERIFY, RETURNED, PENDING] } } },
-      { $group: { _id: '$status', n: { $sum: 1 } } },
-    ]),
+    FundProposal.countDocuments({ fundId: fund._id, status: PENDING }),
     getConfig(CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD),
     FundProposal.countDocuments({
       fundId: fund._id, status: APPROVED,
@@ -113,7 +108,6 @@ export async function getOverview({ now = new Date() } = {}) {
     WorkOrder.countDocuments({ 'repair.isEmergency': true, 'repair.emergencyAt': { $gte: yearStart } }),
   ]);
   const t = Object.fromEntries(totals.map((x) => [x._id, x.amount]));
-  const c = Object.fromEntries(byStatus.map((x) => [x._id, x.n]));
   return {
     fund,
     balance: fund.balance,
@@ -121,11 +115,9 @@ export async function getOverview({ now = new Date() } = {}) {
     available: fund.balance - committed,
     yearIncome: t[FUND_TX_TYPES.INCOME] ?? 0,
     yearExpense: t[FUND_TX_TYPES.EXPENSE] ?? 0,
-    pendingCount: c[PENDING] ?? 0, // chờ Ban quản trị biểu quyết
+    pendingCount, // chờ Ban quản trị biểu quyết
     readyToPayCount, // đã duyệt, đủ nghiệm thu, chờ Kế toán lập phiếu chi
     emergencyCount, // phiếu sửa khẩn cấp bằng Quỹ từ đầu năm (theo dõi lạm dụng nhánh khẩn cấp)
-    verifyCount: c[PENDING_VERIFY] ?? 0, // chờ Kế toán xác nhận
-    returnedCount: c[RETURNED] ?? 0, // bị trả lại, chờ Trưởng BQL sửa
     lowBalanceThreshold: Number(threshold),
     lowBalance: fund.balance < Number(threshold),
   };
@@ -192,7 +184,6 @@ export async function recordIncome(user, { incomeSource, amount, occurredAt, doc
 // ---------------------------------------------------------------------------
 const PROPOSAL_POPULATE = [
   { path: 'proposedBy', select: 'fullName role' },
-  { path: 'verifiedBy', select: 'fullName' },
   { path: 'votes.memberId', select: 'fullName boardTitle' },
   { path: 'finalizedBy', select: 'fullName' },
   { path: 'workAcceptedBy', select: 'fullName' },
@@ -265,11 +256,19 @@ const planText = (p) => (p.planType === FUND_PLAN_TYPES.UNSCHEDULED ? `bảo tr�
 
 /**
  * Trưởng BQL lập đề xuất. body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair?, workOrderId?, contractNo? }
- * + ảnh báo giá. Đề xuất → Chờ Kế toán xác nhận; báo Kế toán (Ban quản trị chỉ nhận sau khi Kế toán xác nhận).
+ * + ảnh báo giá. Kiểm số dư khả dụng; đề xuất → Chờ Ban quản trị biểu quyết, báo Ban quản trị.
+ * Bắt buộc chứng từ: ≥ 1 ảnh báo giá hoặc số hợp đồng / báo giá (không còn bước Kế toán kiểm hồ sơ trước khi Ban quản trị
+ * biểu quyết). Ảnh hư hỏng tự đính kèm từ phiếu bảo trì không tính là báo giá.
  */
 export async function createProposal(user, body, files = [], { now = new Date() } = {}) {
   const { title, description, amount, planType, planRef = null, urgentReason = null, largeRepair = false, workOrderId = null, contractNo = null } = body;
   assertPlan({ planType, planRef, urgentReason });
+  if (!files.length && !contractNo?.trim()) {
+    throw ApiError.badRequest('Đính kèm ít nhất 1 ảnh báo giá hoặc ghi số hợp đồng / báo giá nhà thầu', [
+      { field: 'images', message: 'Đính kèm ảnh báo giá hoặc ghi số hợp đồng / báo giá' },
+      { field: 'contractNo', message: 'Ghi số hợp đồng / báo giá hoặc đính kèm ảnh báo giá' },
+    ]);
+  }
   const fund = await getFund();
   const available = await availableBalance(fund._id);
   if (amount > available) throw insufficient(available);
@@ -292,8 +291,7 @@ export async function createProposal(user, body, files = [], { now = new Date() 
       contractNo: contractNo?.trim() || null,
       attachmentUrls,
       proposedBy: user.id,
-      status: PENDING_VERIFY,
-      submittedAt: now,
+      status: PENDING,
       createdAt: now, // Ngày lập = lúc gửi (seed / test truyền now lùi ngày thì lịch sử không bị trước ngày lập)
       history: [hist('SUBMITTED', user, now)],
     })
@@ -310,143 +308,18 @@ export async function createProposal(user, body, files = [], { now = new Date() 
     planType,
     ...(linked && { workOrderId: proposal.workOrderId }),
   });
-  await safely(() => notifyRoles(['ACCOUNTANT'], {
+  const members = await boardMembers();
+  await safely(() => notify(members.map((m) => m._id), {
     type: NOTIFICATION_TYPES.FUND_APPROVAL,
-    title: `Đề xuất chi quỹ cần xác nhận tài chính: ${title}`,
+    title: `Đề xuất chi quỹ bảo trì chờ biểu quyết: ${title}`,
     content:
       `${proposal.code} — ${title}, số tiền ${formatVnd(amount)} (${planText(proposal)}). `
-      + `Số dư khả dụng hiện tại ${formatVnd(available)}. Kiểm chứng từ, báo giá rồi Xác nhận hoặc Trả lại.`,
+      + `Số dư khả dụng hiện tại ${formatVnd(available)}. Vui lòng vào hệ thống để Đồng ý hoặc Không đồng ý.`,
     refId: proposal._id,
     link: proposalLink(proposal),
     email: true,
   }));
   return proposal;
-}
-
-/** Kế toán xác nhận tài chính: Chờ xác nhận → Chờ Ban quản trị biểu quyết; báo Ban quản trị kèm nhận xét và số dư lúc xác nhận */
-export async function verifyProposal(user, id, { note = null } = {}, { now = new Date() } = {}) {
-  const cur = await FundProposal.findById(id).lean();
-  if (!cur) throw ApiError.notFound('Không tìm thấy đề xuất chi');
-  if (cur.status !== PENDING_VERIFY) throw new ApiError('PROPOSAL_NOT_AWAITING_VERIFY');
-  if (sameId(cur.proposedBy, user.id)) throw ApiError.forbidden('Người lập đề xuất không tự xác nhận được');
-  const fund = await getFund();
-  const available = await availableBalance(fund._id);
-  if (cur.amount > available) {
-    throw new ApiError('FUND_INSUFFICIENT_BALANCE', `Số dư khả dụng ${formatVnd(available)} không đủ cho ${formatVnd(cur.amount)}. Dùng "Trả lại" kèm lý do.`);
-  }
-  const verifyNote = note?.trim() || null;
-  const p = await FundProposal.findOneAndUpdate(
-    { _id: id, status: PENDING_VERIFY },
-    {
-      $set: { ...statusSet(PENDING), verifiedBy: user.id, verifiedAt: now, verifyNote, balanceAtVerify: available, lastRemindedAt: null },
-      $push: { history: hist('VERIFIED', user, now, verifyNote) },
-    },
-    { new: true },
-  ).lean();
-  if (!p) throw new ApiError('CONCURRENT_UPDATE');
-  await audit(AUDIT_ACTIONS.FUND_PROPOSAL_VERIFIED, user, AUDIT_TARGETS.FUND_PROPOSAL, p._id, { code: p.code, amount: p.amount, available });
-
-  const members = await boardMembers();
-  await safely(() => notify(members.map((m) => m._id), {
-    type: NOTIFICATION_TYPES.FUND_APPROVAL,
-    title: `Đề xuất chi quỹ bảo trì chờ biểu quyết: ${p.title}`,
-    content:
-      `${p.code} — ${p.title}, số tiền ${formatVnd(p.amount)} (${planText(p)}). `
-      + `Kế toán đã xác nhận: số dư khả dụng ${formatVnd(available)}${verifyNote ? `, nhận xét: ${verifyNote}` : ''}. `
-      + 'Vui lòng vào hệ thống để Đồng ý hoặc Không đồng ý.',
-    refId: p._id,
-    link: proposalLink(p),
-    email: true,
-  }));
-  return p;
-}
-
-/** Kế toán trả lại (lý do ≥ 5 ký tự): Chờ xác nhận → Bị trả lại; báo Trưởng BQL sửa và gửi lại */
-export async function returnProposal(user, id, { reason }, { now = new Date() } = {}) {
-  const text = reason?.trim() || '';
-  if (text.length < 5) throw ApiError.field('reason', 'Ghi lý do trả lại tối thiểu 5 ký tự');
-  const p = await FundProposal.findOneAndUpdate(
-    { _id: id, status: PENDING_VERIFY },
-    {
-      $set: { ...statusSet(RETURNED), returnReason: text, returnedAt: now, lastRemindedAt: null },
-      $inc: { returnCount: 1 },
-      $push: { history: hist('RETURNED', user, now, text) },
-    },
-    { new: true },
-  ).lean();
-  if (!p) {
-    if (!(await FundProposal.exists({ _id: id }))) throw ApiError.notFound('Không tìm thấy đề xuất chi');
-    throw new ApiError('PROPOSAL_NOT_AWAITING_VERIFY');
-  }
-  await audit(AUDIT_ACTIONS.FUND_PROPOSAL_RETURNED, user, AUDIT_TARGETS.FUND_PROPOSAL, p._id, { code: p.code, reason: text });
-  await syncWorkOrder(p, FUND_DECISIONS.RETURNED, user, now);
-  await safely(() => notify(p.proposedBy, {
-    type: NOTIFICATION_TYPES.FUND_APPROVAL,
-    title: `Kế toán trả lại đề xuất ${p.code}`,
-    content: `Đề xuất "${p.title}" bị trả lại: ${text}. Sửa và gửi lại, hoặc rút đề xuất.`,
-    refId: p._id,
-    link: proposalLink(p),
-    email: true,
-  }));
-  return p;
-}
-
-/**
- * Trưởng BQL sửa đề xuất bị trả lại và gửi lại: Bị trả lại → Chờ Kế toán xác nhận. Được sửa hạng mục, mô tả, số tiền,
- * loại kế hoạch, số hợp đồng; ảnh báo giá mới thêm vào ảnh cũ.
- */
-export async function resubmitProposal(user, id, body, files = [], { now = new Date() } = {}) {
-  const cur = await FundProposal.findById(id).lean();
-  if (!cur) throw ApiError.notFound('Không tìm thấy đề xuất chi');
-  if (cur.status !== RETURNED) throw new ApiError('PROPOSAL_NOT_RETURNED');
-  // Kế toán cần biết đã sửa gì so với lần bị trả lại
-  if ((body.note?.trim().length ?? 0) < 5) throw ApiError.field('note', 'Ghi rõ đã sửa gì (tối thiểu 5 ký tự)');
-  const next = {
-    title: body.title ?? cur.title,
-    description: body.description ?? cur.description,
-    amount: body.amount ?? cur.amount,
-    planType: body.planType ?? cur.planType,
-    planRef: body.planRef !== undefined ? body.planRef : cur.planRef,
-    urgentReason: body.urgentReason !== undefined ? body.urgentReason : cur.urgentReason,
-    contractNo: body.contractNo !== undefined ? body.contractNo?.trim() || null : cur.contractNo,
-  };
-  assertPlan(next);
-  const fund = await getFund();
-  const available = await availableBalance(fund._id);
-  if (next.amount > available) throw insufficient(available);
-  const images = await uploadToCloudinary(files, 'fund-quotations');
-  const note = body.note?.trim() || null;
-  // 1 lần ghi: sửa nội dung + đổi trạng thái + ghi lịch sử (+ thêm ảnh báo giá mới)
-  const p = await FundProposal.findOneAndUpdate(
-    { _id: id, status: RETURNED },
-    {
-      $set: {
-        ...next,
-        planRef: next.planType === FUND_PLAN_TYPES.ANNUAL_PLAN ? next.planRef : null,
-        urgentReason: next.planType === FUND_PLAN_TYPES.UNSCHEDULED ? next.urgentReason : null,
-        ...statusSet(PENDING_VERIFY),
-        submittedAt: now,
-        lastRemindedAt: null,
-      },
-      $push: {
-        history: hist('RESUBMITTED', user, now, note),
-        ...(images.length && { attachmentUrls: { $each: images } }),
-      },
-    },
-    { new: true },
-  ).lean();
-  if (!p) throw new ApiError('CONCURRENT_UPDATE');
-  await audit(AUDIT_ACTIONS.FUND_PROPOSAL_RESUBMITTED, user, AUDIT_TARGETS.FUND_PROPOSAL, p._id, {
-    code: p.code, before: { amount: cur.amount }, after: { amount: p.amount },
-  });
-  await safely(() => notifyRoles(['ACCOUNTANT'], {
-    type: NOTIFICATION_TYPES.FUND_APPROVAL,
-    title: `Đề xuất ${p.code} đã được gửi lại`,
-    content: `Trưởng BQL đã sửa "${p.title}" (${formatVnd(p.amount)})${note ? `: ${note}` : ''}. Vui lòng xác nhận lại.`,
-    refId: p._id,
-    link: proposalLink(p),
-  }));
-  return p;
 }
 
 /** readyToPay: đề xuất Kế toán lập phiếu chi được ngay (đã duyệt; sửa chữa lớn thì đã qua nghiệm thu 2 lớp) */
@@ -574,26 +447,35 @@ async function afterFinalized(p, user, now, outcome, finalNote) {
   // UC10: đề xuất gắn phiếu bảo trì → Duyệt: phiếu sang Đang sửa, báo KTV; Từ chối: bỏ nguồn Quỹ, báo Trưởng BQL quyết định lại
   await syncWorkOrder(p, outcome === APPROVED ? FUND_DECISIONS.APPROVED : FUND_DECISIONS.REJECTED, user, now);
   if (outcome === APPROVED) {
-    await safely(() => notifyRoles(['ACCOUNTANT', 'MANAGER'], {
-      type: NOTIFICATION_TYPES.FUND_APPROVAL,
-      title: `Ban quản trị đã duyệt chi quỹ: ${p.title}`,
-      content:
-        `${p.code} được duyệt (${finalNote}), số tiền ${formatVnd(p.amount)}. `
-        + (p.workOrderId
-          ? 'Nhà thầu sửa xong: Trưởng BQL nghiệm thu kỹ thuật trên phiếu bảo trì, Ban quản trị xác nhận nghiệm thu, rồi Kế toán lập phiếu chi.'
-          : p.largeRepair
-            ? 'Sửa chữa lớn: Trưởng BQL nghiệm thu và Ban quản trị xác nhận xong thì Kế toán mới lập phiếu chi.'
-            : 'Kế toán lập phiếu chi thực tế kèm hóa đơn, chứng từ.'),
-      refId: p._id,
-      link: proposalLink(p),
-      email: true,
-    }));
-  } else {
-    // Phiếu bảo trì đã tự báo Trưởng BQL quyết định lại (onFundDecision) → ở đây chỉ báo Kế toán
-    await safely(() => notifyRoles(p.workOrderId ? ['ACCOUNTANT'] : ['ACCOUNTANT', 'MANAGER'], {
+    const next = await nextStepAfterApproval(p);
+    await safely(async () => {
+      await notifyRoles(['ACCOUNTANT', 'MANAGER'], {
+        type: NOTIFICATION_TYPES.FUND_APPROVAL,
+        title: `Ban quản trị đã duyệt chi quỹ: ${p.title}`,
+        content: `${p.code} được duyệt (${finalNote}), số tiền ${formatVnd(p.amount)}. ${next.text}`,
+        refId: p._id,
+        link: proposalLink(p),
+        email: true,
+      });
+      // Phiếu khẩn cấp đã sửa xong + nghiệm thu kỹ thuật trước khi duyệt → việc tiếp theo là của Ban quản trị
+      if (next.boardTurn) {
+        const members = await boardMembers();
+        await notify(members.map((m) => m._id), {
+          type: NOTIFICATION_TYPES.FUND_APPROVAL,
+          title: `Chờ xác nhận nghiệm thu: ${p.title}`,
+          content: `${p.code} vừa được duyệt. ${next.text}`,
+          refId: p._id,
+          link: proposalLink(p),
+          email: true,
+        });
+      }
+    });
+  } else if (!p.workOrderId) {
+    // Đề xuất gắn phiếu bảo trì: phiếu đã tự báo Trưởng BQL quyết định lại (onFundDecision). Kế toán chưa tham gia nên không báo.
+    await safely(() => notifyRoles(['MANAGER'], {
       type: NOTIFICATION_TYPES.FUND_APPROVAL,
       title: `Ban quản trị không duyệt chi quỹ: ${p.title}`,
-      content: `${p.code} không đạt tỷ lệ đồng ý (${finalNote}). Trưởng BQL cân nhắc phương án khác.`,
+      content: `${p.code} không đạt tỷ lệ đồng ý (${finalNote}). Cân nhắc phương án khác.`,
       refId: p._id,
       link: proposalLink(p),
       email: true,
@@ -601,14 +483,45 @@ async function afterFinalized(p, user, now, outcome, finalNote) {
   }
 }
 
+/**
+ * Bước tiếp theo sau khi đề xuất được duyệt, theo trạng thái thực của phiếu bảo trì gắn kèm (phiếu khẩn cấp có thể đã sửa xong
+ * và nghiệm thu kỹ thuật trước lúc duyệt). boardTurn: việc tiếp theo là Ban quản trị xác nhận nghiệm thu.
+ */
+async function nextStepAfterApproval(p) {
+  if (!p.workOrderId) {
+    return {
+      text: p.largeRepair
+        ? 'Sửa chữa lớn: Trưởng BQL nghiệm thu và Ban quản trị xác nhận xong thì Kế toán mới lập phiếu chi.'
+        : 'Kế toán lập phiếu chi thực tế kèm hóa đơn, chứng từ.',
+      boardTurn: false,
+    };
+  }
+  const S = WORK_ORDER_STATUS;
+  const wo = await WorkOrder.findById(p.workOrderId).select('status repair.isEmergency').lean();
+  if (wo?.status === S.AWAITING_BOARD_ACCEPTANCE) {
+    return {
+      text: 'Phiếu bảo trì đã sửa xong và được Trưởng BQL nghiệm thu kỹ thuật: Ban quản trị xác nhận nghiệm thu, rồi Kế toán lập phiếu chi.',
+      boardTurn: true,
+    };
+  }
+  if (wo?.status === S.AWAITING_ACCEPTANCE) {
+    return {
+      text: 'Nhà thầu đã có biên bản: Trưởng BQL nghiệm thu kỹ thuật trên phiếu bảo trì, Ban quản trị xác nhận nghiệm thu, rồi Kế toán lập phiếu chi.',
+      boardTurn: false,
+    };
+  }
+  return {
+    text: `${wo?.repair?.isEmergency ? 'Sửa chữa khẩn cấp đang tiến hành. ' : 'Phiếu bảo trì chuyển Đang sửa. '}`
+      + 'Nhà thầu sửa xong: Trưởng BQL nghiệm thu kỹ thuật trên phiếu bảo trì, Ban quản trị xác nhận nghiệm thu, rồi Kế toán lập phiếu chi.',
+    boardTurn: false,
+  };
+}
+
 /** Ban quản trị biểu quyết. body: { decision: AGREE | DISAGREE, comment } — Không đồng ý phải ghi ý kiến */
 export async function vote(user, id, { decision, comment = null }, { now = new Date() } = {}) {
   if (decision === VOTE_DECISIONS.DISAGREE && !comment?.trim()) throw ApiError.field('comment', 'Không đồng ý thì ghi rõ ý kiến');
   const current = await FundProposal.findById(id).select('status votes code').lean();
   if (!current) throw ApiError.notFound('Không tìm thấy đề xuất chi');
-  if (current.status === PENDING_VERIFY || current.status === RETURNED) {
-    throw new ApiError('PROPOSAL_ALREADY_REVIEWED', 'Đề xuất chưa được Kế toán xác nhận tài chính, chưa biểu quyết được');
-  }
   if (current.status !== PENDING) throw new ApiError('PROPOSAL_ALREADY_REVIEWED');
   if (current.votes.some((v) => String(v.memberId) === user.id)) throw new ApiError('PROPOSAL_ALREADY_VOTED');
 
@@ -655,13 +568,13 @@ export async function retryBlockedApprovals(trigger, now = new Date()) {
 }
 
 /**
- * Trưởng BQL rút đề xuất đang xử lý (chờ Kế toán / bị trả lại / chờ biểu quyết) hoặc đã duyệt chưa chi (không gắn phiếu).
- * Đề xuất gắn phiếu bảo trì đã duyệt thì không rút được (phiếu đã sang Đang sửa, nhà thầu đã được liên hệ); rút lúc đang xử lý
+ * Trưởng BQL rút đề xuất đang chờ biểu quyết hoặc đã duyệt chưa chi (không gắn phiếu).
+ * Đề xuất gắn phiếu bảo trì đã duyệt thì không rút được (phiếu đã sang Đang sửa, nhà thầu đã được liên hệ); rút lúc đang chờ
  * thì phiếu bỏ nguồn Quỹ, Trưởng BQL quyết định lại.
  */
 export async function cancelProposal(user, id, { reason }, { now = new Date() } = {}) {
   const before = await FundProposal.findOneAndUpdate(
-    { _id: id, $or: [{ status: { $in: [PENDING_VERIFY, RETURNED, PENDING] } }, { status: APPROVED, workOrderId: null }] },
+    { _id: id, $or: [{ status: PENDING }, { status: APPROVED, workOrderId: null }] },
     { $set: { ...statusSet(CANCELLED), cancelReason: reason, approvalBlockedAt: null }, $push: { history: hist('CANCELLED', user, now, reason) } },
     { new: false },
   ).lean();
@@ -676,7 +589,7 @@ export async function cancelProposal(user, id, { reason }, { now = new Date() } 
   const p = { ...before, status: CANCELLED, cancelReason: reason };
   await audit(AUDIT_ACTIONS.FUND_PROPOSAL_CANCELLED, user, AUDIT_TARGETS.FUND_PROPOSAL, p._id, { code: p.code, reason, from: before.status });
   await syncWorkOrder(p, FUND_DECISIONS.CANCELLED, user, now);
-  // Ai đã biết đề xuất thì báo: Kế toán luôn biết; Ban quản trị chỉ biết từ khi Kế toán xác nhận
+  // Ban quản trị luôn biết đề xuất; Kế toán chỉ biết từ khi đã duyệt (chờ lập phiếu chi)
   const msg = {
     type: NOTIFICATION_TYPES.FUND_APPROVAL,
     title: `Đề xuất chi quỹ ${p.code} đã được rút`,
@@ -685,11 +598,9 @@ export async function cancelProposal(user, id, { reason }, { now = new Date() } 
     link: proposalLink(p),
   };
   await safely(async () => {
-    await notifyRoles(['ACCOUNTANT'], msg);
-    if ([PENDING, APPROVED].includes(before.status)) {
-      const members = await boardMembers();
-      await notify(members.map((m) => m._id), msg);
-    }
+    const members = await boardMembers();
+    await notify(members.map((m) => m._id), msg);
+    if (before.status === APPROVED) await notifyRoles(['ACCOUNTANT'], msg);
   });
   if (before.status === APPROVED) await retryBlockedApprovals(`rút đề xuất ${p.code}`, now); // khoản cam kết được giải phóng
   return p;
@@ -825,62 +736,30 @@ export async function recordExpense(user, id, { amount, occurredAt, documentNo, 
 }
 
 // ---------------------------------------------------------------------------
-// Cron FUND_PROPOSAL_REMIND (X8), N ngày/lần, không tự duyệt:
-//   • Chờ Kế toán xác nhận quá FUND_VERIFY_REMIND_DAYS → nhắc Kế toán + báo Trưởng BQL.
-//   • Chờ biểu quyết quá FUND_APPROVAL_REMIND_DAYS (tính từ lúc Kế toán xác nhận) → nhắc thành viên chưa bỏ phiếu + báo Trưởng BQL.
+// Cron FUND_PROPOSAL_REMIND (X8): đề xuất chờ biểu quyết quá FUND_APPROVAL_REMIND_DAYS ngày (tính từ lúc lập) → nhắc thành
+// viên chưa bỏ phiếu + báo Trưởng BQL, N ngày/lần, không tự duyệt.
 // ---------------------------------------------------------------------------
-async function remindDue(status, days, since, now) {
+export async function remindProposals(now = new Date()) {
+  const days = Number(await getConfig(CONFIG_KEYS.FUND_APPROVAL_REMIND_DAYS)) || 3;
   const cutoff = new Date(now.getTime() - days * DAY_MS);
-  return FundProposal.find({
-    status,
-    [since]: { $lte: cutoff },
+  const due = await FundProposal.find({
+    status: PENDING,
+    createdAt: { $lte: cutoff },
     $or: [{ lastRemindedAt: null }, { lastRemindedAt: { $lte: cutoff } }],
   }).lean();
-}
-
-async function claimReminder(p, now) {
-  const res = await FundProposal.updateOne(
-    { _id: p._id, status: p.status, lastRemindedAt: p.lastRemindedAt ?? null },
-    { $set: { lastRemindedAt: now } },
-  );
-  return res.modifiedCount === 1;
-}
-
-export async function remindProposals(now = new Date()) {
-  const [voteDays, verifyDays] = (await Promise.all([
-    getConfig(CONFIG_KEYS.FUND_APPROVAL_REMIND_DAYS),
-    getConfig(CONFIG_KEYS.FUND_VERIFY_REMIND_DAYS),
-  ])).map(Number);
+  if (!due.length) return 0;
+  const members = await boardMembers();
   let count = 0;
-
-  for (const p of await remindDue(PENDING_VERIFY, verifyDays || 3, 'submittedAt', now)) {
-    if (!(await claimReminder(p, now))) continue;
-    count += 1;
-    const age = Math.floor((now - new Date(p.submittedAt)) / DAY_MS);
-    const content = `${p.code} — ${p.title} (${formatVnd(p.amount)}) đã chờ Kế toán xác nhận ${age} ngày.`;
-    await safely(async () => {
-      await notifyRoles(['ACCOUNTANT'], {
-        type: NOTIFICATION_TYPES.FUND_APPROVAL, title: `Nhắc xác nhận đề xuất chi quỹ: ${p.title}`, content, refId: p._id, link: proposalLink(p), email: true,
-      });
-      await notifyRoles(['MANAGER'], {
-        type: NOTIFICATION_TYPES.FUND_APPROVAL, title: `Đề xuất chờ Kế toán quá ${verifyDays} ngày: ${p.title}`, content, refId: p._id, link: proposalLink(p),
-      });
-    });
-  }
-
-  const due = await remindDue(PENDING, voteDays || 3, 'verifiedAt', now);
-  // Dữ liệu cũ (trước bước xác nhận) không có verifiedAt → tính từ lúc tạo
-  const legacy = await FundProposal.find({
-    status: PENDING, verifiedAt: null, createdAt: { $lte: new Date(now.getTime() - (voteDays || 3) * DAY_MS) },
-    $or: [{ lastRemindedAt: null }, { lastRemindedAt: { $lte: new Date(now.getTime() - (voteDays || 3) * DAY_MS) } }],
-  }).lean();
-  const members = due.length || legacy.length ? await boardMembers() : [];
-  for (const p of [...due, ...legacy]) {
-    if (!(await claimReminder(p, now))) continue;
+  for (const p of due) {
+    const res = await FundProposal.updateOne(
+      { _id: p._id, status: PENDING, lastRemindedAt: p.lastRemindedAt ?? null },
+      { $set: { lastRemindedAt: now } },
+    );
+    if (!res.modifiedCount) continue;
     count += 1;
     const voted = new Set(p.votes.map((v) => String(v.memberId)));
     const waiting = members.filter((m) => !voted.has(String(m._id)));
-    const age = Math.floor((now - new Date(p.verifiedAt ?? p.createdAt)) / DAY_MS);
+    const age = Math.floor((now - new Date(p.createdAt)) / DAY_MS);
     const content = `${p.code} — ${p.title} (${formatVnd(p.amount)}) đã chờ biểu quyết ${age} ngày, còn ${waiting.length} thành viên chưa biểu quyết. Hệ thống không tự duyệt.`;
     await safely(async () => {
       await notify(
@@ -889,7 +768,7 @@ export async function remindProposals(now = new Date()) {
       );
       await notifyRoles(['MANAGER'], {
         type: NOTIFICATION_TYPES.FUND_APPROVAL,
-        title: `Đề xuất chi quỹ chờ quá ${voteDays} ngày: ${p.title}`,
+        title: `Đề xuất chi quỹ chờ quá ${days} ngày: ${p.title}`,
         content: `${content} Lập từ ${fmtDateVn(p.createdAt)}.`,
         refId: p._id,
         link: proposalLink(p),
