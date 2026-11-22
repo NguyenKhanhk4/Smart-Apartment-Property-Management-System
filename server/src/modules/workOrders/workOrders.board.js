@@ -166,7 +166,7 @@ export async function listAwaitingBoard() {
     .sort({ 'repair.acceptedAt': 1 })
     .lean();
   const proposals = wos.length
-    ? await FundProposal.find({ workOrderId: { $in: wos.map((w) => w._id) }, status: { $in: [APPROVED, FUND_PROPOSAL_STATUS.PENDING_VERIFY, FUND_PROPOSAL_STATUS.RETURNED, FUND_PROPOSAL_STATUS.PENDING] } })
+    ? await FundProposal.find({ workOrderId: { $in: wos.map((w) => w._id) }, status: { $in: [APPROVED, FUND_PROPOSAL_STATUS.PENDING] } })
       .select('code title amount status workOrderId')
       .lean()
     : [];
@@ -178,7 +178,7 @@ export async function listAwaitingBoard() {
     .populate('workAcceptedBy', 'fullName')
     .sort({ workAcceptedAt: 1 })
     .lean();
-  // ready: đề xuất đã được Ban quản trị duyệt → xác nhận nghiệm thu được. Phiếu khẩn cấp sửa trước, đề xuất còn chờ Kế toán /
+  // ready: đề xuất đã được Ban quản trị duyệt → xác nhận nghiệm thu được. Phiếu khẩn cấp sửa trước, đề xuất còn chờ
   // biểu quyết thì chưa xác nhận được (boardAccept chặn) → vẫn trả về để biết, nhưng không tính vào việc cần làm.
   const items = wos.map((w) => {
     const proposal = byWo.get(String(w._id)) ?? null;

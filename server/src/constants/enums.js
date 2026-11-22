@@ -277,12 +277,10 @@ export const FUND_PLAN_TYPES = Object.freeze({
   UNSCHEDULED: "UNSCHEDULED", // bảo trì đột xuất, bắt buộc ghi lý do
 });
 
-// Vòng đời đề xuất chi quỹ: Trưởng BQL lập → Chờ Kế toán xác nhận tài chính (trả lại thì Trưởng BQL sửa, gửi lại)
-// → Chờ Ban quản trị biểu quyết → Đã duyệt → Đã chi (Kế toán lập phiếu chi); hoặc Từ chối / Trưởng BQL rút lại.
+// Vòng đời đề xuất chi quỹ: Trưởng BQL lập → Chờ Ban quản trị biểu quyết → Đã duyệt → Đã chi (Kế toán lập phiếu chi);
+// hoặc Từ chối / Trưởng BQL rút lại. Không có bước Kế toán xác nhận: hệ thống tự kiểm số dư khả dụng lúc lập và lúc chốt.
 // Đủ tỷ lệ đồng ý > FUND_APPROVAL_RATIO số thành viên thì tự duyệt (nếu số dư khả dụng còn đủ).
 export const FUND_PROPOSAL_STATUS = Object.freeze({
-  PENDING_VERIFY: "PENDING_VERIFY", // chờ Kế toán xác nhận tài chính
-  RETURNED: "RETURNED", // Kế toán trả lại, chờ Trưởng BQL sửa và gửi lại
   PENDING: "PENDING", // chờ Ban quản trị biểu quyết
   APPROVED: "APPROVED",
   REJECTED: "REJECTED",
@@ -291,8 +289,6 @@ export const FUND_PROPOSAL_STATUS = Object.freeze({
 });
 // Đề xuất còn đang xử lý: mỗi phiếu bảo trì chỉ có 1 đề xuất như vậy (FundProposal.isOpen)
 export const FUND_PROPOSAL_OPEN_STATUSES = Object.freeze([
-  FUND_PROPOSAL_STATUS.PENDING_VERIFY,
-  FUND_PROPOSAL_STATUS.RETURNED,
   FUND_PROPOSAL_STATUS.PENDING,
 ]);
 
@@ -630,9 +626,6 @@ export const AUDIT_ACTIONS = Object.freeze({
   FUND_PROPOSAL_CANCELLED: 'FUND_PROPOSAL_CANCELLED',
   FUND_WORK_ACCEPTED: 'FUND_WORK_ACCEPTED',
   FUND_EXPENSE_RECORDED: 'FUND_EXPENSE_RECORDED',
-  FUND_PROPOSAL_VERIFIED: 'FUND_PROPOSAL_VERIFIED', // Kế toán xác nhận tài chính
-  FUND_PROPOSAL_RETURNED: 'FUND_PROPOSAL_RETURNED', // Kế toán trả lại
-  FUND_PROPOSAL_RESUBMITTED: 'FUND_PROPOSAL_RESUBMITTED', // Trưởng BQL sửa, gửi lại
   FUND_BOARD_ACCEPTED: 'FUND_BOARD_ACCEPTED', // Ban quản trị xác nhận nghiệm thu đề xuất không gắn phiếu
   CONFIG_CHANGED: 'CONFIG_CHANGED',
   COMPLAINT_CATEGORY_CHANGED: 'COMPLAINT_CATEGORY_CHANGED',
@@ -796,7 +789,6 @@ export const CONFIG_KEYS = Object.freeze({
   REPAIR_POSTPONE_MAX_DAYS: "REPAIR_POSTPONE_MAX_DAYS", // UC10: ngày xem lại tối đa N ngày kể từ hôm hoãn
   REPAIR_FUND_THRESHOLD: "REPAIR_FUND_THRESHOLD", // BR-E08: chi phí (cộng dồn) từ ngưỡng này bắt buộc dùng Quỹ
   REPAIR_OPERATING_WINDOW_DAYS: "REPAIR_OPERATING_WINDOW_DAYS", // BR-E08: cửa sổ cộng dồn chi phí vận hành cùng thiết bị
-  FUND_VERIFY_REMIND_DAYS: "FUND_VERIFY_REMIND_DAYS", // đề xuất chờ Kế toán xác nhận quá N ngày thì nhắc
   BOARD_ACCEPTANCE_REMIND_DAYS: "BOARD_ACCEPTANCE_REMIND_DAYS", // chờ Ban quản trị xác nhận nghiệm thu quá N ngày thì nhắc
   EMERGENCY_DOSSIER_DAYS: "EMERGENCY_DOSSIER_DAYS", // BR-E11: sửa khẩn cấp phải lập đề xuất quỹ trong N ngày
   OPERATING_EXPENSE_REMIND_DAYS: "OPERATING_EXPENSE_REMIND_DAYS", // phiếu vận hành xong quá N ngày chưa ghi chi thì nhắc Kế toán
@@ -1038,12 +1030,6 @@ export const DEFAULT_CONFIGS = Object.freeze([
     scope: CONFIG_SCOPES.BUSINESS,
     description:
       "Cộng dồn chi phí vận hành sửa cùng thiết bị trong N ngày gần nhất khi so với ngưỡng Quỹ. Đổi cần Ban quản trị xác nhận (BR-E08)",
-  },
-  {
-    key: CONFIG_KEYS.FUND_VERIFY_REMIND_DAYS,
-    value: 3,
-    scope: CONFIG_SCOPES.BUSINESS,
-    description: "Đề xuất chi quỹ chờ Kế toán xác nhận quá N ngày thì nhắc Kế toán và báo Trưởng BQL (BR-X8)",
   },
   {
     key: CONFIG_KEYS.BOARD_ACCEPTANCE_REMIND_DAYS,

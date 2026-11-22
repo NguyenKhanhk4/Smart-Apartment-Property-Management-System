@@ -1,7 +1,7 @@
 // UC10 – Nối phiếu bảo trì với module Quỹ bảo trì. Module quỹ gọi thẳng các hàm này, không qua sự kiện.
 //
 // Luồng thường: Trưởng BQL duyệt sửa bằng Quỹ → phiếu giữ "Chờ duyệt sửa", repair.costSource = FUND → Trưởng BQL lập đề xuất
-// (UC33) gắn workOrderId → Kế toán xác nhận tài chính (trả lại thì Trưởng BQL sửa, gửi lại) → Ban quản trị biểu quyết (UC34)
+// (UC33) gắn workOrderId → Ban quản trị biểu quyết (UC34)
 // → onFundDecision. Nghiệm thu: Trưởng BQL nghiệm thu kỹ thuật trên phiếu (markFundWorkAccepted) → Ban quản trị xác nhận
 // (workOrders.board.js) → Kế toán lập phiếu chi.
 // Luồng khẩn cấp (BR-E11): phiếu đã Đang sửa trước khi có đề xuất; kết quả biểu quyết không đổi trạng thái phiếu.
@@ -15,7 +15,7 @@ import { ApiError } from '../../utils/ApiError.js';
 
 const S = WORK_ORDER_STATUS;
 const LOOSE = { strictQuery: false };
-export const FUND_DECISIONS = Object.freeze({ APPROVED: 'APPROVED', REJECTED: 'REJECTED', CANCELLED: 'CANCELLED', RETURNED: 'RETURNED' });
+export const FUND_DECISIONS = Object.freeze({ APPROVED: 'APPROVED', REJECTED: 'REJECTED', CANCELLED: 'CANCELLED' });
 // Phiếu khẩn cấp được lập đề xuất khi đang sửa / chờ nghiệm thu (sửa trước, hồ sơ sau)
 const EMERGENCY_FUNDABLE = [S.UNDER_REPAIR, S.AWAITING_ACCEPTANCE, S.AWAITING_BOARD_ACCEPTANCE];
 
@@ -31,14 +31,14 @@ const assetLabel = async (assetId) => {
   return a ? `${a.code} – ${a.name}` : 'thiết bị';
 };
 
-/** Phiếu đang có đề xuất chi quỹ còn xử lý (chờ Kế toán / bị trả lại / chờ Ban quản trị biểu quyết) */
+/** Phiếu đang có đề xuất chi quỹ chờ Ban quản trị biểu quyết */
 export async function hasPendingFundProposal(workOrderId, session = null) {
   return Boolean(await FundProposal.exists({ workOrderId, isOpen: true }).setOptions(LOOSE).session(session));
 }
 
 /**
  * Đề xuất chi quỹ đang xử lý của các phiếu nguồn Quỹ (1 truy vấn cho cả trang).
- * @returns {Promise<Map<string, { _id, code, status }>>} workOrderId → đề xuất (status cho biết đang chờ Kế toán hay Ban quản trị)
+ * @returns {Promise<Map<string, { _id, code, status }>>} workOrderId → đề xuất đang chờ biểu quyết
  */
 export async function pendingFundProposals(workOrders) {
   const ids = workOrders.filter((w) => w.repair?.costSource === REPAIR_COST_SOURCES.FUND).map((w) => w._id);
@@ -50,11 +50,10 @@ export async function pendingFundProposals(workOrders) {
   return new Map(docs.map((d) => [String(d.workOrderId), { _id: d._id, code: d.code, status: d.status }]));
 }
 
-/** Số phiếu (trong `filter`) có đề xuất chi quỹ đang chờ Kế toán hoặc Ban quản trị (không tính đề xuất bị trả lại) */
+/** Số phiếu (trong `filter`) có đề xuất chi quỹ đang chờ Ban quản trị biểu quyết */
 export async function countAwaitingFund(filter) {
   const woIds = await FundProposal.distinct('workOrderId', {
     isOpen: true,
-    status: { $ne: FUND_PROPOSAL_STATUS.RETURNED },
     workOrderId: { $ne: null },
   }).setOptions(LOOSE);
   if (!woIds.length) return 0;
@@ -106,15 +105,14 @@ export async function fundPrefill(workOrderId) {
 }
 
 const STEP_ACTION = {
-  APPROVED: 'FUND_APPROVED', REJECTED: 'FUND_REJECTED', CANCELLED: 'FUND_CANCELLED', RETURNED: 'FUND_RETURNED',
+  APPROVED: 'FUND_APPROVED', REJECTED: 'FUND_REJECTED', CANCELLED: 'FUND_CANCELLED',
 };
 
 /**
- * Module quỹ gọi SAU KHI đã lưu kết quả đề xuất (Kế toán trả lại, vote chốt, Trưởng BQL rút).
+ * Module quỹ gọi SAU KHI đã lưu kết quả đề xuất (vote chốt, Trưởng BQL rút).
  * Phiếu thường (còn Chờ duyệt sửa, nguồn Quỹ):
  *   - APPROVED: phiếu → Đang sửa, báo KTV (MSG-E07).
- *   - REJECTED / CANCELLED: bỏ nguồn Quỹ, báo Trưởng BQL quyết định lại (UC10 bước 5a).
- *   - RETURNED: chỉ ghi lịch sử (Trưởng BQL sửa đề xuất và gửi lại).
+ *   - REJECTED / CANCELLED: bỏ nguồn Quỹ, báo Trưởng BQL quyết định lại với các lựa chọn còn hợp lệ (UC10 bước 5a).
  * Phiếu khẩn cấp (đã sửa trước): không đổi trạng thái; bị từ chối / rút thì báo Ban quản trị + Trưởng BQL xử lý.
  * @returns {Promise<boolean>} true nếu phiếu được cập nhật
  */
@@ -124,16 +122,15 @@ export async function onFundDecision(workOrderId, decision, { user = null, propo
   if (!current || current.repair?.costSource !== REPAIR_COST_SOURCES.FUND) return false;
   const emergency = Boolean(current.repair.isEmergency);
   const approved = decision === FUND_DECISIONS.APPROVED;
-  const returned = decision === FUND_DECISIONS.RETURNED;
   const step = {
-    action: emergency && !approved && !returned ? 'FUND_REJECTED_EMERGENCY' : STEP_ACTION[decision],
+    action: emergency && !approved ? 'FUND_REJECTED_EMERGENCY' : STEP_ACTION[decision],
     by: user?.id ?? null,
     at: now,
     refId: proposalId,
   };
 
   let wo;
-  if (emergency || returned) {
+  if (emergency) {
     // Chỉ ghi lịch sử, không đổi trạng thái
     wo = await WorkOrder.findOneAndUpdate(
       { _id: workOrderId, 'repair.costSource': REPAIR_COST_SOURCES.FUND },
@@ -150,7 +147,6 @@ export async function onFundDecision(workOrderId, decision, { user = null, propo
     ).lean();
   }
   if (!wo) return false;
-  if (returned) return true;
 
   const changed = !emergency;
   await logAudit({
@@ -181,22 +177,46 @@ export async function onFundDecision(workOrderId, decision, { user = null, propo
     });
     return true;
   }
-  await safely(() => (approved
-    ? notify(wo.assignedTo, {
-        type: NOTIFICATION_TYPES.MAINTENANCE,
-        title: 'Sửa chữa đã được duyệt',
-        content: `Sửa chữa ${label} đã được duyệt (Quỹ bảo trì). Khi nhà thầu sửa xong, tải biên bản nghiệm thu lên phiếu.`, // MSG-E07
-        refId: wo._id,
-        link: '/app/my-work-orders',
-      })
-    : notifyRoles(['MANAGER'], {
-        type: NOTIFICATION_TYPES.MAINTENANCE,
-        title: decision === FUND_DECISIONS.REJECTED ? 'Ban quản trị từ chối chi quỹ' : 'Đề xuất chi quỹ đã bị rút',
-        content: `${decision === FUND_DECISIONS.REJECTED ? 'Ban quản trị từ chối' : 'Đã rút'} đề xuất chi quỹ sửa ${label}. Vui lòng quyết định lại: chi phí vận hành, tạm hoãn hoặc ngừng sử dụng thiết bị.`,
-        refId: wo._id,
-        link: '/app/repair-approvals',
-      })));
+  if (approved) {
+    await safely(() => notify(wo.assignedTo, {
+      type: NOTIFICATION_TYPES.MAINTENANCE,
+      title: 'Sửa chữa đã được duyệt',
+      content: `Sửa chữa ${label} đã được duyệt (Quỹ bảo trì). Khi nhà thầu sửa xong, tải biên bản nghiệm thu lên phiếu.`, // MSG-E07
+      refId: wo._id,
+      link: '/app/my-work-orders',
+    }));
+    return true;
+  }
+  const options = await redecideOptions(wo, now);
+  await safely(() => notifyRoles(['MANAGER'], {
+    type: NOTIFICATION_TYPES.MAINTENANCE,
+    title: decision === FUND_DECISIONS.REJECTED ? 'Ban quản trị từ chối chi quỹ' : 'Đề xuất chi quỹ đã bị rút',
+    content: `${decision === FUND_DECISIONS.REJECTED ? 'Ban quản trị từ chối' : 'Đã rút'} đề xuất chi quỹ sửa ${label}. Vui lòng quyết định lại: ${options}.`,
+    refId: wo._id,
+    link: '/app/repair-approvals',
+  }));
   return true;
+}
+
+/**
+ * Các lựa chọn Trưởng BQL còn có khi quyết định lại, theo chính sách nguồn chi của phiếu (BR-E08, BR-E10): bắt buộc Quỹ thì
+ * không gợi ý chi phí vận hành; còn bảo hành thì gợi ý bảo hành. Lỗi tính chính sách thì dùng câu đầy đủ.
+ */
+async function redecideOptions(wo, now) {
+  try {
+    // import động: workOrders.decision.js import ngược file này
+    const { repairPolicy } = await import('./workOrders.decision.js');
+    const policy = await repairPolicy(wo, now);
+    const sources = [
+      policy.warrantyActive && 'sửa theo bảo hành',
+      policy.fundRequired ? 'lập lại đề xuất chi quỹ (chi phí từ ngưỡng, bắt buộc dùng Quỹ)' : 'chi phí vận hành',
+      policy.fundRequired ? null : 'lập lại đề xuất chi quỹ',
+    ].filter(Boolean);
+    return [...sources, 'tạm hoãn hoặc ngừng sử dụng thiết bị'].join(', ');
+  } catch (err) {
+    console.error('[UC10] Không tính được chính sách nguồn chi:', err);
+    return 'chọn nguồn chi khác, tạm hoãn hoặc ngừng sử dụng thiết bị';
+  }
 }
 
 /** Trưởng BQL nghiệm thu kỹ thuật trên phiếu → đánh dấu bên đề xuất đã duyệt (cùng transaction với nghiệm thu) */

@@ -55,7 +55,7 @@ export default function FundPage() {
   const [txType, setTxType] = useState();
   const [txPage, setTxPage] = useState(1);
   // Mặc định lọc việc của mình: Ban quản trị chờ biểu quyết, Kế toán chờ xác nhận
-  const [status, setStatus] = useState(isBoard ? ['PENDING'] : isAccountant ? ['PENDING_VERIFY'] : []);
+  const [status, setStatus] = useState(isBoard ? ['PENDING'] : []);
   const [expenseOf, setExpenseOf] = useState(null); // phiếu vận hành đang ghi chi
   const [rejecting, setRejecting] = useState(null); // tham số Ban quản trị từ chối
   const [pPage, setPPage] = useState(1);
@@ -123,9 +123,7 @@ export default function FundPage() {
                 <Statistic title="Còn có thể đề xuất chi" value={formatMoney(o.available)} />
                 <Statistic title="Thu từ đầu năm" value={formatMoney(o.yearIncome)} valueStyle={{ color: '#389e0d' }} />
                 <Statistic title="Chi từ đầu năm" value={formatMoney(o.yearExpense)} valueStyle={{ color: '#cf1322' }} />
-                <Statistic title="Chờ Kế toán xác nhận" value={o.verifyCount ?? 0} />
                 <Statistic title="Chờ Ban quản trị biểu quyết" value={o.pendingCount} />
-                {o.returnedCount > 0 && <Statistic title="Bị trả lại" value={o.returnedCount} valueStyle={{ color: '#d46b08' }} />}
                 {o.emergencyCount > 0 && <Statistic title="Sửa khẩn cấp từ đầu năm" value={o.emergencyCount} valueStyle={{ color: '#cf1322' }} />}
               </Flex>
             </Flex>
@@ -503,51 +501,37 @@ function OperatingExpenseModal({ workOrder, onClose, onDone }) {
 }
 
 /**
- * Trưởng BQL lập đề xuất, hoặc sửa và gửi lại đề xuất bị trả lại (`editing`).
+ * Trưởng BQL lập đề xuất → chờ Ban quản trị biểu quyết.
  * prefill (UC10): { workOrderId, title, description, amount, estimatedCost, attachmentUrls, isEmergency, planType?, urgentReason? }
  */
-export function ProposalModal({ open, available, prefill, editing, onClose, onDone }) {
+function ProposalModal({ open, available, prefill, onClose, onDone }) {
   const [form] = Form.useForm();
   const planType = Form.useWatch('planType', form);
-  const [run, loading] = useAction(
-    ({ images, ...v }) => (editing ? fundApi.resubmit(editing._id, v, toFiles(images)) : fundApi.createProposal(v, toFiles(images))),
-    { onDone: async (res) => (onClose(), await onDone?.(res)) },
-  );
-  const linked = prefill ?? (editing?.workOrderId ? editing : null);
-  const initialValues = editing
+  const [run, loading] = useAction(({ images, ...v }) => fundApi.createProposal(v, toFiles(images)), {
+    onDone: async (res) => (onClose(), await onDone?.(res)),
+  });
+  const initialValues = prefill
     ? {
-        title: editing.title,
-        description: editing.description,
-        amount: editing.amount,
-        planType: editing.planType,
-        planRef: editing.planRef,
-        urgentReason: editing.urgentReason,
-        contractNo: editing.contractNo,
-        largeRepair: editing.largeRepair,
+        planType: 'UNSCHEDULED', // hư hỏng phát hiện khi kiểm tra định kỳ — thường là bảo trì đột xuất
+        urgentReason: prefill.urgentReason, // sửa khẩn cấp: lý do khẩn cấp
+        largeRepair: true,
+        workOrderId: prefill.workOrderId,
+        title: prefill.title,
+        description: prefill.description,
+        amount: prefill.amount,
       }
-    : prefill
-      ? {
-          planType: 'UNSCHEDULED', // hư hỏng phát hiện khi kiểm tra định kỳ — thường là bảo trì đột xuất
-          urgentReason: prefill.urgentReason, // sửa khẩn cấp: lý do khẩn cấp
-          largeRepair: true,
-          workOrderId: prefill.workOrderId,
-          title: prefill.title,
-          description: prefill.description,
-          amount: prefill.amount,
-        }
-      : { planType: 'ANNUAL_PLAN', largeRepair: false };
+    : { planType: 'ANNUAL_PLAN', largeRepair: false };
   return (
     <Modal
       open={open}
-      title={editing ? `Sửa và gửi lại ${editing.code ?? 'đề xuất'}` : 'Lập đề xuất chi quỹ'}
-      okText="Gửi Kế toán xác nhận"
+      title="Lập đề xuất chi quỹ"
+      okText="Gửi Ban quản trị biểu quyết"
       width="min(640px, 94vw)"
       confirmLoading={loading}
       onCancel={onClose}
       onOk={() => form.submit()}
       destroyOnHidden
     >
-      {editing?.returnReason && <Alert className="mb-3" type="warning" showIcon message="Kế toán trả lại" description={editing.returnReason} />}
       {available != null && <Alert className="mb-3" type="info" showIcon message={`Còn có thể đề xuất chi tối đa ${formatMoney(available)}`} />}
       {prefill && (
         <Alert
@@ -555,7 +539,7 @@ export function ProposalModal({ open, available, prefill, editing, onClose, onDo
           type={prefill.isEmergency ? 'warning' : 'success'}
           showIcon
           message={prefill.isEmergency ? 'Hồ sơ cho sửa chữa khẩn cấp (đã sửa trước)' : 'Lập từ phiếu bảo trì đã chọn Quỹ bảo trì'}
-          description={`Chi phí kỹ thuật viên dự kiến ${formatMoney(prefill.estimatedCost)}, sửa theo báo giá thật nếu khác. ${prefill.attachmentUrls?.length ? `${prefill.attachmentUrls.length} ảnh hư hỏng tự đính kèm. ` : ''}Kế toán xác nhận, Ban quản trị duyệt; nghiệm thu làm trên phiếu bảo trì.`}
+          description={`Chi phí kỹ thuật viên dự kiến ${formatMoney(prefill.estimatedCost)}, sửa theo báo giá thật nếu khác. ${prefill.attachmentUrls?.length ? `${prefill.attachmentUrls.length} ảnh hư hỏng tự đính kèm. ` : ''}Ban quản trị biểu quyết; nghiệm thu làm trên phiếu bảo trì.`}
         />
       )}
       <Form form={form} layout="vertical" preserve={false} initialValues={initialValues} onFinish={(v) => run(v).catch(() => {})}>
@@ -572,7 +556,7 @@ export function ProposalModal({ open, available, prefill, editing, onClose, onDo
           <InputNumber {...moneyInputProps} min={1} style={{ width: '100%' }} />
         </Form.Item>
         <Form.Item name="planType" label="Loại kế hoạch">
-          <Radio.Group options={enumOpts(FUND_PLAN_TYPES)} disabled={Boolean(linked?.isEmergency)} />
+          <Radio.Group options={enumOpts(FUND_PLAN_TYPES)} disabled={Boolean(prefill?.isEmergency)} />
         </Form.Item>
         {planType === 'UNSCHEDULED' ? (
           <Form.Item name="urgentReason" label="Lý do bảo trì đột xuất" rules={[{ required: true, message: 'Bảo trì đột xuất phải ghi lý do' }]}>
@@ -583,18 +567,27 @@ export function ProposalModal({ open, available, prefill, editing, onClose, onDo
             <Input maxLength={200} placeholder="Vd: KH bảo trì 2026 — Nghị quyết Hội nghị 03/2026" />
           </Form.Item>
         )}
-        <Form.Item name="contractNo" label="Số hợp đồng / báo giá nhà thầu">
+        {/* Ban quản trị biểu quyết dựa trên hồ sơ: bắt buộc ảnh báo giá hoặc số hợp đồng / báo giá (server cũng chặn).
+            Ảnh hư hỏng tự đính kèm từ phiếu bảo trì không tính là báo giá. */}
+        <Form.Item
+          name="contractNo"
+          label="Số hợp đồng / báo giá nhà thầu"
+          dependencies={['images']}
+          extra="Bắt buộc ghi số này hoặc đính kèm ít nhất 1 ảnh báo giá bên dưới."
+          rules={[
+            ({ getFieldValue }) => ({
+              validator: (_, v) => (v?.trim() || getFieldValue('images')?.length
+                ? Promise.resolve()
+                : Promise.reject(new Error('Ghi số hợp đồng / báo giá hoặc đính kèm ảnh báo giá'))),
+            }),
+          ]}
+        >
           <Input maxLength={100} />
         </Form.Item>
         <Form.Item name="largeRepair" valuePropName="checked" extra="Sửa chữa lớn (thiết bị, kết cấu): Kế toán chỉ lập phiếu chi sau khi Trưởng BQL nghiệm thu và Ban quản trị xác nhận.">
-          <Checkbox disabled={Boolean(linked) || Boolean(editing)}>Sửa chữa lớn</Checkbox>
+          <Checkbox disabled={Boolean(prefill)}>Sửa chữa lớn</Checkbox>
         </Form.Item>
-        {editing && (
-          <Form.Item name="note" label="Đã sửa gì" rules={[{ required: true, whitespace: true, min: 5, message: 'Ghi rõ đã sửa gì (tối thiểu 5 ký tự)' }]}>
-            <Input.TextArea rows={2} maxLength={1000} placeholder="Vd: bổ sung báo giá thứ 2, giảm số tiền" />
-          </Form.Item>
-        )}
-        <EvidencePhotosField name="images" label={editing ? 'Ảnh báo giá bổ sung' : 'Ảnh báo giá'} required={false} />
+        <EvidencePhotosField name="images" label="Ảnh báo giá" required={false} />
       </Form>
     </Modal>
   );

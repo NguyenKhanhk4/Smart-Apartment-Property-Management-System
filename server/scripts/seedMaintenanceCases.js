@@ -26,14 +26,14 @@ const NEW_ASSETS = [
   { code: 'TB-012', name: 'Bơm tăng áp Block C', category: 'PUMP', building: 'T3', location: 'Tầng mái', warrantyDays: -60, manufacturer: 'Grundfos' },
 ];
 const CASES = [
-  '1. TB-001: Quỹ 180tr — Kế toán trả lại → gửi lại → xác nhận → 2/2 đồng ý → nghiệm thu 2 lớp → chi 175tr (lý do chênh lệch)',
+  '1. TB-001: Quỹ 180tr — Ban quản trị đồng ý → nghiệm thu 2 lớp → chi 175tr (lý do chênh lệch)',
   '2. TB-002: Quỹ 95tr đã duyệt, sửa xong, Trưởng BQL nghiệm thu kỹ thuật → chờ Ban quản trị xác nhận',
-  '3. TB-004: Quỹ 65tr, Kế toán trả lại (thiếu báo giá) → Trưởng BQL cần sửa, gửi lại',
-  '4. TB-005: Sửa khẩn cấp (kẹt người) → Đang sửa; đề xuất 120tr lập sau, chờ Kế toán',
+  '3. TB-004: Quỹ 65tr, Trưởng BQL rút đề xuất đang chờ biểu quyết → phiếu về chờ quyết định lại',
+  '4. TB-005: Sửa khẩn cấp (kẹt người) → Đang sửa; đề xuất 120tr lập sau, chờ Ban quản trị biểu quyết',
   '5. TB-006: Vận hành 40tr đã xong + ghi chi; phản ánh mới 15tr → cộng dồn 55tr, bắt buộc Quỹ (chờ quyết định)',
   '6. TB-008: Quỹ 85tr bị Ban quản trị từ chối → Trưởng BQL tạm hoãn 20 ngày',
   '7. TB-009 (mới, còn bảo hành): nguồn Bảo hành, KTV đã tải biên bản → chờ nghiệm thu',
-  '8. TB-010 (mới, hết bảo hành): Quỹ 70tr, Kế toán xác nhận, 1 thành viên đồng ý → đang chờ biểu quyết',
+  '8. TB-010 (mới, hết bảo hành): Quỹ 70tr, 1 thành viên đồng ý → đang chờ biểu quyết',
   '9. TB-011 (mới): hỏng nặng → ngừng sử dụng, phiếu đóng',
   '10. TB-012 (mới): kiểm tra định kỳ Đạt → hoàn thành',
 ];
@@ -125,6 +125,14 @@ export async function seedMaintenanceCases({ apply = false, log = console.log, n
     };
     const report = (tech, wo, day, faultDesc, estimatedCost, vendorName, vendorProposal) =>
       repair.reportFault(tech, wo._id, { faultDesc, vendorName, vendorProposal, estimatedCost }, PHOTOS, at(day, 10));
+    /** Thành viên lần lượt biểu quyết tới khi đề xuất chốt (đủ tỷ lệ hoặc không còn khả năng đạt) */
+    const voteUntilDone = async (p, decision, comment, now) => {
+      for (const m of members) {
+        const r = await fund.vote(m, p._id, { decision, comment }, { now });
+        if (r.outcome) return r.outcome;
+      }
+      throw new Error(`Đề xuất ${p.code} chưa chốt sau khi mọi thành viên biểu quyết`);
+    };
     const propose = (wo, day, extra) => fund.createProposal(manager, {
       planType: 'UNSCHEDULED', urgentReason: 'Hư hỏng phát hiện khi kiểm tra định kỳ, ảnh hưởng an toàn cư dân', workOrderId: String(wo._id), ...extra,
     }, PHOTOS, { now: at(day, 14) });
@@ -137,10 +145,7 @@ export async function seedMaintenanceCases({ apply = false, log = console.log, n
       await decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'FUND', comment: 'Chi phí lớn, sửa bằng Quỹ' }, at(15, 9));
       const pre = await prefillOf(wo);
       const p = await propose(wo, 15, { title: pre.title, description: pre.description, amount: 180_000_000, contractNo: 'BG-TB-2611' });
-      await fund.returnProposal(accountant, p._id, { reason: 'Thiếu báo giá đối chứng của nhà thầu thứ 2' }, { now: at(14, 10) });
-      await fund.resubmitProposal(manager, p._id, { note: 'Bổ sung báo giá Công ty Thang máy Sài Gòn (185tr)' }, PHOTOS, { now: at(14, 15) });
-      await fund.verifyProposal(accountant, p._id, { note: 'Đã so 2 báo giá, chọn giá thấp hơn; số dư khả dụng đủ' }, { now: at(13, 9) });
-      for (const m of members) await fund.vote(m, p._id, { decision: 'AGREE', comment: 'Đồng ý, ưu tiên an toàn' }, { now: at(12, 10) });
+      await voteUntilDone(p, 'AGREE', 'Đồng ý, ưu tiên an toàn', at(12, 10));
       await repair.uploadAcceptance(t1, wo._id, { note: 'Nhà thầu đã thay cáp và má phanh, chạy thử 50 chuyến' }, DOCS, at(5, 16));
       await repair.acceptRepair(manager, wo._id, at(4, 9));
       await board.boardAccept(members[0], wo._id, { note: 'Đã xem biên bản kiểm định an toàn' }, at(3, 10));
@@ -156,20 +161,19 @@ export async function seedMaintenanceCases({ apply = false, log = console.log, n
       await decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'FUND' }, at(10, 9));
       const pre = await prefillOf(wo);
       const p = await propose(wo, 10, { title: pre.title, description: pre.description, amount: 95_000_000 });
-      await fund.verifyProposal(accountant, p._id, { note: 'Báo giá hợp lệ' }, { now: at(9, 9) });
-      for (const m of members) await fund.vote(m, p._id, { decision: 'AGREE' }, { now: at(8, 10) });
+      await voteUntilDone(p, 'AGREE', null, at(8, 10));
       await repair.uploadAcceptance(t2, wo._id, { note: 'Đã thay bo cửa, kiểm tra 20 lần đóng mở' }, DOCS, at(2, 15));
       await repair.acceptRepair(manager, wo._id, at(1, 9));
     }
 
-    // 3. TB-004: Kế toán trả lại
+    // 3. TB-004: Trưởng BQL rút đề xuất đang chờ biểu quyết → phiếu bỏ nguồn Quỹ, chờ quyết định lại
     {
       const { wo } = await inspect('TB-004', t1, 6, { note: 'Bơm chữa cháy không đạt áp lực' });
       await report(t1, wo, 6, 'Bơm chữa cháy chính không đạt áp lực 6 bar, gioăng rò rỉ', 65_000_000, 'Công ty PCCC Hưng Phát', 'Đại tu bơm, thay gioăng và van một chiều');
       await decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'FUND' }, at(5, 9));
       const pre = await prefillOf(wo);
       const p = await propose(wo, 5, { title: pre.title, description: pre.description, amount: 65_000_000 });
-      await fund.returnProposal(accountant, p._id, { reason: 'Báo giá chưa có dấu công ty, đề nghị bổ sung bản có dấu' }, { now: at(4, 10) });
+      await fund.cancelProposal(manager, p._id, { reason: 'Nhà thầu rút báo giá, chờ báo giá mới' }, { now: at(4, 10) });
     }
 
     // 4. TB-005: sửa khẩn cấp, đề xuất lập sau
@@ -202,8 +206,7 @@ export async function seedMaintenanceCases({ apply = false, log = console.log, n
       await decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'FUND' }, at(8, 9));
       const pre = await prefillOf(wo);
       const p = await propose(wo, 8, { title: pre.title, description: pre.description, amount: 85_000_000 });
-      await fund.verifyProposal(accountant, p._id, { note: 'Số dư đủ' }, { now: at(7, 9) });
-      await fund.vote(members[0], p._id, { decision: 'DISAGREE', comment: 'Chỉ cần thay 3 zone lỗi, không thay cả tủ' }, { now: at(7, 15) });
+      await voteUntilDone(p, 'DISAGREE', 'Chỉ cần thay 3 zone lỗi, không thay cả tủ', at(7, 15));
       await decision.decideRepair(manager, wo._id, {
         decision: 'POSTPONE', comment: 'Chờ nhà thầu báo giá lại phương án thay 3 zone', reviewDate: at(-14, 0),
       }, at(6, 9));
@@ -224,7 +227,6 @@ export async function seedMaintenanceCases({ apply = false, log = console.log, n
       await decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'FUND' }, at(4, 9));
       const pre = await prefillOf(wo);
       const p = await propose(wo, 4, { title: pre.title, description: pre.description, amount: 70_000_000 });
-      await fund.verifyProposal(accountant, p._id, { note: 'Báo giá hợp lệ, số dư đủ' }, { now: at(3, 9) });
       await fund.vote(members[0], p._id, { decision: 'AGREE', comment: 'Đồng ý' }, { now: at(2, 10) });
     }
 

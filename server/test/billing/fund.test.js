@@ -1,7 +1,7 @@
 // Bước 10 — Quỹ bảo trì 2% (UC33, UC34) theo hướng mới: Trưởng BQL lập đề xuất → Kế toán xác nhận tài chính / trả lại →
 // Ban quản trị biểu quyết theo tỷ lệ (kiểm lại số dư khả dụng lúc chốt) → nghiệm thu 2 lớp với sửa chữa lớn → phiếu chi
 // (thấp hơn số duyệt phải có lý do), nhắc quá N ngày (không tự duyệt).
-import { after, afterEach, before, test } from 'node:test';
+import { after, afterEach, before, beforeEach, mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { AuditLog, FundProposal, FundTransaction, MaintenanceFund, Notification } from '../../src/models/index.js';
 import {
@@ -16,18 +16,20 @@ import {
   recordExpense,
   recordIncome,
   remindProposals,
-  resubmitProposal,
-  returnProposal,
-  verifyProposal,
   vote,
 } from '../../src/modules/fund/fund.service.js';
 import { DAY_MS } from '../../src/utils/time.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
+import { stubCloudinary } from '../helpers/equipment.js';
 import { asUser, createManager, createUser } from '../helpers/fixtures.js';
 import { USERS, startApp } from '../helpers/http.js';
 
 before(connectTestDB);
-afterEach(clearTestDB);
+beforeEach(() => stubCloudinary());
+afterEach(async () => {
+  mock.restoreAll();
+  await clearTestDB();
+});
 after(closeTestDB);
 
 const NOW = new Date('2026-11-07T03:00:00Z');
@@ -44,11 +46,8 @@ async function setup({ boardSize = 3, balance = 500_000_000 } = {}) {
     await recordIncome(accountant, { incomeSource: 'INITIAL_HANDOVER', amount: balance, documentNo: 'BB-001' }, [], { now: NOW });
   }
   const manager = asUser(managerDoc);
-  /** Trưởng BQL lập + Kế toán xác nhận → chờ biểu quyết */
-  const submit = async (extra = {}) => {
-    const p = await createProposal(manager, proposalBody(extra), [], { now: NOW });
-    return verifyProposal(accountant, p._id, { note: 'Đủ chứng từ' }, { now: NOW });
-  };
+  /** Trưởng BQL lập → chờ biểu quyết ngay */
+  const submit = (extra = {}) => createProposal(manager, proposalBody(extra), [], { now: NOW });
   const approve = async (p) => {
     await vote(board[0], p._id, { decision: 'AGREE' }, { now: NOW });
     return vote(board[1], p._id, { decision: 'AGREE' }, { now: NOW });
@@ -62,6 +61,7 @@ const proposalBody = (extra = {}) => ({
   amount: 100_000_000,
   planType: 'ANNUAL_PLAN',
   planRef: 'KH bảo trì 2026 (NQ Hội nghị 03/2026)',
+  contractNo: 'BG-2026-01', // chứng từ bắt buộc: số báo giá hoặc ảnh báo giá
   ...extra,
 });
 
@@ -78,7 +78,7 @@ test('thu quỹ có chứng từ: phiếu thu PTQ, cộng số dư, ghi Audit Lo
   );
 });
 
-test('Trưởng BQL lập đề xuất → chờ Kế toán (chỉ báo Kế toán); Kế toán xác nhận → chờ biểu quyết, báo Ban quản trị kèm nhận xét', async () => {
+test('Trưởng BQL lập đề xuất → chờ Ban quản trị biểu quyết ngay, báo Ban quản trị kèm số dư khả dụng (Kế toán không được báo)', async () => {
   const { accountant, manager, board } = await setup({ balance: 150_000_000 });
   await assert.rejects(createProposal(manager, proposalBody({ planRef: '' }), [], { now: NOW }), /Kế hoạch bảo trì năm/);
   await assert.rejects(createProposal(manager, proposalBody({ planType: 'UNSCHEDULED' }), [], { now: NOW }), /lý do/);
@@ -86,51 +86,30 @@ test('Trưởng BQL lập đề xuất → chờ Kế toán (chỉ báo Kế to�
     errorCode: 'FUND_INSUFFICIENT_BALANCE',
   });
 
+  // Không có ảnh báo giá lẫn số hợp đồng / báo giá → chặn (không còn bước Kế toán kiểm hồ sơ)
+  await assert.rejects(createProposal(manager, proposalBody({ contractNo: '' }), [], { now: NOW }), (e) => {
+    assert.equal(e.errorCode, 'VALIDATION_ERROR');
+    assert.deepEqual(e.details.map((d) => d.field), ['images', 'contractNo']);
+    return true;
+  });
+  const photo = { originalname: 'bao-gia.jpg', mimetype: 'image/jpeg', buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0]) };
+  const withPhoto = await createProposal(manager, proposalBody({ title: 'Sửa cổng', contractNo: '', amount: 1_000_000 }), [photo], { now: NOW });
+  assert.equal(withPhoto.attachmentUrls.length, 1); // chỉ ảnh báo giá, không số hợp đồng → được
+  await cancelProposal(manager, withPhoto._id, { reason: 'Dùng để kiểm điều kiện chứng từ' });
+
   const p = await createProposal(manager, proposalBody({ contractNo: 'HĐ-NT-07' }), [], { now: NOW });
-  assert.match(p.code, /^DXQ-202611-00001$/);
-  assert.equal(p.status, 'PENDING_VERIFY');
+  assert.match(p.code, /^DXQ-202611-00002$/);
+  assert.equal(p.status, 'PENDING');
   assert.equal(p.isOpen, true);
   assert.equal(p.contractNo, 'HĐ-NT-07');
-  assert.equal(await Notification.countDocuments({ userId: accountant.id, title: /cần xác nhận tài chính/ }), 1);
-  for (const m of board) assert.equal(await Notification.countDocuments({ userId: m.id }), 0, 'Ban quản trị chưa được báo');
-  // Ban quản trị chưa biểu quyết được khi Kế toán chưa xác nhận
-  await assert.rejects(vote(board[0], p._id, { decision: 'AGREE' }, { now: NOW }), /chưa được Kế toán xác nhận/);
-  // Người lập không tự xác nhận
-  await assert.rejects(verifyProposal(manager, p._id, {}, { now: NOW }), { errorCode: 'FORBIDDEN_ROLE' });
-
-  const verified = await verifyProposal(accountant, p._id, { note: 'Báo giá hợp lệ' }, { now: NOW });
-  assert.equal(verified.status, 'PENDING');
-  assert.equal(verified.balanceAtVerify, 150_000_000);
-  assert.equal(verified.verifyNote, 'Báo giá hợp lệ');
+  assert.deepEqual(p.history.map((h) => h.action), ['SUBMITTED']);
   for (const m of board) {
-    const n = await Notification.findOne({ userId: m.id, type: 'FUND_APPROVAL' }).lean();
-    assert.match(n.content, /Kế toán đã xác nhận: số dư khả dụng 150\.000\.000.*Báo giá hợp lệ/);
+    const n = await Notification.findOne({ userId: m.id, title: /chờ biểu quyết: Thay bơm/ }).lean();
+    assert.match(n.content, /Số dư khả dụng hiện tại 150\.000\.000/);
   }
-  await assert.rejects(verifyProposal(accountant, p._id, {}, { now: NOW }), { errorCode: 'PROPOSAL_NOT_AWAITING_VERIFY' });
-  assert.equal(await AuditLog.countDocuments({ action: 'FUND_PROPOSAL_VERIFIED' }), 1);
-});
-
-test('Kế toán trả lại (bắt buộc lý do) → Trưởng BQL sửa, gửi lại → xác nhận; lịch sử giữ đủ các vòng', async () => {
-  const { accountant, manager, managerDoc } = await setup();
-  const p = await createProposal(manager, proposalBody(), [], { now: NOW });
-  await assert.rejects(returnProposal(accountant, p._id, { reason: 'ab' }, { now: NOW }), { errorCode: 'VALIDATION_ERROR' });
-  await assert.rejects(resubmitProposal(manager, p._id, {}, [], { now: NOW }), { errorCode: 'PROPOSAL_NOT_RETURNED' });
-
-  const returned = await returnProposal(accountant, p._id, { reason: 'Thiếu báo giá thứ 2' }, { now: NOW });
-  assert.equal(returned.status, 'RETURNED');
-  assert.equal(returned.isOpen, true);
-  assert.equal(returned.returnCount, 1);
-  assert.match((await Notification.findOne({ userId: managerDoc._id, title: /trả lại/ }).lean()).content, /Thiếu báo giá thứ 2/);
-  await assert.rejects(verifyProposal(accountant, p._id, {}, { now: NOW }), { errorCode: 'PROPOSAL_NOT_AWAITING_VERIFY' });
-
-  await assert.rejects(resubmitProposal(manager, p._id, { amount: 90_000_000 }, [], { now: later(1) }), (e) => e.details?.[0]?.field === 'note');
-  await assert.rejects(resubmitProposal(manager, p._id, { note: 'abc' }, [], { now: later(1) }), (e) => e.details?.[0]?.field === 'note');
-  const again = await resubmitProposal(manager, p._id, { amount: 90_000_000, note: 'Đã bổ sung báo giá' }, [], { now: later(1) });
-  assert.equal(again.status, 'PENDING_VERIFY');
-  assert.equal(again.amount, 90_000_000);
-  const verified = await verifyProposal(accountant, p._id, {}, { now: later(1) });
-  assert.equal(verified.status, 'PENDING');
-  assert.deepEqual(verified.history.map((h) => h.action), ['SUBMITTED', 'RETURNED', 'RESUBMITTED', 'VERIFIED']);
+  assert.equal(await Notification.countDocuments({ userId: accountant.id, title: /chờ biểu quyết/ }), 0);
+  // Biểu quyết được ngay
+  assert.equal((await vote(board[0], p._id, { decision: 'AGREE' }, { now: NOW })).outcome, null);
 });
 
 test('biểu quyết theo tỷ lệ: 3 thành viên, > 50% → cần 2 phiếu đồng ý; mỗi người 1 phiếu; Không đồng ý phải có ý kiến', async () => {
@@ -259,39 +238,38 @@ test('sửa chữa lớn: Trưởng BQL nghiệm thu + Ban quản trị xác nh�
   assert.equal(tx.balanceAfter, 50_000_000);
 });
 
-test('Trưởng BQL rút đề xuất ở mọi bước đang xử lý; nhắc Kế toán / Ban quản trị quá 3 ngày, 3 ngày/lần, không tự duyệt', async () => {
+test('Trưởng BQL rút đề xuất đang chờ; nhắc Ban quản trị chưa bỏ phiếu + báo Trưởng BQL quá 3 ngày, 3 ngày/lần, không tự duyệt', async () => {
   const { accountant, manager, board, managerDoc, submit } = await setup();
-  const waitingVerify = await createProposal(manager, proposalBody({ title: 'Sửa cổng' }), [], { now: NOW });
   const p1 = await submit();
   const p2 = await createProposal(manager, proposalBody({ title: 'Sơn hành lang', amount: 10_000_000 }), [], { now: NOW });
   await cancelProposal(manager, p2._id, { reason: 'Gộp vào đợt sau' });
   assert.equal((await FundProposal.findById(p2._id).lean()).isOpen, false);
-  for (const m of board) assert.equal(await Notification.countDocuments({ userId: m.id, title: /đã được rút/ }), 0, 'Ban quản trị chưa biết đề xuất chưa xác nhận');
+  for (const m of board) assert.equal(await Notification.countDocuments({ userId: m.id, title: /đã được rút/ }), 1, 'Ban quản trị được báo rút');
+  assert.equal(await Notification.countDocuments({ userId: accountant.id, title: /đã được rút/ }), 0, 'chưa duyệt thì Kế toán không liên quan');
   await assert.rejects(cancelProposal(manager, p2._id, { reason: 'Rút lần nữa' }), /Chỉ rút/);
   await vote(board[0], p1._id, { decision: 'AGREE' }, { now: NOW });
 
   const count = (userId, title) => Notification.countDocuments({ userId, title });
   assert.equal(await remindProposals(later(2)), 0);
-  assert.equal(await remindProposals(later(3)), 2); // 1 chờ Kế toán + 1 chờ biểu quyết
-  assert.equal(await count(accountant.id, /Nhắc xác nhận/), 1);
+  assert.equal(await remindProposals(later(3)), 1);
   assert.equal(await count(board[0].id, /Nhắc biểu quyết/), 0, 'người đã bỏ phiếu không bị nhắc');
   assert.equal(await count(board[1].id, /Nhắc biểu quyết/), 1);
-  assert.equal(await count(managerDoc._id, /chờ (Kế toán )?quá/), 2);
+  assert.equal(await count(managerDoc._id, /chờ quá/), 1);
+  assert.equal(await count(accountant.id, /Nhắc/), 0);
   assert.equal(await remindProposals(later(4)), 0);
-  assert.equal(await remindProposals(later(6)), 2);
+  assert.equal(await remindProposals(later(6)), 1);
   assert.equal((await FundProposal.findById(p1._id).lean()).status, 'PENDING');
-  assert.equal((await FundProposal.findById(waitingVerify._id).lean()).status, 'PENDING_VERIFY');
 });
 
-test('phân quyền API quỹ: Trưởng BQL lập / rút, Kế toán xác nhận / trả lại / thu chi, Ban quản trị biểu quyết, cư dân không xem', async () => {
+test('phân quyền API quỹ: Trưởng BQL lập / rút, Kế toán thu chi, Ban quản trị biểu quyết, cư dân không xem; không còn route xác nhận / trả lại', async () => {
   const app = await startApp();
   try {
     const id = '64b000000000000000000009';
     assert.equal((await app.request('GET', '/fund', { user: USERS.resident })).status, 403);
     assert.equal((await app.request('POST', '/fund/proposals', { user: { role: 'ACCOUNTANT' }, body: proposalBody() })).status, 403);
     assert.equal((await app.request('POST', '/fund/proposals', { user: USERS.manager, body: { title: 'x' } })).status, 400);
-    assert.equal((await app.request('POST', `/fund/proposals/${id}/verify`, { user: USERS.manager, body: {} })).status, 403);
-    assert.equal((await app.request('POST', `/fund/proposals/${id}/return`, { user: USERS.manager, body: { reason: 'Thiếu chứng từ' } })).status, 403);
+    assert.equal((await app.request('POST', `/fund/proposals/${id}/verify`, { user: { role: 'ACCOUNTANT' }, body: {} })).status, 404);
+    assert.equal((await app.request('POST', `/fund/proposals/${id}/return`, { user: { role: 'ACCOUNTANT' }, body: { reason: 'Thiếu chứng từ' } })).status, 404);
     assert.equal((await app.request('POST', `/fund/proposals/${id}/cancel`, { user: { role: 'ACCOUNTANT' }, body: { reason: 'Rút đề xuất' } })).status, 403);
     assert.equal((await app.request('POST', `/fund/proposals/${id}/votes`, { user: USERS.manager, body: { decision: 'AGREE' } })).status, 403);
     assert.equal((await app.request('POST', `/fund/proposals/${id}/board-accept`, { user: USERS.manager, body: {} })).status, 403);

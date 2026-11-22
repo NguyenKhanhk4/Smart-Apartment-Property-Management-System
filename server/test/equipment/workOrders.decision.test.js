@@ -110,10 +110,6 @@ describe('UC10 — duyệt sửa chữa lớn', () => {
     assert.equal(listed.items[0].pendingFund.code, 'DX-0001');
     assert.equal(listed.items[0].pendingFund.status, 'PENDING');
     assert.equal(listed.counts.awaitingFund, 1);
-    // Đề xuất bị Kế toán trả lại: vẫn khóa quyết định nhưng là việc của Trưởng BQL (không trừ khỏi số đếm)
-    await FundProposal.collection.updateMany({ workOrderId: ctx.wo._id }, { $set: { status: 'RETURNED' } });
-    assert.equal((await decision.listRepairs({ tab: 'pending' })).counts.awaitingFund, 0);
-    await FundProposal.collection.updateMany({ workOrderId: ctx.wo._id }, { $set: { status: 'PENDING' } });
     const all = await service.listWorkOrders(ctx.mUser, {});
     assert.equal(all.items.find((w) => String(w._id) === String(ctx.wo._id)).pendingFund.code, 'DX-0001');
 

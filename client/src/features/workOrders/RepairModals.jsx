@@ -18,7 +18,7 @@ const HISTORY_LABEL = {
   APPROVED: 'Duyệt sửa chữa',
   FUND_REQUESTED: 'Chọn Quỹ bảo trì, chờ lập đề xuất chi',
   EMERGENCY_STARTED: 'Sửa khẩn cấp bằng Quỹ (hồ sơ lập sau)',
-  FUND_RETURNED: 'Kế toán trả lại đề xuất chi quỹ',
+  FUND_RETURNED: 'Kế toán trả lại đề xuất chi quỹ', // dữ liệu cũ
   FUND_APPROVED: 'Ban quản trị duyệt chi quỹ',
   FUND_REJECTED: 'Ban quản trị từ chối chi quỹ',
   FUND_REJECTED_EMERGENCY: 'Khoản sửa khẩn cấp không được duyệt chi quỹ',
@@ -271,7 +271,7 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
   const warrantyActive = Boolean(policy?.warrantyActive);
   const sourceOptions = [
     { value: 'OPERATING', label: 'Chi phí vận hành', disabled: fundRequired },
-    { value: 'FUND', label: 'Quỹ bảo trì (Kế toán xác nhận, Ban quản trị duyệt)' },
+    { value: 'FUND', label: 'Quỹ bảo trì (Ban quản trị biểu quyết)' },
     { value: 'WARRANTY', label: 'Bảo hành', disabled: !warrantyActive },
   ];
   const defaultSource = warrantyActive ? 'WARRANTY' : fundRequired ? 'FUND' : 'OPERATING';
@@ -279,7 +279,7 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
     OPERATING: 'Phiếu chuyển Đang sửa; bạn liên hệ nhà thầu ngoài hệ thống. Kế toán ghi chi thực tế khi xong.',
     FUND: emergency
       ? `Phiếu chuyển Đang sửa ngay. Lập đề xuất chi quỹ trong ${settings?.emergencyDossierDays ?? 3} ngày; Ban quản trị được báo ngay.`
-      : 'Phiếu giữ Chờ duyệt sửa; bạn lập đề xuất chi quỹ ngay sau bước này. Kế toán xác nhận, Ban quản trị duyệt thì mới sửa.',
+      : 'Phiếu giữ Chờ duyệt sửa; bạn lập đề xuất chi quỹ ngay sau bước này. Ban quản trị biểu quyết duyệt thì mới sửa.',
     WARRANTY: 'Phiếu chuyển Đang sửa; KTV liên hệ hãng bảo hành, không phát sinh chi.',
   };
   return (
@@ -301,7 +301,7 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
           showIcon
           style={{ marginBottom: 12 }}
           title="Đã chọn Quỹ bảo trì, chưa có đề xuất chi quỹ"
-          description="Lập đề xuất ở trang Quỹ bảo trì. Khi đề xuất đang chờ Kế toán hoặc Ban quản trị thì không quyết định lại được; chưa lập thì bạn vẫn đổi được quyết định."
+          description="Lập đề xuất ở trang Quỹ bảo trì. Khi đề xuất đang chờ Ban quản trị biểu quyết thì không quyết định lại được; chưa lập thì bạn vẫn đổi được quyết định."
         />
       )}
       <RepairInfo workOrder={workOrder} showHistory={false} />

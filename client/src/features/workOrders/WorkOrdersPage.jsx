@@ -100,7 +100,7 @@ export default function WorkOrdersPage() {
         // UC10: quyết định sửa / gửi yêu cầu sửa lại phiếu hoãn; Q12: nghiệm thu
         if (r.status === 'AWAITING_REPAIR_APPROVAL') {
           if (r.pendingFund) {
-            const waiting = { PENDING_VERIFY: 'Chờ Kế toán', RETURNED: 'Bị trả lại', PENDING: 'Chờ biểu quyết' }[r.pendingFund.status] ?? 'Đang xử lý';
+            const waiting = { PENDING: 'Chờ biểu quyết' }[r.pendingFund.status] ?? 'Đang xử lý';
             return <Tooltip title={`Đề xuất chi quỹ ${r.pendingFund.code}: ${waiting.toLowerCase()}`}><Button size="small" disabled>{waiting}</Button></Tooltip>;
           }
           return <Button size="small" type="primary" danger onClick={() => setReviewing({ mode: 'approve', wo: r })}>Quyết định</Button>;
