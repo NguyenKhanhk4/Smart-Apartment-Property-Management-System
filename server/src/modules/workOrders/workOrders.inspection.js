@@ -12,6 +12,7 @@ import { withTransaction } from '../../utils/transaction.js';
 import { fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { computeNextMaintenance } from '../assets/assets.service.js';
 import { getOnDuty, isUserOnDuty } from '../dutyShifts/dutyShifts.service.js';
+import { syncTicketOnEnd } from './workOrders.ticketLink.js';
 
 const { PENDING, IN_PROGRESS, DONE } = WORK_ORDER_STATUS;
 const isMeasured = (item) => Boolean(item.unit) || item.minValue != null || item.maxValue != null;
@@ -66,7 +67,7 @@ async function dutyOf(userId, now) {
 export async function shiftChecklist(user, now = new Date()) {
   const duty = await dutyOf(user.id, now);
   const items = await WorkOrder.find({
-    type: WORK_ORDER_TYPES.SCHEDULED,
+    type: { $in: [WORK_ORDER_TYPES.SCHEDULED, WORK_ORDER_TYPES.TICKET_LINKED] }, // gồm phiếu theo phản ánh của cư dân
     $or: [
       { status: PENDING, assignedTo: null },
       { status: { $in: [...WORK_ORDER_OPEN_STATUSES] }, assignedTo: user.id }, // cả phiếu đang sửa chữa của mình (UC09)
@@ -163,7 +164,7 @@ const missingError = (checklist, missing, noImages) => {
  * Có mục bắt buộc không đạt thì không được chọn PASSED.
  */
 export async function submitInspection(user, id, { result, note = '', results: inputs = [] }, files = [], now = new Date()) {
-  const wo = await WorkOrder.findById(id).select('assetId type title status assignedTo scannedAt result checklist').lean();
+  const wo = await WorkOrder.findById(id).select('assetId ticketId type title status assignedTo scannedAt result checklist').lean();
   if (!wo) throw ApiError.notFound('Không tìm thấy phiếu bảo trì');
   if (!sameId(wo.assignedTo, user.id)) throw ApiError.forbidden();
   if (wo.status !== IN_PROGRESS) throw new ApiError('WORKORDER_INVALID_STATUS', wo.status === DONE ? 'Phiếu bảo trì đã hoàn thành' : 'Cần quét mã QR để nhận phiếu trước');
@@ -215,6 +216,7 @@ export async function submitInspection(user, id, { result, note = '', results: i
       await asset.save({ session });
       return asset.nextMaintenanceDate;
     });
+    await syncTicketOnEnd({ ticketId: wo.ticketId, status: DONE }, now);
   } else {
     const res = await WorkOrder.updateOne(condition, { $set: base });
     if (!res.modifiedCount) throw new ApiError('CONCURRENT_UPDATE');

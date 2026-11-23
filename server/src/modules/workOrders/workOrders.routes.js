@@ -8,7 +8,7 @@ import { validate } from '../../middlewares/validate.js';
 import { uploadImageFields, uploadImages } from '../../services/upload.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
-import { ok, paginated } from '../../utils/response.js';
+import { created, ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId } from '../../utils/validators.js';
 import { generateMaintenanceWorkOrders } from './workOrders.jobs.js';
 import * as decision from './workOrders.decision.js';
@@ -16,6 +16,7 @@ import * as expense from './workOrders.expense.js';
 import * as inspection from './workOrders.inspection.js';
 import * as repair from './workOrders.repair.js';
 import * as service from './workOrders.service.js';
+import * as ticketLink from './workOrders.ticketLink.js';
 
 // Người 1 — Vũ Việt (Mô đun 10). Job tạo phiếu; danh sách, phân công / giao lại; UC08: checklist ca, quét QR, nộp kết quả.
 // Thứ tự khai báo: đường dẫn cố định (/assignees, /jobs/...) phải đứng TRƯỚC /:id.
@@ -432,6 +433,46 @@ router.post(
     }),
   }),
   async (req, res) => ok(res, await expense.recordOperatingExpense(req.user, req.params.id, req.body, req.files), 'Đã ghi chi phí vận hành'),
+);
+
+/**
+ * @openapi
+ * /work-orders/from-ticket:
+ *   post:
+ *     tags: [Thiết bị & bảo trì]
+ *     summary: Trưởng BQL tạo phiếu bảo trì từ phản ánh của cư dân (TICKET_LINKED)
+ *     description: |
+ *       Chỉ với phản ánh đang mở (Mới / Đang xử lý), mỗi phản ánh 1 phiếu bảo trì đang xử lý. Phản ánh chuyển Đang xử lý,
+ *       gắn thiết bị, cư dân được báo. Có assignedTo thì phân công luôn, không thì phiếu hiện ở Checklist ca.
+ *       Phiếu xong / đóng → ghi ngược lịch sử phản ánh, báo Trưởng BQL để phản hồi và đóng phản ánh.
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [ticketId, assetId]
+ *             properties:
+ *               ticketId: { type: string }
+ *               assetId: { type: string }
+ *               assignedTo: { type: string }
+ *               note: { type: string, maxLength: 500 }
+ */
+router.post(
+  '/from-ticket',
+  authenticate,
+  authorize('MANAGER', 'STAFF:TECHNICIAN'),
+  validate({
+    body: Joi.object({
+      ticketId: objectId().required(),
+      assetId: objectId().required(),
+      assignedTo: objectId().allow(null),
+      note: Joi.string().trim().max(500).allow('').default(''),
+    }),
+  }),
+  async (req, res) => {
+    const { ticketId, ...rest } = req.body;
+    created(res, await ticketLink.createFromTicket(req.user, ticketId, rest), 'Đã tạo phiếu bảo trì từ phản ánh');
+  },
 );
 
 export default router;

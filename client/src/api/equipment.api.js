@@ -18,6 +18,8 @@ export const workOrderApi = {
   get: (id) => http.get(`/work-orders/${id}`),
   assignees: () => http.get('/work-orders/assignees'),
   assign: (id, body) => http.patch(`/work-orders/${id}/assign`, body),
+  /** Phản ánh → phiếu bảo trì. body: { ticketId, assetId, assignedTo?, note? } */
+  createFromTicket: (body) => http.post('/work-orders/from-ticket', body),
   // UC08 (KTV): checklist ca → quét QR thiết bị → nộp kết quả (multipart: result, note, results JSON, images)
   shiftChecklist: () => http.get('/work-orders/shift-checklist'),
   scan: (id, qrCode) => http.post(`/work-orders/${id}/scan`, { qrCode }),

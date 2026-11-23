@@ -18,6 +18,9 @@ export function progressOptions(ticket) {
   return STEPS[ticket.status] ?? [];
 }
 
+// Tạm ẩn lựa chọn "Trong căn hộ" (luồng báo giá cho Người nộp phí) ở form gửi và form đổi phân loại; bật true để dùng lại
+export const IN_APARTMENT_ENABLED = false;
+
 const NOT_STARTED = ['NEW', 'ASSIGNED'];
 
 // KTV gửi báo giá (Đã nhận), sửa bản đang chờ, hoặc báo giá lại khi đang làm phát sinh thêm (UC48)
@@ -33,11 +36,13 @@ export function ticketActions(ticket, user, hasRole) {
   const resident = hasRole('RESIDENT');
   const mine = hasRole('STAFF:TECHNICIAN') && ticket.assignedTo?._id === user.id;
   return {
-    canClaim: hasRole('STAFF:TECHNICIAN') && isIncident && ticket.status === 'NEW' && !ticket.assignedTo,
-    canAssign: manager && isIncident && !isFinal && !['WAITING_CONFIRM', 'MERGED'].includes(ticket.status),
+    canClaim: hasRole('STAFF:TECHNICIAN') && ticket.status === 'NEW' && !ticket.assignedTo,
+    canAssign: manager && !isFinal && !['WAITING_CONFIRM', 'MERGED'].includes(ticket.status),
     canReject: manager && ['NEW', 'ASSIGNED'].includes(ticket.status),
     canProgress: mine && progressOptions(ticket).length > 0,
-    canRespondComplaint: hasRole('MANAGER') && !isIncident && ['NEW', 'IN_PROGRESS'].includes(ticket.status),
+    canRespondComplaint: hasRole('MANAGER') && !isIncident && ['NEW', 'ASSIGNED', 'IN_PROGRESS'].includes(ticket.status),
+    // Phản ánh liên quan thiết bị: Trưởng BQL, hoặc KTV đang xử lý, tạo phiếu bảo trì (kiểm tra / báo hư hỏng / duyệt sửa)
+    canLinkMaintenance: (hasRole('MANAGER') || mine) && (!isIncident || ticket.scope === 'COMMON_AREA') && ['NEW', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_PARTS'].includes(ticket.status),
     canQuote: mine && isIncident && ticket.scope === 'IN_APARTMENT' && QUOTABLE.includes(ticket.status),
     canDecideQuote: resident && ticket.status === 'WAITING_QUOTE_APPROVAL',
     canConfirm: resident && (ticket.status === 'WAITING_CONFIRM' ||

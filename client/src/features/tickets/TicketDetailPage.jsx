@@ -28,10 +28,11 @@ import {
   TICKET_SCOPES,
   TICKET_STATUS,
   TICKET_TYPES,
+  WORK_ORDER_STATUS,
 } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
 import {
-  AssignModal, ComplaintResponseModal, ConfirmModal, MergeModal, ProgressModal,
+  AssignModal, ComplaintResponseModal, ConfirmModal, MaintenanceLinkModal, MergeModal, ProgressModal,
   QuoteDecisionModal, ReclassifyModal, RejectModal,
 } from './TicketActionModals';
 import { ticketActions } from './ticketActions';
@@ -55,7 +56,7 @@ export default function TicketDetailPage() {
 
   const {
     canClaim, canAssign, canReject, canProgress, canRespondComplaint, canQuote,
-    canDecideQuote, canConfirm, canReclassify, canMerge,
+    canDecideQuote, canConfirm, canReclassify, canMerge, canLinkMaintenance,
   } = ticketActions(t, user, hasRole);
   const quoteList = quotes.data?.items ?? [];
   const pendingQuote = quoteList.find((q) => q.status === 'PENDING');
@@ -103,6 +104,7 @@ export default function TicketDetailPage() {
               Cập nhật tiến độ
             </Button>
           )}
+          {canLinkMaintenance && <Button onClick={() => setModal('maintenance')}>Tạo phiếu bảo trì thiết bị</Button>}
           {canRespondComplaint && (
             <Button type="primary" onClick={() => setModal('complaint')}>Xử lý phản ánh</Button>
           )}
@@ -150,8 +152,8 @@ export default function TicketDetailPage() {
             title="Sửa chữa trong căn hộ có phát sinh phí. Người nộp phí của căn vui lòng đồng ý hoặc từ chối báo giá."
           />
         )}
-        {isComplaint && hasRole('MANAGER', 'STAFF:RECEPTIONIST') && (
-          <Alert type="info" showIcon title="Phản ánh do Trưởng BQL tiếp nhận và phản hồi, không giao cho kỹ thuật viên." />
+        {isComplaint && hasRole('MANAGER', 'STAFF:RECEPTIONIST', 'STAFF:TECHNICIAN') && (
+          <Alert type="info" showIcon title="Phản ánh do kỹ thuật viên lên kiểm tra. Thấy thiết bị hỏng thì tạo phiếu bảo trì từ phản ánh; Trưởng BQL vẫn phản hồi / đóng trực tiếp được." />
         )}
 
         <Card size="small">
@@ -190,9 +192,7 @@ export default function TicketDetailPage() {
               {/* M5-2: hạn được lùi thêm phần thời gian chờ khi phiếu chạy tiếp */}
               {t.slaPausedAt && ` (SLA tạm dừng từ ${formatDateTime(t.slaPausedAt)})`}
             </Descriptions.Item>
-            {!isComplaint && (
-              <Descriptions.Item label="Kỹ thuật viên">{t.assignedTo?.fullName ?? 'Chưa có người nhận'}</Descriptions.Item>
-            )}
+            <Descriptions.Item label="Kỹ thuật viên">{t.assignedTo?.fullName ?? 'Chưa có người nhận'}</Descriptions.Item>
             {t.quoteDecision?.at && (
               <Descriptions.Item label="Báo giá">
                 {t.quoteDecision.accepted ? 'Cư dân đã đồng ý' : 'Cư dân đã từ chối'} lúc {formatDateTime(t.quoteDecision.at)}
@@ -260,6 +260,25 @@ export default function TicketDetailPage() {
           />
         )}
 
+        {t.maintenance?.length > 0 && (
+          <Card size="small" title="Phiếu bảo trì liên quan">
+            <Flex vertical gap={6}>
+              {t.maintenance.map((w) => (
+                <Flex key={w._id} gap={8} wrap align="center">
+                  <EnumTag map={WORK_ORDER_STATUS} value={w.status} />
+                  <Typography.Text>
+                    {w.assetId ? `${w.assetId.code} – ${w.assetId.name}` : w.title}
+                    {w.assignedTo?.fullName ? ` · KTV ${w.assignedTo.fullName}` : ' · chưa phân công'}
+                  </Typography.Text>
+                </Flex>
+              ))}
+              {t.maintenance.every((w) => ['DONE', 'CLOSED'].includes(w.status)) && canRespondComplaint && (
+                <Alert type="success" showIcon title="Kỹ thuật đã xử lý xong. Hãy phản hồi kết quả cho cư dân và đóng phản ánh." />
+              )}
+            </Flex>
+          </Card>
+        )}
+
         <Card size="small" title="Lịch sử xử lý">
           <Timeline
             items={[...t.history].reverse().map((h) => ({
@@ -291,6 +310,7 @@ export default function TicketDetailPage() {
       <ReclassifyModal {...modalProps('classify')} />
       <MergeModal {...modalProps('merge')} />
       <ProgressModal {...modalProps('progress')} />
+      <MaintenanceLinkModal {...modalProps('maintenance')} />
       <ComplaintResponseModal {...modalProps('complaint')} />
       <ConfirmModal {...modalProps('confirm')} />
       <QuoteDecisionModal {...modalProps('quote')} quote={pendingQuote} />

@@ -19,9 +19,9 @@ const H = 3_600_000;
 const now = new Date('2026-11-01T02:00:00Z');
 const t = (extra) => ({ type: 'INCIDENT', scope: 'COMMON_AREA', status: 'ASSIGNED', quoteDecision: {}, ...extra });
 
-test('routeOf: sự cố vào hàng chờ Kỹ thuật, phản ánh sang bàn xử lý của Trưởng BQL (Người 2)', () => {
+test('routeOf: cả sự cố và phản ánh đều vào hàng chờ Kỹ thuật (KTV lên kiểm tra)', () => {
   assert.equal(routeOf('INCIDENT'), 'TECH_QUEUE');
-  assert.equal(routeOf('COMPLAINT'), 'COMPLAINT_DESK');
+  assert.equal(routeOf('COMPLAINT'), 'TECH_QUEUE');
 });
 
 test('computeDeadlines: sự cố có hạn nhận phiếu + hạn hoàn thành', () => {

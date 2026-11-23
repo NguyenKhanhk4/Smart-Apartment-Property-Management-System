@@ -135,6 +135,7 @@ export const LABELS = {
   TICKET_COMPLAINT_RESPONDED: 'Trả lời phản ánh',
   REPAIR_QUOTE_SUBMITTED: 'Gửi báo giá sửa chữa',
   WORKORDER_ASSIGNED: 'Phân công phiếu bảo trì',
+  WORKORDER_CREATED_FROM_TICKET: 'Tạo phiếu bảo trì từ phản ánh',
   ASSET_CREATED: 'Thêm thiết bị',
   ASSET_UPDATED: 'Sửa thiết bị',
   WORKORDER_INSPECTED: 'Nộp kết quả kiểm tra thiết bị',

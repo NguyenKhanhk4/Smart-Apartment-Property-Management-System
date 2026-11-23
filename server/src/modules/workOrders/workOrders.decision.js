@@ -26,6 +26,7 @@ import { withTransaction } from '../../utils/transaction.js';
 import { DAY_MS, endOfVnDay, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { computeNextMaintenance } from '../assets/assets.service.js';
 import { countAwaitingFund, hasPendingFundProposal, pendingFundProposals } from './workOrders.fund.js';
+import { syncTicketOnEnd } from './workOrders.ticketLink.js';
 
 const S = WORK_ORDER_STATUS;
 const step = (action, user, now, extra = {}) => ({ action, by: user?.id ?? null, at: now, ...extra });
@@ -355,6 +356,7 @@ async function retire(user, wo, note, now) {
     action: AUDIT_ACTIONS.WORKORDER_REPAIR_RETIRED, user, targetType: AUDIT_TARGETS.WORK_ORDER, targetId: wo._id,
     before: { status: wo.status }, after: { status: S.CLOSED }, metadata: { assetId: wo.assetId, reason: note, closedOthers },
   });
+  await syncTicketOnEnd({ ticketId: wo.ticketId, status: S.CLOSED }, now);
   await logAudit({
     action: AUDIT_ACTIONS.ASSET_DEACTIVATED, user, targetType: AUDIT_TARGETS.ASSET, targetId: wo.assetId,
     before: { isActive: true }, after: { isActive: false }, metadata: { reason: note, workOrderId: wo._id },

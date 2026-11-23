@@ -1,6 +1,6 @@
 // Quy tắc phiếu sự cố / phản ánh — logic thuần, không đọc DB.
 // Máy trạng thái sự cố: Mới → Đã nhận → (Chờ cư dân đồng ý phí) → Đang xử lý ⇄ Chờ linh kiện → Đã xong (chờ nghiệm thu)
-// → Đã nghiệm thu. Phản ánh không vào hàng chờ Kỹ thuật mà chuyển sang màn hình xử lý của Trưởng BQL.
+// → Đã nghiệm thu. Phản ánh cũng vào hàng chờ Kỹ thuật (KTV lên kiểm tra); Trưởng BQL vẫn phản hồi / đóng trực tiếp được.
 import {
   PRIORITIES,
   TICKET_FINAL_STATUSES,
@@ -16,7 +16,8 @@ const { NEW, ASSIGNED, WAITING_QUOTE_APPROVAL, IN_PROGRESS, WAITING_PARTS, WAITI
 
 export const ROUTES = Object.freeze({ TECH_QUEUE: 'TECH_QUEUE', COMPLAINT_DESK: 'COMPLAINT_DESK' });
 
-export const routeOf = (type) => (type === TICKET_TYPES.COMPLAINT ? ROUTES.COMPLAINT_DESK : ROUTES.TECH_QUEUE);
+// Cả sự cố và phản ánh đều vào hàng chờ Kỹ thuật; COMPLAINT_DESK chỉ còn là tên cũ để tương thích
+export const routeOf = () => ROUTES.TECH_QUEUE;
 
 /**
  * Hạn SLA lúc tạo phiếu. Sự cố: hạn nhận phiếu (ackDueAt, tính từ `ackFrom` — xem ackStartAt) + hạn hoàn thành;
@@ -171,10 +172,10 @@ export function progressError(ticket, to) {
   return null;
 }
 
-/** Phản ánh do Trưởng BQL xử lý và đóng trực tiếp; không đi qua nghiệm thu kỹ thuật. */
+/** Trưởng BQL phản hồi / đóng phản ánh trực tiếp (kể cả khi KTV đang kiểm tra); không đi qua nghiệm thu kỹ thuật. */
 export function complaintResponseError(ticket, to) {
   if (ticket.type !== TICKET_TYPES.COMPLAINT) return 'Chỉ dùng thao tác này cho phản ánh, khiếu nại';
-  if (![NEW, IN_PROGRESS].includes(ticket.status) || ![IN_PROGRESS, TICKET_STATUS.CLOSED].includes(to)) {
+  if (![NEW, ASSIGNED, IN_PROGRESS].includes(ticket.status) || ![IN_PROGRESS, TICKET_STATUS.CLOSED].includes(to)) {
     return `Không thể chuyển phản ánh từ ${ticket.status} sang ${to}`;
   }
   return null;

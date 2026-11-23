@@ -53,20 +53,31 @@ test('không có ai trong ca: báo tất cả KTV đang hoạt động', async (
   assert.equal(await notified(b), 1);
 });
 
-test('phản ánh: có hạn phản hồi, không vào hàng chờ KTV, không giao được cho KTV', async () => {
+test('phản ánh: có hạn phản hồi, vào hàng chờ KTV; KTV nhận hoặc Trưởng BQL giao đều tính là đã phản hồi', async () => {
   const { user, apartment } = await createHousehold();
-  const category = await createCategory();
+  const category = await createCategory({ defaultPriority: 'HIGH' }); // ưu tiên Cao: báo KTV ngay cả ngoài giờ hành chính
   const tech = await createTechnician();
   const ticket = await service.createTicket(asUser(user), {
     categoryId: category._id, title: 'Hàng xóm ồn ào', description: 'Căn bên cạnh hát karaoke tới 1h sáng', type: 'COMPLAINT', apartmentId: apartment._id,
   }, []);
   assert.ok(ticket.responseDueAt > new Date());
   assert.equal(ticket.ackDueAt, null);
-  assert.equal(await notified(tech), 0);
+  assert.equal(await notified(tech), 1);
   const queue = await service.listQueue(asUser(tech));
-  assert.equal(queue.items.length, 0);
+  assert.deepEqual(queue.items.map((x) => x.title), ['Hàng xóm ồn ào']);
+
+  const claimed = await service.claimTicket(asUser(tech), ticket._id);
+  assert.equal(claimed.status, 'ASSIGNED');
+  assert.ok((await Ticket.findById(ticket._id).lean()).respondedAt);
+
+  // Trưởng BQL giao thẳng cho KTV (phản ánh khác)
+  const other = await service.createTicket(asUser(user), {
+    categoryId: category._id, title: 'Rác chưa dọn', description: 'Hành lang tầng 3 có rác nhiều ngày', type: 'COMPLAINT', apartmentId: apartment._id,
+  }, []);
   const manager = asUser(await createManager());
-  await assert.rejects(service.assignTicket(manager, ticket._id, { assignedTo: tech._id }), { errorCode: 'VALIDATION_ERROR' });
+  const assigned = await service.assignTicket(manager, other._id, { assignedTo: tech._id });
+  assert.equal(assigned.status, 'ASSIGNED');
+  assert.ok((await Ticket.findById(other._id).lean()).respondedAt);
 });
 
 test('Lễ tân tạo hộ cư dân: ghi createdByStaff, căn bắt buộc, lưu liên hệ người báo', async () => {
@@ -116,7 +127,7 @@ test('nút Nhận: đang có lịch trực mà KTV không trong ca → NOT_ON_DU
   await service.claimTicket(asUser(inShift), ticket._id);
 });
 
-test('hàng chờ: chỉ sự cố mới chưa ai nhận, khẩn cấp lên đầu; báo KTV có đang trong ca không', async () => {
+test('hàng chờ: sự cố và phản ánh mới chưa ai nhận, khẩn cấp lên đầu; báo KTV có đang trong ca không', async () => {
   const { user, apartment } = await createHousehold();
   const tech = await createTechnician();
   await createTicket({ apartment, createdBy: user, priority: 'LOW', title: 'thấp' });
@@ -124,7 +135,7 @@ test('hàng chờ: chỉ sự cố mới chưa ai nhận, khẩn cấp lên đ�
   await createTicket({ apartment, createdBy: user, status: 'ASSIGNED', assignedTo: tech._id, title: 'đã nhận' });
   await createTicket({ apartment, createdBy: user, type: 'COMPLAINT', title: 'phản ánh' });
   const queue = await service.listQueue(asUser(tech));
-  assert.deepEqual(queue.items.map((x) => x.title), ['khẩn', 'thấp']);
+  assert.deepEqual(queue.items.map((x) => x.title), ['khẩn', 'phản ánh', 'thấp']);
   assert.equal(queue.onDuty, false);
   assert.equal(queue.hasSchedule, false);
 });
@@ -171,7 +182,7 @@ test('chờ linh kiện: Đang xử lý → Chờ linh kiện → Đang xử lý
   assert.equal(resumed.status, 'IN_PROGRESS');
 });
 
-test('Kanban: nhóm sự cố đang mở theo cột, không gồm phiếu đã đóng và phản ánh', async () => {
+test('Kanban: nhóm sự cố và phản ánh đang mở theo cột, không gồm phiếu đã đóng', async () => {
   const { user, apartment } = await createHousehold();
   await createTicket({ apartment, createdBy: user });
   await createTicket({ apartment, createdBy: user, status: 'WAITING_PARTS' });
@@ -179,9 +190,9 @@ test('Kanban: nhóm sự cố đang mở theo cột, không gồm phiếu đã �
   await createTicket({ apartment, createdBy: user, type: 'COMPLAINT' });
   const board = await service.getBoard(asUser(await createManager()));
   const count = (s) => board.columns.find((c) => c.status === s).items.length;
-  assert.equal(count('NEW'), 1);
+  assert.equal(count('NEW'), 2);
   assert.equal(count('WAITING_PARTS'), 1);
-  assert.equal(board.columns.reduce((n, c) => n + c.items.length, 0), 2);
+  assert.equal(board.columns.reduce((n, c) => n + c.items.length, 0), 3);
 });
 
 test('cron SLA: sự cố quá hạn nhận và phản ánh quá hạn phản hồi → báo Trưởng BQL đúng 1 lần', async () => {

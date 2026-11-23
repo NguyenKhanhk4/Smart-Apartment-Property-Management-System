@@ -15,6 +15,7 @@ import { withTransaction } from '../../utils/transaction.js';
 import { fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { computeNextMaintenance } from '../assets/assets.service.js';
 import { markFundWorkAccepted } from './workOrders.fund.js';
+import { syncTicketOnEnd } from './workOrders.ticketLink.js';
 
 const S = WORK_ORDER_STATUS;
 const sameId = (a, b) => a != null && b != null && String(a) === String(b);
@@ -198,6 +199,7 @@ export async function acceptRepair(user, id, now = new Date()) {
     });
     return WorkOrder.findById(id).lean();
   }
+  await syncTicketOnEnd({ ticketId: wo.ticketId, status: S.DONE }, now);
   await safely(async () => notify(wo.assignedTo, {
     type: NOTIFICATION_TYPES.MAINTENANCE,
     title: 'Sửa chữa đã được nghiệm thu',

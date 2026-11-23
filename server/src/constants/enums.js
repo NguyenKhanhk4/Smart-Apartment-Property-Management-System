@@ -506,6 +506,8 @@ export const TICKET_HISTORY_ACTIONS = Object.freeze({
   RECLASSIFIED: "RECLASSIFIED", // M5-5: đổi loại / phạm vi phiếu
   MERGED: "MERGED", // M5-6: gộp phiếu trùng vào phiếu chính
   EMERGENCY_ACKED: "EMERGENCY_ACKED", // BR-X6: có người bấm "Đã tiếp nhận" cảnh báo khẩn sự cố chưa ai nhận
+  MAINTENANCE_LINKED: "MAINTENANCE_LINKED", // Trưởng BQL chuyển phản ánh sang phiếu bảo trì
+  MAINTENANCE_DONE: "MAINTENANCE_DONE", // phiếu bảo trì theo phản ánh đã hoàn thành / đóng
 });
 
 // Loại phiếu: sự cố kỹ thuật vào hàng chờ Kỹ thuật; phản ánh chuyển sang màn hình xử lý của Người 2
@@ -634,6 +636,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   TICKET_CLOSED: 'TICKET_CLOSED',
   ANNOUNCEMENT_PUBLISHED: 'ANNOUNCEMENT_PUBLISHED',
   WORKORDER_ASSIGNED: 'WORKORDER_ASSIGNED',
+  WORKORDER_CREATED_FROM_TICKET: 'WORKORDER_CREATED_FROM_TICKET', // phản ánh → phiếu bảo trì
   ASSET_CREATED: 'ASSET_CREATED', // UC07
   ASSET_UPDATED: 'ASSET_UPDATED',
   WORKORDER_INSPECTED: 'WORKORDER_INSPECTED', // UC08: nộp kết quả kiểm tra
