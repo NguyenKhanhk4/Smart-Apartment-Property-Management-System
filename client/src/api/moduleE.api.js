@@ -13,6 +13,10 @@ export const complaintCategoryApi = {
 export const systemConfigApi = {
   list: () => http.get('/system-configs'),
   update: (key, value) => http.patch(`/system-configs/${key}`, { value }),
+  /** BR-S12: thay đổi tham số tài chính chờ Ban quản trị xác nhận */
+  pending: () => http.get('/system-configs/pending'),
+  approve: (key) => http.post(`/system-configs/${key}/approve`),
+  reject: (key, reason) => http.post(`/system-configs/${key}/reject`, { reason }),
 };
 
 // multipart: field rỗng bỏ qua, ảnh gửi ở field `images`
@@ -26,6 +30,7 @@ function toForm(body, files) {
 // ===== UC-E02..E06: Ticket =====
 export const ticketApi = {
   list: (params) => http.get('/tickets', { params }),
+  rules: () => http.get('/tickets/rules'),
   get: (id) => http.get(`/tickets/${id}`),
   /** body: { categoryId, title, description, type, scope, apartmentId? }, files: File[] */
   create: (body, files = []) => http.post('/tickets', toForm(body, files)),
@@ -84,7 +89,7 @@ export const guestApi = {
   register: (body) => http.post('/guests', body),
   cancel: (id) => http.delete(`/guests/${id}`),
   walkIn: (body) => http.post('/guests/walk-in', body),
-  checkIn: (id, note) => http.patch(`/guests/${id}/check-in`, note ? { note } : {}),
+  checkIn: (id, body = {}) => http.patch(`/guests/${id}/check-in`, typeof body === 'string' ? { note: body } : body),
   checkOut: (id) => http.patch(`/guests/${id}/check-out`),
 };
 
@@ -92,7 +97,7 @@ export const guestApi = {
 export const announcementApi = {
   comments: (id, params) => http.get(`/announcements/${id}/comments`, { params }),
   comment: (id, content) => http.post(`/announcements/${id}/comments`, { content }),
-  hideComment: (id, commentId) => http.patch(`/announcements/${id}/comments/${commentId}/hide`),
+  hideComment: (id, commentId, reason) => http.patch(`/announcements/${id}/comments/${commentId}/hide`, { reason }),
   poll: (id, apartmentId) => http.get(`/announcements/${id}/poll`, { params: { apartmentId } }),
   vote: (id, body) => http.put(`/announcements/${id}/poll/vote`, body),
   closePoll: (id) => http.patch(`/announcements/${id}/poll/close`),
@@ -118,6 +123,8 @@ export const reportApi = {
   occupancy: (params) => http.get('/reports/occupancy', { params }),
   tickets: (params) => http.get('/reports/tickets', { params }),
   maintenance: (params) => http.get('/reports/maintenance', { params }),
+  /** UC60 Dashboard vận hành — params: { from, to: 'YYYY-MM', buildingId } */
+  operationsKpi: (params) => http.get('/reports/operations-kpi', { params }),
   amenityUsage: (params) => http.get('/reports/amenity-usage', { params }),
   /** Mô đun 9 — Dashboard tài chính (UC60). params: { from, to } dạng YYYY-MM */
   finance: (params) => http.get('/reports/finance', { params }),

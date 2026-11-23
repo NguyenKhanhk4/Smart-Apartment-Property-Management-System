@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Button, Card, Flex, Input, Select, Switch, Table, Tabs, Tag, Typography } from 'antd';
+import { Button, Card, Flex, Input, Select, Switch, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import { workOrderApi } from '../../api/equipment.api';
 import { lookupApi } from '../../api/moduleE.api';
 import { useApi } from '../../hooks/useApi';
@@ -8,7 +8,7 @@ import { useAuth } from '../../hooks/useAuth';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
 import { WORK_ORDER_RESULTS, WORK_ORDER_STATUS, WORK_ORDER_TYPES, enumOptions } from '../../constants/enums';
-import { formatDate, formatDateTime } from '../../utils/format';
+import { dateTimeOr, formatDate } from '../../utils/format';
 import { vtName } from '../../motion/viewTransition';
 import AssignWorkOrderModal from './AssignWorkOrderModal';
 import ShiftChecklist from './ShiftChecklist';
@@ -32,7 +32,7 @@ export default function WorkOrdersPage() {
   const set = (patch) => setFilters((f) => ({ ...f, page: 1, ...patch }));
 
   const showTable = !isTech || tab === 'done';
-  const { data = [], pagination, loading, reload } = useApi(() => workOrderApi.list(filters), [filters], { enabled: showTable });
+  const { data = [], pagination, raw, loading, reload } = useApi(() => workOrderApi.list(filters), [filters], { enabled: showTable });
   const { data: buildings = [] } = useApi(() => lookupApi.buildings(), [], { enabled: !isTech });
   const { data: techs = [] } = useApi(() => workOrderApi.assignees(), [], { enabled: !isTech });
 
@@ -48,7 +48,7 @@ export default function WorkOrdersPage() {
             <Typography.Text strong style={vtName('asset', a._id)}>{a.name}</Typography.Text>
           </Link>
         ) : (
-          '—'
+          'Thiết bị đã xóa'
         )}
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {a?.buildingId?.name}{a?.location ? ` · ${a.location}` : ''}
@@ -67,6 +67,7 @@ export default function WorkOrdersPage() {
         <Flex vertical gap={4} align="flex-start">
           <EnumTag map={WORK_ORDER_STATUS} value={v} />
           {r.result && <EnumTag map={WORK_ORDER_RESULTS} value={r.result} />}
+          {r.repair?.isEmergency && <Tag color="red">Khẩn cấp</Tag>}
         </Flex>
       ),
     },
@@ -98,10 +99,17 @@ export default function WorkOrdersPage() {
       render: (_, r) => {
         // UC10: quyết định sửa / gửi yêu cầu sửa lại phiếu hoãn; Q12: nghiệm thu
         if (r.status === 'AWAITING_REPAIR_APPROVAL') {
+          if (r.pendingFund) {
+            const waiting = { PENDING: 'Chờ biểu quyết' }[r.pendingFund.status] ?? 'Đang xử lý';
+            return <Tooltip title={`Đề xuất chi quỹ ${r.pendingFund.code}: ${waiting.toLowerCase()}`}><Button size="small" disabled>{waiting}</Button></Tooltip>;
+          }
           return <Button size="small" type="primary" danger onClick={() => setReviewing({ mode: 'approve', wo: r })}>Quyết định</Button>;
         }
         if (r.status === 'REPAIR_POSTPONED') {
           return <Button size="small" onClick={() => setReviewing({ mode: 'request', wo: r })}>Yêu cầu sửa lại</Button>;
+        }
+        if (r.status === 'AWAITING_BOARD_ACCEPTANCE') {
+          return <Tooltip title="Đã nghiệm thu kỹ thuật, chờ Ban quản trị xác nhận"><Button size="small" disabled>Chờ Ban quản trị</Button></Tooltip>;
         }
         if (r.status === 'AWAITING_ACCEPTANCE') {
           return <Button size="small" type="primary" onClick={() => setReviewing({ mode: 'accept', wo: r })}>Nghiệm thu</Button>;
@@ -119,8 +127,8 @@ export default function WorkOrdersPage() {
   const techColumns = [
     assetColumn,
     ...commonColumns,
-    { title: 'Kiểm tra lúc', dataIndex: 'inspectedAt', width: 160, render: (v, r) => formatDateTime(v ?? r.completedAt) },
-    { title: 'Ghi chú', dataIndex: 'note', width: 240, render: (v) => v || '—' },
+    { title: 'Kiểm tra lúc', dataIndex: 'inspectedAt', width: 160, render: (v, r) => dateTimeOr(v ?? r.completedAt, 'Chưa kiểm tra') },
+    { title: 'Ghi chú', dataIndex: 'note', width: 240, render: (v) => v || 'Không ghi chú' },
     {
       title: '',
       width: 130,
@@ -218,7 +226,8 @@ export default function WorkOrdersPage() {
         )}
         {viewing && <WorkOrderReportModal workOrder={viewing} open onClose={() => setViewing(null)} />}
         {reviewing?.mode === 'approve' && (
-          <RepairDecisionModal workOrder={reviewing.wo} open onClose={() => setReviewing(null)} onDone={reload} />
+          // policy (cộng dồn, bảo hành) + settings (ngưỡng, ngày hoãn tối đa) server gắn sẵn như trang Duyệt sửa chữa
+          <RepairDecisionModal workOrder={reviewing.wo} settings={raw?.settings} open onClose={() => setReviewing(null)} onDone={reload} />
         )}
         {reviewing?.mode === 'request' && (
           <RepairRequestModal workOrder={reviewing.wo} open onClose={() => setReviewing(null)} onDone={reload} />

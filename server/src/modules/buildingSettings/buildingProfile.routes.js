@@ -90,7 +90,7 @@ router.put(
       },
     });
 
-    ok(res, profile, 'Đã lưu cấu hình. Thay đổi phí áp dụng từ kỳ tính phí sau.');
+    ok(res, profile, 'Đã lưu thông tin tòa nhà');
   },
 );
 

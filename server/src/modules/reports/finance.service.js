@@ -1,6 +1,6 @@
 // Mô đun 9 — UC60 Dashboard tài chính (Trưởng BQL, Kế toán) và báo cáo giám sát cho Ban quản trị (5.6).
 // Số liệu tài chính lấy từ Mô đun 4: thông báo phí đã phát hành, giao dịch thu, Số dư trả trước, Quỹ bảo trì.
-// Tiền tiện ích trả ngay khi đặt (booking.paidAt) tách riêng, không đi qua thông báo phí (M4-8).
+// Tiền tiện ích trả ngay khi đặt (booking.paidAt — tại quầy hoặc payOS) tách riêng, không đi qua thông báo phí (M4-8).
 import {
   FUND_PROPOSAL_STATUS,
   FUND_TX_TYPES,
@@ -20,7 +20,17 @@ const TZ = 'Asia/Ho_Chi_Minh';
 const monthOf = (field) => ({ $dateToString: { format: '%Y-%m', date: field, timezone: TZ } });
 const rate = (part, total) => (total ? Math.round((part / total) * 10000) / 10000 : 0);
 
-function assertRange(from, to) {
+// Tránh đếm trùng tiền tiện ích (mỗi khoản chỉ tính 1 lần):
+//  - payOS trả phí booking đã xác nhận được booking (creditAmount = 0): tiền đã tính ở booking.paidAt → bỏ khỏi giao dịch thu.
+//    Không giữ được chỗ thì toàn bộ tiền vào Số dư trả trước (creditAmount > 0) → vẫn là tiền thu payOS.
+//  - Đổi lịch booking đã trả: booking mới chép paidAt của booking cũ → chỉ tính ở booking cũ.
+const NOT_BOOKING_CONFIRMED = { $nor: [{ bookingId: { $ne: null }, creditAmount: { $lte: 0 } }] };
+const NOT_INHERITED_PAYMENT = [
+  { $lookup: { from: 'bookings', localField: 'rescheduledFrom', foreignField: '_id', pipeline: [{ $project: { paidAt: 1 } }], as: 'prev' } },
+  { $match: { $expr: { $ne: [{ $first: '$prev.paidAt' }, '$paidAt'] } } },
+];
+
+export function assertRange(from, to) {
   if (from > to) throw ApiError.badRequest('Khoảng thời gian không hợp lệ (from > to)');
   const periods = periodRange(from, to);
   if (periods.length > MAX_RANGE_MONTHS) throw ApiError.badRequest(`Khoảng thời gian tối đa ${MAX_RANGE_MONTHS / 12} năm, hãy thu hẹp lại`);
@@ -97,11 +107,12 @@ export async function financeDashboard({ from, to }, { now = new Date() } = {}) 
       { $sort: { amount: -1 } },
     ]),
     Payment.aggregate([
-      { $match: { status: PAYMENT_STATUS.SUCCESS, paidAt: { $gte: start, $lt: end } } },
+      { $match: { status: PAYMENT_STATUS.SUCCESS, paidAt: { $gte: start, $lt: end }, ...NOT_BOOKING_CONFIRMED } },
       { $group: { _id: { month: monthOf('$paidAt'), method: '$method' }, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
     ]),
     Booking.aggregate([
       { $match: { paidAt: { $gte: start, $lt: end }, fee: { $gt: 0 } } },
+      ...NOT_INHERITED_PAYMENT,
       { $group: { _id: monthOf('$paidAt'), amount: { $sum: '$fee' }, count: { $sum: 1 } } },
     ]),
     debtStatusNow(now),

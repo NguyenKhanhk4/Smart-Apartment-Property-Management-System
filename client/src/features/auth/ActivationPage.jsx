@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { Alert, Button, Form, Input, Steps } from 'antd';
-import { ArrowRightOutlined, HomeOutlined, LockOutlined, MailOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons';
+import { ArrowRightOutlined, HomeOutlined, LockOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons';
 import { authApi } from '../../api/auth.api';
+import { ALERT_GAP } from './authStyles';
 import { portalPath, useAuthPortal } from './authPortal';
 import { PHONE_RULES } from '../../utils/phone';
 import PersonalDataTerms from './PersonalDataTerms';
+import VerificationCodeField from './VerificationCodeField';
 
 const RESEND_SECONDS = 60;
 const icon = (Icon) => <Icon className="text-ink-3" />;
@@ -54,6 +56,7 @@ export default function ActivationPage() {
   const sendOtp = async (values) => {
     const res = await run(() => authApi.startActivation(values));
     if (!res) return;
+    if (step === 0) setCredentials(null);
     setIdentity(values);
     setResendIn(RESEND_SECONDS);
     setStep(1);
@@ -75,9 +78,8 @@ export default function ActivationPage() {
 
   return (
     <>
-      <h2 className="m-0 text-2xl font-semibold tracking-tight text-ink">Kích hoạt tài khoản</h2>
-      <div className="w-8 h-0.5 bg-gold mt-2 mb-2" />
-      <p className="m-0 mb-5 text-[13px] text-ink-2">
+      <h2 id="auth-form-title" className="auth-form-title">Kích hoạt tài khoản</h2>
+      <p className="auth-form-subtitle">
         {step === 0 && 'Nhập số điện thoại, mã căn hộ và email đã đăng ký với Ban quản lý.'}
         {step === 1 && (identity ? 'Nhập mã đã gửi tới email và tự đặt mật khẩu.' : 'Nhập mã in tại quầy lễ tân và tự đặt mật khẩu.')}
         {step === 2 && 'Đọc điều khoản dữ liệu cá nhân rồi chọn đồng ý hoặc không đồng ý.'}
@@ -93,7 +95,7 @@ export default function ActivationPage() {
         />
       </div>
 
-      {error && <Alert type="error" showIcon title={error} className="mb-4" closable={{ onClose: () => setError(null) }} />}
+      {error && <Alert type="error" showIcon title={error} style={ALERT_GAP} closable={{ onClose: () => setError(null) }} />}
 
       {step === 0 && (
         <Form form={infoForm} layout="vertical" requiredMark={false} onFinish={sendOtp} disabled={loading} initialValues={identity ?? { phone: deskPhone ?? prefillPhone }}>
@@ -124,6 +126,7 @@ export default function ActivationPage() {
               setError(null);
               setIdentity(null);
               setDeskPhone(infoForm.getFieldValue('phone')?.trim() || null); // không bắt gõ lại SĐT
+              setCredentials(null);
               setStep(1);
             }}
           >
@@ -136,7 +139,7 @@ export default function ActivationPage() {
         <Form
           layout="vertical"
           requiredMark={false}
-          initialValues={{ phone: identity?.phone ?? deskPhone, ...credentials }}
+          initialValues={{ phone: identity?.phone ?? deskPhone ?? prefillPhone, ...credentials }}
           onFinish={(values) => {
             setError(null);
             setCredentials(values);
@@ -144,14 +147,12 @@ export default function ActivationPage() {
           }}
         >
           {identity && (
-            <Alert type="info" showIcon className="mb-4" title="Mã xác minh đã được gửi tới email của bạn, có hiệu lực 10 phút." />
+            <Alert type="info" showIcon style={ALERT_GAP} title="Mã xác minh đã được gửi tới email của bạn, có hiệu lực 10 phút." />
           )}
           <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
             <Input size="large" prefix={icon(PhoneOutlined)} disabled={Boolean(identity)} />
           </Form.Item>
-          <Form.Item name="code" label="Mã xác minh" rules={[{ required: true, message: 'Vui lòng nhập mã xác minh' }]}>
-            <Input size="large" prefix={icon(SafetyOutlined)} placeholder="6 số trong email hoặc mã in tại quầy" autoComplete="one-time-code" />
-          </Form.Item>
+          <VerificationCodeField desk={!identity} />
           <Form.Item name="password" label="Mật khẩu" rules={PASSWORD_RULES}>
             <Input.Password size="large" prefix={icon(LockOutlined)} autoComplete="new-password" />
           </Form.Item>
@@ -223,7 +224,7 @@ export default function ActivationPage() {
 
       <div className="mt-4 text-center text-[13px] text-ink-2">
         Đã kích hoạt?{' '}
-        <Link to={portalPath(portal, '/login')} className="font-semibold text-navy hover:text-gold transition-colors">
+        <Link to={portalPath(portal, '/login')} className="font-medium text-navy hover:text-navy-hover">
           Đăng nhập
         </Link>
       </div>

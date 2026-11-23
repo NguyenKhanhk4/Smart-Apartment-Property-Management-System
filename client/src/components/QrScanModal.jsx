@@ -108,7 +108,7 @@ export default function QrScanModal({ open, title = 'Quét mã QR', onClose, onR
     }
   };
   return (
-    <Modal title={title} open={open} onCancel={onClose} footer={null} destroyOnHidden width={420}>
+    <Modal title={title} open={open} onCancel={onClose} footer={null} destroyOnHidden width="min(420px, 94vw)">
       <Scanner onResult={handle} busy={busy} instruction={instruction} placeholder={placeholder} />
     </Modal>
   );

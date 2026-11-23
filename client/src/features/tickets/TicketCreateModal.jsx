@@ -8,6 +8,7 @@ import { PHONE_RULES } from '../../utils/phone';
 import { isConsentLocked } from '../../utils/consent';
 import ApartmentSelect from '../../components/ApartmentSelect';
 import { PRIORITIES, TICKET_STATUS } from '../../constants/enums';
+import { IN_APARTMENT_ENABLED } from './ticketActions';
 import { IMAGE_ACCEPT, IMAGE_HINT, checkImageFile } from '../../utils/imageUpload';
 
 const MAX_PHOTOS = 5;
@@ -159,7 +160,7 @@ export default function TicketCreateModal({ open, onClose, onCreated, staff = fa
             <Form.Item name="type" label="Bạn muốn gửi">
               <CardChoice options={TYPES} />
             </Form.Item>
-            {type === 'INCIDENT' && (
+            {IN_APARTMENT_ENABLED && type === 'INCIDENT' && (
               <Form.Item name="scope" label="Vị trí">
                 <CardChoice options={SCOPES} compact />
               </Form.Item>

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import dayjs from 'dayjs';
-import { Button, Card, DatePicker, Flex, Input, Popconfirm, Segmented, Select, Space, Table, Typography } from 'antd';
-import { CheckOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, DatePicker, Flex, Input, Popconfirm, Segmented, Select, Space, Table, Typography } from 'antd';
+import { BankOutlined, CheckOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
 import { invoiceApi } from '../../api/moduleB.api';
 import { lookupApi } from '../../api/moduleE.api';
 import EnumTag from '../../components/EnumTag';
@@ -13,6 +13,7 @@ import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { formatDate, formatMoney } from '../../utils/format';
+import AdjustmentsPanel from './AdjustmentsPanel';
 import { aptLabel, OUTSTANDING_STATUSES, outstandingOf, periodLabel } from './invoiceShared';
 
 // Mô đun 4 — UC27/UC28: danh sách thông báo phí theo kỳ. Kế toán trình duyệt Nháp; Trưởng BQL Duyệt & Phát hành / Trả lại.
@@ -66,10 +67,14 @@ export default function InvoiceListPage() {
     setSelected([]);
     return list.reload();
   };
-  // Có chọn dòng → xử lý các dòng đã chọn; không chọn → cả kỳ đang lọc
-  const selector = selected.length ? { invoiceIds: selected } : { period };
-  const scopeText = selected.length ? `${selected.length} thông báo đã chọn` : `toàn bộ kỳ ${periodLabel(period)}`;
-  const canBatch = selected.length > 0 || Boolean(period);
+  // Có chọn dòng → xử lý các dòng đã chọn; không chọn → cả kỳ đang lọc (và chỉ tòa đang lọc, nếu có)
+  const buildingName = buildings.find((b) => b._id === buildingId)?.name;
+  const selector = selected.length ? { invoiceIds: selected } : { period, ...(buildingId && { buildingId }) };
+  const scopeText = selected.length
+    ? `${selected.length} thông báo đã chọn`
+    : `toàn bộ kỳ ${periodLabel(period)}${buildingName ? ` của ${buildingName}` : ' (mọi tòa)'}`;
+  const tabCount = byStatus?.[status]?.count ?? 0;
+  const canBatch = selected.length > 0 || (Boolean(period) && tabCount > 0);
 
   const [submit, submitting] = useAction(() => invoiceApi.submit(selector), { onDone: afterAction });
   const [publish, publishing] = useAction(() => invoiceApi.publish(selector), { onDone: afterAction });
@@ -113,6 +118,9 @@ export default function InvoiceListPage() {
 
   // Chỉ chọn dòng khi đang ở tab có thao tác hàng loạt cho vai trò này
   const selectable = (isAccountant && status === 'DRAFT') || (isManager && status === 'PENDING_APPROVAL');
+  // Đang ở tab "Tất cả" / tab khác mà có việc chờ vai trò này → gợi ý chuyển tab (nút chỉ hiện ở tab Nháp / Chờ duyệt)
+  const pendingTab = isAccountant ? 'DRAFT' : isManager ? 'PENDING_APPROVAL' : null;
+  const pendingCount = pendingTab ? (byStatus?.[pendingTab]?.count ?? 0) : 0;
 
   return (
     <>
@@ -121,11 +129,19 @@ export default function InvoiceListPage() {
         subtitle="Kế toán tính phí → Trình duyệt → Trưởng BQL Duyệt & Phát hành. Cư dân chỉ thấy thông báo đã phát hành."
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Thông báo phí' }]}
         extra={
-          isAccountant && (
-            <Button onClick={() => navigate('/app/invoices/generate')} type="primary">
-              Tính phí
-            </Button>
-          )
+          <Space wrap>
+            {isManager && (
+              // Tài khoản nhận tiền nhập ở hồ sơ tòa nhà (UC05) — một nguồn cho PDF thông báo phí
+              <Button icon={<BankOutlined />} onClick={() => navigate('/app/building-settings')}>
+                Tài khoản nhận tiền
+              </Button>
+            )}
+            {isAccountant && (
+              <Button onClick={() => navigate('/app/invoices/generate')} type="primary">
+                Tính phí
+              </Button>
+            )}
+          </Space>
         }
       />
 
@@ -167,10 +183,31 @@ export default function InvoiceListPage() {
             />
           </div>
 
+          {pendingTab && status !== pendingTab && pendingCount > 0 && (
+            <Alert
+              type="info"
+              showIcon
+              message={`Có ${pendingCount} thông báo ${INVOICE_STATUS[pendingTab].label.toLowerCase()} cần bạn ${isAccountant ? 'trình duyệt' : 'duyệt'}.`}
+              action={
+                <Button size="small" type="primary" onClick={() => setStatus(pendingTab)}>
+                  Mở tab {INVOICE_STATUS[pendingTab].label}
+                </Button>
+              }
+            />
+          )}
+
+          {period && (status === 'DRAFT' || status === 'PENDING_APPROVAL') && <AdjustmentsPanel period={period} />}
+
           {selectable && (
             <Flex gap={8} wrap align="center">
               <Typography.Text type="secondary">
-                {selected.length ? `Đã chọn ${selected.length}` : period ? 'Không chọn dòng = xử lý cả kỳ' : 'Chọn dòng hoặc chọn kỳ'}
+                {selected.length
+                  ? `Đã chọn ${selected.length}`
+                  : !tabCount
+                    ? 'Không có thông báo nào ở trạng thái này'
+                    : period
+                      ? `Không chọn dòng = xử lý ${scopeText}`
+                      : 'Chọn dòng hoặc chọn kỳ'}
               </Typography.Text>
               {isAccountant && status === 'DRAFT' && (
                 <Popconfirm title={`Trình duyệt ${scopeText}?`} onConfirm={() => submit().catch(() => {})} disabled={!canBatch}>
@@ -219,6 +256,7 @@ export default function InvoiceListPage() {
           />
         </Flex>
       </Card>
+
 
       <ReasonModal
         open={Boolean(returning)}

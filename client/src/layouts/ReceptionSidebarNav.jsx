@@ -4,6 +4,7 @@ import { Tooltip } from 'antd';
 import { adminMenu, receptionNav } from '../config/menu';
 import { selectCounts, useReceptionDashboard } from '../features/home/reception/receptionDashboard';
 import { useAuth } from '../hooks/useAuth';
+import { activeMenuKey } from './activeMenu';
 
 // Sidebar riêng của Lễ tân: nhóm lại các mục có sẵn trong adminMenu (route và quyền không đổi),
 // kèm badge số việc chờ. Badge vàng = việc cần duyệt / xử lý, xám = thông tin (số khách chưa đến). Ẩn khi bằng 0.
@@ -11,8 +12,11 @@ export default function ReceptionSidebarNav({ collapsed, onNavigate }) {
   const { pathname } = useLocation();
   const { canSee } = useAuth();
   const counts = selectCounts(useReceptionDashboard());
-  const activeKey = pathname.split('/')[2];
   const byKey = Object.fromEntries(adminMenu.map((m) => [m.key, m]));
+  const activeKey = activeMenuKey(
+    pathname,
+    receptionNav.flatMap((g) => g.items.map((i) => byKey[i.key]).filter(Boolean)),
+  );
 
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="Menu chính">
@@ -25,7 +29,7 @@ export default function ReceptionSidebarNav({ collapsed, onNavigate }) {
               <div className="px-3 pb-1 pt-1 text-[11px] font-bold tracking-[0.12em] uppercase text-[#C9A24A] select-none">{group}</div>
             )}
             {visible.map(({ menu, badge, badgeTone }) => {
-              const active = activeKey === menu.path.split('/')[0];
+              const active = activeKey === menu.key;
               const count = badge ? counts[badge] : 0;
               const link = (
                 <Link

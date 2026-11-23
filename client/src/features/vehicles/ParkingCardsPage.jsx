@@ -186,7 +186,7 @@ export default function ParkingCardsPage() {
       dataIndex: 'cardNumber',
       key: 'cardNumber',
       render: (v) => (
-        <Tag icon={<IdcardOutlined />} color="blue" className="font-bold text-sm">
+        <Tag icon={<IdcardOutlined />} color="blue" className="font-semibold text-sm">
           {v}
         </Tag>
       ),
@@ -220,7 +220,7 @@ export default function ParkingCardsPage() {
             <EnumTag map={VEHICLE_TYPES} value={v.type} />
             <b>{v.plateNumber || 'Không biển số'}</b>
             {(v.brand || v.color) && (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-ink-3">
                 ({[v.brand, v.color].filter(Boolean).join(' - ')})
               </span>
             )}
@@ -237,7 +237,7 @@ export default function ParkingCardsPage() {
         return (
           <div>
             <div>{u.fullName}</div>
-            <div className="text-xs text-gray-400">{u.phone || u.email || ''}</div>
+            <div className="text-xs text-ink-3">{u.phone || u.email || ''}</div>
           </div>
         );
       },
@@ -257,7 +257,7 @@ export default function ParkingCardsPage() {
       render: (v, r) => (
         <div>
           {formatDateTime(v)}
-          {r.handedOverAt && <div className="text-xs text-gray-500">Đã giao: {formatDateTime(r.handedOverAt)}</div>}
+          {r.handedOverAt && <div className="text-xs text-ink-3">Đã giao: {formatDateTime(r.handedOverAt)}</div>}
         </div>
       ),
     },
@@ -267,7 +267,7 @@ export default function ParkingCardsPage() {
       render: (_, r) => (
         <div className="text-xs">
           {r.closedAt && <div>Đóng lúc: {formatDateTime(r.closedAt)}</div>}
-          {r.note && <div className="text-gray-500">Ghi chú: {r.note}</div>}
+          {r.note && <div className="text-ink-3">Ghi chú: {r.note}</div>}
           {!r.closedAt && !r.note && '—'}
         </div>
       ),
@@ -294,7 +294,7 @@ export default function ParkingCardsPage() {
           }
         }
         if (r.status !== 'DISABLED_TO_COLLECT') {
-          return <span className="text-xs text-gray-400">—</span>;
+          return <span className="text-xs text-ink-3">—</span>;
         }
         if (!isReceptionist) {
           return <Tag>Chỉ Lễ tân thao tác</Tag>;

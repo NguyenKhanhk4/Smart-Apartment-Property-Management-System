@@ -34,7 +34,7 @@ export default function PersonalDataTerms({ className = 'max-h-64', onScroll, re
       ref={ref}
       onScroll={onScroll}
       tabIndex={0}
-      className={`${className} overflow-y-auto rounded-md border border-line p-3 text-[13px] leading-relaxed text-ink-2`}
+      className={`${className} overflow-y-auto rounded-[10px] border border-line-strong bg-surface-alt/40 p-3 text-[13px] leading-relaxed text-ink-2`}
     >
       <p className="mt-0 font-semibold text-ink">Điều khoản xử lý dữ liệu cá nhân</p>
       {SECTIONS.map(({ title, body }) => (

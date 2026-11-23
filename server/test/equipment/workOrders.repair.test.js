@@ -21,6 +21,8 @@ let upload;
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, 1)]);
 const PHOTO = { originalname: 'anh.jpg', mimetype: 'image/jpeg', buffer: JPEG };
 const CHECKLIST = [{ label: 'Điện áp', unit: 'V', minValue: 370, maxValue: 400, required: true }];
+// Thang máy: biên bản nhà thầu + biên bản kiểm định
+const DOCS = { images: [PHOTO], certificates: [PHOTO] };
 const FAULT = { faultDesc: 'Biến áp tủ điều khiển cháy', vendorName: 'Công ty Toàn Phát', vendorProposal: 'Thay biến áp mới', estimatedCost: 12_500_000 };
 
 before(async () => {
@@ -60,7 +62,7 @@ describe('UC09 — báo hư hỏng và nghiệm thu sửa chữa', () => {
     if (until === 'reported') return ctx;
     await decision.decideRepair(ctx.mUser, wo._id, { decision: 'APPROVE', costSource: 'OPERATING', comment: 'Làm ngay' });
     if (until === 'approved') return ctx;
-    await repair.uploadAcceptance(ctx.tUser, wo._id, { note: 'Nhà thầu đã thay biến áp' }, [PHOTO]);
+    await repair.uploadAcceptance(ctx.tUser, wo._id, { note: 'Nhà thầu đã thay biến áp' }, DOCS);
     return ctx;
   };
   const reload = (wo) => WorkOrder.findById(wo._id).lean();
@@ -102,8 +104,11 @@ describe('UC09 — báo hư hỏng và nghiệm thu sửa chữa', () => {
   it('tải biên bản: bắt buộc ảnh; chỉ chuyển Chờ nghiệm thu (chưa hoàn thành, thiết bị chưa dời lịch); báo Trưởng BQL (MSG-E13)', async () => {
     const { tUser, wo, asset } = await setup('approved');
     await assert.rejects(repair.uploadAcceptance(tUser, wo._id, {}, []), { errorCode: 'VALIDATION_ERROR' });
-    const res = await repair.uploadAcceptance(tUser, wo._id, { note: 'Xong' }, [PHOTO]);
+    // Thang máy thiếu biên bản kiểm định → 400
+    await assert.rejects(repair.uploadAcceptance(tUser, wo._id, { note: 'Xong' }, [PHOTO]), (e) => e.details?.[0]?.field === 'certificates');
+    const res = await repair.uploadAcceptance(tUser, wo._id, { note: 'Xong' }, DOCS);
     assert.equal(res.status, 'AWAITING_ACCEPTANCE');
+    assert.equal(res.repair.inspectionCertUrls.length, 1);
     assert.equal(res.completedAt, undefined);
     assert.equal((await Asset.findById(asset._id).lean()).nextMaintenanceDate.getTime(), asset.nextMaintenanceDate.getTime());
     assert.ok(await Notification.exists({ title: 'Sửa chữa chờ nghiệm thu' }));
@@ -138,7 +143,7 @@ describe('UC09 — báo hư hỏng và nghiệm thu sửa chữa', () => {
     const { mUser, wo } = await setup('approved');
     await assert.rejects(repair.acceptRepair(mUser, wo._id), { errorCode: 'WORKORDER_INVALID_STATUS' });
     const { tUser } = { tUser: asUser({ _id: (await reload(wo)).assignedTo, role: 'STAFF', roleTitle: 'TECHNICIAN' }) };
-    await repair.uploadAcceptance(tUser, wo._id, {}, [PHOTO]);
+    await repair.uploadAcceptance(tUser, wo._id, {}, DOCS);
     mock.method(Asset.prototype, 'save', async () => { throw new Error('boom'); });
     await assert.rejects(repair.acceptRepair(mUser, wo._id), /boom/);
     assert.equal((await reload(wo)).status, 'AWAITING_ACCEPTANCE');
@@ -152,10 +157,11 @@ describe('UC09 — báo hư hỏng và nghiệm thu sửa chữa', () => {
     assert.equal(res.status, 'UNDER_REPAIR');
     assert.deepEqual(res.repair.acceptanceImages, []);
     const uploaded = res.repair.history.find((h) => h.action === 'ACCEPTANCE_UPLOADED');
-    assert.equal(uploaded.images.length, 1); // biên bản cũ vẫn còn trong lịch sử
+    assert.equal(uploaded.images.length, 2); // biên bản cũ (nhà thầu + kiểm định) vẫn còn trong lịch sử
+    assert.deepEqual(res.repair.inspectionCertUrls, []);
     assert.equal(res.repair.history.at(-1).note, 'Biên bản thiếu chữ ký nhà thầu');
     assert.ok(await Notification.exists({ userId: tUser.id, title: 'Yêu cầu sửa lại' }));
-    assert.equal((await repair.uploadAcceptance(tUser, wo._id, {}, [PHOTO])).status, 'AWAITING_ACCEPTANCE');
+    assert.equal((await repair.uploadAcceptance(tUser, wo._id, {}, DOCS)).status, 'AWAITING_ACCEPTANCE');
   });
 
   it('job: thiết bị đang sửa chữa không bị tạo phiếu mới; không tính quá hạn kiểm tra; chờ nghiệm thu quá 3 ngày thì nhắc', async () => {

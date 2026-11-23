@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Badge, Button, Card, Flex, Space, Table, Tabs, Tag, Typography } from 'antd';
+import { useNavigate } from 'react-router';
+import { Badge, Button, Card, Flex, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import { workOrderApi } from '../../api/equipment.api';
 import EnumTag from '../../components/EnumTag';
 import PageHeader from '../../components/PageHeader';
@@ -11,6 +12,11 @@ import { RepairDecisionModal, RepairRequestModal } from './RepairModals';
 import WorkOrderReportModal from './WorkOrderReportModal';
 
 const PAGE_SIZE = 10;
+
+// Đề xuất chi quỹ đang xử lý của phiếu: đang chờ ai
+const FUND_WAITING = {
+  PENDING: 'chờ Ban quản trị biểu quyết',
+};
 
 const assetCell = (_, r) => (
   <Flex vertical>
@@ -39,6 +45,7 @@ const reviewCell = (_, r) => (
 
 // UC10 – Trưởng BQL: danh sách báo cáo hư hỏng chờ quyết định, phiếu đang tạm hoãn (để không bị quên), phiếu đã quyết định
 export default function MajorRepairApprovalPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('pending');
   const [page, setPage] = useState(1);
   const [acting, setActing] = useState(null); // { mode: 'decide' | 'retire' | 'request' | 'view', wo }
@@ -54,21 +61,46 @@ export default function MajorRepairApprovalPage() {
   ];
   const byTab = {
     pending: [
-      { title: 'Báo cáo', key: 'reported', width: 170, render: (_, r) => <Flex vertical><span>{r.repair?.reportedBy?.fullName ?? '—'}</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(r.repair?.reportedAt)}</Typography.Text></Flex> },
+      { title: 'Báo cáo', key: 'reported', width: 170, render: (_, r) => <Flex vertical><span>{r.repair?.reportedBy?.fullName ?? 'Không rõ người báo'}</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(r.repair?.reportedAt)}</Typography.Text></Flex> },
       {
         title: 'Nguồn chi',
         key: 'source',
-        width: 160,
-        render: (_, r) => (r.repair?.costSource === 'FUND'
-          ? <Flex vertical><EnumTag map={REPAIR_COST_SOURCES} value="FUND" /><Typography.Text type="secondary" style={{ fontSize: 12 }}>Chờ Ban quản trị</Typography.Text></Flex>
-          : <Tag>Chưa quyết định</Tag>),
+        width: 200,
+        render: (_, r) => {
+          if (r.repair?.costSource !== 'FUND') {
+            return r.policy?.fundRequired
+              ? <Tooltip title={`Tổng ${formatMoney(r.policy.total)} từ ngưỡng ${formatMoney(r.policy.threshold)}`}><Tag color="purple">Bắt buộc Quỹ</Tag></Tooltip>
+              : <Tag>Chưa quyết định</Tag>;
+          }
+          const f = r.pendingFund;
+          return (
+            <Flex vertical>
+              <EnumTag map={REPAIR_COST_SOURCES} value="FUND" />
+              {f ? (
+                <Typography.Link
+                  style={{ fontSize: 12 }}
+                  onClick={() => navigate(`/app/fund/proposals/${f._id}`)}
+                >
+                  {f.code}: {FUND_WAITING[f.status] ?? 'đang xử lý'}
+                </Typography.Link>
+              ) : (
+                <Typography.Link style={{ fontSize: 12 }} onClick={() => navigate(`/app/fund?createFrom=${r._id}`)}>Lập đề xuất chi quỹ</Typography.Link>
+              )}
+            </Flex>
+          );
+        },
       },
       {
         title: '',
         key: 'act',
         width: 120,
         fixed: 'right',
-        render: (_, r) => <Button size="small" type="primary" onClick={() => setActing({ mode: 'decide', wo: r })}>Quyết định</Button>,
+        // Đề xuất chi quỹ đang xử lý thì không quyết định lại được (server trả WORKORDER_FUND_PENDING)
+        render: (_, r) => (
+          <Tooltip title={r.pendingFund ? `Đề xuất ${r.pendingFund.code} ${FUND_WAITING[r.pendingFund.status] ?? 'đang xử lý'}` : undefined}>
+            <Button size="small" type="primary" disabled={Boolean(r.pendingFund)} onClick={() => setActing({ mode: 'decide', wo: r })}>Quyết định</Button>
+          </Tooltip>
+        ),
       },
     ],
     postponed: [
@@ -89,8 +121,8 @@ export default function MajorRepairApprovalPage() {
     ],
     decided: [
       { title: 'Trạng thái', dataIndex: 'status', width: 140, render: (v) => <EnumTag map={WORK_ORDER_STATUS} value={v} /> },
-      { title: 'Nguồn chi', dataIndex: ['repair', 'costSource'], width: 140, render: (v) => (v ? <EnumTag map={REPAIR_COST_SOURCES} value={v} /> : '—') },
-      { title: 'Quyết định', key: 'decided', width: 170, render: (_, r) => <Flex vertical><span>{r.repair?.decidedBy?.fullName ?? '—'}</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(r.repair?.decidedAt)}</Typography.Text></Flex> },
+      { title: 'Nguồn chi', dataIndex: ['repair', 'costSource'], width: 140, render: (v, r) => (v ? <EnumTag map={REPAIR_COST_SOURCES} value={v} /> : r.status === 'CLOSED' ? 'Không sửa (ngừng sử dụng)' : 'Chưa chọn') },
+      { title: 'Quyết định', key: 'decided', width: 170, render: (_, r) => <Flex vertical><span>{r.repair?.decidedBy?.fullName ?? 'Chưa quyết định'}</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(r.repair?.decidedAt)}</Typography.Text></Flex> },
       { title: '', key: 'act', width: 100, fixed: 'right', render: (_, r) => <Button size="small" onClick={() => setActing({ mode: 'view', wo: r })}>Xem</Button> },
     ],
   };

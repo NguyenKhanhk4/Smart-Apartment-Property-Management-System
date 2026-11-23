@@ -99,6 +99,26 @@ test('dashboard tài chính: phát hành / đã thu theo kỳ, thu theo tháng v
   assert.equal(r.fund.income, 12_000_000);
 });
 
+test('tiền tiện ích không đếm trùng: payOS trả phí booking, đổi lịch booking đã trả', async () => {
+  const h = await createHousehold();
+  const amenity = await createAmenity();
+  const paidAt = new Date('2026-10-14T03:00:00Z');
+  // payOS trả phí booking, xác nhận được booking → tính 1 lần ở "Tiện ích trả ngay"
+  const viaPayos = await createBooking({ amenity, apartment: h.apartment, startAt: new Date('2026-10-15T03:00:00Z'), fee: 100_000, paidAt, paymentRef: '111' });
+  await Payment.create({ apartmentId: h.apartment._id, payerId: h.user._id, bookingId: viaPayos._id, amount: 100_000, method: 'PAYOS', status: 'SUCCESS', paidAt, orderCode: 111 });
+  // payOS về muộn, hết chỗ → tiền vào Số dư trả trước → là tiền thu payOS
+  const lost = await createBooking({ amenity, apartment: h.apartment, startAt: new Date('2026-10-16T03:00:00Z'), fee: 70_000, status: 'CANCELLED' });
+  await Payment.create({ apartmentId: h.apartment._id, payerId: h.user._id, bookingId: lost._id, amount: 70_000, creditAmount: 70_000, method: 'PAYOS', status: 'SUCCESS', paidAt, orderCode: 222 });
+  // Đổi lịch booking đã trả tại quầy: booking mới chép paidAt → chỉ tính 1 lần
+  const old = await createBooking({ amenity, apartment: h.apartment, startAt: new Date('2026-10-17T03:00:00Z'), fee: 50_000, status: 'CANCELLED', paidAt, paymentRef: 'PT-1' });
+  await createBooking({ amenity, apartment: h.apartment, startAt: new Date('2026-10-18T03:00:00Z'), fee: 50_000, paidAt, paymentRef: 'PT-1', rescheduledFrom: old._id });
+
+  const oct = (await financeDashboard({ from: '2026-10', to: '2026-10' }, { now: NOW })).byMonth[0];
+  assert.equal(oct.amenityDirect, 150_000);
+  assert.equal(oct.PAYOS, 70_000);
+  assert.equal(oct.collected, 70_000);
+});
+
 test('báo cáo giám sát Ban quản trị: quỹ, thu phí, sự cố — không lộ công nợ từng căn', async () => {
   await seedData();
   const r = await supervisionReport({ from: '2026-10', to: '2026-11' }, { now: NOW });

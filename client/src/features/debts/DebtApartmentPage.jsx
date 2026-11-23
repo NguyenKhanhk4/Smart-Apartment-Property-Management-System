@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { Alert, App, Button, Card, Descriptions, Empty, Flex, Skeleton, Statistic, Table, Tag, Timeline, Typography } from 'antd';
-import { EditOutlined, FilePdfOutlined } from '@ant-design/icons';
+import { DollarOutlined, EditOutlined, FilePdfOutlined } from '@ant-design/icons';
 import { debtApi } from '../../api/moduleB.api';
 import { contractsApi } from '../../api/moduleA.api';
 import EnumTag from '../../components/EnumTag';
@@ -11,6 +11,7 @@ import { useAction, useApi } from '../../hooks/useApi';
 import { useAuth } from '../../hooks/useAuth';
 import { formatDate, formatDateTime, formatMoney } from '../../utils/format';
 import { periodLabel } from '../invoices/invoiceShared';
+import RecordPaymentModal from '../payments/RecordPaymentModal';
 import DebtActivityModal from './DebtActivityModal';
 import { caseHint } from './debtShared';
 
@@ -23,6 +24,7 @@ export default function DebtApartmentPage() {
   const { hasRole } = useAuth();
   const isAccountant = hasRole('ACCOUNTANT');
   const [recording, setRecording] = useState(null); // { caseId, payerName }
+  const [collecting, setCollecting] = useState(null); // thu tiền cho 1 Người nộp phí: { apartmentId, payerId, name, apt, outstanding }
   const [downloading, setDownloading] = useState(null);
   const { data, loading, reload } = useApi(() => debtApi.apartment(id), [id]);
   const { data: transferReview, reload: reloadTransferReview } = useApi(
@@ -108,9 +110,28 @@ export default function DebtApartmentPage() {
             type="warning"
             showIcon
             message={`${reconcilePayments.length} giao dịch payOS cần đối soát`}
-            description={reconcilePayments.map((p) => `${p.orderCode ?? p.reference ?? p._id} · ${formatMoney(p.amount)} · ${formatDateTime(p.createdAt)}`).join('; ')}
+            description={
+              <Flex vertical gap={2}>
+                {reconcilePayments.map((p) => (
+                  <Link key={p._id} to={`/app/payments/${p._id}/receipt`} viewTransition>
+                    {p.orderCode ?? p.reference ?? p._id} · {formatMoney(p.amount)} · {formatDateTime(p.createdAt)}
+                    {p.payerId?.fullName && ` · ${p.payerId.fullName}`}
+                  </Link>
+                ))}
+              </Flex>
+            }
             action={
-              <Button size="small" onClick={() => navigate('/app/payments')}>
+              <Button
+                size="small"
+                onClick={() =>
+                  navigate(
+                    reconcilePayments.length === 1
+                      ? `/app/payments/${reconcilePayments[0]._id}/receipt`
+                      : `/app/payments?status=RECONCILE&apartmentId=${id}&apt=${encodeURIComponent(apt)}`,
+                    { viewTransition: true },
+                  )
+                }
+              >
                 Xem giao dịch
               </Button>
             }
@@ -135,20 +156,29 @@ export default function DebtApartmentPage() {
                 </Flex>
               }
               extra={
-                openCase && (
-                  <Flex gap={8} wrap>
-                    {isAccountant && (
-                      <Button icon={<EditOutlined />} onClick={() => setRecording({ caseId: openCase._id, payerName: p.fullName })}>
-                        Ghi kết quả xử lý
-                      </Button>
-                    )}
-                    {p.outstanding > 0 && (
-                      <Button icon={<FilePdfOutlined />} loading={downloading === openCase._id} onClick={() => download(openCase._id)}>
-                        PDF thông báo nợ
-                      </Button>
-                    )}
-                  </Flex>
-                )
+                <Flex gap={8} wrap>
+                  {isAccountant && p.outstanding > 0 && (
+                    <Button
+                      type="primary"
+                      icon={<DollarOutlined />}
+                      onClick={() =>
+                        setCollecting({ apartmentId: id, payerId: p.payerId, name: p.fullName, apt, outstanding: p.outstanding })
+                      }
+                    >
+                      Thu tiền
+                    </Button>
+                  )}
+                  {openCase && isAccountant && (
+                    <Button icon={<EditOutlined />} onClick={() => setRecording({ caseId: openCase._id, payerName: p.fullName })}>
+                      Ghi kết quả xử lý
+                    </Button>
+                  )}
+                  {openCase && p.outstanding > 0 && (
+                    <Button icon={<FilePdfOutlined />} loading={downloading === openCase._id} onClick={() => download(openCase._id)}>
+                      PDF thông báo nợ
+                    </Button>
+                  )}
+                </Flex>
               }
             >
               <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} className="mb-3">
@@ -224,6 +254,13 @@ export default function DebtApartmentPage() {
           />
         </Card>
       </Flex>
+
+      <RecordPaymentModal
+        open={Boolean(collecting)}
+        payer={collecting}
+        onClose={() => setCollecting(null)}
+        onDone={() => setCollecting(null)}
+      />
 
       <DebtActivityModal
         open={Boolean(recording)}

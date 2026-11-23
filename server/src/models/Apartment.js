@@ -12,7 +12,12 @@ const apartmentSchema = new Schema(
     type: { type: String, enum: values(APARTMENT_TYPES) },
     grossArea: { type: Number, min: 0 },
     netArea: { type: Number, min: 0 },
-    technicalShaft: String,
+    managementAreaHistory: { type: [{
+      area: { type: Number, required: true, min: 1 },
+      effectiveFrom: { type: Date, required: true },
+      reason: String, sourceReference: String,
+      changedBy: { type: ObjectId, ref: 'User' }, changedAt: Date, _id: false,
+    }], default: [] },
     handoverDate: Date,
     // Hồ sơ cũ chưa có ngày bàn giao giữ giá trị undefined để BQL đối chiếu.
     occupancyStatus: { type: String, enum: values(APARTMENT_OCCUPANCY) },

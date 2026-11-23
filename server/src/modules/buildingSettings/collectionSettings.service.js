@@ -90,6 +90,17 @@ export async function updateCollectionSetting(user, { utility, enabled, waterQuo
   const currentPeriod = vnPeriod(now);
   const nextPeriod = shiftPeriod(currentPeriod, 1);
 
+  // Chọn lại đúng trạng thái đang áp dụng ở kỳ hiện tại = hủy lịch hẹn (không tạo dòng hẹn thừa)
+  const current = await CollectionSetting.findOne({ utility, fromPeriod: { $lte: currentPeriod } })
+    .sort({ fromPeriod: -1 })
+    .lean();
+  const currentEnabled = current ? current.enabled : DEFAULTS[utility].enabled;
+  const currentQuota = current ? current.waterQuotaPerOccupant : DEFAULTS[utility].waterQuotaPerOccupant;
+  const nextQuota = utility === 'WATER' && enabled && waterQuotaPerOccupant != null ? Number(waterQuotaPerOccupant) : null;
+  if (Boolean(enabled) === currentEnabled && (nextQuota ?? null) === (currentQuota ?? null)) {
+    return cancelUpcomingSetting(user, utility, { now });
+  }
+
   // Lấy trạng thái trước đó
   const before = await CollectionSetting.findOne({ utility })
     .sort({ fromPeriod: -1 })
@@ -118,6 +129,7 @@ export async function updateCollectionSetting(user, { utility, enabled, waterQuo
     user,
     targetType: AUDIT_TARGETS.COLLECTION_SETTING,
     targetId: setting._id,
+    metadata: { utility },
     before: beforeState,
     after: {
       enabled: setting.enabled,
@@ -131,5 +143,31 @@ export async function updateCollectionSetting(user, { utility, enabled, waterQuo
     effectiveFrom: nextPeriod,
     message: `Đã lưu cấu hình. Thay đổi thu hộ có hiệu lực từ kỳ sau (${periodLabel(nextPeriod)}).`,
   };
+}
+
+/**
+ * Hủy lịch hẹn đổi thu hộ (mọi bản ghi ở kỳ tương lai) → kỳ sau giữ nguyên trạng thái hiện tại.
+ */
+export async function cancelUpcomingSetting(user, utility, { now = new Date() } = {}) {
+  const currentPeriod = vnPeriod(now);
+  const upcoming = await CollectionSetting.find({ utility, fromPeriod: { $gt: currentPeriod } })
+    .sort({ fromPeriod: 1 })
+    .lean();
+  if (!upcoming.length) {
+    return { setting: null, effectiveFrom: null, message: 'Không có lịch hẹn nào cần hủy, trạng thái thu hộ giữ nguyên.' };
+  }
+
+  await CollectionSetting.deleteMany({ _id: { $in: upcoming.map((s) => s._id) } });
+  await logAudit({
+    action: AUDIT_ACTIONS.COLLECTION_SETTING_CHANGED,
+    user,
+    targetType: AUDIT_TARGETS.COLLECTION_SETTING,
+    targetId: upcoming[0]._id,
+    metadata: { utility },
+    before: { enabled: upcoming[0].enabled, waterQuotaPerOccupant: upcoming[0].waterQuotaPerOccupant, fromPeriod: upcoming[0].fromPeriod },
+    after: { cancelled: true },
+  });
+
+  return { setting: null, effectiveFrom: null, message: 'Đã hủy lịch hẹn, kỳ sau giữ nguyên trạng thái thu hộ hiện tại.' };
 }
 

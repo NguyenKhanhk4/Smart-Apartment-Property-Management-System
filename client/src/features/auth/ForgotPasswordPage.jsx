@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Alert, Button, Form, Input } from 'antd';
-import { ArrowRightOutlined, LockOutlined, PhoneOutlined, SafetyOutlined } from '@ant-design/icons';
+import { ArrowRightOutlined, LockOutlined, PhoneOutlined } from '@ant-design/icons';
 import { authApi } from '../../api/auth.api';
+import { ALERT_GAP } from './authStyles';
 import { portalPath, useAuthPortal } from './authPortal';
 import { PHONE_RULES } from '../../utils/phone';
+import VerificationCodeField from './VerificationCodeField';
 
 const RESEND_SECONDS = 60;
 const icon = (Icon) => <Icon className="text-ink-3" />;
@@ -13,6 +15,8 @@ const icon = (Icon) => <Icon className="text-ink-3" />;
 export default function ForgotPasswordPage() {
   const portal = useAuthPortal(); // cổng cư dân / Ban quản lý: link quay lại đúng cổng
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const desk = searchParams.get('method') === 'desk';
   const [phone, setPhone] = useState(null); // null = chưa gửi mã
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -45,22 +49,26 @@ export default function ForgotPasswordPage() {
   };
 
   const reset = async (values) => {
-    if (await run(() => authApi.resetPassword({ ...values, phone }))) {
-      navigate(portalPath(portal, '/login'), { replace: true, state: { passwordReset: true, phone } });
+    const targetPhone = desk ? values.phone : phone;
+    if (await run(() => authApi.resetPassword({ ...values, phone: targetPhone }))) {
+      navigate(portalPath(portal, '/login'), { replace: true, state: { passwordReset: true, phone: targetPhone } });
     }
   };
 
   return (
     <>
-      <h2 className="m-0 text-2xl font-semibold tracking-tight text-ink">Quên mật khẩu</h2>
-      <div className="w-8 h-0.5 bg-gold mt-2 mb-2" />
-      <p className="m-0 mb-6 text-[13px] text-ink-2">
-        {phone ? 'Nhập mã đã gửi tới email và đặt mật khẩu mới.' : 'Nhập số điện thoại đăng nhập, mã đặt lại mật khẩu sẽ gửi tới email của tài khoản.'}
+      <h2 id="auth-form-title" className="auth-form-title">Quên mật khẩu</h2>
+      <p className="auth-form-subtitle">
+        {desk
+          ? 'Nhập số điện thoại và mã in tại quầy để đặt mật khẩu mới.'
+          : phone
+            ? 'Nhập mã đã gửi tới email và đặt mật khẩu mới.'
+            : 'Nhập số điện thoại đăng nhập, mã đặt lại mật khẩu sẽ gửi tới email của tài khoản.'}
       </p>
 
-      {error && <Alert type="error" showIcon title={error} className="mb-4" closable={{ onClose: () => setError(null) }} />}
+      {error && <Alert type="error" showIcon title={error} style={ALERT_GAP} closable={{ onClose: () => setError(null) }} />}
 
-      {!phone ? (
+      {!desk && !phone ? (
         <Form layout="vertical" requiredMark={false} disabled={loading} onFinish={({ phone: value }) => sendCode(value)}>
           <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
             <Input size="large" prefix={icon(PhoneOutlined)} placeholder="0912345678" autoComplete="tel" />
@@ -70,17 +78,21 @@ export default function ForgotPasswordPage() {
           </Button>
         </Form>
       ) : (
-        <Form layout="vertical" requiredMark={false} disabled={loading} onFinish={reset}>
-          <Alert
-            type="info"
-            showIcon
-            className="mb-4"
-            title={`Nếu số ${phone} có tài khoản và email, mã đã được gửi tới email, có hiệu lực 10 phút.`}
-            description="Không nhận được email hoặc tài khoản không có email: mang CCCD đến quầy lễ tân để lấy mã in."
-          />
-          <Form.Item name="code" label="Mã xác minh" rules={[{ required: true, message: 'Vui lòng nhập mã xác minh' }]}>
-            <Input size="large" prefix={icon(SafetyOutlined)} placeholder="6 số trong email" autoComplete="one-time-code" />
-          </Form.Item>
+        <Form key={desk ? 'desk' : 'email'} layout="vertical" requiredMark={false} disabled={loading} initialValues={{ phone }} onFinish={reset}>
+          {desk ? (
+            <Form.Item name="phone" label="Số điện thoại" rules={PHONE_RULES}>
+              <Input size="large" prefix={icon(PhoneOutlined)} placeholder="0912345678" autoComplete="tel" />
+            </Form.Item>
+          ) : (
+            <Alert
+              type="info"
+              showIcon
+              style={ALERT_GAP}
+              title={`Nếu số ${phone} có tài khoản và email, mã đã được gửi tới email, có hiệu lực 10 phút.`}
+              description="Không nhận được email hoặc tài khoản không có email: mang CCCD đến quầy lễ tân để lấy mã in."
+            />
+          )}
+          <VerificationCodeField desk={desk} />
           <Form.Item
             name="password"
             label="Mật khẩu mới"
@@ -110,22 +122,29 @@ export default function ForgotPasswordPage() {
           <Button type="primary" htmlType="submit" size="large" block loading={loading}>
             Đặt lại mật khẩu <ArrowRightOutlined />
           </Button>
-          <Button type="link" block className="mt-2" disabled={resendIn > 0 || loading} onClick={() => sendCode(phone)}>
-            {resendIn > 0 ? `Gửi lại mã sau ${resendIn} giây` : 'Gửi lại mã'}
-          </Button>
-          <Button type="link" block onClick={() => setPhone(null)}>
-            Đổi số điện thoại
-          </Button>
+          {!desk && (
+            <>
+              <Button type="link" block className="mt-2" disabled={resendIn > 0 || loading} onClick={() => sendCode(phone)}>
+                {resendIn > 0 ? `Gửi lại mã sau ${resendIn} giây` : 'Gửi lại mã'}
+              </Button>
+              <Button type="link" block onClick={() => setPhone(null)}>
+                Đổi số điện thoại
+              </Button>
+            </>
+          )}
         </Form>
       )}
 
       <div className="mt-4 text-center text-[13px] text-ink-2">
-        Có mã in tại quầy?{' '}
-        <Link to={portalPath(portal, '/activate')} className="font-semibold text-navy hover:text-gold transition-colors">
-          Nhập mã tại đây
+        <Link
+          to={portalPath(portal, desk ? '/forgot-password' : '/forgot-password?method=desk')}
+          onClick={() => setError(null)}
+          className="font-medium text-navy hover:text-navy-hover"
+        >
+          {desk ? 'Nhận mã qua email' : 'Tôi đã có mã in tại quầy'}
         </Link>
         {' · '}
-        <Link to={portalPath(portal, '/login')} className="font-semibold text-navy hover:text-gold transition-colors">
+        <Link to={portalPath(portal, '/login')} className="font-medium text-navy hover:text-navy-hover">
           Đăng nhập
         </Link>
       </div>

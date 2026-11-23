@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 
-// Hai cổng đăng nhập tách riêng: cư dân (/login) và Ban quản lý (/staff/login).
+// Hai cổng đăng nhập tách riêng: cư dân (/login, giao diện B xanh lá) và Ban quản lý (/staff/login, giao diện A).
 // Kích hoạt / quên mật khẩu có ở cả hai cổng; trang dùng portalPath() để link về đúng cổng đang đứng.
 export const PORTALS = {
   resident: { prefix: '', label: 'Cổng cư dân', other: 'staff' },

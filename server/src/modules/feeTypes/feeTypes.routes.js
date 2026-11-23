@@ -62,9 +62,9 @@ router.get('/', authenticate, authorize('MANAGER', 'ACCOUNTANT'), validate({ que
  * /fee-types/current:
  *   get:
  *     tags: [Phí & hóa đơn]
- *     summary: Bảng giá đang áp dụng kỳ hiện tại (mọi người dùng đã đăng nhập)
+ *     summary: Bảng giá đang áp dụng kỳ hiện tại (Trưởng BQL, Kế toán)
  */
-router.get('/current', authenticate, async (_req, res) => ok(res, await service.getCurrentPrices()));
+router.get('/current', authenticate, authorize('MANAGER', 'ACCOUNTANT'), async (_req, res) => ok(res, await service.getCurrentPrices()));
 
 /**
  * @openapi

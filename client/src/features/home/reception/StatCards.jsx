@@ -55,9 +55,9 @@ export default function StatCards({ counts, parts }) {
         >
           <div className={`text-sm ${MUTED}`}>{c.label}</div>
           {loading(...c.names) && c.value == null ? (
-            <div className="mt-2 h-8 w-16 rounded bg-r-segment/60 dark:bg-[#18263D] animate-pulse" aria-label="Đang tải" />
+            <div className="mt-2 h-8 w-16 rounded bg-r-segment/60 dark:bg-[#27272A] animate-pulse" aria-label="Đang tải" />
           ) : (
-            <div className={`mt-1 text-[30px] leading-[1.2] font-semibold ${TEXT}`}>{c.value ?? '—'}</div>
+            <div className={`mt-1 text-2xl leading-[1.35] font-semibold ${TEXT}`}>{c.value ?? '—'}</div>
           )}
           {failed(...c.names) && c.value == null ? (
             <div className="text-[13px] text-r-danger-text">Không tải được</div>

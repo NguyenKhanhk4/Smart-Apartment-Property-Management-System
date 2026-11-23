@@ -9,6 +9,7 @@ import { startApp } from '../helpers/http.js';
 import { Notification, Resident } from '../../src/models/index.js';
 import express from 'express';
 import { uploadImages } from '../../src/services/upload.service.js';
+import { AnnouncementComment } from '../../src/models/Announcement.js';
 
 before(connectTestDB);
 afterEach(clearTestDB);
@@ -74,11 +75,54 @@ test('Module 8: bài riêng đúng căn, bình luận ẩn không lộ cho cư d
   await assert.rejects(service.addComment(asUser(other.user), article._id, 'Không được đọc'), { status: 404 });
   const comment = await service.addComment(asUser(home.user), article._id, '<script>alert(1)</script>');
   await assert.rejects(service.hideComment(asUser(home.user), article._id, comment._id), { status: 403 });
-  await service.hideComment(asUser(manager), article._id, comment._id);
+  await service.hideComment(asUser(manager), article._id, comment._id, 'Nội dung vi phạm');
   assert.equal((await service.comments(asUser(home.user), article._id)).items.length, 0);
   assert.equal((await service.comments(asUser(manager), article._id)).items.length, 1);
   await service.remove(asUser(manager), article._id);
   assert.equal(await Notification.countDocuments({ refId: article._id, userId: other.user._id }), 0);
+});
+
+test('N5-07: lý do bắt buộc, trim và lưu cùng người/thời điểm ẩn; retry không ghi đè', async () => {
+  const manager = await createManager(); const home = await createHousehold(); const article = await survey(manager);
+  const comment = await service.addComment(asUser(home.user), article._id, 'Bình luận cần kiểm duyệt');
+  for (const reason of [undefined, '', '   ', 'x'.repeat(501), 42]) {
+    await assert.rejects(service.hideComment(asUser(manager), article._id, comment._id, reason), { status: 400 });
+  }
+  assert.equal((await AnnouncementComment.findById(comment._id)).hidden, false);
+  await service.hideComment(asUser(manager), article._id, comment._id, '  Xúc phạm người khác  ');
+  const first = await AnnouncementComment.findById(comment._id).lean();
+  assert.equal(first.hideReason, 'Xúc phạm người khác');
+  assert.equal(String(first.hiddenBy), String(manager._id)); assert.ok(first.hiddenAt instanceof Date);
+  manager.isActive = false; await manager.save();
+  const another = await createManager(); // Thay BQL theo quy tắc chỉ một BQL hoạt động.
+  await service.hideComment(asUser(another), article._id, comment._id, 'Lý do mới');
+  const retried = await AnnouncementComment.findById(comment._id).lean();
+  assert.equal(retried.hideReason, first.hideReason);
+  assert.equal(String(retried.hiddenBy), String(first.hiddenBy)); assert.deepEqual(retried.hiddenAt, first.hiddenAt);
+  assert.equal((await service.comments(asUser(home.user), article._id)).pagination.total, 0);
+});
+
+test('N5-07: HTTP chặn sai quyền/thiếu lý do/sai bài, hai phiên BQL đồng thời chỉ ghi chứng cứ đầu tiên', async () => {
+  const manager = await createManager(); const home = await createHousehold();
+  const article = await survey(manager); const other = await survey(manager);
+  const comment = await service.addComment(asUser(home.user), article._id, 'Cần ẩn bình luận');
+  const app = await startApp();
+  const path = `/announcements/${article._id}/comments/${comment._id}/hide`;
+  try {
+    assert.equal((await app.request('PATCH', path, { user: asUser(home.user), body: { reason: 'Lý do' } })).status, 403);
+    for (const body of [{}, { reason: '  ' }, { reason: 'x'.repeat(501) }]) {
+      assert.equal((await app.request('PATCH', path, { user: asUser(manager), body })).status, 400);
+    }
+    assert.equal((await app.request('PATCH', `/announcements/${other._id}/comments/${comment._id}/hide`, { user: asUser(manager), body: { reason: 'Lý do' } })).status, 404);
+    const results = await Promise.all([0, 1].map((i) => app.request('PATCH', path, { user: asUser(manager), body: { reason: `Lý do ${i}` } })));
+    assert.ok(results.every((r) => r.status === 200));
+    const saved = await AnnouncementComment.findById(comment._id).lean();
+    assert.ok(['Lý do 0', 'Lý do 1'].includes(saved.hideReason));
+    assert.equal(String(saved.hiddenBy), String(manager._id));
+    const residentList = await app.request('GET', `/announcements/${article._id}/comments`, { user: asUser(home.user) });
+    assert.equal(residentList.body.data.length, 0);
+    assert.equal(JSON.stringify(residentList.body).includes(saved.hideReason), false);
+  } finally { await app.close(); }
 });
 
 test('Module 8: HTTP chỉ quản lý đăng, từ chối khảo sát trùng phương án; cư dân vẫn đọc bảng tin', async () => {

@@ -1,32 +1,29 @@
 import { VEHICLE_STATUS } from '../../constants/enums.js';
-import { periodStart } from '../../utils/time.js';
+import { periodEnd, periodStart } from '../../utils/time.js';
 import { Vehicle } from '../../models/index.js';
 
+const VEHICLE_FIELDS = '_id type plateNumber approvedAt cancelledAt';
+
+/** Điều kiện "xe có ít nhất 1 ngày được gửi trong [from, to)": duyệt trước `to`, chưa gỡ hoặc gỡ sau `from` */
+export const activeVehicleFilter = (from, to) => ({
+  approvedAt: { $lt: to },
+  $or: [
+    { status: VEHICLE_STATUS.APPROVED },
+    { status: VEHICLE_STATUS.CANCELLED, cancelledAt: { $gt: from } },
+  ],
+});
+
 /**
- * BR-F5: Xe tính vé tháng cho kỳ `period` ('YYYY-MM', giờ VN):
- * Xe duyệt trong tháng T -> tính phí từ kỳ T+1; xe hủy trong tháng T -> vẫn tính hết tháng T.
- * Điều kiện:
- * approvedAt < periodStart(period) VÀ (status APPROVED, hoặc status CANCELLED với cancelledAt >= periodStart(period))
+ * Mô đun 4 — xe tính phí gửi xe kỳ `period` ('YYYY-MM', giờ VN): mọi xe có ít nhất 1 ngày được gửi trong kỳ.
+ * Số ngày thực tế (đăng ký mới / gỡ xe giữa tháng) do builder thông báo phí tính từ approvedAt / cancelledAt.
  *
  * @param {string|import('mongoose').Types.ObjectId} apartmentId
  * @param {string} period 'YYYY-MM'
+ * @param {{ ids?: Array }} [opts] thêm các xe này dù không còn hoạt động trong kỳ (đối chiếu xe đã tính phí kỳ trước)
  * @returns {Promise<Array<{ _id: import('mongoose').Types.ObjectId, type: string, plateNumber: string, approvedAt: Date, cancelledAt: Date }>>}
  */
-export async function getBillableVehicles(apartmentId, period) {
-  const start = periodStart(period);
-  const filter = {
-    apartmentId,
-    approvedAt: { $lt: start },
-    $or: [
-      { status: VEHICLE_STATUS.APPROVED },
-      { status: VEHICLE_STATUS.CANCELLED, cancelledAt: { $gte: start } },
-    ],
-  };
-
-  const list = await Vehicle.find(filter)
-    .select('_id type plateNumber approvedAt cancelledAt')
-    .sort({ createdAt: 1 })
-    .lean();
-
-  return list;
+export async function getBillableVehicles(apartmentId, period, { ids = [] } = {}) {
+  const active = activeVehicleFilter(periodStart(period), periodEnd(period));
+  const filter = ids.length ? { apartmentId, $or: [active, { _id: { $in: ids } }] } : { apartmentId, ...active };
+  return Vehicle.find(filter).select(VEHICLE_FIELDS).sort({ createdAt: 1 }).lean();
 }

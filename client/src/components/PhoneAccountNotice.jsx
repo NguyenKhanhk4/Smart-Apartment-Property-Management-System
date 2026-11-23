@@ -6,7 +6,7 @@ const accountSummary = ({ fullName, email, idNumber }) =>
 /** Kết quả tra SĐT trong form gắn người vào căn hộ. `check` lấy từ usePhoneAccount */
 export default function PhoneAccountNotice({ check }) {
   const { status, account, phone } = check;
-  const show = (props) => <Alert showIcon className="mb-4" {...props} />;
+  const show = (props) => <Alert showIcon style={{ marginBottom: 16 }} {...props} />;
 
   switch (status) {
     case 'checking':

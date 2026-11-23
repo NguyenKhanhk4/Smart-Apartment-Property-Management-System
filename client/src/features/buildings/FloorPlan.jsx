@@ -6,6 +6,9 @@ import { unknownOccupancy } from './apartmentOccupancy';
 export default function FloorPlan({
   buildings, building, selection, onSelect, apartments, loading, error, onOpen,
 }) {
+  const floors = building?.floorInventory?.length
+    ? building.floorInventory.map((row) => row.floor).sort((a, b) => a - b)
+    : Array.from({ length: building?.totalFloors ?? 0 }, (_, index) => index + 1);
   return (
     <div className="space-y-4">
       <Space wrap>
@@ -15,17 +18,14 @@ export default function FloorPlan({
           style={{ minWidth: 200 }}
           value={building?._id}
           options={buildings.map((item) => ({ value: item._id, label: item.name }))}
-          onChange={(buildingId) => onSelect({ buildingId, floor: 1 })}
+          onChange={(buildingId) => onSelect({ buildingId, floor: buildings.find((item) => item._id === buildingId)?.floorInventory?.[0]?.floor ?? 1 })}
         />
         <Select
           aria-label="Tầng"
           disabled={!building}
           style={{ minWidth: 110 }}
-          value={selection.floor}
-          options={Array.from({ length: building?.totalFloors ?? 0 }, (_, index) => ({
-            value: index + 1,
-            label: `Tầng ${index + 1}`,
-          }))}
+          value={floors.includes(selection.floor) ? selection.floor : floors[0]}
+          options={floors.map((floor) => ({ value: floor, label: `Tầng ${floor}` }))}
           onChange={(floor) => onSelect({ ...selection, floor })}
         />
       </Space>

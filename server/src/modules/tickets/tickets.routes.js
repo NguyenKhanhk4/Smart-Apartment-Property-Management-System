@@ -131,6 +131,15 @@ router.post(
 
 /**
  * @openapi
+ * /tickets/rules:
+ *   get:
+ *     tags: [Ticket]
+ *     summary: Thời hạn đang áp dụng (đọc từ tham số hệ thống) để giao diện hiển thị đúng — { autoCloseDays }
+ */
+router.get('/rules', authenticate, async (_req, res) => ok(res, await service.getTicketRules()));
+
+/**
+ * @openapi
  * /tickets/queue:
  *   get:
  *     tags: [Ticket]

@@ -17,5 +17,6 @@ export const authApi = {
   /** Thu hồi refresh token trên mọi thiết bị; không cần access token còn hạn */
   logout: (refreshToken) => http.post('/auth/logout', { refreshToken }),
   devAccounts: () => http.get('/dev/accounts'),
-  devLogin: (email) => http.post('/dev/login', { email }),
+  /** Đăng nhập nhanh khi dev theo id tài khoản (tài khoản không có email vẫn vào được) */
+  devLogin: (id) => http.post('/dev/login', { id }),
 };

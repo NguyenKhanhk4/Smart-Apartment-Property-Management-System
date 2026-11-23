@@ -17,6 +17,7 @@ const fundTransactionSchema = new Schema(
     attachmentUrls: [String], // ảnh chứng từ, hóa đơn
     occurredAt: { type: Date, default: Date.now },
     proposalId: { type: ObjectId, ref: 'FundProposal', default: null }, // khi EXPENSE
+    varianceReason: { type: String, default: null }, // BR-F17: chi thấp hơn số đã duyệt thì ghi lý do
     createdBy: { type: ObjectId, ref: 'User' },
   },
   schemaOptions('fund_transactions'),

@@ -146,11 +146,14 @@ export async function addComment(user, id, content) {
   return AnnouncementComment.create({ announcementId: id, createdBy: user.id, content });
 }
 
-export async function hideComment(user, id, commentId) {
+export async function hideComment(user, id, commentId, reason) {
   if (user.role !== ROLES.MANAGER) throw ApiError.forbidden();
-  const comment = await AnnouncementComment.findOneAndUpdate({ _id: commentId, announcementId: id },
-    { $set: { hidden: true, hiddenBy: user.id, hiddenAt: new Date() } }, { returnDocument: 'after' });
-  if (!comment) throw ApiError.notFound();
+  const hideReason = typeof reason === 'string' ? reason.trim() : '';
+  if (!hideReason || hideReason.length > 500) throw ApiError.badRequest('Nhập lý do ẩn bình luận từ 1 đến 500 ký tự');
+  // Chỉ lần ẩn đầu ghi actor/time/reason; retry hoặc người thứ hai không ghi đè chứng cứ.
+  const comment = await AnnouncementComment.findOneAndUpdate({ _id: commentId, announcementId: id, hidden: false },
+    { $set: { hidden: true, hiddenBy: user.id, hiddenAt: new Date(), hideReason } }, { returnDocument: 'after' });
+  if (!comment && !(await AnnouncementComment.exists({ _id: commentId, announcementId: id, hidden: true }))) throw ApiError.notFound();
   return { hidden: true };
 }
 

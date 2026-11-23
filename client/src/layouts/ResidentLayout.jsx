@@ -2,6 +2,7 @@ import { Suspense, useLayoutEffect } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import { ConfigProvider } from 'antd';
 import { getAntdTheme } from '../config/theme';
+import { typography } from '../theme/tokens';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useThemeMode } from '../hooks/useThemeMode';
 import PageLoader from '../components/PageLoader';
@@ -14,7 +15,9 @@ import ConsentGate from '../components/resident/ConsentGate';
 
 // Khu cư dân chỉ có bản sáng theo thiết kế: bỏ class `dark` trên <html> khi ở đây (các trang cũ còn dùng `dark:`),
 // rời khu thì trả lại theo lựa chọn của người dùng.
-const lightTheme = { ...getAntdTheme(false), inherit: false };
+// Khu cư dân: font Mulish, chữ 13.5px (cùng bảng màu với khu quản lý)
+const base = getAntdTheme(false);
+const lightTheme = { ...base, inherit: false, token: { ...base.token, fontFamily: typography.fontResident, fontSize: 13.5, lineHeight: 1.6 } };
 
 // Trang mobile dùng tiêu đề thay cho lời chào ở header (đường dẫn khớp tuyệt đối)
 const HEADER_TITLES = { '/r/amenities': 'Tiện ích', '/r/my-code': 'Mã của tôi' };
@@ -33,7 +36,7 @@ export default function ResidentLayout() {
   return (
     <ConfigProvider theme={lightTheme}>
       <ResidentProvider>
-        <div className="min-h-screen bg-r-bg text-r-text font-sans">
+        <div className="font-resident min-h-screen bg-r-bg text-r-text">
           {isWide ? <WebHeader /> : <MobileHeader title={HEADER_TITLES[pathname.replace(/\/$/, '')]} />}
 
           <main className={isWide ? 'max-w-[1200px] mx-auto px-6 pt-8 pb-12' : 'px-5 pt-5 pb-28'}>

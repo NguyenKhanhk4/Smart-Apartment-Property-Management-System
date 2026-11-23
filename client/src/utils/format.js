@@ -13,9 +13,15 @@ export const moneyInputProps = {
   formatter: (v) => (v == null ? '' : `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.')),
   parser: (v) => (v == null ? '' : v.replace(/\./g, '')),
 };
-export const formatPercent = (r, digits = 1) => `${((r ?? 0) * 100).toFixed(digits)}%`;
+/** Số lượng dòng phí: tính theo ngày ra số lẻ (16/31 ngày ≈ 0,5161) → tối đa 4 chữ số thập phân, kiểu VN */
+export const formatQuantity = (n) => (n ?? 0).toLocaleString('vi-VN', { maximumFractionDigits: 4 });
+export const formatPercent =(r, digits = 1) => `${((r ?? 0) * 100).toFixed(digits)}%`;
 export const formatDateTime = (d) => (d ? dayjs(d).format('HH:mm DD/MM/YYYY') : '—');
 export const formatDate = (d) => (d ? dayjs(d).format('DD/MM/YYYY') : '—');
+/** Như formatDate / formatDateTime nhưng ngày trống thì ghi chữ (vd 'Chưa bảo trì') thay cho '—'.
+ * Không thêm tham số vào formatDate vì nó được truyền thẳng làm render của Table (tham số 2 là bản ghi). */
+export const dateOr = (d, empty) => (d ? dayjs(d).format('DD/MM/YYYY') : empty);
+export const dateTimeOr = (d, empty) => (d ? dayjs(d).format('HH:mm DD/MM/YYYY') : empty);
 export const fromNow = (d) => (d ? dayjs(d).fromNow() : '');
 
 /** Tên gọi thân mật theo thói quen người Việt: chữ cuối của họ tên ("Nguyễn Văn An" → "An") */

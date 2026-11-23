@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import Joi from 'joi';
+import { BOOKING_PAYMENT_METHODS, values } from '../../constants/enums.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { authorize } from '../../middlewares/authorize.js';
 import { validate } from '../../middlewares/validate.js';
@@ -20,6 +21,8 @@ const createBody = Joi.object({
   amenityId: objectId().required(),
   date: ymd().required(),
   slotStart: hhmm().required(),
+  // Tiện ích có phí: cư dân chọn trả ngay (payOS) hoặc cộng vào phí tháng; bỏ trống = trả ngay nếu có, không thì cộng phí tháng
+  paymentMethod: Joi.string().valid(...values(BOOKING_PAYMENT_METHODS)),
 });
 const counterBody = Joi.object({
   memberCode: Joi.string().trim().min(1).max(300).required(), // mã cư dân của người được đặt hộ
@@ -61,6 +64,17 @@ const mineQuery = Joi.object({
  */
 router.post('/', authenticate, authorize('RESIDENT'), validate({ body: createBody }), async (req, res) =>
   created(res, await service.createBooking(req.user, req.body), 'Đặt tiện ích thành công'),
+);
+
+/**
+ * @openapi
+ * /bookings/{id}/pay-later:
+ *   patch:
+ *     tags: [Tiện ích & đặt chỗ]
+ *     summary: Booking đang giữ chỗ chờ thanh toán online → chuyển sang cộng phí vào thông báo phí tháng (hết giữ chỗ, xác nhận luôn)
+ */
+router.patch('/:id/pay-later', authenticate, authorize('RESIDENT'), validate({ params: idParams }), async (req, res) =>
+  ok(res, await service.payLater(req.user, req.params.id), 'Đã chuyển sang cộng vào phí tháng'),
 );
 
 /**

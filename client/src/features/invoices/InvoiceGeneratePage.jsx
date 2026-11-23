@@ -8,7 +8,7 @@ import PageHeader from '../../components/PageHeader';
 import EnumTag from '../../components/EnumTag';
 import { useAction, useApi } from '../../hooks/useApi';
 import { FEE_CATEGORIES, INVOICE_PREVIEW_STATUS, INVOICE_STATUS, PAYER_SOURCES } from '../../constants/enums';
-import { formatMoney } from '../../utils/format';
+import { formatMoney, formatQuantity } from '../../utils/format';
 
 // Mô đun 4 — UC26: Xem trước và tính phí tháng → thông báo phí Nháp. Kế toán kiểm tra, sửa rồi trình Trưởng BQL duyệt.
 const periodLabel = (p) => `${p.slice(5)}/${p.slice(0, 4)}`;
@@ -18,7 +18,7 @@ const isFuture = (d) => d.isAfter(dayjs(), 'month');
 const itemColumns = [
   { title: 'Nhóm', dataIndex: 'feeCategory', width: 130, render: (v) => <EnumTag map={FEE_CATEGORIES} value={v} /> },
   { title: 'Diễn giải', dataIndex: 'description' },
-  { title: 'SL', dataIndex: 'quantity', width: 80, align: 'right' },
+  { title: 'SL', dataIndex: 'quantity', width: 80, align: 'right', render: formatQuantity },
   { title: 'Đơn giá', dataIndex: 'unitPrice', width: 130, align: 'right', render: formatMoney },
   { title: 'Thành tiền', dataIndex: 'amount', width: 140, align: 'right', render: formatMoney },
 ];

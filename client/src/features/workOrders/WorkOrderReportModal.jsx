@@ -2,13 +2,14 @@ import { Descriptions, Modal, Table, Tag, Typography } from 'antd';
 import EnumTag from '../../components/EnumTag';
 import EvidencePhotos from '../../components/EvidencePhotos';
 import { WORK_ORDER_RESULTS } from '../../constants/enums';
-import { formatDate, formatDateTime } from '../../utils/format';
-import { isMeasured, rangeText } from './inspectionForm';
+import { dateTimeOr, formatDate, formatDateTime } from '../../utils/format';
+import { allowedText, isMeasured } from './inspectionForm';
 import { RepairInfo } from './RepairModals';
 
 const resultCell = (r, item) => {
-  if (item && isMeasured(item)) return r.value == null ? '—' : `${r.value}${item.unit ? ` ${item.unit}` : ''}`;
-  if (r.ok == null) return '—';
+  // KTV bỏ trống mục không bắt buộc → ghi rõ, không để "—" (cột cuối đã có thẻ Bỏ trống)
+  if (item && isMeasured(item)) return r.value == null ? 'Không nhập' : `${r.value}${item.unit ? ` ${item.unit}` : ''}`;
+  if (r.ok == null) return 'Không nhập';
   return r.ok ? 'Đạt' : 'Không đạt';
 };
 
@@ -21,12 +22,12 @@ export default function WorkOrderReportModal({ workOrder, open, onClose }) {
     <Modal title="Kết quả kiểm tra" open={open} onCancel={onClose} footer={null} width="min(720px, 94vw)" destroyOnHidden>
       <Typography.Paragraph type="secondary">{workOrder.title}</Typography.Paragraph>
       <Descriptions column={1} size="small" bordered>
-        <Descriptions.Item label="Kỹ thuật viên">{workOrder.assignedTo?.fullName ?? '—'}</Descriptions.Item>
+        <Descriptions.Item label="Kỹ thuật viên">{workOrder.assignedTo?.fullName ?? 'Chưa phân công'}</Descriptions.Item>
         <Descriptions.Item label="Ngày lên lịch">{formatDate(workOrder.scheduledDate)}</Descriptions.Item>
-        <Descriptions.Item label="Quét QR lúc">{formatDateTime(workOrder.scannedAt ?? workOrder.startedAt)}</Descriptions.Item>
-        <Descriptions.Item label="Kiểm tra lúc">{formatDateTime(workOrder.inspectedAt ?? workOrder.completedAt)}</Descriptions.Item>
+        <Descriptions.Item label="Quét QR lúc">{dateTimeOr(workOrder.scannedAt ?? workOrder.startedAt, 'Chưa quét')}</Descriptions.Item>
+        <Descriptions.Item label="Kiểm tra lúc">{dateTimeOr(workOrder.inspectedAt ?? workOrder.completedAt, 'Chưa kiểm tra')}</Descriptions.Item>
         <Descriptions.Item label="Kết quả">
-          {workOrder.result ? <EnumTag map={WORK_ORDER_RESULTS} value={workOrder.result} /> : '—'}
+          {workOrder.result ? <EnumTag map={WORK_ORDER_RESULTS} value={workOrder.result} /> : 'Chưa kiểm tra'}
           {workOrder.status === 'CLOSED' && <Typography.Text type="secondary"> Không sửa, thiết bị ngừng sử dụng</Typography.Text>}
           {workOrder.result === 'FAULTY' && workOrder.status === 'DONE' && workOrder.repair && (
             <Typography.Text type="secondary"> Đã sửa và nghiệm thu{workOrder.repair.acceptedAt ? ` lúc ${formatDateTime(workOrder.repair.acceptedAt)}` : ''}</Typography.Text>
@@ -36,7 +37,7 @@ export default function WorkOrderReportModal({ workOrder, open, onClose }) {
           )}
         </Descriptions.Item>
         <Descriptions.Item label={workOrder.result === 'FAULTY' ? 'Mô tả sự cố' : 'Ghi chú'}>
-          <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{workOrder.note || '—'}</Typography.Text>
+          <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{workOrder.note || 'Không ghi chú'}</Typography.Text>
         </Descriptions.Item>
         <Descriptions.Item label="Ảnh kiểm tra">
           {workOrder.completionImages?.length ? (
@@ -56,7 +57,7 @@ export default function WorkOrderReportModal({ workOrder, open, onClose }) {
           scroll={{ x: 520 }}
           columns={[
             { title: 'Mục', dataIndex: 'label' },
-            { title: 'Cho phép', width: 140, render: (_, r) => (isMeasured(checklist[r.index]) ? rangeText(checklist[r.index]) : '—') },
+            { title: 'Cho phép', width: 140, render: (_, r) => allowedText(checklist[r.index]) },
             { title: 'Kết quả', width: 120, render: (_, r) => resultCell(r, checklist[r.index]) },
             {
               title: '',

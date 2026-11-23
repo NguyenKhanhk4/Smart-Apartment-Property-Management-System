@@ -7,7 +7,9 @@ import { validate } from '../../middlewares/validate.js';
 import { paginationQuery, sortable } from '../../utils/pagination.js';
 import { created, ok, paginated } from '../../utils/response.js';
 import { csvEnum, idParams, objectId } from '../../utils/validators.js';
+import { sendFile } from '../../services/export.service.js';
 import * as payosService from './payments.payos.js';
+import { buildReceiptPdf } from './receipt.pdf.js';
 import * as service from './payments.service.js';
 
 // Mô đun 4 — UC29 payOS, UC30 thu tiền mặt / chuyển khoản, UC35 biên lai, danh sách giao dịch.
@@ -83,6 +85,23 @@ router.get('/', authenticate, authorize('ACCOUNTANT', 'MANAGER'), validate({ que
   const { items, pagination, totals } = await service.listPayments(req.validated.query);
   return paginated(res, items, pagination, { totals });
 });
+
+/**
+ * @openapi
+ * /payments/{id}/receipt.pdf:
+ *   get:
+ *     tags: [Thanh toán]
+ *     summary: Tải PDF biên lai (số tiền bằng chữ, phân bổ, ghi chú không thay thế hóa đơn GTGT). Quyền như xem biên lai
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ */
+router.get(
+  '/:id/receipt.pdf',
+  authenticate,
+  authorize('ACCOUNTANT', 'MANAGER', 'RESIDENT'),
+  validate({ params: idParams }),
+  async (req, res) => sendFile(res, await buildReceiptPdf(req.user, req.params.id)),
+);
 
 /**
  * @openapi

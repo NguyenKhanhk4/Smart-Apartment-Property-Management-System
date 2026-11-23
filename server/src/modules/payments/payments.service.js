@@ -73,7 +73,7 @@ export function allocate(invoices, amount) {
   const allocations = [];
   for (const inv of invoices) {
     if (left <= 0) break;
-    const owed = inv.totalAmount - inv.paidAmount;
+    const owed = inv.totalAmount - (inv.paidAmount ?? 0);
     if (owed <= 0) continue;
     const take = Math.min(owed, left);
     allocations.push({ invoice: inv, amount: take });
@@ -201,19 +201,26 @@ export async function recordOfflinePayment(user, body, { now = new Date() } = {}
   }
 }
 
+/** Số biên lai: số phiếu thu (tiền mặt / chuyển khoản) hoặc mã đơn payOS */
+export const receiptNumber = (p) => p.receiptNo ?? (p.orderCode ? `PAYOS-${p.orderCode}` : String(p._id).slice(-8).toUpperCase());
+
+export const VAT_NOTE = 'Biên lai chỉ xác nhận Ban quản lý đã nhận tiền, không thay thế hóa đơn giá trị gia tăng (GTGT).';
+
 /** Biên lai điện tử cho Người nộp phí (Web + Email) */
 export function sendReceipt(payment, { allocations, credit, balanceAfter }) {
-  const lines = [`Đã nhận ${formatVnd(payment.amount)} lúc ${fmtDateTimeVn(payment.paidAt)}. Số phiếu thu ${payment.receiptNo}.`];
+  const no = receiptNumber(payment);
+  const lines = [`Đã nhận ${formatVnd(payment.amount)} lúc ${fmtDateTimeVn(payment.paidAt)}. Số biên lai ${no}.`];
   for (const a of allocations) lines.push(`• Kỳ ${periodLabel(a.period)} (${a.code}): ${formatVnd(a.amount)}`);
   if (credit > 0) lines.push(`Tiền thừa ${formatVnd(credit)} đã vào Số dư trả trước (số dư hiện tại ${formatVnd(balanceAfter)}).`);
+  lines.push(VAT_NOTE);
   return notify(payment.payerId, {
     type: NOTIFICATION_TYPES.PAYMENT_RECEIPT,
-    title: `Biên lai ${payment.receiptNo}`,
+    title: `Biên lai ${no}`,
     content: lines.join('\n'),
     refId: payment._id,
     link: `/r/payments/${payment._id}/receipt`,
     email: true,
-  }).catch((err) => console.error(`[payment] gửi biên lai ${payment.receiptNo} lỗi:`, err));
+  }).catch((err) => console.error(`[payment] gửi biên lai ${no} lỗi:`, err));
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +237,8 @@ export async function listPayments({ method, status, apartmentId, payerId, from,
   if (q) {
     const rx = { $regex: escapeRegex(q.trim()), $options: 'i' };
     filter.$or = [{ receiptNo: rx }, { bankRef: rx }, { reference: rx }];
+    // Mã giao dịch payOS (orderCode) là số: tìm đúng mã — dùng khi bấm từ cảnh báo "Cần đối soát"
+    if (/^\d{1,15}$/.test(q.trim())) filter.$or.push({ orderCode: Number(q.trim()) });
   }
   const [{ items, pagination }, [totals]] = await Promise.all([
     paginate(Payment, filter, { ...query, sort: query.sort ?? '-paidAt' }, {
@@ -257,6 +266,7 @@ export async function getReceipt(user, id) {
       { path: 'payerId', select: 'fullName phone' },
       { path: 'confirmedBy', select: 'fullName' },
       { path: 'allocations.invoiceId', select: 'code period totalAmount paidAmount status' },
+      { path: 'bookingId', select: 'date slotStart slotEnd fee status', populate: { path: 'amenityId', select: 'name' } },
     ])
     .lean();
   const own = payment && sameId(payment.payerId?._id, user.id);
@@ -280,9 +290,11 @@ export async function getReceipt(user, id) {
         code: a.invoiceId.code,
         period: a.invoiceId.period,
         status: a.invoiceId.status,
-        outstanding: Math.max(0, a.invoiceId.totalAmount - a.invoiceId.paidAmount),
+        outstanding: Math.max(0, a.invoiceId.totalAmount - (a.invoiceId.paidAmount ?? 0)),
       },
     })),
+    receiptNumber: receiptNumber(payment),
+    vatNote: VAT_NOTE,
     currentOutstanding: debt?.outstanding ?? 0,
     prepaidBalance: balance?.balance ?? 0,
   };

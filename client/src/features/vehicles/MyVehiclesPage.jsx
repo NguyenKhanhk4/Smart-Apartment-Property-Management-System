@@ -134,14 +134,14 @@ export default function MyVehiclesPage() {
   if (!apartments.length) {
     return (
       <div className="max-w-2xl mx-auto p-4 md:p-6">
-        <Card className="shadow-sm border-gray-100 dark:border-gray-800 text-center py-10">
+        <Card className="shadow-sm border-line dark:border-gray-800 text-center py-10">
           <Empty
             description={
               <div>
-                <p className="font-semibold text-gray-700 dark:text-gray-200 text-base">
+                <p className="font-semibold text-ink dark:text-gray-200 text-base">
                   Bạn chưa được gán vào căn hộ nào
                 </p>
-                <p className="text-gray-400 text-sm mt-1">
+                <p className="text-ink-3 text-sm mt-1">
                   Vui lòng liên hệ Lễ tân tòa nhà để được kích hoạt hồ sơ cư dân.
                 </p>
               </div>
@@ -163,10 +163,10 @@ export default function MyVehiclesPage() {
             onClick={() => startTransition(() => navigate(-1))}
           />
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2 m-0">
+            <h1 className="text-xl md:text-2xl font-semibold text-ink dark:text-gray-100 flex items-center gap-2 m-0">
               <CarOutlined className="text-primary" /> Xe của tôi
             </h1>
-            <p className="text-gray-500 dark:text-gray-400 text-xs md:text-sm m-0 mt-0.5">
+            <p className="text-ink-3 dark:text-gray-400 text-xs md:text-sm m-0 mt-0.5">
               Đăng ký và quản lý phương tiện gửi tại hầm chung cư
             </p>
           </div>
@@ -213,9 +213,9 @@ export default function MyVehiclesPage() {
 
       {/* Căn hộ đang chọn (nếu có nhiều căn) */}
       {apartments.length > 1 && (
-        <Card className="mb-4 shadow-sm border border-gray-100 dark:border-gray-800">
+        <Card className="mb-4 shadow-sm border border-line dark:border-gray-800">
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Chọn căn hộ:</span>
+            <span className="text-sm font-medium text-ink-2 dark:text-gray-300">Chọn căn hộ:</span>
             <Select
               className="w-56"
               value={activeAptId}
@@ -246,7 +246,7 @@ export default function MyVehiclesPage() {
           <Spin size="large" />
         </div>
       ) : vehicles.length === 0 ? (
-        <Card className="shadow-sm border border-gray-100 dark:border-gray-800 text-center py-12">
+        <Card className="shadow-sm border border-line dark:border-gray-800 text-center py-12">
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description="Căn hộ hiện chưa có phương tiện nào được đăng ký gửi xe"
@@ -282,12 +282,12 @@ export default function MyVehiclesPage() {
             return (
               <Col xs={24} md={12} key={v._id}>
                 <Card
-                  className="shadow-sm hover:shadow transition-shadow border border-gray-100 dark:border-gray-800 h-full flex flex-col justify-between"
+                  className="shadow-sm hover:shadow transition-shadow border border-line dark:border-gray-800 h-full flex flex-col justify-between"
                   title={
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <EnumTag map={VEHICLE_TYPES} value={v.type} />
-                        <span className="font-bold text-base text-gray-800 dark:text-gray-100">
+                        <span className="font-semibold text-base text-ink dark:text-gray-100">
                           {v.plateNumber || (isBicycle ? 'Không biển số' : '—')}
                         </span>
                       </div>
@@ -295,24 +295,24 @@ export default function MyVehiclesPage() {
                     </div>
                   }
                 >
-                  <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                  <div className="space-y-2 text-sm text-ink-2 dark:text-gray-300">
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Hãng xe:</span>
+                      <span className="text-ink-3">Hãng xe:</span>
                       <span className="font-medium">{v.brand || '—'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Màu xe:</span>
+                      <span className="text-ink-3">Màu xe:</span>
                       <span className="font-medium">{v.color || '—'}</span>
                     </div>
                     {v.approvedAt && (
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Ngày duyệt:</span>
+                        <span className="text-ink-3">Ngày duyệt:</span>
                         <span>{formatDate(v.approvedAt)}</span>
                       </div>
                     )}
                     {v.cancelledAt && (
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Ngày hủy:</span>
+                        <span className="text-ink-3">Ngày hủy:</span>
                         <span>{formatDate(v.cancelledAt)}</span>
                       </div>
                     )}
@@ -334,7 +334,7 @@ export default function MyVehiclesPage() {
                   </div>
 
                   {/* Nút hành động */}
-                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+                  <div className="mt-4 pt-3 border-t border-line dark:border-gray-800 flex justify-end">
                     {isRegistrant && isPending && (
                       <Popconfirm
                         title="Rút yêu cầu đăng ký xe"
@@ -358,7 +358,7 @@ export default function MyVehiclesPage() {
                             <p className="m-0 mb-1">
                               Nếu xe còn trong bãi, bảo vệ cần ghi nhận xe ra trước. Quyền gửi xe kết thúc khi lễ tân xác nhận hủy.
                             </p>
-                            <p className="m-0 text-xs text-gray-400">
+                            <p className="m-0 text-xs text-ink-3">
                               Phí gửi xe được tính riêng theo kỳ hóa đơn.
                             </p>
                           </div>
@@ -427,7 +427,7 @@ export default function MyVehiclesPage() {
               <span>
                 Biển số xe{' '}
                 {selectedType === 'BICYCLE' ? (
-                  <span className="text-gray-400 font-normal">(Xe đạp không bắt buộc)</span>
+                  <span className="text-ink-3 font-normal">(Xe đạp không bắt buộc)</span>
                 ) : (
                   <span className="text-red-500">*</span>
                 )}

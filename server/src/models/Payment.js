@@ -34,6 +34,9 @@ const paymentSchema = new Schema(
     checkoutUrl: String,
     qrCode: String, // chuỗi VietQR để client tự vẽ mã QR
     expiredAt: Date, // hết hạn link thanh toán
+    // Khóa "1 link payOS đang dùng" cho cùng Người nộp phí + các thông báo (hoặc cùng booking): unique → 2 yêu cầu tạo
+    // link đồng thời không sinh 2 link. Gỡ khi link hỏng / hết hạn để tạo link mới (payments.payos.js)
+    linkKey: { type: String, default: undefined },
     reference: String, // mã giao dịch ngân hàng payOS trả về trong webhook
     needsReconcile: { type: Boolean, default: false }, // quá 15 phút chưa rõ kết quả → danh sách Cần đối soát
     // Tiền mặt / chuyển khoản tay
@@ -50,6 +53,7 @@ const paymentSchema = new Schema(
 );
 
 paymentSchema.index({ orderCode: 1 }, { unique: true, sparse: true });
+paymentSchema.index({ linkKey: 1 }, { name: 'uniq_payos_link_key', unique: true, partialFilterExpression: { linkKey: { $type: 'string' } } });
 paymentSchema.index({ receiptNo: 1 }, { unique: true, sparse: true });
 // Chặn ghi nhận trùng 1 giao dịch ngân hàng (mã trên sao kê)
 paymentSchema.index({ bankRef: 1 }, { unique: true, partialFilterExpression: { bankRef: { $type: 'string' } } });

@@ -3,6 +3,7 @@ import {
   Apartment,
   Building,
   ComplaintCategory,
+  DutyShift,
   Resident,
   Ticket,
   User,
@@ -38,6 +39,13 @@ export const createManager = (extra) => createUser('MANAGER', extra);
 export const createTechnician = (extra) => createUser('STAFF', { roleTitle: 'TECHNICIAN', ...extra });
 export const createReceptionist = (extra) => createUser('STAFF', { roleTitle: 'RECEPTIONIST', ...extra });
 export const createSecurity = (extra) => createUser('STAFF', { roleTitle: 'SECURITY', ...extra });
+
+export async function createOnDutySecurity() {
+  const guard = await createSecurity();
+  const now = Date.now();
+  await DutyShift.create({ userId: guard._id, roleTitle: 'SECURITY', startAt: new Date(now - 60000), endAt: new Date(now + 3600000) });
+  return guard;
+}
 
 export async function createBuilding(extra = {}) {
   const n = next();

@@ -5,6 +5,7 @@ import { connectDB, disconnectDB } from '../src/config/db.js';
 import * as models from '../src/models/index.js';
 import { normalizePhone } from '../src/utils/validators.js';
 import { ensureDefaultConfigs } from '../src/services/systemConfig.service.js';
+import { migrateLegacyBankConfigs } from '../src/modules/invoices/invoices.payinfo.js';
 
 await connectDB();
 const db = mongoose.connection.db;
@@ -61,4 +62,10 @@ for (const Model of Object.values(models)) {
 
 const added = await ensureDefaultConfigs();
 console.log(`\nsystem_configs: thêm ${added} tham số mặc định còn thiếu`);
+
+// Tài khoản nhận tiền: tham số BANK_* cũ (Mô đun 4) → hồ sơ tòa nhà UC05
+const bank = await migrateLegacyBankConfigs();
+if (bank.removed) {
+  console.log(`building_profile: chuyển ${bank.moved.length ? bank.moved.join(', ') : 'không mục nào (hồ sơ đã có)'} từ tham số BANK_*; xóa ${bank.removed} tham số cũ`);
+}
 await disconnectDB();

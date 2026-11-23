@@ -163,7 +163,7 @@ function renderNoticePdf({ c, invoices, total, overdueTotal, now }) {
         fmtDateVn(inv.dueDate),
         money(inv.totalAmount),
         money(inv.paidAmount),
-        money(inv.totalAmount - inv.paidAmount),
+        money(inv.totalAmount - (inv.paidAmount ?? 0)),
       ]);
     }
     row(['', 'Tổng cộng', '', '', '', money(total)], { bold: true });
@@ -216,8 +216,8 @@ export async function buildDebtNotice(user, id, { now = new Date() } = {}) {
   ).map((i) => ({ ...i, overdue: i.status === 'OVERDUE' || Boolean(i.dueDate && i.dueDate < today) }));
   if (!invoices.length) throw ApiError.badRequest('Người nộp phí không còn khoản nợ nào tại căn này');
 
-  const total = invoices.reduce((s, i) => s + i.totalAmount - i.paidAmount, 0);
-  const overdueTotal = invoices.filter((i) => i.overdue).reduce((s, i) => s + i.totalAmount - i.paidAmount, 0);
+  const total = invoices.reduce((s, i) => s + i.totalAmount - (i.paidAmount ?? 0), 0);
+  const overdueTotal = invoices.filter((i) => i.overdue).reduce((s, i) => s + i.totalAmount - (i.paidAmount ?? 0), 0);
   const buffer = await renderNoticePdf({ c, invoices, total, overdueTotal, now });
   await logAudit({
     action: AUDIT_ACTIONS.DEBT_NOTICE_EXPORTED,

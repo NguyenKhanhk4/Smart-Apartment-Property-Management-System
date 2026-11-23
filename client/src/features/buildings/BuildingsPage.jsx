@@ -20,6 +20,7 @@ import {
   Descriptions,
   App,
   Tooltip,
+  Alert,
 } from 'antd';
 import {
   BankOutlined,
@@ -42,6 +43,10 @@ import { useApi, useAction } from '../../hooks/useApi';
 import { buildingsApi, apartmentsApi } from '../../api/moduleA.api';
 import ApartmentOccupancyTag from './ApartmentOccupancyTag';
 import FloorPlan from './FloorPlan';
+import BuildingInventoryModal from './BuildingInventoryModal';
+import ApartmentCorrectionModal from './ApartmentCorrectionModal';
+import ApartmentDeleteModal from './ApartmentDeleteModal';
+import InventoryHistoryDetail from './InventoryHistoryDetail';
 import { handoverDay } from './apartmentOccupancy';
 
 const occupancyOptions = Object.entries(APARTMENT_OCCUPANCY).map(([value, { label }]) => ({ value, label }));
@@ -51,6 +56,10 @@ export default function BuildingsPage() {
   const { hasRole } = useAuth();
   const { message } = App.useApp();
   const isManager = hasRole('MANAGER');
+  const [inventoryModal, setInventoryModal] = useState(null);
+  const [correctionApartment, setCorrectionApartment] = useState(null);
+  const [deletingApartment, setDeletingApartment] = useState(null);
+  const [historyRows, setHistoryRows] = useState(null);
   // Trang chi tiết căn hộ (route apartment-detail) chỉ dành cho Trưởng BQL / Lễ tân
   const canOpenApartment = hasRole('MANAGER', 'STAFF:RECEPTIONIST');
 
@@ -72,7 +81,10 @@ export default function BuildingsPage() {
   } = useApi(buildingsApi.list, []);
 
   const planBuilding = buildings.find((building) => building._id === planSelection.buildingId) ?? buildings[0];
-  const planFloor = Math.min(planSelection.floor, planBuilding?.totalFloors ?? 1);
+  const declaredPlanFloors = planBuilding?.floorInventory?.map((row) => row.floor) ?? [];
+  const planFloor = declaredPlanFloors.length
+    ? (declaredPlanFloors.includes(planSelection.floor) ? planSelection.floor : Math.min(...declaredPlanFloors))
+    : Math.min(planSelection.floor, planBuilding?.totalFloors ?? 1);
   const {
     data: planApartments = [], loading: loadingPlan, error: planError, reload: reloadFloorPlan,
   } = useApi(
@@ -135,6 +147,34 @@ export default function BuildingsPage() {
     return { totalBuildings, totalApartments };
   }, [buildings]);
 
+  const refreshCatalog = () => {
+    reloadBuildings();
+    reloadApartmentViews();
+    setInventoryModal(null);
+    setCorrectionApartment(null);
+    setDeletingApartment(null);
+    setDetailModalOpen(false);
+  };
+  const openInventory = async (building) => {
+    if (!building) { setInventoryModal({ building: null }); return; }
+    try {
+      const result = await buildingsApi.inventory(building._id);
+      setInventoryModal({ building: result.data });
+    } catch (err) { message.error(err.message); }
+  };
+  const openCorrection = async (apartment) => {
+    try {
+      const result = await apartmentsApi.getById(apartment._id);
+      setCorrectionApartment(result.data);
+    } catch (err) { message.error(err.message); }
+  };
+  const openHistory = async (building) => {
+    try {
+      const result = await buildingsApi.inventoryHistory(building._id);
+      setHistoryRows(result.data);
+    } catch (err) { message.error(err.message); }
+  };
+
   // Actions for Building
   const [saveBuilding, submittingBuilding] = useAction(
     async (values) => {
@@ -165,6 +205,7 @@ export default function BuildingsPage() {
         name: bldg.name,
         address: bldg.address || '',
         totalFloors: bldg.totalFloors,
+        reason: '', sourceReference: bldg.inventorySource || '',
       });
     } else {
       buildingForm.resetFields();
@@ -212,9 +253,7 @@ export default function BuildingsPage() {
     async (values) => {
       const { buildingId, ...properties } = values;
       const body = {
-        ...properties,
         handoverDate: properties.handoverDate || null,
-        netArea: properties.netArea ?? undefined,
       };
       if (editingApartment) {
         if (!editingApartment.type && body.netArea !== undefined && body.netArea !== editingApartment.netArea) {
@@ -237,14 +276,6 @@ export default function BuildingsPage() {
     },
   );
 
-  const [deleteApartment] = useAction((id) => apartmentsApi.delete(id), {
-    success: 'Đã xóa căn hộ thành công',
-    onDone: () => {
-      reloadApartmentViews();
-      reloadBuildings();
-    },
-  });
-
   const handleOpenApartmentModal = (apt = null) => {
     setEditingApartment(apt);
     setLatestHandoverDay(handoverDay(Date.now()));
@@ -254,8 +285,7 @@ export default function BuildingsPage() {
         buildingId: apt.buildingId?._id || apt.buildingId,
         code: apt.code,
         floor: apt.floor,
-        netArea: apt.netArea,
-        technicalShaft: apt.technicalShaft,
+        netArea: apt.managementArea ?? apt.netArea ?? apt.area,
         handoverDate: handoverDay(apt.handoverDate),
       });
     } else if (activeTab === 'floorPlan') {
@@ -309,7 +339,7 @@ export default function BuildingsPage() {
       title: 'Địa chỉ',
       dataIndex: 'address',
       key: 'address',
-      render: (addr) => addr || <span className="text-gray-400 italic">Chưa có</span>,
+      render: (addr) => addr || <span className="text-ink-3 italic">Chưa có</span>,
     },
     {
       title: 'Tổng số tầng',
@@ -322,17 +352,24 @@ export default function BuildingsPage() {
       title: 'Số căn hộ',
       dataIndex: 'apartmentCount',
       key: 'apartmentCount',
-      width: 130,
+      width: 100,
       render: (count) => <Badge count={count ?? 0} showZero overflowCount={999} style={{ backgroundColor: '#108ee9' }} />,
     },
+    { title: 'Danh mục', key: 'inventory', width: 175,
+      render: (_, record) => <Space orientation="vertical" size={2}>
+        <Tag color={record.inventoryConfirmedAt ? 'green' : 'orange'}>{record.inventoryConfirmedAt ? 'Đã đối chiếu' : 'Cần rà soát'}</Tag>
+        {record.inventoryConfirmedAt && <span className="text-xs text-gray-500">{new Date(record.inventoryConfirmedAt).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span>}
+      </Space> },
     ...(isManager
       ? [
           {
             title: 'Thao tác',
             key: 'action',
-            width: 150,
+            width: 330,
             render: (_, record) => (
-              <Space>
+              <Space wrap>
+                <Button size="small" type="link" onClick={() => openInventory(record)}>Đối chiếu danh mục</Button>
+                <Button size="small" type="text" onClick={() => openHistory(record)}>Lịch sử</Button>
                 <Button
                   size="small"
                   type="text"
@@ -405,8 +442,8 @@ export default function BuildingsPage() {
     },
     {
       title: 'Diện tích tính phí quản lý',
-      dataIndex: 'netArea',
-      key: 'netArea',
+      dataIndex: 'managementArea',
+      key: 'managementArea',
       width: 160,
       render: (area) => (area != null ? `${area} m²` : '—'),
     },
@@ -420,7 +457,7 @@ export default function BuildingsPage() {
     {
       title: 'Thao tác',
       key: 'action',
-      width: 180,
+      width: 290,
       render: (_, record) => (
         <Space>
           <Button
@@ -433,21 +470,14 @@ export default function BuildingsPage() {
           </Button>
           {isManager && (
             <>
-              <Button
-                size="small"
-                type="text"
-                icon={<EditOutlined />}
-                onClick={() => handleOpenApartmentModal(record)}
-              >
-                Sửa
-              </Button>
+              <Button size="small" type="text" onClick={() => openCorrection(record)}>Điều chỉnh</Button>
               <Popconfirm
                 title="Xóa căn hộ"
                 description={`Bạn có chắc muốn xóa căn ${record.code}?`}
                 okText="Xóa"
                 cancelText="Hủy"
                 okButtonProps={{ danger: true }}
-                onConfirm={() => deleteApartment(record._id).catch(() => {})}
+                onConfirm={() => setDeletingApartment(record)}
               >
                 <Button size="small" type="text" danger icon={<DeleteOutlined />}>
                   Xóa
@@ -464,7 +494,7 @@ export default function BuildingsPage() {
     <div>
       <PageHeader
         title="Tòa nhà & Căn hộ"
-        subtitle="Quản lý tòa nhà, tầng và căn hộ"
+        subtitle="Thiết lập danh mục theo hồ sơ tiếp nhận và theo dõi tình trạng sử dụng"
         breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Tòa nhà & Căn hộ' }]}
         extra={
           <Space>
@@ -481,24 +511,31 @@ export default function BuildingsPage() {
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
-                onClick={() => handleOpenBuildingModal()}
+                onClick={() => openInventory(null)}
               >
-                Thêm tòa nhà
+                Thiết lập tòa nhà
               </Button>
             )}
             {isManager && activeTab !== 'buildings' && (
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
-                onClick={() => handleOpenApartmentModal()}
+                onClick={() => {
+                  const building = activeTab === 'floorPlan' ? planBuilding : buildings.find((row) => row._id === apartmentFilter.buildingId);
+                  if (building) openInventory(building);
+                  else message.info('Chọn tòa nhà trước, sau đó đối chiếu danh mục để bổ sung căn hộ.');
+                }}
               >
-                Thêm căn hộ
+                Bổ sung căn theo hồ sơ
               </Button>
             )}
           </Space>
         }
       />
 
+      {isManager && buildings.some((row) => !row.inventoryConfirmedAt) && <Alert className="mb-4" type="info" showIcon
+        title="Danh mục cũ cần rà soát theo hồ sơ"
+        description="Mở Đối chiếu danh mục ở từng tòa để xác nhận tầng, mã căn và diện tích. Các hồ sơ hiện có được giữ nguyên." />}
       {/* Overview Cards */}
       <Row gutter={[16, 16]} className="mb-6">
         <Col xs={24} sm={12} md={6}>
@@ -542,6 +579,7 @@ export default function BuildingsPage() {
                   rowKey="_id"
                   loading={loadingBuildings}
                   pagination={false}
+                  scroll={{ x: 1150 }}
                 />
               ),
             },
@@ -572,14 +610,14 @@ export default function BuildingsPage() {
               children: (
                 <div>
                   {/* Filters Bar */}
-                  <div className="flex flex-wrap gap-3 items-center mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                  <div className="flex flex-wrap gap-3 items-center mb-4 p-3 bg-surface-alt border border-line rounded-lg dark:bg-[#27272A] dark:border-[#2E2E33]">
                     <Select
                       placeholder="Lọc theo tòa"
                       allowClear
                       style={{ width: 170 }}
                       value={apartmentFilter.buildingId}
                       onChange={(val) =>
-                        setApartmentFilter((prev) => ({ ...prev, page: 1, buildingId: val }))
+                        setApartmentFilter((prev) => ({ ...prev, page: 1, buildingId: val, floor: undefined }))
                       }
                     >
                       {buildings.map((b) => (
@@ -672,6 +710,22 @@ export default function BuildingsPage() {
         />
       </Card>
 
+      {inventoryModal && <BuildingInventoryModal building={inventoryModal.building} onClose={() => setInventoryModal(null)} onSaved={refreshCatalog} />}
+      {correctionApartment && <ApartmentCorrectionModal apartment={correctionApartment} onClose={() => setCorrectionApartment(null)} onSaved={refreshCatalog} />}
+      {deletingApartment && <ApartmentDeleteModal apartment={deletingApartment} onClose={() => setDeletingApartment(null)} onSaved={refreshCatalog} />}
+      <Modal title="Lịch sử danh mục và điều chỉnh căn hộ (100 lượt gần nhất)" open={historyRows !== null} width={1000}
+        onCancel={() => setHistoryRows(null)} footer={<Button onClick={() => setHistoryRows(null)}>Đóng</Button>}>
+        <Table size="small" rowKey="_id" dataSource={historyRows || []} pagination={{ pageSize: 8 }}
+          expandable={{ expandedRowRender: (row) => <InventoryHistoryDetail metadata={row.metadata} /> }}
+          columns={[
+            { title: 'Thời điểm', dataIndex: 'createdAt', render: (value) => new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) },
+            { title: 'Người thực hiện', dataIndex: 'performedBy', render: (value) => value?.fullName || 'Hệ thống' },
+            { title: 'Thao tác', render: (_, row) => ({ INVENTORY_CREATED: 'Thiết lập danh mục', INVENTORY_CONFIRMED: 'Đối chiếu danh mục cũ',
+              INVENTORY_REVISED: 'Bổ sung / điều chỉnh danh mục', CATALOG_CORRECTED: 'Điều chỉnh thông tin căn', DELETE: 'Xóa bản ghi nhập nhầm', UPDATE: 'Cập nhật thông tin' }[row.metadata?.action] || 'Cập nhật nghiệp vụ') },
+            { title: 'Lý do', render: (_, row) => row.metadata?.reason || '—' },
+            { title: 'Tài liệu đối chiếu', render: (_, row) => row.metadata?.sourceReference || '—' },
+          ]} />
+      </Modal>
       {/* Modal Thêm / Sửa Tòa nhà */}
       <Modal
         title={editingBuilding ? 'Chỉnh sửa tòa nhà' : 'Thêm tòa nhà mới'}
@@ -721,8 +775,11 @@ export default function BuildingsPage() {
               { type: 'number', min: 1, message: 'Số tầng tối thiểu là 1' },
             ]}
           >
-            <InputNumber min={1} max={200} style={{ width: '100%' }} placeholder="Vd: 25" />
+            <InputNumber disabled={Boolean(editingBuilding?.inventoryConfirmedAt)} min={1} max={200} style={{ width: '100%' }} placeholder="Vd: 25" />
           </Form.Item>
+          {editingBuilding?.inventoryConfirmedAt && <p className="text-gray-500 mb-4">Số tầng được điều chỉnh trong Đối chiếu danh mục.</p>}
+          <Form.Item name="reason" label="Lý do cập nhật" rules={[{ required: true, whitespace: true }]}><Input.TextArea rows={2} maxLength={500} /></Form.Item>
+          <Form.Item name="sourceReference" label="Tài liệu đối chiếu" rules={[{ required: true, whitespace: true }]}><Input.TextArea rows={2} maxLength={500} /></Form.Item>
         </Form>
       </Modal>
 
@@ -773,7 +830,7 @@ export default function BuildingsPage() {
             rules={[{ required: true, message: 'Vui lòng nhập mã căn hộ' }]}
             extra="Mã căn là duy nhất trong tòa nhà (vd: A-101, B-1204)"
           >
-            <Input placeholder="Vd: A-101" />
+            <Input disabled={Boolean(editingApartment)} placeholder="Vd: A-101" />
           </Form.Item>
 
           <Form.Item
@@ -784,7 +841,7 @@ export default function BuildingsPage() {
               { type: 'number', min: 1, message: 'Tầng tối thiểu là 1' },
             ]}
           >
-            <InputNumber min={1} max={formBuilding?.totalFloors} precision={0} style={{ width: '100%' }} />
+            <InputNumber disabled={Boolean(editingApartment)} min={1} max={formBuilding?.totalFloors} precision={0} style={{ width: '100%' }} />
           </Form.Item>
 
           <Form.Item
@@ -803,11 +860,9 @@ export default function BuildingsPage() {
               }] : []),
             ]}
           >
-            <InputNumber min={1} step={0.1} className="!w-full" />
+            <InputNumber disabled={Boolean(editingApartment)} min={1} step={0.1} className="!w-full" />
           </Form.Item>
-          <Form.Item name="technicalShaft" label="Vị trí hộp kỹ thuật điện/nước">
-            <Input maxLength={200} />
-          </Form.Item>
+          <p className="text-gray-500 mb-3">Dùng nút Điều chỉnh trong danh sách căn để sửa mã, tầng hoặc diện tích có căn cứ.</p>
           <Form.Item name="handoverDate" label="Ngày bàn giao thực tế"
             extra="Để trống nếu căn mới chưa bàn giao."
             rules={[{ required: Boolean(editingApartment?.handoverDate), message: 'Vui lòng giữ ngày bàn giao đã ghi nhận' }]}
@@ -872,7 +927,7 @@ export default function BuildingsPage() {
             Đóng
           </Button>,
         ]}
-        width={680}
+        width="min(680px, 94vw)"
       >
         {selectedApartment ? (
           <div>
@@ -888,12 +943,11 @@ export default function BuildingsPage() {
               </Descriptions.Item>
               <Descriptions.Item label="Tầng">{`Tầng ${selectedApartment.floor}`}</Descriptions.Item>
               <Descriptions.Item label="Diện tích tính phí quản lý">
-                {selectedApartment.netArea != null ? `${selectedApartment.netArea} m²` : '—'}
+                {selectedApartment.managementArea != null ? `${selectedApartment.managementArea} m²` : '—'}
               </Descriptions.Item>
               <Descriptions.Item label="Ngày bàn giao">
                 {handoverDay(selectedApartment.handoverDate).split('-').reverse().join('/') || '—'}
               </Descriptions.Item>
-              <Descriptions.Item label="Hộp kỹ thuật">{selectedApartment.technicalShaft || '—'}</Descriptions.Item>
               <Descriptions.Item label="Địa chỉ tòa">
                 {selectedApartment.building?.address || '—'}
               </Descriptions.Item>
@@ -929,7 +983,7 @@ export default function BuildingsPage() {
             {selectedApartment.activeContracts && selectedApartment.activeContracts.length > 0 ? (
               <div className="space-y-2">
                 {selectedApartment.activeContracts.map((c) => (
-                  <Card key={c._id} size="small" className="border-gray-200 dark:border-gray-700">
+                  <Card key={c._id} size="small" className="border-line dark:border-gray-700">
                     <div className="flex justify-between items-center mb-1">
                       <Space>
                         <EnumTag map={CONTRACT_TYPES} value={c.type} />
@@ -950,7 +1004,7 @@ export default function BuildingsPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-gray-400 italic">Chưa có hợp đồng nào đang hiệu lực</p>
+              <p className="text-xs text-ink-3 italic">Chưa có hợp đồng nào đang hiệu lực</p>
             )}
           </div>
         ) : (

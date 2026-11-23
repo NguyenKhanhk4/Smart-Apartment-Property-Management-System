@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Card, Checkbox, Flex, Input, Segmented, Select, Statistic, Table, Typography } from 'antd';
 import { debtApi } from '../../api/moduleB.api';
 import { lookupApi } from '../../api/moduleE.api';
@@ -64,6 +64,7 @@ export default function DebtLedgerPage() {
     },
     {
       title: 'Người nộp phí',
+      width: 220, // bắt buộc có width: cột "Thu tiền" fixed làm bảng chuyển table-layout: fixed
       render: (_, r) => (
         <Flex vertical>
           <span>{r.payerName ?? '—'}</span>
@@ -104,7 +105,17 @@ export default function DebtLedgerPage() {
             <EnumTag map={LEDGER_STATUS} value={r.ledgerStatus} />
           </span>
           {r.case && <Typography.Text type="secondary">{caseHint(r.case)}</Typography.Text>}
-          {r.reconcileCount > 0 && <Typography.Text type="warning">{r.reconcileCount} giao dịch cần đối soát</Typography.Text>}
+          {r.reconcileCount > 0 && (
+            <Link
+              to={`/app/payments?status=RECONCILE&apartmentId=${r.apartmentId}&apt=${encodeURIComponent([r.buildingCode, r.apartmentCode].filter(Boolean).join('-'))}`}
+              onClick={(e) => e.stopPropagation()}
+              viewTransition
+            >
+              <Typography.Text type="warning" underline>
+                {r.reconcileCount} giao dịch cần đối soát
+              </Typography.Text>
+            </Link>
+          )}
         </Flex>
       ),
     },
@@ -132,7 +143,9 @@ export default function DebtLedgerPage() {
               <Statistic title="Trong đó quá hạn" value={formatMoney(summary.overdueAmount)} valueStyle={{ color: '#cf1322' }} />
               <Statistic title="Số dư trả trước" value={formatMoney(summary.prepaidBalance)} />
               <Statistic title="Nợ quá hạn dài" value={summary.byStatus?.LONG_OVERDUE ?? 0} suffix="dòng" />
-              <Statistic title="Giao dịch cần đối soát" value={summary.reconcileCount ?? 0} />
+              <Link to="/app/payments?status=RECONCILE" viewTransition>
+                <Statistic title="Giao dịch cần đối soát" value={summary.reconcileCount ?? 0} />
+              </Link>
             </Flex>
           )}
           <Segmented
@@ -180,7 +193,7 @@ export default function DebtLedgerPage() {
             loading={list.loading}
             dataSource={list.data ?? []}
             columns={columns}
-            scroll={{ x: 1250 }}
+            scroll={{ x: 1380 }}
             onRow={(r) => ({ onClick: () => navigate(`/app/debts/apartments/${r.apartmentId}`), style: { cursor: 'pointer' } })}
             pagination={{
               current: page,

@@ -21,6 +21,7 @@ import { useAction, useApi } from '../../hooks/useApi';
 import EnumTag from '../../components/EnumTag';
 import { PRIORITIES, enumOptions } from '../../constants/enums';
 import { formatDateTime } from '../../utils/format';
+import { DEADLINE_CONFIG_KEYS } from './deadlineConfigs';
 
 function CategoryModal({ category, open, onClose, onDone }) {
   const [form] = Form.useForm();
@@ -84,8 +85,8 @@ function ConfigValueEditor({ config, onSaved }) {
       const next = isArray
         ? String(value).split(',').map((s) => Number(s.trim())).filter((n) => !Number.isNaN(n))
         : value;
-      await systemConfigApi.update(config.key, next);
-      message.success('Đã cập nhật tham số');
+      const res = await systemConfigApi.update(config.key, next);
+      message.success(res?.message ?? 'Đã cập nhật tham số');
       setEditing(false);
       onSaved();
     } catch (e) {
@@ -93,11 +94,23 @@ function ConfigValueEditor({ config, onSaved }) {
     }
   };
 
+  // BR-S12: tham số tài chính đang chờ Ban quản trị xác nhận thay đổi → chưa sửa tiếp được
+  const awaitingBoard = config.pendingValue != null;
   if (!editing) {
     return (
-      <Flex align="center" gap={8}>
-        <Typography.Text strong>{isArray ? config.value.join(', ') : String(config.value)}</Typography.Text>
-        <Button size="small" type="text" icon={<EditOutlined />} onClick={() => setEditing(true)} />
+      <Flex vertical gap={4}>
+        <Flex align="center" gap={8}>
+          <Typography.Text strong>{isArray ? config.value.join(', ') : String(config.value)}</Typography.Text>
+          <Button
+            size="small"
+            type="text"
+            icon={<EditOutlined />}
+            onClick={() => (awaitingBoard
+              ? message.warning(`Đang chờ Ban quản trị xác nhận đổi thành ${config.pendingValue}. Chờ Ban quản trị xác nhận hoặc từ chối rồi mới đổi tiếp được.`)
+              : setEditing(true))}
+          />
+        </Flex>
+        {awaitingBoard && <Tag color="gold">Chờ Ban quản trị xác nhận: {String(config.pendingValue)}</Tag>}
       </Flex>
     );
   }
@@ -165,11 +178,11 @@ export default function ComplaintSettingsPage() {
         />
       </Card>
 
-      <Card title="Tham số nghiệp vụ" extra={<Typography.Text type="secondary">Áp dụng ngay cho nghiệp vụ phát sinh sau khi lưu</Typography.Text>}>
+      <Card title="Tham số nghiệp vụ" extra={<Typography.Text type="secondary">Áp dụng ngay cho nghiệp vụ phát sinh sau khi lưu. Các mốc nhắc / thời hạn sửa ở Tòa nhà & biểu phí → Lịch & thời hạn</Typography.Text>}>
         <Table
           rowKey="key"
           loading={configs.loading}
-          dataSource={configs.data}
+          dataSource={(configs.data || []).filter((c) => !DEADLINE_CONFIG_KEYS.has(c.key))}
           pagination={false}
           scroll={{ x: 640 }}
           columns={[

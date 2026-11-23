@@ -73,7 +73,7 @@ export default function FinanceDashboardPage() {
       <Card size="small">
         <Flex gap={8} wrap align="center" justify="space-between">
           <Flex gap={8} wrap align="center">
-            <Typography.Title level={4} style={{ margin: 0 }}>
+            <Typography.Title level={3} style={{ margin: 0 }}>
               Dashboard tài chính
             </Typography.Title>
             <DatePicker.RangePicker picker="month" value={range} format="MM/YYYY" allowClear={false} onChange={(v) => v && setRange(v)} />

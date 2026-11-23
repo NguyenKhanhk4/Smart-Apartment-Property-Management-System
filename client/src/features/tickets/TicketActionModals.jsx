@@ -1,4 +1,6 @@
-import { Form, Input, Modal, Radio, Rate, Select } from 'antd';
+import { useState } from 'react';
+import { Alert, Form, Input, Modal, Radio, Rate, Select } from 'antd';
+import { assetApi, workOrderApi } from '../../api/equipment.api';
 import { ticketApi } from '../../api/moduleE.api';
 import { QuoteItems } from '../repairQuotes/QuotePanel';
 import { formatMoney } from '../../utils/format';
@@ -7,7 +9,9 @@ import { PRIORITIES, TICKET_SCOPES, TICKET_STATUS, TICKET_TYPES, enumOptions } f
 import { keysOf } from '../../utils/status';
 import EvidencePhotosField from '../../components/EvidencePhotosField';
 import { toFiles } from '../../utils/upload';
-import { progressOptions } from './ticketActions';
+import { useAuth } from '../../hooks/useAuth';
+import { isConsentLocked } from '../../utils/consent';
+import { IN_APARTMENT_ENABLED, progressOptions } from './ticketActions';
 
 const TS = keysOf(TICKET_STATUS);
 
@@ -81,7 +85,7 @@ export function AssignModal({ ticket, open, onClose, onDone }) {
       <Form.Item
         name="priority"
         label="Mức ưu tiên"
-        extra="Đổi mức ưu tiên sẽ tính lại hạn xử lý theo SLA (Khẩn cấp 24h, Cao 3 ngày, Thường 7 ngày)."
+        extra="Hạn xử lý theo loại phản ánh, đổi mức ưu tiên không đổi hạn."
       >
         <Select options={enumOptions(PRIORITIES)} />
       </Form.Item>
@@ -141,6 +145,64 @@ export function ProgressModal({ ticket, open, onClose, onDone }) {
   );
 }
 
+// Phản ánh liên quan thiết bị → tạo phiếu bảo trì cho kỹ thuật kiểm tra (phản ánh chuyển Đang xử lý)
+export function MaintenanceLinkModal({ ticket, open, onClose, onDone }) {
+  const [q, setQ] = useState('');
+  const { data: assets = [], loading } = useApi(
+    () => assetApi.list({ q: q || undefined, isActive: true, limit: 30 }),
+    [q],
+    { enabled: open, autoRefresh: false },
+  );
+  const { hasRole } = useAuth();
+  const isManager = hasRole('MANAGER');
+  const { data: techs = [] } = useApi(() => workOrderApi.assignees(), [], { enabled: open && isManager, autoRefresh: false });
+  return (
+    <ActionModal
+      title={`Tạo phiếu bảo trì — ${ticket.code}`}
+      open={open}
+      onClose={onClose}
+      onDone={onDone}
+      okText="Tạo phiếu bảo trì"
+      success="Đã tạo phiếu bảo trì từ phản ánh"
+      action={({ assetId, assignedTo, note }) =>
+        workOrderApi.createFromTicket({ ticketId: ticket._id, assetId, assignedTo: assignedTo ?? null, note: note ?? '' })
+      }
+    >
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        title="Phiếu bảo trì đi tiếp luồng kiểm tra – báo hư hỏng – duyệt sửa. Khi phiếu xong, Trưởng BQL phản hồi và đóng phản ánh."
+      />
+      <Form.Item name="assetId" label="Thiết bị liên quan" rules={[{ required: true, message: 'Chọn thiết bị' }]}>
+        <Select
+          showSearch
+          placeholder="Gõ mã hoặc tên thiết bị"
+          filterOption={false}
+          onSearch={setQ}
+          loading={loading}
+          options={assets.map((a) => ({
+            value: a._id,
+            label: `${a.code} – ${a.name}${a.buildingId?.name ? ` · ${a.buildingId.name}` : ''}`,
+          }))}
+        />
+      </Form.Item>
+      {isManager && (
+        <Form.Item name="assignedTo" label="Kỹ thuật viên" extra="Bỏ trống: phiếu hiện ở Checklist ca cho mọi kỹ thuật viên nhận">
+          <Select
+            allowClear
+            placeholder="Chọn kỹ thuật viên (không bắt buộc)"
+            options={techs.map((t) => ({ value: t._id, label: `${t.fullName} — đang có ${t.openWorkOrders} phiếu` }))}
+          />
+        </Form.Item>
+      )}
+      <Form.Item name="note" label="Ghi chú cho kỹ thuật">
+        <Input.TextArea rows={3} maxLength={500} showCount />
+      </Form.Item>
+    </ActionModal>
+  );
+}
+
 export function ComplaintResponseModal({ ticket, open, onClose, onDone }) {
   return (
     <ActionModal title={`Xử lý phản ánh ${ticket.code}`} open={open} onClose={onClose} onDone={onDone}
@@ -164,6 +226,8 @@ export function ComplaintResponseModal({ ticket, open, onClose, onDone }) {
 
 // UC-E05 — Cư dân xác nhận + đánh giá sao, hoặc báo chưa đạt
 export function ConfirmModal({ ticket, open, onClose, onDone }) {
+  const { user } = useAuth();
+  const photoLocked = isConsentLocked(user); // BR-X7: chưa đồng ý điều khoản thì không gửi kèm ảnh
   const ratingOnly = ticket.type === 'COMPLAINT' && ticket.status === TS.CLOSED;
   return (
     <ActionModal
@@ -175,7 +239,7 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
       success={(res) => (res.data.status === TS.CLOSED ? 'Cảm ơn bạn đã đánh giá' : 'Đã gửi lại cho kỹ thuật viên')}
       initialValues={{ accepted: true, rating: 5 }}
       action={({ accepted, rating, comment, reason, images }) =>
-        ticketApi.confirm(ticket._id, accepted ? { accepted, rating, comment } : { accepted, reason }, accepted ? [] : toFiles(images))
+        ticketApi.confirm(ticket._id, accepted ? { accepted, rating, comment } : { accepted, reason }, accepted || photoLocked ? [] : toFiles(images))
       }
     >
       <Form.Item name="accepted" label="Kết quả xử lý" hidden={ratingOnly}>
@@ -203,7 +267,16 @@ export function ConfirmModal({ ticket, open, onClose, onDone }) {
                 <Input.TextArea rows={3} maxLength={500} />
               </Form.Item>
               {/* UC49: ảnh minh chứng kết quả chưa đạt (tùy chọn) */}
-              <EvidencePhotosField name="images" label="Ảnh minh chứng (nếu có)" required={false} />
+              {photoLocked ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  title="Chưa đính kèm ảnh được"
+                  description="Bạn cần đồng ý điều khoản dữ liệu cá nhân (trong Hồ sơ cá nhân) để gửi ảnh. Vẫn gửi được lý do không kèm ảnh."
+                />
+              ) : (
+                <EvidencePhotosField name="images" label="Ảnh minh chứng (nếu có)" required={false} />
+              )}
             </>
           )
         }
@@ -285,7 +358,7 @@ export function ReclassifyModal({ ticket, open, onClose, onDone }) {
       <Form.Item name="type" label="Loại phiếu" extra="Đổi sang Phản ánh thì phiếu bỏ kỹ thuật viên, chuyển cho Trưởng BQL xử lý">
         <Radio.Group optionType="button" buttonStyle="solid" options={enumOptions(TICKET_TYPES)} />
       </Form.Item>
-      {type === 'INCIDENT' && (
+      {IN_APARTMENT_ENABLED && type === 'INCIDENT' && (
         <Form.Item name="scope" label="Phạm vi" extra="Trong căn hộ: phải gửi báo giá cho Người nộp phí trước khi sửa">
           <Radio.Group options={enumOptions(TICKET_SCOPES)} />
         </Form.Item>

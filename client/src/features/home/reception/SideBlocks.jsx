@@ -39,7 +39,7 @@ export function UpcomingGuests() {
             <li key={g._id} className={`flex items-center gap-3 px-6 py-3 border-t ${DIVIDER}`}>
               <span className={`w-12 shrink-0 font-semibold text-base ${TEXT}`}>{dayjs(g.expectedTime).format('HH:mm')}</span>
               <div className="flex-1 min-w-0">
-                <div className={`font-semibold text-[15px] truncate ${TEXT}`}>{g.guestName}</div>
+                <div className={`font-semibold text-[14px] truncate ${TEXT}`}>{g.guestName}</div>
                 <div className={`text-[13px] ${MUTED}`}>
                   Đến {g.apartmentId?.code ?? '—'} · {g.numberOfGuests ?? 1} người
                 </div>
@@ -82,7 +82,7 @@ export function LatestNews() {
         <ul className="list-none m-0 p-0">
           {items.map((a) => (
             <li key={a._id} className={`px-6 py-3 border-t ${DIVIDER}`}>
-              <div className={`font-semibold text-[15px] ${TEXT}`}>
+              <div className={`font-semibold text-[14px] ${TEXT}`}>
                 {a.isPinned && <PushpinOutlined className="text-r-gold-icon mr-1.5" aria-label="Tin ghim" />}
                 {a.title}
               </div>

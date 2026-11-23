@@ -1,10 +1,10 @@
 // Đăng ký cron toàn hệ thống và lịch nhắc khách, bưu kiện, tuần tra, cảnh báo khẩn Module 7.
 import cron from 'node-cron';
-import { runOperationsJobs } from '../modules/guests/guests.service.js';
+import { purgeGuestLogs, remindParcels, runOperationsJobs } from '../modules/guests/guests.service.js';
 import { env } from '../config/env.js';
 import { CRON_JOBS } from '../constants/enums.js';
 import { runTrackedJob } from './cronRunner.js';
-import { generateMaintenanceWorkOrders, warnEquipment } from '../modules/workOrders/workOrders.jobs.js';
+import { generateMaintenanceWorkOrders, remindRepairFollowups, warnEquipment } from '../modules/workOrders/workOrders.jobs.js';
 import { remindPostponedRepairs } from '../modules/workOrders/workOrders.decision.js';
 import { alertSlaBreaches, autoCloseTickets, escalateOverdueTickets } from '../modules/tickets/tickets.jobs.js';
 import { billingReminders, markOverdueInvoices } from '../modules/invoices/invoices.jobs.js';
@@ -21,9 +21,11 @@ import { remindProposals } from '../modules/fund/fund.service.js';
  */
 export const JOBS = [
   { name: CRON_JOBS.OPERATIONS_SECURITY, schedule: '* * * * *', handler: runOperationsJobs },
+  { name: CRON_JOBS.PARCEL_REMIND, schedule: '0 9 * * *', handler: remindParcels },
+  { name: CRON_JOBS.GUEST_PURGE, schedule: '0 2 * * *', handler: purgeGuestLogs },
   // UC-E06 / BR-O8 — 09:00 hằng ngày
   { name: CRON_JOBS.TICKET_ESCALATE, schedule: '0 9 * * *', handler: escalateOverdueTickets },
-  // Người 4 — mỗi phút: cảnh báo sự cố quá hạn nhận / phản ánh quá hạn phản hồi + cảnh báo khẩn lặp 15 phút (BR-X6)
+  // Người 4 — mỗi phút: cảnh báo sự cố quá hạn nhận / phản ánh quá hạn phản hồi + cảnh báo khẩn lặp mỗi EMERGENCY_REPEAT_MINUTES phút (BR-X6)
   { name: CRON_JOBS.TICKET_SLA_ALERT, schedule: '* * * * *', handler: alertSlaBreaches },
   // BR-O9 — 01:00 hằng ngày tự đóng ticket chờ xác nhận quá hạn
   { name: CRON_JOBS.TICKET_AUTO_CLOSE, schedule: '0 1 * * *', handler: autoCloseTickets },
@@ -33,6 +35,8 @@ export const JOBS = [
   { name: CRON_JOBS.EQUIPMENT_WARNING, schedule: '0 7 * * *', handler: warnEquipment },
   // UC10: 07:05 nhắc Trưởng BQL xem lại phiếu tạm hoãn sửa đã tới ngày, lặp mỗi N ngày (MSG-E12)
   { name: CRON_JOBS.REPAIR_REVIEW, schedule: '5 7 * * *', handler: remindPostponedRepairs },
+  // BR-E11, BR-E09, BR-X8: 07:10 nhắc hồ sơ sửa khẩn cấp quá hạn, chờ Ban quản trị xác nhận nghiệm thu, chờ Kế toán ghi chi vận hành
+  { name: CRON_JOBS.REPAIR_FOLLOWUP_REMIND, schedule: '10 7 * * *', handler: remindRepairFollowups },
   // Mô đun 4 — 08:00 hằng ngày: đến ngày cấu hình thì nhắc Kế toán tính phí; nhắc Trưởng BQL thông báo chờ duyệt quá N ngày (không tự duyệt)
   { name: CRON_JOBS.BILLING_REMIND, schedule: '0 8 * * *', handler: billingReminders },
   // BR-F8 — 00:15 hằng ngày chuyển hóa đơn quá hạn thanh toán sang OVERDUE

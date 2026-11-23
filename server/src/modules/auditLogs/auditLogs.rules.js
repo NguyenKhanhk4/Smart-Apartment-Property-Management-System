@@ -5,17 +5,24 @@ import { objectId } from '../../utils/validators.js';
 
 export const FINANCIAL_ACTIONS = [
   'FEE_TYPE_CHANGED', 'AMENITY_FEE_CHANGED',
-  'INVOICE_GENERATED', 'INVOICE_ADJUSTED', 'INVOICE_CANCELLED', 'INVOICE_RECALCULATED',
+  'INVOICE_GENERATED', 'INVOICE_ADJUSTED', 'INVOICE_ADJUSTMENT_CANCELLED', 'INVOICE_CANCELLED', 'INVOICE_RECALCULATED',
   'INVOICE_ITEM_ADDED', 'INVOICE_ITEM_REMOVED', 'INVOICE_SUBMITTED', 'INVOICE_PUBLISHED', 'INVOICE_RETURNED',
   'PAYMENT_CONFIRMED', 'PREPAID_REFUNDED', 'DEBT_FOLLOWUP_RECORDED', 'DEBT_NOTICE_EXPORTED',
   'FUND_INCOME_RECORDED', 'FUND_VOTED', 'FUND_PROPOSAL_APPROVED', 'FUND_PROPOSAL_REJECTED',
   'FUND_PROPOSAL_CREATED', 'FUND_PROPOSAL_CANCELLED', 'FUND_WORK_ACCEPTED', 'FUND_EXPENSE_RECORDED',
   // UC05 – Cấu hình tòa nhà & biểu phí (Vũ Việt)
   'BUILDING_PROFILE_UPDATED', 'UTILITY_TARIFF_CREATED', 'UTILITY_TARIFF_DELETED', 'COLLECTION_SETTING_CHANGED',
+  // UC10 – Trưởng BQL duyệt sửa bằng Quỹ bảo trì, kết quả biểu quyết / rút đề xuất báo về phiếu bảo trì
+  'WORKORDER_FUND_REQUESTED', 'WORKORDER_FUND_DECIDED',
+  // Luồng quỹ hướng mới: Kế toán xác nhận / trả lại, Ban quản trị xác nhận nghiệm thu, ghi chi vận hành, sửa khẩn cấp, đổi ngưỡng
+  'FUND_PROPOSAL_VERIFIED', 'FUND_PROPOSAL_RETURNED', 'FUND_PROPOSAL_RESUBMITTED', 'FUND_BOARD_ACCEPTED',
+  'WORKORDER_BOARD_ACCEPTED', 'WORKORDER_BOARD_RETURNED', 'WORKORDER_EXPENSE_RECORDED', 'WORKORDER_EMERGENCY_STARTED',
+  'CONFIG_CHANGE_REQUESTED', 'CONFIG_CHANGE_CONFIRMED', 'CONFIG_CHANGE_REJECTED',
 ];
 export const FINANCIAL_CONFIG_KEYS = [
   CONFIG_KEYS.FUND_APPROVAL_RATIO, CONFIG_KEYS.FUND_LOW_BALANCE_THRESHOLD, CONFIG_KEYS.FUND_APPROVAL_REMIND_DAYS,
   CONFIG_KEYS.PAYMENT_TERM_DAYS, CONFIG_KEYS.BILLING_REMIND_DAY,
+  CONFIG_KEYS.REPAIR_FUND_THRESHOLD, CONFIG_KEYS.REPAIR_OPERATING_WINDOW_DAYS,
 ];
 export const financialAuditFilter = () => ({
   $or: [
@@ -42,6 +49,10 @@ export const auditExportQuery = auditQuery
 
 // Nhãn tiếng Việt của mọi hành động; test kiểm tra hành động mới thêm vào AUDIT_ACTIONS phải có nhãn
 export const LABELS = {
+  PARCEL_RECEIVED: 'Tiếp nhận bưu kiện',
+  PARCEL_HANDED_OVER: 'Bàn giao hoặc trả bưu kiện',
+  GUEST_CHECKED_IN: 'Ghi nhận khách vào',
+  GUEST_CHECKED_OUT: 'Ghi nhận khách rời',
   // Tài khoản (Mô đun 1)
   ROLE_ASSIGNED: 'Gán vai trò tài khoản',
   ACCOUNT_LOCKED: 'Khóa tài khoản',
@@ -90,7 +101,8 @@ export const LABELS = {
   FEE_TYPE_CHANGED: 'Thay đổi bảng phí',
   AMENITY_FEE_CHANGED: 'Thay đổi phí tiện ích',
   INVOICE_GENERATED: 'Tạo thông báo phí',
-  INVOICE_ADJUSTED: 'Điều chỉnh thông báo phí',
+  INVOICE_ADJUSTED: 'Lập khoản điều chỉnh thông báo phí',
+  INVOICE_ADJUSTMENT_CANCELLED: 'Hủy khoản điều chỉnh thông báo phí',
   INVOICE_CANCELLED: 'Hủy thông báo phí',
   INVOICE_RECALCULATED: 'Tính lại thông báo phí',
   INVOICE_ITEM_ADDED: 'Thêm khoản vào thông báo phí',
@@ -123,6 +135,7 @@ export const LABELS = {
   TICKET_COMPLAINT_RESPONDED: 'Trả lời phản ánh',
   REPAIR_QUOTE_SUBMITTED: 'Gửi báo giá sửa chữa',
   WORKORDER_ASSIGNED: 'Phân công phiếu bảo trì',
+  WORKORDER_CREATED_FROM_TICKET: 'Tạo phiếu bảo trì từ phản ánh',
   ASSET_CREATED: 'Thêm thiết bị',
   ASSET_UPDATED: 'Sửa thiết bị',
   WORKORDER_INSPECTED: 'Nộp kết quả kiểm tra thiết bị',
@@ -136,6 +149,17 @@ export const LABELS = {
   WORKORDER_REPAIR_POSTPONED: 'Tạm hoãn sửa chữa thiết bị',
   WORKORDER_REPAIR_REQUESTED: 'Gửi yêu cầu sửa lại thiết bị đang hoãn',
   WORKORDER_REPAIR_RETIRED: 'Ngừng sử dụng thiết bị hư hỏng',
+  WORKORDER_BOARD_ACCEPTED: 'Ban quản trị xác nhận nghiệm thu sửa chữa',
+  WORKORDER_BOARD_RETURNED: 'Ban quản trị trả về nghiệm thu sửa chữa',
+  WORKORDER_EXPENSE_RECORDED: 'Ghi chi phí vận hành sửa chữa',
+  WORKORDER_EMERGENCY_STARTED: 'Sửa chữa khẩn cấp bằng Quỹ bảo trì',
+  FUND_PROPOSAL_VERIFIED: 'Kế toán xác nhận đề xuất chi quỹ',
+  FUND_PROPOSAL_RETURNED: 'Kế toán trả lại đề xuất chi quỹ',
+  FUND_PROPOSAL_RESUBMITTED: 'Gửi lại đề xuất chi quỹ',
+  FUND_BOARD_ACCEPTED: 'Ban quản trị xác nhận nghiệm thu khoản chi quỹ',
+  CONFIG_CHANGE_REQUESTED: 'Đề nghị đổi tham số tài chính',
+  CONFIG_CHANGE_CONFIRMED: 'Ban quản trị xác nhận đổi tham số',
+  CONFIG_CHANGE_REJECTED: 'Ban quản trị từ chối đổi tham số',
   ASSET_DEACTIVATED: 'Ngừng theo dõi thiết bị',
   ASSET_REACTIVATED: 'Theo dõi lại thiết bị',
   COMPLAINT_CATEGORY_CHANGED: 'Thay đổi danh mục phản ánh',
@@ -155,10 +179,13 @@ export const LABELS = {
 export const auditActionLabel = (action) => LABELS[action] ?? action.replaceAll('_', ' ');
 
 const TARGET_LABELS = {
+  parcels: 'Bưu kiện',
+  guest_logs: 'Sổ khách',
   maintenance_fund: 'Quỹ bảo trì', fund_transactions: 'Giao dịch quỹ', fund_proposals: 'Đề xuất chi quỹ',
   operating_expenses: 'Chi phí vận hành', users: 'Tài khoản', buildings: 'Tòa nhà', apartments: 'Căn hộ',
   contracts: 'Hợp đồng', residents: 'Cư dân', vehicles: 'Phương tiện',
-  gate_passes: 'Giấy chuyển đồ', parking_cards: 'Thẻ gửi xe', fee_types: 'Bảng phí', invoices: 'Thông báo phí', payments: 'Thanh toán',
+  gate_passes: 'Giấy chuyển đồ', parking_cards: 'Thẻ gửi xe', fee_types: 'Bảng phí', invoices: 'Thông báo phí', invoice_adjustments: 'Điều chỉnh thông báo phí',
+  payments: 'Thanh toán',
   debt_followups: 'Xử lý công nợ', repair_quotes: 'Báo giá sửa chữa', amenities: 'Tiện ích',
   amenity_passes: 'Gói tiện ích', amenity_visits: 'Lượt tiện ích', bookings: 'Đặt tiện ích',
   work_orders: 'Lệnh bảo trì', tickets: 'Sự cố và phản ánh', complaint_categories: 'Danh mục phản ánh',
@@ -189,9 +216,9 @@ export function auditOptions(isBoard) {
   const actions = values(AUDIT_ACTIONS).filter((v) => !isBoard || FINANCIAL_ACTIONS.includes(v) || v === AUDIT_ACTIONS.CONFIG_CHANGED);
   const targets = isBoard
     ? [AUDIT_TARGETS.MAINTENANCE_FUND, AUDIT_TARGETS.FUND_TRANSACTION, AUDIT_TARGETS.FUND_PROPOSAL,
-      AUDIT_TARGETS.FEE_TYPE, AUDIT_TARGETS.INVOICE, AUDIT_TARGETS.PAYMENT,
+      AUDIT_TARGETS.FEE_TYPE, AUDIT_TARGETS.INVOICE, AUDIT_TARGETS.INVOICE_ADJUSTMENT, AUDIT_TARGETS.PAYMENT,
       AUDIT_TARGETS.DEBT_FOLLOWUP, AUDIT_TARGETS.AMENITY, AUDIT_TARGETS.SYSTEM_CONFIG,
-      AUDIT_TARGETS.BUILDING_PROFILE, AUDIT_TARGETS.UTILITY_TARIFF, AUDIT_TARGETS.COLLECTION_SETTING]
+      AUDIT_TARGETS.BUILDING_PROFILE, AUDIT_TARGETS.UTILITY_TARIFF, AUDIT_TARGETS.COLLECTION_SETTING, AUDIT_TARGETS.WORK_ORDER]
     : values(AUDIT_TARGETS);
   return {
     actions: actions.map((value) => ({ value, label: auditActionLabel(value) })),
