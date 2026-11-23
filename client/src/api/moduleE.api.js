@@ -13,6 +13,10 @@ export const complaintCategoryApi = {
 export const systemConfigApi = {
   list: () => http.get('/system-configs'),
   update: (key, value) => http.patch(`/system-configs/${key}`, { value }),
+  /** BR-S12: thay đổi tham số tài chính chờ Ban quản trị xác nhận */
+  pending: () => http.get('/system-configs/pending'),
+  approve: (key) => http.post(`/system-configs/${key}/approve`),
+  reject: (key, reason) => http.post(`/system-configs/${key}/reject`, { reason }),
 };
 
 // multipart: field rỗng bỏ qua, ảnh gửi ở field `images`
@@ -26,6 +30,7 @@ function toForm(body, files) {
 // ===== UC-E02..E06: Ticket =====
 export const ticketApi = {
   list: (params) => http.get('/tickets', { params }),
+  rules: () => http.get('/tickets/rules'),
   get: (id) => http.get(`/tickets/${id}`),
   /** body: { categoryId, title, description, type, scope, apartmentId? }, files: File[] */
   create: (body, files = []) => http.post('/tickets', toForm(body, files)),

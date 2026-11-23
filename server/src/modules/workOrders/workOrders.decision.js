@@ -1,18 +1,21 @@
 // UC10 – Duyệt sửa chữa lớn: Trưởng BQL quyết định với báo cáo hư hỏng (BR-E06, Q5).
 //
-//   Chờ duyệt sửa ─ Duyệt, chi phí vận hành ─► Đang sửa (MSG-E07)
-//                ├ Duyệt, Quỹ bảo trì ──────► giữ Chờ duyệt sửa, chờ đề xuất chi quỹ (workOrders.fund.js)
+//   Chờ duyệt sửa ─ Duyệt, chi phí vận hành ─► Đang sửa (MSG-E07). Chặn nếu cộng dồn 30 ngày ≥ ngưỡng (BR-E08)
+//                ├ Duyệt, bảo hành ─────────► Đang sửa, hãng bảo hành sửa (chỉ khi còn bảo hành, BR-E10)
+//                ├ Duyệt, Quỹ bảo trì ──────► giữ Chờ duyệt sửa, Trưởng BQL lập đề xuất chi quỹ (workOrders.fund.js)
+//                ├ Duyệt, Quỹ, khẩn cấp ────► Đang sửa ngay, đề xuất lập sau trong N ngày (BR-E11)
 //                ├ Tạm hoãn ────────────────► Tạm hoãn sửa (lý do + ngày xem lại ≤ N ngày; dời lịch kiểm tra)
 //                └ Ngừng sử dụng ───────────► Đã đóng, thiết bị ngừng theo dõi
 //   Tạm hoãn sửa ─ Gửi yêu cầu sửa lại (KTV / Trưởng BQL) ─► Chờ duyệt sửa
 //                └ Ngừng sử dụng ─► Đã đóng
 // Phiếu hoãn được nhắc từ ngày xem lại, lặp mỗi N ngày (remindPostponedRepairs). Mọi bước ghi có điều kiện trạng thái cũ.
+import mongoose from 'mongoose';
 import {
-  AUDIT_ACTIONS, AUDIT_TARGETS, CONFIG_KEYS, NOTIFICATION_TYPES, REPAIR_COST_SOURCES, REPAIR_DECISIONS, WORK_ORDER_INSPECTING_STATUSES,
+  AUDIT_ACTIONS, AUDIT_TARGETS, CONFIG_KEYS, NOTIFICATION_TYPES, REPAIR_COST_SOURCES, REPAIR_DECISIONS, ROLES, WORK_ORDER_INSPECTING_STATUSES,
   WORK_ORDER_STATUS, WORK_ORDER_TYPES,
 } from '../../constants/enums.js';
 import { isRole } from '../../middlewares/authorize.js';
-import { Asset, WorkOrder } from '../../models/index.js';
+import { Asset, User, WorkOrder } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
 import { getConfigs } from '../../services/systemConfig.service.js';
@@ -22,7 +25,7 @@ import { paginate } from '../../utils/pagination.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { DAY_MS, endOfVnDay, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { computeNextMaintenance } from '../assets/assets.service.js';
-import { countAwaitingVote, hasPendingFundProposal, pendingFundProposals } from './workOrders.fund.js';
+import { countAwaitingFund, hasPendingFundProposal, pendingFundProposals } from './workOrders.fund.js';
 
 const S = WORK_ORDER_STATUS;
 const step = (action, user, now, extra = {}) => ({ action, by: user?.id ?? null, at: now, ...extra });
@@ -45,12 +48,65 @@ async function load(id) {
   return wo;
 }
 
-/** Tham số UC10 (đọc từ system_configs, thiếu thì mặc định 7 / 90) */
+/** Tham số UC10 (đọc từ system_configs, thiếu thì mặc định) */
 export async function repairSettings() {
-  const c = await getConfigs([CONFIG_KEYS.REPAIR_REVIEW_REPEAT_DAYS, CONFIG_KEYS.REPAIR_POSTPONE_MAX_DAYS]);
+  const K = CONFIG_KEYS;
+  const c = await getConfigs([
+    K.REPAIR_REVIEW_REPEAT_DAYS, K.REPAIR_POSTPONE_MAX_DAYS, K.REPAIR_FUND_THRESHOLD, K.REPAIR_OPERATING_WINDOW_DAYS, K.EMERGENCY_DOSSIER_DAYS,
+  ]);
   return {
-    reviewRepeatDays: Number(c[CONFIG_KEYS.REPAIR_REVIEW_REPEAT_DAYS]) || 7,
-    postponeMaxDays: Number(c[CONFIG_KEYS.REPAIR_POSTPONE_MAX_DAYS]) || 90,
+    reviewRepeatDays: Number(c[K.REPAIR_REVIEW_REPEAT_DAYS]) || 7,
+    postponeMaxDays: Number(c[K.REPAIR_POSTPONE_MAX_DAYS]) || 90,
+    fundThreshold: Number(c[K.REPAIR_FUND_THRESHOLD]) || 50_000_000,
+    operatingWindowDays: Number(c[K.REPAIR_OPERATING_WINDOW_DAYS]) || 30,
+    emergencyDossierDays: Number(c[K.EMERGENCY_DOSSIER_DAYS]) || 3,
+  };
+}
+
+// ===== BR-E08, BR-E10: chính sách chọn nguồn chi =====
+const toId = (id) => new mongoose.Types.ObjectId(String(id?._id ?? id));
+
+/**
+ * Tổng chi phí vận hành đã duyệt cho cùng thiết bị trong windowDays ngày gần nhất (trừ phiếu excludeId).
+ * Phiếu Kế toán đã ghi chi thực tế thì lấy số thực tế, chưa ghi thì lấy chi phí dự kiến.
+ */
+export async function operatingSpentInWindow(assetId, now, windowDays, excludeId = null) {
+  const [row] = await WorkOrder.aggregate([
+    {
+      $match: {
+        assetId: toId(assetId),
+        'repair.costSource': REPAIR_COST_SOURCES.OPERATING,
+        'repair.decidedAt': { $gte: new Date(now.getTime() - windowDays * DAY_MS) },
+        ...(excludeId && { _id: { $ne: toId(excludeId) } }),
+      },
+    },
+    { $group: { _id: null, total: { $sum: { $ifNull: ['$repair.actualCost', { $ifNull: ['$repair.estimatedCost', 0] }] } } } },
+  ]);
+  return row?.total ?? 0;
+}
+
+/**
+ * Chính sách chọn nguồn cho phiếu có báo cáo hư hỏng: tổng = dự kiến + đã chi vận hành cùng thiết bị trong cửa sổ;
+ * tổng ≥ ngưỡng → bắt buộc Quỹ (BR-E08). Còn bảo hành khi warrantyEnd ≥ đầu ngày hôm nay (BR-E10).
+ */
+export async function repairPolicy(wo, now = new Date(), settings = null) {
+  const { fundThreshold: threshold, operatingWindowDays: windowDays } = settings ?? (await repairSettings());
+  const [spentInWindow, asset] = await Promise.all([
+    operatingSpentInWindow(wo.assetId, now, windowDays, wo._id),
+    Asset.findById(toId(wo.assetId)).select('warrantyEnd').lean(),
+  ]);
+  const estimatedCost = wo.repair?.estimatedCost ?? 0;
+  const total = estimatedCost + spentInWindow;
+  const warrantyEnd = asset?.warrantyEnd ?? null;
+  return {
+    threshold,
+    windowDays,
+    estimatedCost,
+    spentInWindow,
+    total,
+    fundRequired: total >= threshold,
+    warrantyActive: Boolean(warrantyEnd && new Date(warrantyEnd) >= startOfVnDay(now)),
+    warrantyEnd,
   };
 }
 
@@ -62,10 +118,12 @@ const notifyTech = (wo, title, content) => safely(async () => {
 
 // ===== UC10 bước 3–5, 3a: quyết định =====
 /**
- * @param {{ decision: 'APPROVE'|'POSTPONE'|'RETIRE', costSource?: 'OPERATING'|'FUND', comment?: string, reviewDate?: Date }} body
- * Còn đề xuất chi quỹ đang chờ Ban quản trị thì không quyết định lại được (WORKORDER_FUND_PENDING).
+ * @param {{ decision: 'APPROVE'|'POSTPONE'|'RETIRE', costSource?: 'OPERATING'|'FUND'|'WARRANTY', comment?: string, reviewDate?: Date,
+ *   warrantyOverrideReason?: string, emergency?: boolean, emergencyReason?: string }} body
+ * Còn đề xuất chi quỹ đang chờ Ban quản trị biểu quyết thì không quyết định lại được (WORKORDER_FUND_PENDING).
  */
-export async function decideRepair(user, id, { decision, costSource, comment = '', reviewDate }, now = new Date()) {
+export async function decideRepair(user, id, body, now = new Date()) {
+  const { decision, costSource, comment = '', reviewDate, warrantyOverrideReason, emergency = false, emergencyReason } = body;
   const wo = await load(id);
   const note = comment?.trim() || null;
   const allowed = decision === REPAIR_DECISIONS.RETIRE ? [S.AWAITING_REPAIR_APPROVAL, S.REPAIR_POSTPONED] : [S.AWAITING_REPAIR_APPROVAL];
@@ -76,43 +134,87 @@ export async function decideRepair(user, id, { decision, costSource, comment = '
 
   if (decision === REPAIR_DECISIONS.RETIRE) return retire(user, wo, note, now);
   if (decision === REPAIR_DECISIONS.POSTPONE) return postpone(user, wo, note, reviewDate, now);
-  if (costSource === REPAIR_COST_SOURCES.FUND) return approveFund(user, wo, note, now);
-  return approveOperating(user, wo, note, now);
+
+  // APPROVE: kiểm chính sách nguồn chi ở server (client có khóa lựa chọn cũng không tin)
+  const policy = await repairPolicy(wo, now);
+  if (costSource === REPAIR_COST_SOURCES.WARRANTY && !policy.warrantyActive) {
+    throw ApiError.field('costSource', 'Thiết bị đã hết bảo hành, không chọn nguồn Bảo hành được');
+  }
+  if (costSource === REPAIR_COST_SOURCES.OPERATING && policy.fundRequired) {
+    throw new ApiError(
+      'WORKORDER_FUND_REQUIRED',
+      `Tổng chi phí ${money(policy.total)} (gồm ${money(policy.spentInWindow)} đã chi vận hành cho thiết bị trong ${policy.windowDays} ngày) `
+        + `từ ngưỡng ${money(policy.threshold)} trở lên, bắt buộc dùng Quỹ bảo trì`,
+      { details: [{ field: 'costSource', message: 'Bắt buộc dùng Quỹ bảo trì', total: policy.total, threshold: policy.threshold, spentInWindow: policy.spentInWindow }] },
+    );
+  }
+  let warrantyNote = null;
+  if (policy.warrantyActive && costSource !== REPAIR_COST_SOURCES.WARRANTY) {
+    warrantyNote = warrantyOverrideReason?.trim() || '';
+    if (warrantyNote.length < 5) {
+      throw new ApiError('WORKORDER_WARRANTY_REASON_REQUIRED', `Thiết bị còn bảo hành đến ${fmtDateVn(policy.warrantyEnd)}. Ghi lý do không dùng bảo hành (tối thiểu 5 ký tự)`, {
+        details: [{ field: 'warrantyOverrideReason', message: 'Ghi lý do không dùng bảo hành' }],
+      });
+    }
+  }
+  const extra = { warrantyNote, policy };
+  if (costSource === REPAIR_COST_SOURCES.FUND) {
+    if (emergency) {
+      const reason = emergencyReason?.trim() || '';
+      if (reason.length < 10) throw ApiError.field('emergencyReason', 'Ghi lý do khẩn cấp tối thiểu 10 ký tự');
+      return approveEmergency(user, wo, note, reason, now, extra);
+    }
+    return approveFund(user, wo, note, now, extra);
+  }
+  return approveDirect(user, wo, note, now, costSource, extra);
 }
 
-const decided = (user, now, note, costSource) => ({
+const decided = (user, now, note, costSource, warrantyNote = null) => ({
   'repair.costSource': costSource,
   'repair.decidedBy': user.id,
   'repair.decidedAt': now,
   'repair.decisionNote': note,
+  'repair.warrantyOverrideReason': warrantyNote,
 });
 
-async function approveOperating(user, wo, note, now) {
+/** Chi phí vận hành hoặc bảo hành: phiếu sang Đang sửa ngay */
+async function approveDirect(user, wo, note, now, source, { warrantyNote, policy }) {
+  const warranty = source === REPAIR_COST_SOURCES.WARRANTY;
+  const historyNote = warrantyNote ? [note, `Không dùng bảo hành: ${warrantyNote}`].filter(Boolean).join('. ') : note;
   const res = await WorkOrder.updateOne(
     { _id: wo._id, status: S.AWAITING_REPAIR_APPROVAL },
     {
-      $set: { status: S.UNDER_REPAIR, ...decided(user, now, note, REPAIR_COST_SOURCES.OPERATING) },
-      $push: { 'repair.history': step('APPROVED', user, now, { note, cost: wo.repair?.estimatedCost ?? null }) },
+      $set: { status: S.UNDER_REPAIR, ...decided(user, now, note, source, warrantyNote) },
+      $push: { 'repair.history': step('APPROVED', user, now, { note: historyNote, cost: warranty ? 0 : wo.repair?.estimatedCost ?? null }) },
     },
   );
   if (!res.modifiedCount) throw new ApiError('CONCURRENT_UPDATE');
   await logAudit({
     action: AUDIT_ACTIONS.WORKORDER_REPAIR_APPROVED, user, targetType: AUDIT_TARGETS.WORK_ORDER, targetId: wo._id,
     before: { status: wo.status },
-    after: { status: S.UNDER_REPAIR, costSource: REPAIR_COST_SOURCES.OPERATING, estimatedCost: wo.repair?.estimatedCost ?? null },
-    metadata: { assetId: wo.assetId },
+    after: { status: S.UNDER_REPAIR, costSource: source, estimatedCost: wo.repair?.estimatedCost ?? null },
+    metadata: {
+      assetId: wo.assetId,
+      ...(!warranty && { spentInWindow: policy.spentInWindow, threshold: policy.threshold }),
+      ...(warrantyNote && { warrantyOverrideReason: warrantyNote }),
+    },
   });
-  await notifyTech(wo, 'Sửa chữa đã được duyệt',
-    `Sửa chữa ${await assetLabel(wo.assetId)} đã được duyệt (chi phí vận hành). Khi nhà thầu sửa xong, tải biên bản nghiệm thu lên phiếu.`); // MSG-E07
+  const label = await assetLabel(wo.assetId);
+  await notifyTech(wo, 'Sửa chữa đã được duyệt', warranty
+    ? `Sửa chữa ${label} đã được duyệt theo bảo hành. Liên hệ hãng bảo hành để sửa; sửa xong tải biên bản nghiệm thu lên phiếu.`
+    : `Sửa chữa ${label} đã được duyệt (chi phí vận hành). Khi nhà thầu sửa xong, tải biên bản nghiệm thu lên phiếu.`); // MSG-E07
   return WorkOrder.findById(wo._id).lean();
 }
 
-/** UC10 bước 5: giữ Chờ duyệt sửa, ghi nguồn Quỹ, báo Kế toán lập đề xuất chi (UC33) */
-async function approveFund(user, wo, note, now) {
+/**
+ * UC10 bước 5: giữ Chờ duyệt sửa, ghi nguồn Quỹ. Trưởng BQL lập đề xuất chi ngay sau đó (UC33, form điền sẵn từ báo cáo
+ * hư hỏng) → trả nextStep để client mở form. Ban quản trị được báo khi đề xuất được lập.
+ */
+async function approveFund(user, wo, note, now, { warrantyNote }) {
   const res = await WorkOrder.updateOne(
     { _id: wo._id, status: S.AWAITING_REPAIR_APPROVAL },
     {
-      $set: decided(user, now, note, REPAIR_COST_SOURCES.FUND),
+      $set: decided(user, now, note, REPAIR_COST_SOURCES.FUND, warrantyNote),
       $push: { 'repair.history': step('FUND_REQUESTED', user, now, { note, cost: wo.repair?.estimatedCost ?? null }) },
     },
   );
@@ -121,19 +223,57 @@ async function approveFund(user, wo, note, now) {
     action: AUDIT_ACTIONS.WORKORDER_FUND_REQUESTED, user, targetType: AUDIT_TARGETS.WORK_ORDER, targetId: wo._id,
     before: { costSource: wo.repair?.costSource ?? null },
     after: { costSource: REPAIR_COST_SOURCES.FUND, estimatedCost: wo.repair?.estimatedCost ?? null },
-    metadata: { assetId: wo.assetId, financial: true },
+    metadata: { assetId: wo.assetId, financial: true, ...(warrantyNote && { warrantyOverrideReason: warrantyNote }) },
+  });
+  await notifyTech(wo, 'Sửa chữa chờ duyệt chi quỹ',
+    `Sửa chữa ${await assetLabel(wo.assetId)} được duyệt bằng Quỹ bảo trì, đang chờ lập và duyệt đề xuất chi. Chưa liên hệ nhà thầu.`); // MSG-E07
+  return { ...(await WorkOrder.findById(wo._id).lean()), nextStep: 'CREATE_PROPOSAL' };
+}
+
+/**
+ * BR-E11: sự cố khẩn cấp (vd thang máy kẹt người) — sửa trước bằng Quỹ, phiếu sang Đang sửa ngay. Báo KTV tiến hành,
+ * báo Ban quản trị ngay; Trưởng BQL lập đề xuất (Đột xuất, kèm lý do) trong EMERGENCY_DOSSIER_DAYS ngày, quá hạn job nhắc.
+ */
+async function approveEmergency(user, wo, note, reason, now, { warrantyNote }) {
+  const { emergencyDossierDays } = await repairSettings();
+  const res = await WorkOrder.updateOne(
+    { _id: wo._id, status: S.AWAITING_REPAIR_APPROVAL },
+    {
+      $set: {
+        status: S.UNDER_REPAIR,
+        ...decided(user, now, note, REPAIR_COST_SOURCES.FUND, warrantyNote),
+        'repair.isEmergency': true,
+        'repair.emergencyReason': reason,
+        'repair.emergencyAt': now,
+        'repair.dossierRemindedAt': null,
+      },
+      $push: { 'repair.history': step('EMERGENCY_STARTED', user, now, { note: reason, cost: wo.repair?.estimatedCost ?? null }) },
+    },
+  );
+  if (!res.modifiedCount) throw new ApiError('CONCURRENT_UPDATE');
+  await logAudit({
+    action: AUDIT_ACTIONS.WORKORDER_EMERGENCY_STARTED, user, targetType: AUDIT_TARGETS.WORK_ORDER, targetId: wo._id,
+    before: { status: wo.status },
+    after: { status: S.UNDER_REPAIR, costSource: REPAIR_COST_SOURCES.FUND, estimatedCost: wo.repair?.estimatedCost ?? null },
+    metadata: { assetId: wo.assetId, reason, financial: true },
   });
   const label = await assetLabel(wo.assetId);
-  await safely(() => notifyRoles(['ACCOUNTANT'], {
-    type: NOTIFICATION_TYPES.MAINTENANCE,
-    title: 'Cần lập đề xuất chi quỹ sửa chữa',
-    content: `Trưởng BQL duyệt sửa ${label} bằng Quỹ bảo trì (dự kiến ${money(wo.repair?.estimatedCost)}). Vui lòng lập đề xuất chi quỹ gắn với phiếu bảo trì này.`,
-    refId: wo._id,
-    link: '/app/fund',
-  }));
-  await notifyTech(wo, 'Sửa chữa chờ duyệt chi quỹ',
-    `Sửa chữa ${label} được duyệt bằng Quỹ bảo trì, đang chờ Ban quản trị duyệt đề xuất chi. Chưa liên hệ nhà thầu.`); // MSG-E07
-  return WorkOrder.findById(wo._id).lean();
+  await notifyTech(wo, 'Sửa chữa khẩn cấp: tiến hành ngay',
+    `Trưởng BQL duyệt sửa khẩn cấp ${label}: ${reason}. Liên hệ nhà thầu sửa ngay; sửa xong tải biên bản nghiệm thu lên phiếu.`); // MSG-E07
+  await safely(async () => {
+    const members = await User.find({ role: ROLES.BOARD, isActive: true }).select('_id').lean();
+    if (!members.length) return;
+    await notify(members.map((m) => m._id), {
+      type: NOTIFICATION_TYPES.FUND_APPROVAL,
+      title: `Sửa chữa khẩn cấp bằng Quỹ: ${label}`,
+      content: `Trưởng BQL cho sửa ngay ${label} (dự kiến ${money(wo.repair?.estimatedCost)}) vì: ${reason}. `
+        + `Đề xuất chi quỹ sẽ được lập trong ${emergencyDossierDays} ngày để Ban quản trị biểu quyết.`,
+      refId: wo._id,
+      link: '/app/fund',
+      email: true,
+    });
+  });
+  return { ...(await WorkOrder.findById(wo._id).lean()), nextStep: 'CREATE_PROPOSAL' };
 }
 
 /**
@@ -270,7 +410,7 @@ const TABS = {
   pending: { filter: { status: S.AWAITING_REPAIR_APPROVAL }, sort: 'repair.reportedAt' },
   postponed: { filter: { status: S.REPAIR_POSTPONED }, sort: 'repair.reviewDate' },
   decided: {
-    filter: { status: { $in: [S.UNDER_REPAIR, S.AWAITING_ACCEPTANCE, S.DONE, S.CLOSED] }, 'repair.decidedAt': { $ne: null } },
+    filter: { status: { $in: [S.UNDER_REPAIR, S.AWAITING_ACCEPTANCE, S.AWAITING_BOARD_ACCEPTANCE, S.DONE, S.CLOSED] }, 'repair.decidedAt': { $ne: null } },
     sort: '-repair.decidedAt',
   },
 };
@@ -286,28 +426,33 @@ export async function listRepairs({ tab = 'pending', ...query }, now = new Date(
   const { filter, sort } = TABS[tab] ?? TABS.pending;
   const endToday = endOfVnDay(now);
   const result = await paginate(WorkOrder, filter, { ...query, sort }, { populate: LIST_POPULATE });
-  const pendingFunds = await pendingFundProposals(result.items);
-  result.items = result.items.map((wo) => {
+  const settings = await repairSettings();
+  const [pendingFunds, policies] = await Promise.all([
+    pendingFundProposals(result.items),
+    // Phiếu chờ quyết định: kèm chính sách nguồn chi để form khóa lựa chọn (BR-E08, BR-E10)
+    Promise.all(result.items.map((wo) => (wo.status === S.AWAITING_REPAIR_APPROVAL && wo.repair ? repairPolicy(wo, now, settings) : null))),
+  ]);
+  result.items = result.items.map((wo, i) => {
     const review = wo.repair?.reviewDate ? new Date(wo.repair.reviewDate) : null;
     const due = wo.status === S.REPAIR_POSTPONED && review && review <= endToday;
     return {
       ...wo,
       isReviewDue: Boolean(due),
       reviewOverdueDays: due ? Math.floor((startOfVnDay(now) - startOfVnDay(review)) / DAY_MS) : 0,
-      // Đề xuất chi quỹ đang chờ Ban quản trị biểu quyết → không quyết định lại được (WORKORDER_FUND_PENDING)
+      // Đề xuất chi quỹ đang xử lý → không quyết định lại được (WORKORDER_FUND_PENDING); status cho biết chờ ai
       pendingFund: pendingFunds.get(String(wo._id)) ?? null,
+      policy: policies[i],
     };
   });
-  const [pending, postponed, reviewDue, awaitingVote, settings] = await Promise.all([
+  const [pending, postponed, reviewDue, awaitingFund] = await Promise.all([
     WorkOrder.countDocuments(TABS.pending.filter),
     WorkOrder.countDocuments(TABS.postponed.filter),
     WorkOrder.countDocuments({ status: S.REPAIR_POSTPONED, 'repair.reviewDate': { $lte: endToday } }),
-    countAwaitingVote(TABS.pending.filter),
-    repairSettings(),
+    countAwaitingFund(TABS.pending.filter),
   ]);
-  // awaitingVote: phiếu chờ quyết định nhưng đang chờ Ban quản trị biểu quyết (Trưởng BQL chưa làm gì được) —
-  // số việc cần xử lý trên menu = pending − awaitingVote + reviewDue
-  return { ...result, counts: { pending, postponed, reviewDue, awaitingVote }, settings };
+  // awaitingFund: phiếu chờ quyết định đã có đề xuất đang chờ Ban quản trị biểu quyết (Trưởng BQL chưa làm gì được)
+  // — số việc trên menu = pending − awaitingFund + reviewDue
+  return { ...result, counts: { pending, postponed, reviewDue, awaitingFund }, settings };
 }
 
 // ===== Job REPAIR_REVIEW: nhắc Trưởng BQL xem lại phiếu tạm hoãn (MSG-E12) =====

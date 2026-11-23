@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { checklistRule, cleanChecklist, cycleText, dueText, isDuplicateLabel, warrantyState } from '../src/features/assets/assetFormat.js';
 
-test('chu kỳ: ngày / tháng / quý; thiếu dữ liệu → —', () => {
+test('chu kỳ: ngày / tháng / quý; thiếu dữ liệu → Chưa đặt chu kỳ', () => {
   assert.equal(cycleText({ cycleValue: 30, cycleUnit: 'DAY' }), '30 ngày');
   assert.equal(cycleText({ cycleValue: 1, cycleUnit: 'MONTH' }), '1 tháng');
   assert.equal(cycleText({ cycleValue: 2, cycleUnit: 'QUARTER' }), '2 quý');
-  assert.equal(cycleText({ maintenanceCycleDays: 30 }), '—');
+  assert.equal(cycleText({ maintenanceCycleDays: 30 }), 'Chưa đặt chu kỳ');
 });
 
 test('bảo hành: hết hạn / còn ≤ 30 ngày / còn hạn; ngày cuối vẫn còn hạn', () => {

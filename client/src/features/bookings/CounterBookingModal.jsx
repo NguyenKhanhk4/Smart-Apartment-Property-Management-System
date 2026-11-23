@@ -8,8 +8,6 @@ import { AGE_GROUPS } from '../../constants/enums';
 import { useAction, useApi } from '../../hooks/useApi';
 import { formatMoney } from '../../utils/format';
 
-const DEFAULT_ADVANCE_DAYS = 14;
-
 /**
  * UC-D07 — Lễ tân đặt hộ tại quầy: nhập mã cư dân → đối chiếu ảnh → chọn tiện ích, ngày, giờ.
  * Phí > 0 mà người được đặt hộ không có quyền phí thì phải chọn người chịu phí (chủ hộ / thành viên có quyền phí cùng căn).
@@ -66,7 +64,8 @@ export default function CounterBookingModal({ initialDate, onClose, onDone }) {
     },
   );
 
-  const advance = grid?.rules?.advanceDays ?? DEFAULT_ADVANCE_DAYS;
+  // Ngày đặt xa nhất do server trả về (BOOKING_ADVANCE_DAYS); chưa tải lưới thì server vẫn kiểm tra khi đặt
+  const maxDay = grid?.maxDate ? dayjs(grid.maxDate).endOf('day') : null;
   const canSubmit = Boolean(person && amenityId && slot?.available && (!needsPayer || payerCode));
 
   return (
@@ -145,7 +144,7 @@ export default function CounterBookingModal({ initialDate, onClose, onDone }) {
                   format="DD/MM/YYYY"
                   value={date}
                   onChange={(d) => (setDate(d), setSlotStart(undefined))}
-                  disabledDate={(d) => d.isBefore(dayjs().startOf('day')) || d.isAfter(dayjs().add(advance, 'day').endOf('day'))}
+                  disabledDate={(d) => d.isBefore(dayjs().startOf('day')) || Boolean(maxDay && d.isAfter(maxDay))}
                 />
               </Flex>
             </div>

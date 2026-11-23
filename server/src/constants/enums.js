@@ -277,15 +277,20 @@ export const FUND_PLAN_TYPES = Object.freeze({
   UNSCHEDULED: "UNSCHEDULED", // bảo trì đột xuất, bắt buộc ghi lý do
 });
 
-// Vòng đời đề xuất chi quỹ: Chờ Ban quản trị biểu quyết → Đã duyệt → Đã chi (Kế toán lập phiếu chi);
-// hoặc Từ chối / Kế toán rút lại. Đủ tỷ lệ đồng ý > FUND_APPROVAL_RATIO số thành viên thì tự duyệt.
+// Vòng đời đề xuất chi quỹ: Trưởng BQL lập → Chờ Ban quản trị biểu quyết → Đã duyệt → Đã chi (Kế toán lập phiếu chi);
+// hoặc Từ chối / Trưởng BQL rút lại. Không có bước Kế toán xác nhận: hệ thống tự kiểm số dư khả dụng lúc lập và lúc chốt.
+// Đủ tỷ lệ đồng ý > FUND_APPROVAL_RATIO số thành viên thì tự duyệt (nếu số dư khả dụng còn đủ).
 export const FUND_PROPOSAL_STATUS = Object.freeze({
-  PENDING: "PENDING",
+  PENDING: "PENDING", // chờ Ban quản trị biểu quyết
   APPROVED: "APPROVED",
   REJECTED: "REJECTED",
   PAID: "PAID",
   CANCELLED: "CANCELLED",
 });
+// Đề xuất còn đang xử lý: mỗi phiếu bảo trì chỉ có 1 đề xuất như vậy (FundProposal.isOpen)
+export const FUND_PROPOSAL_OPEN_STATUSES = Object.freeze([
+  FUND_PROPOSAL_STATUS.PENDING,
+]);
 
 export const EXPENSE_CATEGORIES = Object.freeze({
   SALARY: "SALARY",
@@ -321,6 +326,7 @@ export const WORK_ORDER_STATUS = Object.freeze({
   AWAITING_REPAIR_APPROVAL: "AWAITING_REPAIR_APPROVAL", // UC09: KTV đã báo hư hỏng, chờ Trưởng BQL duyệt (UC10)
   UNDER_REPAIR: "UNDER_REPAIR", // đã duyệt, nhà thầu đang sửa
   AWAITING_ACCEPTANCE: "AWAITING_ACCEPTANCE", // KTV đã tải biên bản của nhà thầu, chờ Trưởng BQL nghiệm thu
+  AWAITING_BOARD_ACCEPTANCE: "AWAITING_BOARD_ACCEPTANCE", // sửa bằng Quỹ: Trưởng BQL đã nghiệm thu kỹ thuật, chờ Ban quản trị xác nhận (BR-E09)
   REPAIR_POSTPONED: "REPAIR_POSTPONED", // UC10 (Q5): Trưởng BQL tạm hoãn sửa, có ngày xem lại; kiểm tra định kỳ vẫn chạy
   DONE: "DONE",
   CLOSED: "CLOSED", // UC10: thiết bị ngừng sử dụng, phiếu đóng không sửa
@@ -333,10 +339,11 @@ export const REPAIR_DECISIONS = Object.freeze({
   RETIRE: "RETIRE", // không sửa: ngừng sử dụng thiết bị
 });
 
-// UC10: nguồn chi phí sửa chữa (BR-E06)
+// UC10: nguồn chi phí sửa chữa (BR-E06, BR-E08, BR-E10)
 export const REPAIR_COST_SOURCES = Object.freeze({
-  OPERATING: "OPERATING",
-  FUND: "FUND",
+  OPERATING: "OPERATING", // chi phí vận hành: tổng cộng dồn 30 ngày dưới ngưỡng REPAIR_FUND_THRESHOLD
+  FUND: "FUND", // Quỹ bảo trì: bắt buộc khi từ ngưỡng trở lên
+  WARRANTY: "WARRANTY", // hãng bảo hành sửa, không phát sinh chi
 });
 
 // UC08: kết quả kiểm tra định kỳ (BR-E05)
@@ -356,6 +363,7 @@ export const WORK_ORDER_REPAIR_STATUSES = Object.freeze([
   WORK_ORDER_STATUS.AWAITING_REPAIR_APPROVAL,
   WORK_ORDER_STATUS.UNDER_REPAIR,
   WORK_ORDER_STATUS.AWAITING_ACCEPTANCE,
+  WORK_ORDER_STATUS.AWAITING_BOARD_ACCEPTANCE,
 ]);
 // Đang làm (kiểm tra hoặc sửa): job không tạo phiếu mới; hiện là "phiếu đang mở" của thiết bị
 export const WORK_ORDER_ACTIVE_STATUSES = Object.freeze([
@@ -576,6 +584,7 @@ export const CRON_JOBS = Object.freeze({
   WORK_ORDER_GENERATE: 'WORK_ORDER_GENERATE',
   EQUIPMENT_WARNING: 'EQUIPMENT_WARNING', // UC07, BR-E07: phiếu bảo trì quá hạn, thiết bị sắp hết bảo hành (MSG-E08)
   REPAIR_REVIEW: 'REPAIR_REVIEW', // UC10: nhắc Trưởng BQL xem lại phiếu tạm hoãn sửa (MSG-E12)
+  REPAIR_FOLLOWUP_REMIND: 'REPAIR_FOLLOWUP_REMIND', // hồ sơ sửa khẩn cấp, chờ Ban quản trị xác nhận nghiệm thu, chờ ghi chi vận hành (BR-X8)
   TICKET_ESCALATE: 'TICKET_ESCALATE',
   TICKET_AUTO_CLOSE: 'TICKET_AUTO_CLOSE',
   CONTRACT_EXPIRE: 'CONTRACT_EXPIRE',
@@ -617,6 +626,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   FUND_PROPOSAL_CANCELLED: 'FUND_PROPOSAL_CANCELLED',
   FUND_WORK_ACCEPTED: 'FUND_WORK_ACCEPTED',
   FUND_EXPENSE_RECORDED: 'FUND_EXPENSE_RECORDED',
+  FUND_BOARD_ACCEPTED: 'FUND_BOARD_ACCEPTED', // Ban quản trị xác nhận nghiệm thu đề xuất không gắn phiếu
   CONFIG_CHANGED: 'CONFIG_CHANGED',
   COMPLAINT_CATEGORY_CHANGED: 'COMPLAINT_CATEGORY_CHANGED',
   TICKET_ASSIGNED: 'TICKET_ASSIGNED',
@@ -637,6 +647,13 @@ export const AUDIT_ACTIONS = Object.freeze({
   WORKORDER_REPAIR_POSTPONED: 'WORKORDER_REPAIR_POSTPONED',
   WORKORDER_REPAIR_REQUESTED: 'WORKORDER_REPAIR_REQUESTED',
   WORKORDER_REPAIR_RETIRED: 'WORKORDER_REPAIR_RETIRED',
+  WORKORDER_BOARD_ACCEPTED: 'WORKORDER_BOARD_ACCEPTED', // BR-E09: Ban quản trị xác nhận nghiệm thu sửa bằng Quỹ
+  WORKORDER_BOARD_RETURNED: 'WORKORDER_BOARD_RETURNED',
+  WORKORDER_EXPENSE_RECORDED: 'WORKORDER_EXPENSE_RECORDED', // Kế toán ghi chi phí vận hành thực tế
+  WORKORDER_EMERGENCY_STARTED: 'WORKORDER_EMERGENCY_STARTED', // BR-E11: sửa khẩn cấp, hồ sơ quỹ lập sau
+  CONFIG_CHANGE_REQUESTED: 'CONFIG_CHANGE_REQUESTED', // BR-S12: đổi tham số cần Ban quản trị xác nhận
+  CONFIG_CHANGE_CONFIRMED: 'CONFIG_CHANGE_CONFIRMED',
+  CONFIG_CHANGE_REJECTED: 'CONFIG_CHANGE_REJECTED',
   ASSET_DEACTIVATED: 'ASSET_DEACTIVATED',
   ASSET_REACTIVATED: 'ASSET_REACTIVATED',
   AMENITY_FEE_CHANGED: 'AMENITY_FEE_CHANGED',
@@ -736,10 +753,6 @@ export const AUDIT_TARGETS = Object.freeze({
 // Tham số nghiệp vụ/kỹ thuật mặc định (system_configs). Seed khi khởi tạo DB.
 export const CONFIG_KEYS = Object.freeze({
   GUEST_RETENTION_MONTHS: "GUEST_RETENTION_MONTHS",
-  SLA_HOURS_URGENT: "SLA_HOURS_URGENT",
-  SLA_HOURS_HIGH: "SLA_HOURS_HIGH",
-  SLA_HOURS_MEDIUM: "SLA_HOURS_MEDIUM",
-  SLA_HOURS_LOW: "SLA_HOURS_LOW",
   TICKET_AUTO_CLOSE_DAYS: "TICKET_AUTO_CLOSE_DAYS",
   PAYMENT_TERM_DAYS: "PAYMENT_TERM_DAYS",
   DEBT_REMINDER_INTERVAL_DAYS: "DEBT_REMINDER_INTERVAL_DAYS",
@@ -774,6 +787,11 @@ export const CONFIG_KEYS = Object.freeze({
   REPAIR_ACCEPTANCE_REMIND_DAYS: "REPAIR_ACCEPTANCE_REMIND_DAYS", // UC09: chờ nghiệm thu quá N ngày thì nhắc Trưởng BQL (BR-X8)
   REPAIR_REVIEW_REPEAT_DAYS: "REPAIR_REVIEW_REPEAT_DAYS", // UC10: phiếu hoãn đã tới ngày xem lại thì nhắc lại mỗi N ngày
   REPAIR_POSTPONE_MAX_DAYS: "REPAIR_POSTPONE_MAX_DAYS", // UC10: ngày xem lại tối đa N ngày kể từ hôm hoãn
+  REPAIR_FUND_THRESHOLD: "REPAIR_FUND_THRESHOLD", // BR-E08: chi phí (cộng dồn) từ ngưỡng này bắt buộc dùng Quỹ
+  REPAIR_OPERATING_WINDOW_DAYS: "REPAIR_OPERATING_WINDOW_DAYS", // BR-E08: cửa sổ cộng dồn chi phí vận hành cùng thiết bị
+  BOARD_ACCEPTANCE_REMIND_DAYS: "BOARD_ACCEPTANCE_REMIND_DAYS", // chờ Ban quản trị xác nhận nghiệm thu quá N ngày thì nhắc
+  EMERGENCY_DOSSIER_DAYS: "EMERGENCY_DOSSIER_DAYS", // BR-E11: sửa khẩn cấp phải lập đề xuất quỹ trong N ngày
+  OPERATING_EXPENSE_REMIND_DAYS: "OPERATING_EXPENSE_REMIND_DAYS", // phiếu vận hành xong quá N ngày chưa ghi chi thì nhắc Kế toán
   // UC05 — Cấu hình tòa nhà & biểu phí (BR-X8)
   OWNER_CONFIRM_REMIND_DAYS: "OWNER_CONFIRM_REMIND_DAYS",
   OWNER_CONFIRM_AUTO_CANCEL_DAYS: "OWNER_CONFIRM_AUTO_CANCEL_DAYS",
@@ -788,30 +806,6 @@ export const DEFAULT_CONFIGS = Object.freeze([
     description: "Thời hạn lưu dữ liệu khách vãng lai (tháng) — Module 7",
   },
   // BUSINESS — Manager sửa (UC-E01)
-  {
-    key: CONFIG_KEYS.SLA_HOURS_URGENT,
-    value: 24,
-    scope: CONFIG_SCOPES.BUSINESS,
-    description: "SLA ticket Khẩn cấp (giờ) — BR-O7",
-  },
-  {
-    key: CONFIG_KEYS.SLA_HOURS_HIGH,
-    value: 72,
-    scope: CONFIG_SCOPES.BUSINESS,
-    description: "SLA ticket Cao (giờ) — BR-O7",
-  },
-  {
-    key: CONFIG_KEYS.SLA_HOURS_MEDIUM,
-    value: 168,
-    scope: CONFIG_SCOPES.BUSINESS,
-    description: "SLA ticket Thường (giờ) — BR-O7",
-  },
-  {
-    key: CONFIG_KEYS.SLA_HOURS_LOW,
-    value: 168,
-    scope: CONFIG_SCOPES.BUSINESS,
-    description: "SLA ticket Thấp (giờ)",
-  },
   {
     key: CONFIG_KEYS.TICKET_AUTO_CLOSE_DAYS,
     value: 3,
@@ -957,7 +951,7 @@ export const DEFAULT_CONFIGS = Object.freeze([
   },
   {
     key: CONFIG_KEYS.TICKET_ACK_MINUTES,
-    value: 1,
+    value: 30,
     scope: CONFIG_SCOPES.BUSINESS,
     description: "Hạn kỹ thuật viên nhận sự cố kể từ lúc gửi (phút)",
   },
@@ -1023,6 +1017,38 @@ export const DEFAULT_CONFIGS = Object.freeze([
     description:
       "Phiếu chờ nghiệm thu sửa chữa quá N ngày thì nhắc Trưởng BQL, không tự nghiệm thu (UC09, BR-X8)",
   },
+  {
+    key: CONFIG_KEYS.REPAIR_FUND_THRESHOLD,
+    value: 50000000,
+    scope: CONFIG_SCOPES.BUSINESS,
+    description:
+      "Chi phí sửa chữa (cộng dồn chi phí vận hành cùng thiết bị trong cửa sổ ngày) từ mức này trở lên bắt buộc dùng Quỹ bảo trì (VNĐ). Đổi cần Ban quản trị xác nhận (BR-E08, BR-S12)",
+  },
+  {
+    key: CONFIG_KEYS.REPAIR_OPERATING_WINDOW_DAYS,
+    value: 30,
+    scope: CONFIG_SCOPES.BUSINESS,
+    description:
+      "Cộng dồn chi phí vận hành sửa cùng thiết bị trong N ngày gần nhất khi so với ngưỡng Quỹ. Đổi cần Ban quản trị xác nhận (BR-E08)",
+  },
+  {
+    key: CONFIG_KEYS.BOARD_ACCEPTANCE_REMIND_DAYS,
+    value: 3,
+    scope: CONFIG_SCOPES.BUSINESS,
+    description: "Sửa chữa bằng Quỹ chờ Ban quản trị xác nhận nghiệm thu quá N ngày thì nhắc Ban quản trị (BR-E09, BR-X8)",
+  },
+  {
+    key: CONFIG_KEYS.EMERGENCY_DOSSIER_DAYS,
+    value: 3,
+    scope: CONFIG_SCOPES.BUSINESS,
+    description: "Sửa chữa khẩn cấp: Trưởng BQL phải lập đề xuất chi quỹ trong N ngày, quá thì nhắc mỗi ngày (BR-E11)",
+  },
+  {
+    key: CONFIG_KEYS.OPERATING_EXPENSE_REMIND_DAYS,
+    value: 3,
+    scope: CONFIG_SCOPES.BUSINESS,
+    description: "Sửa chữa chi phí vận hành đã xong quá N ngày mà Kế toán chưa ghi chi thực tế thì nhắc Kế toán (BR-X8)",
+  },
   // UC05 — Cấu hình tòa nhà & biểu phí (BR-X8)
   {
     key: CONFIG_KEYS.OWNER_CONFIRM_REMIND_DAYS,
@@ -1038,7 +1064,7 @@ export const DEFAULT_CONFIGS = Object.freeze([
   },
   {
     key: CONFIG_KEYS.EMERGENCY_REPEAT_MINUTES,
-    value: 1,
+    value: 15,
     scope: CONFIG_SCOPES.BUSINESS,
     description: "Khoảng thời gian lặp lại cảnh báo khẩn cấp (phút) — BR-X8",
   },
@@ -1055,6 +1081,13 @@ export const DEFAULT_CONFIGS = Object.freeze([
 export const CONFIG_DEFAULTS = Object.freeze(
   Object.fromEntries(DEFAULT_CONFIGS.map((c) => [c.key, c.value])),
 );
+
+// BR-S12: tham số tài chính, Trưởng BQL đổi thì phải chờ Ban quản trị xác nhận mới có hiệu lực
+export const BOARD_CONFIRM_CONFIG_KEYS = Object.freeze([
+  CONFIG_KEYS.REPAIR_FUND_THRESHOLD,
+  CONFIG_KEYS.REPAIR_OPERATING_WINDOW_DAYS,
+  CONFIG_KEYS.FUND_APPROVAL_RATIO,
+]);
 
 // Tham số được phép đặt 0 = tắt tính năng (các tham số số khác phải > 0)
 export const ZERO_ALLOWED_CONFIG_KEYS = Object.freeze([

@@ -88,6 +88,34 @@ export function uploadImages(fieldName = 'images', maxCount = 5, allowPdf = fals
     });
 }
 
+/**
+ * Như uploadImages nhưng nhận nhiều field ảnh: req.files = { field: [file] }.
+ * @example uploadImageFields([{ name: 'images', maxCount: 5 }, { name: 'certificates', maxCount: 5 }])
+ */
+export function uploadImageFields(fields) {
+  const handler = multerInstance.fields(fields);
+  return (req, res, next) =>
+    handler(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        const message = err.code === 'LIMIT_FILE_SIZE'
+          ? `Ảnh vượt quá ${HARD_MAX_MB}MB`
+          : err.code === 'LIMIT_UNEXPECTED_FILE' ? 'Quá số ảnh cho phép' : err.message;
+        return next(ApiError.badRequest(message));
+      }
+      if (err) return next(err);
+      const all = Object.values(req.files ?? {}).flat();
+      const fake = all.find((f) => !(isImageBuffer(f.buffer) && ALLOWED_TYPES.includes(f.mimetype)));
+      if (fake) return next(ApiError.badRequest(`Ảnh "${fake.originalname}" không phải file jpg/png hợp lệ`));
+      if (!all.length) return next();
+      return maxUploadMb()
+        .then((maxMb) => {
+          const big = all.find((f) => f.size > maxMb * MB);
+          next(big ? ApiError.badRequest(`Ảnh "${big.originalname}" vượt quá ${maxMb}MB`) : undefined);
+        })
+        .catch(next);
+    });
+}
+
 function uploadBuffer(file, folder) {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(

@@ -30,6 +30,17 @@ export function rangeText(item) {
   return unit.trim();
 }
 
+/**
+ * Chữ cho cột / dòng "Cho phép" (không để trống hay "—"):
+ *   mục đo có ngưỡng → "20 – 70 °C"; mục đo không đặt ngưỡng → "Không giới hạn (°C)"; mục tick → "Đạt / Không đạt"
+ */
+export function allowedText(item) {
+  if (!item) return '';
+  if (!isMeasured(item)) return 'Đạt / Không đạt';
+  if (item.minValue == null && item.maxValue == null) return `Không giới hạn${item.unit ? ` (${item.unit})` : ''}`;
+  return rangeText(item);
+}
+
 /** Dữ liệu form → mảng gửi server, cùng thứ tự checklist: { value } cho mục đo, { ok } cho mục tick */
 export const toPayload = (checklist = [], inputs = []) =>
   checklist.map((item, i) => {

@@ -108,7 +108,7 @@ export const debtApi = {
   downloadNotice: (id) => downloadFile(`/debts/cases/${id}/notice.pdf`, 'thong-bao-no-qua-han.pdf'),
 };
 
-// ===== Mô đun 4: Quỹ bảo trì 2% (UC33 Kế toán, UC34 Ban quản trị) =====
+// ===== Mô đun 4: Quỹ bảo trì 2% (UC33 Trưởng BQL lập; UC34 Ban quản trị biểu quyết, xác nhận nghiệm thu; Kế toán thu chi) =====
 // Form có ảnh (chứng từ, báo giá, hóa đơn) gửi multipart, ảnh ở field `images`
 function toMultipart(body, files = []) {
   if (!files.length) return body;
@@ -124,18 +124,22 @@ export const fundApi = {
   transactions: (params) => http.get('/fund/transactions', { params }),
   /** body: { incomeSource, amount, occurredAt?, documentNo, description? } */
   recordIncome: (body, files) => http.post('/fund/incomes', toMultipart(body, files)),
-  /** params: { page, limit, status (CSV) } */
+  /** params: { page, limit, status (CSV), readyToPay? } */
   proposals: (params) => http.get('/fund/proposals', { params }),
   proposal: (id) => http.get(`/fund/proposals/${id}`),
-  /** body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair?, workOrderId? } */
+  /** Trưởng BQL — body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair?, workOrderId?, contractNo? } */
   createProposal: (body, files) => http.post('/fund/proposals', toMultipart(body, files)),
-  /** UC10: phiếu bảo trì Trưởng BQL duyệt sửa bằng Quỹ, chờ Kế toán lập đề xuất */
+  /** UC10: phiếu bảo trì Trưởng BQL duyệt sửa bằng Quỹ, chờ lập đề xuất */
   awaitingWorkOrders: () => http.get('/fund/work-orders'),
   workOrderPrefill: (id) => http.get(`/fund/work-orders/${id}/prefill`),
   /** body: { decision: AGREE | DISAGREE, comment? } */
   vote: (id, body) => http.post(`/fund/proposals/${id}/votes`, body),
   cancel: (id, reason) => http.post(`/fund/proposals/${id}/cancel`, { reason }),
   acceptWork: (id) => http.post(`/fund/proposals/${id}/accept-work`),
-  /** body: { amount, occurredAt?, documentNo, description? } */
+  /** BR-E09: Ban quản trị xác nhận / trả về nghiệm thu */
+  acceptances: () => http.get('/fund/acceptances'),
+  boardAccept: (id, note) => http.post(`/fund/proposals/${id}/board-accept`, { note }),
+  boardReturn: (id, comment) => http.post(`/fund/proposals/${id}/board-return`, { comment }),
+  /** body: { amount, occurredAt?, documentNo, description?, varianceReason? } */
   recordExpense: (id, body, files) => http.post(`/fund/proposals/${id}/expense`, toMultipart(body, files)),
 };

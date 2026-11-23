@@ -15,7 +15,6 @@ import { holdLabel } from './bookingHelpers';
 import { payBooking } from './payBooking';
 
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-const DEFAULT_ADVANCE_DAYS = 14;
 
 const slotFee = (slot) => (slot.fee > 0 ? formatMoney(slot.fee) : 'Miễn phí');
 
@@ -84,8 +83,10 @@ function BookingPanel({ amenity, apartmentId }) {
   );
   const viewer = info?.viewer;
   const slot = info?.slots.find((s) => s.slotStart === picked);
-  const advance = info?.rules.advanceDays ?? DEFAULT_ADVANCE_DAYS;
-  const days = Array.from({ length: advance + 1 }, (_, i) => dayjs().add(i, 'day'));
+  // Số ngày đặt trước + cách trả phí đều do server quyết định (rules); client chỉ hiển thị
+  const days = Array.from({ length: (info?.rules.advanceDays ?? 0) + 1 }, (_, i) => dayjs().add(i, 'day'));
+  const payOptions = info?.rules.paymentOptions ?? [];
+  const method = payOptions.includes(payMethod) ? payMethod : info?.rules.defaultPaymentMethod;
 
   const chargeBlocked = Boolean(slot && slot.fee > 0 && viewer && !viewer.canIncurCharges);
   const blockedReason = viewer?.overdue
@@ -97,9 +98,13 @@ function BookingPanel({ amenity, apartmentId }) {
   const submit = async () => {
     setBooking(true);
     try {
-      const options = info?.rules.paymentOptions ?? ['INVOICE'];
-      const method = slot?.fee > 0 ? (payMethod && options.includes(payMethod) ? payMethod : options[0]) : undefined;
-      const { data: booking } = await bookingApi.create({ apartmentId, amenityId: amenity._id, date, slotStart: picked, ...(method && { paymentMethod: method }) });
+      const { data: booking } = await bookingApi.create({
+        apartmentId,
+        amenityId: amenity._id,
+        date,
+        slotStart: picked,
+        ...(slot?.fee > 0 && method && { paymentMethod: method }),
+      });
       // Tiện ích có phí: giữ chỗ chờ thanh toán → sang payOS ngay; lỗi thì vẫn thanh toán lại được từ Lịch sử đặt
       if (booking?.status === 'PENDING_PAYMENT') {
         message.warning(`${holdLabel(booking.holdExpiresAt)}. Đang chuyển sang trang thanh toán…`, 6);
@@ -202,9 +207,8 @@ function BookingPanel({ amenity, apartmentId }) {
               {/* Cư dân chọn cách trả: thanh toán ngay (payOS) hoặc cộng vào phí dịch vụ tháng */}
               <div className="text-[13px] font-medium">Cách thanh toán</div>
               <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Cách thanh toán">
-                {(info.rules.paymentOptions ?? ['INVOICE']).map((m) => {
-                  const options = info.rules.paymentOptions ?? ['INVOICE'];
-                  const active = (payMethod && options.includes(payMethod) ? payMethod : options[0]) === m;
+                {payOptions.map((m) => {
+                  const active = method === m;
                   const online = m === 'ONLINE';
                   return (
                     <button
