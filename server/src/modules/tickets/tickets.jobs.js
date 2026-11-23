@@ -226,7 +226,7 @@ export async function alertSlaBreaches(now = new Date()) {
       await notifyRoles(['MANAGER'], { ...payload, email: true });
     }
   }
-  // BR-X6: sự cố khẩn cấp chưa ai nhận → cảnh báo khẩn lặp mỗi 1 phút
+  // BR-X6: sự cố khẩn cấp chưa ai nhận → cảnh báo khẩn lặp mỗi EMERGENCY_REPEAT_MINUTES phút
   affected += await dispatchEmergencies(now);
   return affected;
 }

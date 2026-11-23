@@ -71,8 +71,28 @@ const workOrderSchema = new Schema(
         acceptanceImages: { type: [String], default: [] }, // biên bản nghiệm thu của nhà thầu (bản đang chờ / đã nghiệm thu)
         acceptanceNote: { type: String, default: null },
         acceptanceUploadedAt: { type: Date, default: null },
-        acceptedBy: { type: ObjectId, ref: 'User', default: null },
+        acceptedBy: { type: ObjectId, ref: 'User', default: null }, // Trưởng BQL nghiệm thu (kỹ thuật với nguồn Quỹ)
         acceptedAt: { type: Date, default: null },
+        inspectionCertUrls: { type: [String], default: [] }, // biên bản kiểm định (thang máy, PCCC)
+        // BR-E09: sửa bằng Quỹ — Ban quản trị xác nhận nghiệm thu sau Trưởng BQL
+        boardAcceptedBy: { type: ObjectId, ref: 'User', default: null },
+        boardAcceptedAt: { type: Date, default: null },
+        boardReturnNote: { type: String, default: null },
+        boardRemindedAt: { type: Date, default: null },
+        // BR-E10: thiết bị còn bảo hành mà không dùng bảo hành thì phải ghi lý do
+        warrantyOverrideReason: { type: String, default: null },
+        // BR-E11: sửa khẩn cấp (nguồn Quỹ) — sửa trước, Trưởng BQL lập đề xuất trong EMERGENCY_DOSSIER_DAYS ngày
+        isEmergency: { type: Boolean, default: false },
+        emergencyReason: { type: String, default: null },
+        emergencyAt: { type: Date, default: null },
+        dossierRemindedAt: { type: Date, default: null },
+        // Chi phí vận hành thực tế do Kế toán ghi (nguồn OPERATING, sau khi Hoàn thành)
+        actualCost: { type: Number, default: null },
+        invoiceNo: { type: String, default: null },
+        invoiceUrls: { type: [String], default: [] },
+        expenseRecordedBy: { type: ObjectId, ref: 'User', default: null },
+        expenseRecordedAt: { type: Date, default: null },
+        expenseRemindedAt: { type: Date, default: null },
         // Mỗi bước: báo cáo, duyệt, quỹ, hoãn, yêu cầu lại, kiểm tra lại, tải biên bản, nghiệm thu... Không ghi đè bản cũ
         history: {
           type: [{
@@ -106,5 +126,6 @@ workOrderSchema.index(
 workOrderSchema.index({ assignedTo: 1, status: 1 });
 workOrderSchema.index({ status: 1, scheduledDate: 1 });
 workOrderSchema.index({ assetId: 1, completedAt: -1 }); // lịch sử bảo trì của tài sản
+workOrderSchema.index({ assetId: 1, 'repair.costSource': 1, 'repair.decidedAt': -1 }); // BR-E08: cộng dồn chi phí vận hành
 
 export const WorkOrder = model('WorkOrder', workOrderSchema);

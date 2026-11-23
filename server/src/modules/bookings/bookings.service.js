@@ -1,11 +1,10 @@
 // UC-D06 — Xem lịch trống, đặt tiện ích (tự xác nhận APPROVED, BR-O12), xem lịch sử và hủy. CHỈ tiện ích accessMode = BOOKING.
 // Quyền đặt lấy từ household.service (thành viên CÓ QUYỀN của căn): chủ sở hữu "không ở" không đặt được.
 // UC-D07 (cùng file): lịch trong ngày, check-in (lễ tân / bảo vệ), lễ tân hủy kèm lý do, lễ tân đặt hộ tại quầy.
-import { AMENITY_ACCESS_MODES, AUDIT_ACTIONS, AUDIT_TARGETS, BOOKING_ACTIVE_STATUSES as ACTIVE, BOOKING_PAYMENT_METHODS as PAY, BOOKING_STATUS, CONFIG_KEYS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
+import { AMENITY_ACCESS_MODES, AUDIT_ACTIONS, AUDIT_TARGETS, BOOKING_ACTIVE_STATUSES as ACTIVE, BOOKING_PAYMENT_METHODS as PAY, BOOKING_STATUS, NOTIFICATION_TYPES, ROLES } from '../../constants/enums.js';
 import { Amenity, Apartment, Booking, MemberCode, Payment } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
-import { getConfig } from '../../services/systemConfig.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { DAY_MS, MINUTE_MS, fmtDateVn, fmtTimeVn } from '../../utils/time.js';
@@ -19,7 +18,7 @@ import { assertMember, getMyHouseholds } from '../household/household.service.js
 import { ensureCodes, resolveApartmentId, resolveMemberCode } from '../memberCodes/memberCodes.service.js';
 import { checkInWindow, findDayBookings, isInCheckInWindow, loadBookingView, presentDayBookings, vnHHmm } from './bookings.queries.js';
 import { cancelPaymentLink, isPayosEnabled } from '../payments/payos.client.js';
-import { HOLD_EXPIRED_REASON, holdExpiry } from './booking.payment.js';
+import { HOLD_EXPIRED_REASON, getPaymentSetup, holdExpiry } from './booking.payment.js';
 import { signBookingQr, verifyBookingQr } from './bookingQr.js';
 
 // Booking cư dân còn hủy được (trước giờ bắt đầu): đã xác nhận hoặc đang giữ chỗ chờ thanh toán
@@ -71,7 +70,7 @@ export async function getSlots(user, amenityId, { date, apartmentId }, { now = n
   if (accessModeOf(amenity) !== AMENITY_ACCESS_MODES.BOOKING) throw new ApiError('AMENITY_NOT_BOOKABLE');
   const dayStart = parseDay(date);
   const cfg = await getBookingConfig();
-  const holdMinutes = Number(await getConfig(CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES));
+  const pay = await getPaymentSetup();
 
   const rows = await Booking.find({
     amenityId,
@@ -155,10 +154,11 @@ export async function getSlots(user, amenityId, { date, apartmentId }, { now = n
       checkinEarlyMinutes: cfg.checkinEarlyMinutes,
       noShowGraceMinutes: cfg.noShowGraceMinutes,
       receptionOpen: cfg.receptionOpen,
-      // Tiện ích có phí: true = trả online qua payOS được (giữ chỗ holdMinutes phút); cư dân chọn trong paymentOptions
-      payOnline: holdMinutes > 0 && isPayosEnabled(),
-      holdMinutes,
-      paymentOptions: [...(holdMinutes > 0 && isPayosEnabled() ? [PAY.ONLINE] : []), PAY.INVOICE],
+      // Tiện ích có phí: cách trả do getPaymentSetup() quyết định (nguồn duy nhất); client chỉ hiển thị theo các trường này
+      payOnline: pay.online,
+      holdMinutes: pay.holdMinutes,
+      paymentOptions: pay.options,
+      defaultPaymentMethod: pay.defaultMethod,
     },
     viewer,
     slots,
@@ -195,7 +195,7 @@ async function placeBooking(
   // Thành viên CÓ QUYỀN của căn (chủ sở hữu "không ở" bị từ chối ở đây → 403)
   const { me } = await assertMember(bookerId, apartmentId);
   const cfg = await getBookingConfig();
-  const holdMinutes = Number(await getConfig(CONFIG_KEYS.BOOKING_PAYMENT_HOLD_MINUTES));
+  const pay = await getPaymentSetup();
   const notReplaced = replacing ? { _id: { $ne: replacing._id } } : {};
 
   const created = await withTransaction(async (session) => {
@@ -246,13 +246,12 @@ async function placeBooking(
 
     // Cách trả phí: cư dân chọn ONLINE (giữ chỗ + payOS) hoặc INVOICE (cộng vào phí tháng); Lễ tân đặt hộ luôn cộng phí tháng.
     // Bỏ trống: trả online nếu đang bật, không thì cộng phí tháng (giữ hành vi cũ). Đổi lịch giữ cách trả của lượt cũ.
-    const onlineReady = holdMinutes > 0 && isPayosEnabled();
-    const method = fee > 0 ? (replacing?.paymentMethod ?? (staff ? PAY.INVOICE : paymentMethod ?? (onlineReady ? PAY.ONLINE : PAY.INVOICE))) : null;
-    if (fee > 0 && !prepaid && method === PAY.ONLINE && !onlineReady) {
+    const method = fee > 0 ? (replacing?.paymentMethod ?? (staff ? PAY.INVOICE : paymentMethod ?? pay.defaultMethod)) : null;
+    if (fee > 0 && !prepaid && method === PAY.ONLINE && !pay.online) {
       throw ApiError.field('paymentMethod', 'Thanh toán online đang tạm ngưng, vui lòng chọn cộng vào phí tháng');
     }
     const holdExpiresAt =
-      method === PAY.ONLINE ? holdExpiry({ fee, holdMinutes, byStaff: Boolean(staff), prepaid, gateway: isPayosEnabled(), now }) : null;
+      method === PAY.ONLINE ? holdExpiry({ fee, holdMinutes: pay.holdMinutes, byStaff: Boolean(staff), prepaid, gateway: pay.online, now }) : null;
 
     // Lễ tân đặt hộ + "check-in ngay": trong khung thì vào thẳng CHECKED_IN, ngoài khung vẫn đặt bình thường (APPROVED)
     const draft = { date: dayStart, slotStart: slot.slotStart, slotEnd: slot.slotEnd, startAt, endAt };

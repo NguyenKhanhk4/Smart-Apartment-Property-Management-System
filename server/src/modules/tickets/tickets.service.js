@@ -41,7 +41,7 @@ import {
   retryOnDuplicate,
 } from "../../utils/codeGenerator.js";
 import { escapeRegex, paginate } from "../../utils/pagination.js";
-import { HOUR_MS, fmtDateTimeVn } from "../../utils/time.js";
+import { HOUR_MS, MINUTE_MS, fmtDateTimeVn } from "../../utils/time.js";
 import { getPayer } from "../contracts/contracts.queries.js";
 import { getOnDuty, isUserOnDuty } from "../dutyShifts/dutyShifts.service.js";
 import { recordQuoteDecision } from "../repairQuotes/repairQuotes.service.js";
@@ -78,9 +78,9 @@ const DESK = ["MANAGER", "STAFF:RECEPTIONIST"];
 
 /**
  * Quy tắc SLA hoàn thành (dueDate) — một nguồn cho mỗi thời điểm:
- *  - Lúc tạo: theo `slaHours` của loại phản ánh (form tạo hiển thị đúng số giờ này cho cư dân).
- *  - Khi Trưởng BQL / Lễ tân đổi mức ưu tiên: tính lại TỪ LÚC ĐỔI theo tham số SLA_HOURS_<ưu tiên>
- *    (đổi ưu tiên = đánh giá lại mức khẩn cấp, nên hạn chạy lại theo bảng SLA chung).
+ *  - NGUỒN DUY NHẤT: `slaHours` của loại phản ánh (ComplaintCategory, sửa ở Danh mục loại phản ánh) — lúc tạo phiếu,
+ *    form tạo hiển thị đúng số giờ này cho cư dân. Đổi phân loại phiếu (reclassify) tính lại theo đúng số giờ này.
+ *  - Đổi mức ưu tiên KHÔNG đổi hạn hoàn thành (ưu tiên chỉ ảnh hưởng thứ tự xử lý và hạn nhận phiếu sự cố).
  * Quá hạn / leo thang chỉ xét TICKET_SLA_STATUSES; SLA tạm dừng khi chờ cư dân đồng ý phí và chờ linh kiện
  * (tối đa TICKET_PARTS_PAUSE_HOURS) — M5-2, quy tắc ở ticket.rules.
  */
@@ -98,23 +98,17 @@ export async function workHoursOf() {
   });
 }
 
+/** Thời hạn hiển thị cho giao diện — client không tự viết cứng số ngày (nguồn: system_configs) */
+export async function getTicketRules() {
+  return { autoCloseDays: Number(await getConfig(CONFIG_KEYS.TICKET_AUTO_CLOSE_DAYS)) };
+}
+
 export async function partsPauseMs() {
   return (
     Number(await getConfig(CONFIG_KEYS.TICKET_PARTS_PAUSE_HOURS)) * HOUR_MS
   );
 }
 
-const SLA_KEY_BY_PRIORITY = {
-  [PRIORITIES.URGENT]: CONFIG_KEYS.SLA_HOURS_URGENT,
-  [PRIORITIES.HIGH]: CONFIG_KEYS.SLA_HOURS_HIGH,
-  [PRIORITIES.MEDIUM]: CONFIG_KEYS.SLA_HOURS_MEDIUM,
-  [PRIORITIES.LOW]: CONFIG_KEYS.SLA_HOURS_LOW,
-};
-
-/** BR-O7: số giờ SLA theo mức ưu tiên (system_configs) */
-export async function slaHoursOf(priority) {
-  return Number(await getConfig(SLA_KEY_BY_PRIORITY[priority]));
-}
 
 const DETAIL_POPULATE = [
   { path: "category", select: "name defaultPriority slaHours" },
@@ -562,14 +556,8 @@ export async function assignTicket(user, id, { assignedTo, priority, note }) {
   const prevAssignee = ticket.assignedTo ? String(ticket.assignedTo) : null;
   const priorityChanged = priority && priority !== ticket.priority;
 
-  if (priorityChanged) {
-    ticket.priority = priority;
-    ticket.dueDate = new Date(
-      now.getTime() + (await slaHoursOf(priority)) * HOUR_MS,
-    );
-    // Hạn mới tính từ lúc đổi → phần đang tạm dừng (nếu có) cũng đếm lại từ lúc này
-    if (ticket.slaPausedAt) ticket.slaPausedAt = now;
-  }
+  // Hạn hoàn thành theo loại phản ánh (BR-O7) nên đổi ưu tiên không đổi dueDate
+  if (priorityChanged) ticket.priority = priority;
   ticket.assignedTo = tech._id;
   ticket.assignedBy = user.id;
   ticket.assignedAt = now;
@@ -1038,10 +1026,11 @@ export async function reclassifyTicket(
     getConfig(CONFIG_KEYS.COMPLAINT_RESPONSE_HOURS),
     workHoursOf(),
   ]);
+  if (!category) throw ApiError.notFound("Không tìm thấy loại phản ánh của phiếu");
   const ackFrom = ackStartAt(ticket.priority, now, wh);
   const deadlines = computeDeadlines({
     type: nextType,
-    slaHours: category?.slaHours ?? (await slaHoursOf(ticket.priority)),
+    slaHours: category.slaHours,
     ackMinutes: Number(ackMinutes),
     responseHours: Number(responseHours),
     now,
@@ -1341,7 +1330,7 @@ export async function acknowledgeEmergency(user, id) {
 }
 
 /**
- * [Job mỗi phút] Bắt đầu cảnh báo khẩn cho sự cố mức Khẩn cấp quá hạn nhận chưa ai nhận, và gửi lại mỗi 1 phút
+ * [Job mỗi phút] Bắt đầu cảnh báo khẩn cho sự cố mức Khẩn cấp quá hạn nhận chưa ai nhận, và gửi lại mỗi EMERGENCY_REPEAT_MINUTES phút
  * (web + email) cho Trưởng BQL và KTV / Bảo vệ đang trực đến khi có người tiếp nhận hoặc phiếu được nhận.
  * Trả về số lượt đã gửi.
  */
@@ -1357,6 +1346,7 @@ export async function dispatchEmergencies(now = new Date()) {
     },
     { $set: { "emergency.startedAt": now, "emergency.nextNotifyAt": now } },
   );
+  const repeatMs = Number(await getConfig(CONFIG_KEYS.EMERGENCY_REPEAT_MINUTES)) * MINUTE_MS;
   const due = await Ticket.find({
     ...EMERGENCY_ACTIVE,
     "emergency.nextNotifyAt": { $lte: now },
@@ -1375,7 +1365,7 @@ export async function dispatchEmergencies(now = new Date()) {
       },
       {
         $set: {
-          "emergency.nextNotifyAt": new Date(now.getTime() + 1 * 60 * 1000),
+          "emergency.nextNotifyAt": new Date(now.getTime() + repeatMs),
         },
         $inc: { "emergency.notifyCount": 1 },
       },

@@ -83,7 +83,7 @@ export function AssignModal({ ticket, open, onClose, onDone }) {
       <Form.Item
         name="priority"
         label="Mức ưu tiên"
-        extra="Đổi mức ưu tiên sẽ tính lại hạn xử lý theo SLA (Khẩn cấp 24h, Cao 3 ngày, Thường 7 ngày)."
+        extra="Hạn xử lý theo loại phản ánh, đổi mức ưu tiên không đổi hạn."
       >
         <Select options={enumOptions(PRIORITIES)} />
       </Form.Item>

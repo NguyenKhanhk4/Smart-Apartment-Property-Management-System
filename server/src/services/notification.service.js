@@ -1,5 +1,6 @@
 import { Apartment, Notification, Resident, User } from '../models/index.js';
 import { hasPermission } from '../middlewares/authorize.js';
+import { env } from '../config/env.js';
 import { sendMail } from './mail.service.js';
 
 /**
@@ -18,7 +19,7 @@ const uniqIds = (ids) => [...new Set(ids.filter(Boolean).map(String))];
 
 /**
  * Tạo thông báo trong app cho 1 hoặc nhiều user; `email: true` thì gửi kèm email.
- * Trả về số thông báo đã tạo. Không throw khi email lỗi.
+ * Trả về số thông báo đã tạo. Không throw khi email lỗi. Email gửi nền (không chờ), trừ khi chạy test.
  */
 export async function notify(userIds, { type, title, content, refId = null, link, email = false }) {
   const ids = uniqIds([userIds].flat());
@@ -29,19 +30,25 @@ export async function notify(userIds, { type, title, content, refId = null, link
   );
 
   if (email) {
-    const users = await User.find({ _id: { $in: ids }, isActive: true }).select('email').lean();
-    const sent = await sendMail({
-      to: users.map((u) => u.email),
-      subject: `[SAPMS] ${title}`,
-      text: content,
-      html: `<p>${escapeHtml(content).replace(/\n/g, '<br>')}</p>`,
-    });
-    if (sent) {
-      await Notification.updateMany(
-        { _id: { $in: docs.map((d) => d._id) } },
-        { $set: { emailSent: true } },
-      );
-    }
+    const job = (async () => {
+      const users = await User.find({ _id: { $in: ids }, isActive: true }).select('email').lean();
+      const sent = await sendMail({
+        to: users.map((u) => u.email),
+        subject: `[SAPMS] ${title}`,
+        text: content,
+        html: `<p>${escapeHtml(content).replace(/\n/g, '<br>')}</p>`,
+      });
+      if (sent) {
+        await Notification.updateMany(
+          { _id: { $in: docs.map((d) => d._id) } },
+          { $set: { emailSent: true } },
+        );
+      }
+    })();
+    // Gửi SMTP mất vài giây mỗi lần → không bắt request chờ (vd phiếu biểu quyết chốt kết quả gửi 2–3 email liền nhau mất 5–8 s).
+    // Thông báo trong app đã ghi ở trên. Test / chưa cấu hình SMTP (không gửi thật, xong ngay) vẫn chờ để kết quả ổn định.
+    if (env.isTest || !env.smtp.enabled) await job;
+    else job.catch((err) => console.error('[notify] gửi email thất bại:', err.message));
   }
   return docs.length;
 }

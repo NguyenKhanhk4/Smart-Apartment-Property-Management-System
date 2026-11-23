@@ -47,6 +47,7 @@ export default function ShiftChecklist() {
       return <Button type="primary" icon={<FileProtectOutlined />} onClick={() => setUploading(wo)}>Tải biên bản nghiệm thu</Button>;
     }
     if (wo.status === 'AWAITING_ACCEPTANCE') return <Tag color="gold">Chờ Trưởng BQL nghiệm thu</Tag>;
+    if (wo.status === 'AWAITING_BOARD_ACCEPTANCE') return <Tag color="purple">Chờ Ban quản trị xác nhận</Tag>;
     if (wo.status === 'REPAIR_POSTPONED') return <Button onClick={() => setRequesting(wo)}>Gửi yêu cầu sửa lại</Button>;
     const blocked = !wo.mine && !data?.canClaim;
     return (
@@ -87,6 +88,7 @@ export default function ShiftChecklist() {
                     <Typography.Text strong>{wo.assetId?.name}</Typography.Text>
                     <EnumTag map={WORK_ORDER_STATUS} value={wo.status} />
                     {wo.mine && <Tag color="cyan">Của bạn</Tag>}
+                    {wo.repair?.isEmergency && <Tag color="red">Khẩn cấp</Tag>}
                   </Flex>
                 }
                 description={

@@ -2,9 +2,9 @@
 
 const UNIT_TEXT = { DAY: 'ngày', MONTH: 'tháng', QUARTER: 'quý' };
 
-/** { cycleValue: 1, cycleUnit: 'MONTH' } → '1 tháng'; thiếu dữ liệu → '—' */
+/** { cycleValue: 1, cycleUnit: 'MONTH' } → '1 tháng'; thiếu dữ liệu → 'Chưa đặt chu kỳ' */
 export function cycleText(asset) {
-  if (!asset?.cycleValue || !UNIT_TEXT[asset.cycleUnit]) return '—';
+  if (!asset?.cycleValue || !UNIT_TEXT[asset.cycleUnit]) return 'Chưa đặt chu kỳ';
   return `${asset.cycleValue} ${UNIT_TEXT[asset.cycleUnit]}`;
 }
 

@@ -6,6 +6,7 @@ const maintenanceFundSchema = new Schema(
     buildingId: { type: ObjectId, ref: 'Building', default: null },
     name: { type: String, default: 'Quỹ bảo trì chung' },
     balance: { type: Number, required: true, default: 0, min: 0 }, // BR-M3
+    approvalSeq: { type: Number, default: 0 }, // BR-F16: tăng mỗi lần chốt duyệt đề xuất, để 2 lần chốt song song không cùng qua kiểm số dư
   },
   schemaOptions('maintenance_fund'),
 );

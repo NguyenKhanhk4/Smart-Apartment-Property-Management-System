@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { failingRequired, isMeasured, itemStatus, rangeText, toPayload } from '../src/features/workOrders/inspectionForm.js';
+import { allowedText, failingRequired, isMeasured, itemStatus, rangeText, toPayload } from '../src/features/workOrders/inspectionForm.js';
 
 const CHECKLIST = [
   { label: 'Điện áp', unit: 'V', minValue: 370, maxValue: 400, required: true },
@@ -28,3 +28,12 @@ test('khoảng cho phép và dữ liệu gửi server theo thứ tự checklist'
   assert.equal(rangeText({ unit: 'bar', minValue: 2 }), '≥ 2 bar');
   assert.deepEqual(toPayload(CHECKLIST, [{ value: 380 }, { ok: true }]), [{ value: 380 }, { ok: true }, { ok: null }]);
 });
+
+test('allowedText: cột "Cho phép" không còn để "—" hay chỉ hiện đơn vị', () => {
+  assert.equal(allowedText({ label: 'Nhiệt độ', unit: '°C', minValue: 20, maxValue: 70 }), '20 – 70 °C');
+  assert.equal(allowedText({ label: 'Áp lực', unit: 'bar', minValue: 6, maxValue: null }), '≥ 6 bar');
+  assert.equal(allowedText({ label: 'Độ ồn', unit: 'dB', minValue: null, maxValue: null }), 'Không giới hạn (dB)');
+  assert.equal(allowedText({ label: 'Tiếng ồn, rung bất thường', unit: null, minValue: null, maxValue: null }), 'Đạt / Không đạt');
+  assert.equal(allowedText(undefined), '');
+});
+
