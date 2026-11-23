@@ -86,6 +86,9 @@ export default function MyInvoiceDetailPage() {
                   </div>
                 ))}
                 <div className="mt-2 pt-2 border-t border-r-border">
+                  <div className="text-[12px] text-r-muted italic mb-2">
+                    * Đơn giá các dịch vụ trên đã bao gồm thuế GTGT (VAT).
+                  </div>
                   <Row label="Tổng tiền kỳ này" value={formatMoney(d.totalAmount)} strong />
                   {d.prepaidApplied > 0 && <Row label="Đã trừ Số dư trả trước" value={`− ${formatMoney(d.prepaidApplied)}`} muted />}
                   <Row label="Đã thanh toán" value={formatMoney(d.paidAmount)} muted />

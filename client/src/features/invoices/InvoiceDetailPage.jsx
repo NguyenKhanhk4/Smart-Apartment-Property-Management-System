@@ -326,6 +326,9 @@ export default function InvoiceDetailPage() {
             )
           }
         />
+        <Typography.Text type="secondary" style={{ fontSize: 13, display: 'block', marginTop: 8 }}>
+          * Đơn giá các dịch vụ trên đã bao gồm thuế GTGT (VAT).
+        </Typography.Text>
       </Card>
 
       {d?.items?.some((i) => i.feeCategory === 'ADJUSTMENT') && (isDraft || isPending) && (
