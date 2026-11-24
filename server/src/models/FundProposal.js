@@ -11,6 +11,20 @@ const voteSchema = new Schema(
   { _id: false },
 );
 
+// Nhà thầu do Trưởng ban quản trị chọn (chỉ chi bằng Quỹ). Đổi được tới khi có phiếu Đồng ý đầu tiên.
+const vendorSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    phone: { type: String, default: null },
+    quoteUrls: { type: [String], default: [] }, // ảnh hợp đồng với nhà thầu (≥ 1)
+    amount: { type: Number, required: true, min: 1 }, // giá nhà thầu báo = số tiền Ban quản trị biểu quyết
+    note: { type: String, default: null },
+    selectedBy: { type: ObjectId, ref: 'User', required: true },
+    selectedAt: { type: Date, required: true },
+  },
+  { _id: false },
+);
+
 // Mỗi vòng gửi / trả lại / xác nhận / biểu quyết / nghiệm thu: 1 dòng, không ghi đè
 const historySchema = new Schema(
   { action: String, by: { type: ObjectId, ref: 'User', default: null }, at: Date, note: { type: String, default: null } },
@@ -27,7 +41,9 @@ const fundProposalSchema = new Schema(
     fundId: { type: ObjectId, ref: 'MaintenanceFund', required: true },
     title: { type: String, required: true }, // hạng mục
     description: { type: String, required: true },
-    amount: { type: Number, required: true, min: 1 },
+    amount: { type: Number, required: true, min: 1 }, // lúc lập = dự kiến; Trưởng ban chọn nhà thầu thì = giá báo
+    estimatedAmount: { type: Number, default: null }, // số Trưởng BQL dự kiến lúc lập
+    vendor: { type: vendorSchema, default: null },
     planType: { type: String, enum: values(FUND_PLAN_TYPES), default: FUND_PLAN_TYPES.ANNUAL_PLAN },
     planRef: { type: String, default: null }, // tên / số kế hoạch năm, nghị quyết Hội nghị nhà chung cư
     urgentReason: { type: String, default: null }, // bắt buộc khi bảo trì đột xuất
@@ -35,9 +51,9 @@ const fundProposalSchema = new Schema(
     // UC10: đề xuất lập từ phiếu bảo trì Trưởng BQL duyệt sửa bằng Quỹ. Kết quả biểu quyết / rút báo lại phiếu (onFundDecision);
     // nghiệm thu làm trên phiếu bảo trì (Q12), không làm ở đây.
     workOrderId: { type: ObjectId, ref: 'WorkOrder', default: null },
-    attachmentUrls: [String], // ảnh báo giá
+    attachmentUrls: [String], // ảnh hiện trạng, hồ sơ kèm đề xuất (đề xuất cũ: cả ảnh báo giá)
     proposedBy: { type: ObjectId, ref: 'User', required: true }, // Trưởng BQL (dữ liệu cũ: Kế toán)
-    contractNo: { type: String, default: null }, // số hợp đồng / báo giá với nhà thầu
+    contractNo: { type: String, default: null }, // đề xuất cũ: số hợp đồng / báo giá Trưởng BQL ghi; đề xuất mới dùng ảnh báo giá ở vendor
     votes: [voteSchema],
     boardSize: { type: Number, default: null }, // số thành viên Ban quản trị lúc chốt
     status: { type: String, enum: values(FUND_PROPOSAL_STATUS), required: true, default: FUND_PROPOSAL_STATUS.PENDING },

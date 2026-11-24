@@ -1,7 +1,7 @@
 // Làm mới toàn bộ dữ liệu luồng bảo trì – sửa chữa (giữ nguyên tài khoản):
 //   1. Sao lưu ra file JSON (nếu truyền --backup=<đường dẫn>).
 //   2. Xóa: phiếu bảo trì, đề xuất chi quỹ, sổ thu chi quỹ, thông báo loại Bảo trì / Quỹ, nhật ký của luồng (phiếu, đề xuất, sổ
-//      quỹ, quỹ, đổi tham số tài chính, thiết bị bị xóa), thiết bị demo TB-009 → TB-018 và TEST-UC07; giá trị chờ xác nhận của
+//      quỹ, quỹ, đổi tham số tài chính, thiết bị bị xóa), thiết bị demo TB-009 → TB-018, TB24/25/26-xx và TEST-UC07; giá trị chờ xác nhận của
 //      tham số tài chính.
 //   3. Đặt lại: số dư quỹ về 0 rồi ghi 1 phiếu thu bàn giao (mặc định 500 triệu); thiết bị TB-001 → TB-008 về chưa bảo trì,
 //      đến hạn từ 25 ngày trước.
@@ -20,10 +20,12 @@ import { getFund, recordIncome } from '../src/modules/fund/fund.service.js';
 import { DAY_MS, HOUR_MS, startOfVnDay } from '../src/utils/time.js';
 import { seedMaintenanceCases } from './seedMaintenanceCases.js';
 import { seedMaintenanceCasesExtra } from './seedMaintenanceCasesExtra.js';
+import { DEMO3_CODES } from './seedMaintenanceDemo3Days.js';
 
 export const KEEP_ASSETS = ['TB-001', 'TB-002', 'TB-003', 'TB-004', 'TB-005', 'TB-006', 'TB-007', 'TB-008'];
 export const DEMO_ASSETS = [
   'TB-009', 'TB-010', 'TB-011', 'TB-012', 'TB-013', 'TB-014', 'TB-015', 'TB-016', 'TB-017', 'TB-018', 'TEST-UC07',
+  ...DEMO3_CODES, // TB24-xx, TB25-xx, TB26-xx (seedMaintenanceDemo3Days)
 ];
 const FLOW_TARGETS = ['work_orders', 'fund_proposals', 'fund_transactions', 'maintenance_fund'];
 const FLOW_ACTIONS = /^(WORKORDER_|FUND_|CONFIG_CHANGE_)/;
@@ -53,6 +55,7 @@ export async function resetMaintenanceFlow({ apply = false, log = console.log, n
   const keep = await c('assets').countDocuments({ code: { $in: KEEP_ASSETS } });
   const accountant = await User.findOne({ role: 'ACCOUNTANT', isActive: true }).lean();
   if (!accountant) throw new Error('Thiếu tài khoản Kế toán để ghi phiếu thu quỹ.');
+  if (keep < KEEP_ASSETS.length) throw new Error(`Thiếu thiết bị gốc ${KEEP_ASSETS[0]} → ${KEEP_ASSETS.at(-1)} (có ${keep}/${KEEP_ASSETS.length}), không chạy được. Dữ liệu demo 3 ngày: dùng seedMaintenanceDemo3Days.js --reset.`);
 
   log(`Kế hoạch (${apply ? 'GHI' : 'chỉ xem, thêm --apply để ghi'}) trên DB ${db.databaseName}:`);
   Object.entries(counts).forEach(([name, n]) => log(`  - xóa ${n} ${name}`));

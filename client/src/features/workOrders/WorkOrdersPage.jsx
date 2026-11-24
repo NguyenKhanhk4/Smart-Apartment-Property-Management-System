@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Button, Card, Flex, Input, Select, Switch, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
+import { Button, Card, DatePicker, Flex, Input, Select, Switch, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import { workOrderApi } from '../../api/equipment.api';
 import { lookupApi } from '../../api/moduleE.api';
 import { useApi } from '../../hooks/useApi';
@@ -18,6 +18,9 @@ import { AcceptanceReviewModal, RepairDecisionModal, RepairRequestModal } from '
 const UNASSIGNED = 'UNASSIGNED';
 // KTV, tab Đã xong: việc mình đã hoàn thành, mới nhất lên trước
 const DONE_FILTER = { status: 'DONE', sort: '-completedAt' };
+// Trưởng BQL: hôm nay lên đầu, rồi các ngày đã qua, rồi sắp tới (server xếp). Bấm tiêu đề cột để xếp theo ngày lên lịch thuần
+const TODAY_FIRST = 'today';
+const SORT_ORDER = { '-scheduledDate': 'descend', scheduledDate: 'ascend' };
 
 // Trưởng BQL: danh sách phiếu bảo trì, phân công / giao lại (ngoại lệ), xem kết quả kiểm tra.
 // KTV (UC08): tab Checklist ca (quét QR → checklist) và tab Đã xong (phiếu của mình).
@@ -25,7 +28,7 @@ export default function WorkOrdersPage() {
   const { hasRole } = useAuth();
   const isTech = hasRole('STAFF:TECHNICIAN');
   const [tab, setTab] = useState('shift');
-  const [filters, setFilters] = useState({ page: 1, limit: 20, ...(isTech ? DONE_FILTER : {}) });
+  const [filters, setFilters] = useState({ page: 1, limit: 20, ...(isTech ? DONE_FILTER : { sort: TODAY_FIRST }) });
   const [assigning, setAssigning] = useState(null);
   const [viewing, setViewing] = useState(null); // báo cáo hoàn thành (ghi chú + ảnh)
   const [reviewing, setReviewing] = useState(null); // { mode: 'approve' | 'accept' | 'request', wo }
@@ -75,6 +78,11 @@ export default function WorkOrdersPage() {
       title: 'Ngày lên lịch',
       dataIndex: 'scheduledDate',
       width: 150,
+      ...(!isTech && {
+        sorter: true, // server sắp xếp (có phân trang)
+        sortOrder: SORT_ORDER[filters.sort] ?? null,
+        sortDirections: ['descend', 'ascend'], // bấm lần 3: về hôm nay lên đầu
+      }),
       render: (v, r) => (
         <Typography.Text type={r.isOverdue ? 'danger' : undefined}>
           {formatDate(v)}{r.isOverdue && ' (quá hạn)'}
@@ -100,7 +108,7 @@ export default function WorkOrdersPage() {
         // UC10: quyết định sửa / gửi yêu cầu sửa lại phiếu hoãn; Q12: nghiệm thu
         if (r.status === 'AWAITING_REPAIR_APPROVAL') {
           if (r.pendingFund) {
-            const waiting = { PENDING: 'Chờ biểu quyết' }[r.pendingFund.status] ?? 'Đang xử lý';
+            const waiting = r.pendingFund.awaitingVendor ? 'Chờ chọn nhà thầu' : { PENDING: 'Chờ biểu quyết' }[r.pendingFund.status] ?? 'Đang xử lý';
             return <Tooltip title={`Đề xuất chi quỹ ${r.pendingFund.code}: ${waiting.toLowerCase()}`}><Button size="small" disabled>{waiting}</Button></Tooltip>;
           }
           return <Button size="small" type="primary" danger onClick={() => setReviewing({ mode: 'approve', wo: r })}>Quyết định</Button>;
@@ -163,7 +171,13 @@ export default function WorkOrdersPage() {
         {showTable && (
         <>
         <Flex gap={8} wrap style={{ marginBottom: 12 }}>
-          <Input.Search placeholder="Tên thiết bị" allowClear style={{ width: 200 }} onSearch={(q) => set({ q: q || undefined })} />
+          <Input.Search placeholder="Mã, tên thiết bị" allowClear style={{ width: 200 }} onSearch={(q) => set({ q: q || undefined })} />
+          <DatePicker.RangePicker
+            allowEmpty={[true, true]}
+            format="DD/MM/YYYY"
+            placeholder={['Ngày lên lịch từ', 'đến']}
+            onChange={(v) => set({ from: v?.[0]?.startOf('day').toISOString(), to: v?.[1]?.endOf('day').toISOString() })}
+          />
           {!isTech && (
             <>
               <Select
@@ -211,6 +225,9 @@ export default function WorkOrdersPage() {
           dataSource={data}
           columns={isTech ? techColumns : managerColumns}
           scroll={{ x: 960 }}
+          onChange={(_, __, sorter, { action }) => {
+            if (action === 'sort') set({ sort: { descend: '-scheduledDate', ascend: 'scheduledDate' }[sorter.order] ?? TODAY_FIRST });
+          }}
           pagination={{
             current: filters.page,
             pageSize: filters.limit,

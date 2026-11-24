@@ -103,6 +103,7 @@ export const CORE_PERMISSIONS = {
 const APPROVE_WORDS = new Set([
   'approve', 'reject', 'publish', 'return', 'review', 'owner-decision', 'quote-decision', 'votes', 'accept-work',
   'repair-decision', 'accept', 'return-repair', // UC09, UC10: quyết định sửa chữa, nghiệm thu / yêu cầu sửa lại
+  'select-vendor', // Trưởng ban quản trị chọn nhà thầu cho đề xuất chi quỹ
   'board-accept', 'board-return', // Ban quản trị xác nhận / trả về nghiệm thu
 ]);
 /** Ngoại lệ: đường dẫn mà quy tắc chung đoán sai (khóa: 'PHƯƠNG_THỨC /chức-năng/đường/dẫn' với tham số là :id) */

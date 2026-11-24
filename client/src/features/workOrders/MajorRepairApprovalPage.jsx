@@ -18,6 +18,8 @@ const FUND_WAITING = {
   PENDING: 'chờ Ban quản trị biểu quyết',
 };
 
+const waitingText = (f) => (f.awaitingVendor ? 'chờ Trưởng ban quản trị chọn nhà thầu' : FUND_WAITING[f.status] ?? 'đang xử lý');
+
 const assetCell = (_, r) => (
   <Flex vertical>
     <Space size={6} wrap>
@@ -81,7 +83,7 @@ export default function MajorRepairApprovalPage() {
                   style={{ fontSize: 12 }}
                   onClick={() => navigate(`/app/fund/proposals/${f._id}`)}
                 >
-                  {f.code}: {FUND_WAITING[f.status] ?? 'đang xử lý'}
+                  {f.code}: {waitingText(f)}
                 </Typography.Link>
               ) : (
                 <Typography.Link style={{ fontSize: 12 }} onClick={() => navigate(`/app/fund?createFrom=${r._id}`)}>Lập đề xuất chi quỹ</Typography.Link>
@@ -97,7 +99,7 @@ export default function MajorRepairApprovalPage() {
         fixed: 'right',
         // Đề xuất chi quỹ đang xử lý thì không quyết định lại được (server trả WORKORDER_FUND_PENDING)
         render: (_, r) => (
-          <Tooltip title={r.pendingFund ? `Đề xuất ${r.pendingFund.code} ${FUND_WAITING[r.pendingFund.status] ?? 'đang xử lý'}` : undefined}>
+          <Tooltip title={r.pendingFund ? `Đề xuất ${r.pendingFund.code} ${waitingText(r.pendingFund)}` : undefined}>
             <Button size="small" type="primary" disabled={Boolean(r.pendingFund)} onClick={() => setActing({ mode: 'decide', wo: r })}>Quyết định</Button>
           </Tooltip>
         ),

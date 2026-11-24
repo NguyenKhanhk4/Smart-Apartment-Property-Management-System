@@ -74,6 +74,7 @@ export async function seedMaintenanceCases({ apply = false, log = console.log, n
   ]);
   const problems = [
     !managerDoc && 'Trưởng BQL', !accountantDoc && 'Kế toán', !techDocs.length && 'Kỹ thuật viên', boardDocs.length < 2 && '≥ 2 thành viên Ban quản trị',
+    !boardDocs.some((b) => b.boardTitle === 'CHAIRMAN') && 'Trưởng ban quản trị',
     buildings.length < 3 && 'tòa A, B, T3', existing.length < EXISTING.length && `thiết bị ${EXISTING.filter((c) => !existing.some((a) => a.code === c)).join(', ')}`,
   ].filter(Boolean);
   if (problems.length) throw new Error(`Thiếu ${problems.join(', ')}.`);
@@ -123,10 +124,19 @@ export async function seedMaintenanceCases({ apply = false, log = console.log, n
       await inspection.submitInspection(tech, wo._id, { result, note, results }, PHOTOS, at(day, 9));
       return { wo, asset };
     };
-    const report = (tech, wo, day, faultDesc, estimatedCost, vendorName, vendorProposal) =>
-      repair.reportFault(tech, wo._id, { faultDesc, vendorName, vendorProposal, estimatedCost }, PHOTOS, at(day, 10));
+    const chairman = members.find((m) => m.boardTitle === 'CHAIRMAN');
+    const vendorOf = new Map(); // phiếu → nhà thầu Trưởng ban quản trị sẽ chọn nếu sửa bằng Quỹ
+    const report = (tech, wo, day, faultDesc, estimatedCost, vendorName, vendorProposal) => {
+      vendorOf.set(String(wo._id), vendorName);
+      return repair.reportFault(tech, wo._id, { faultDesc, vendorProposal, estimatedCost }, PHOTOS, at(day, 10));
+    };
+    /** Trưởng ban quản trị chọn nhà thầu, 1 giờ trước lúc biểu quyết */
+    const pick = (p, now) => fund.selectVendor(chairman, p._id, {
+      name: vendorOf.get(String(p.workOrderId)), amount: p.amount, note: 'Giá tốt nhất trong các báo giá nhận được',
+    }, PHOTOS, { now: new Date(now.getTime() - HOUR_MS) });
     /** Thành viên lần lượt biểu quyết tới khi đề xuất chốt (đủ tỷ lệ hoặc không còn khả năng đạt) */
     const voteUntilDone = async (p, decision, comment, now) => {
+      await pick(p, now);
       for (const m of members) {
         const r = await fund.vote(m, p._id, { decision, comment }, { now });
         if (r.outcome) return r.outcome;
@@ -144,7 +154,7 @@ export async function seedMaintenanceCases({ apply = false, log = console.log, n
       await report(t1, wo, 16, 'Cáp tải mòn 3 sợi, phanh cabin trượt 5 cm khi dừng tầng', 180_000_000, 'Công ty Thang máy Thái Bình', 'Thay bộ cáp tải và má phanh cabin');
       await decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'FUND', comment: 'Chi phí lớn, sửa bằng Quỹ' }, at(15, 9));
       const pre = await prefillOf(wo);
-      const p = await propose(wo, 15, { title: pre.title, description: pre.description, amount: 180_000_000, contractNo: 'BG-TB-2611' });
+      const p = await propose(wo, 15, { title: pre.title, description: pre.description, amount: 180_000_000 });
       await voteUntilDone(p, 'AGREE', 'Đồng ý, ưu tiên an toàn', at(12, 10));
       await repair.uploadAcceptance(t1, wo._id, { note: 'Nhà thầu đã thay cáp và má phanh, chạy thử 50 chuyến' }, DOCS, at(5, 16));
       await repair.acceptRepair(manager, wo._id, at(4, 9));
@@ -227,6 +237,7 @@ export async function seedMaintenanceCases({ apply = false, log = console.log, n
       await decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'FUND' }, at(4, 9));
       const pre = await prefillOf(wo);
       const p = await propose(wo, 4, { title: pre.title, description: pre.description, amount: 70_000_000 });
+      await pick(p, at(2, 10));
       await fund.vote(members[0], p._id, { decision: 'AGREE', comment: 'Đồng ý' }, { now: at(2, 10) });
     }
 
