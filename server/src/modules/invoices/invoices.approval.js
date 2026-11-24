@@ -36,14 +36,15 @@ const audit = (action, user, invoice, metadata, session = null) =>
  * Lấy các thông báo cần xử lý theo id hoặc cả kỳ (tùy chọn chỉ 1 tòa: `buildingId`, khớp bộ lọc tòa trên màn hình);
  * id không đúng trạng thái → skipped
  */
-async function selectInvoices({ invoiceIds, period, buildingId }, status) {
-  const filter = invoiceIds ? { _id: { $in: invoiceIds } } : { period, status, ...(buildingId && { buildingId }) };
+async function selectInvoices({ invoiceIds, period, buildingId }, allowedStatuses) {
+  const allowed = Array.isArray(allowedStatuses) ? allowedStatuses : [allowedStatuses];
+  const filter = invoiceIds ? { _id: { $in: invoiceIds } } : { period, status: { $in: allowed }, ...(buildingId && { buildingId }) };
   const found = await Invoice.find(filter).sort({ code: 1 }).lean();
   if (invoiceIds && !found.length) throw ApiError.notFound('Không tìm thấy thông báo phí');
   const skipped = [];
   const targets = [];
   for (const inv of found) {
-    if (inv.status === status) targets.push(inv);
+    if (allowed.includes(inv.status)) targets.push(inv);
     else skipped.push({ invoiceId: inv._id, code: inv.code, status: inv.status });
   }
   return { targets, skipped };
@@ -203,7 +204,7 @@ async function publishOne(user, invoice, { now, dueDate }) {
   return withTransaction(async (session) => {
     // Giành quyền xử lý trước: ai đổi trạng thái thành công mới được trừ số dư
     const claimed = await Invoice.findOneAndUpdate(
-      { _id: invoice._id, status: PENDING_APPROVAL },
+      { _id: invoice._id, status: { $in: [DRAFT, PENDING_APPROVAL] } },
       { $set: { status: UNPAID, reviewedBy: user.id, issuedAt: now, dueDate, previousDebt, returnNote: null } },
       { new: true, session },
     ).lean();
@@ -262,7 +263,7 @@ function notifyPayer(inv) {
 }
 
 export async function publishInvoices(user, selector, { now = new Date() } = {}) {
-  const { targets, skipped } = await selectInvoices(selector, PENDING_APPROVAL);
+  const { targets, skipped } = await selectInvoices(selector, [DRAFT, PENDING_APPROVAL]);
   const termDays = await getConfig(CONFIG_KEYS.PAYMENT_TERM_DAYS);
   const dueDate = new Date(now.getTime() + termDays * DAY_MS);
 

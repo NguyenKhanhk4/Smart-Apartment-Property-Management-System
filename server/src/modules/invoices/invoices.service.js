@@ -137,12 +137,18 @@ const auditGenerated = (user, metadata, targetId = null) =>
  * Một căn lỗi không làm hỏng cả đợt: gom lỗi vào `failed`, các căn khác vẫn được lập.
  * Chạy lại an toàn: căn đã có thông báo kỳ này (kể cả Nháp) được bỏ qua.
  */
-export async function generateForPeriod({ period = vnPeriod(), user = null } = {}) {
+export async function generateForPeriod({ period = vnPeriod(), user = null, buildingId, apartmentIds } = {}) {
   const generatedBy = user ? GENERATED_BY.MANUAL : GENERATED_BY.CRON;
+  // Phạm vi: toàn bộ (mặc định / cron), 1 tòa, hoặc danh sách căn Kế toán tick chọn
+  const filter = {};
+  if (buildingId) filter.buildingId = buildingId;
+  if (apartmentIds?.length) filter._id = { $in: apartmentIds };
   const prices = await getPriceTable(period);
-  const apartments = await loadApartments({});
+  const apartments = await loadApartments(filter);
   const billed = new Set(
-    (await Invoice.find({ period, status: ACTIVE_INVOICE }).select('apartmentId').lean()).map((i) => String(i.apartmentId)),
+    (await Invoice.find({ period, status: ACTIVE_INVOICE, ...(buildingId && { buildingId }), ...(apartmentIds?.length && { apartmentId: { $in: apartmentIds } }) })
+      .select('apartmentId')
+      .lean()).map((i) => String(i.apartmentId)),
   );
 
   const summary = { period, totalApartments: apartments.length, created: 0, existing: 0, notHandedOver: 0, noPayer: 0, totalAmount: 0, failed: [] };
@@ -168,7 +174,15 @@ export async function generateForPeriod({ period = vnPeriod(), user = null } = {
   });
 
   if (summary.created || summary.failed.length) {
-    await auditGenerated(user, { period, generatedBy, created: summary.created, totalAmount: summary.totalAmount, failed: summary.failed.length });
+    await auditGenerated(user, {
+      period,
+      generatedBy,
+      ...(buildingId && { buildingId }),
+      ...(apartmentIds?.length && { apartmentCount: apartmentIds.length }),
+      created: summary.created,
+      totalAmount: summary.totalAmount,
+      failed: summary.failed.length,
+    });
   }
   return summary;
 }
@@ -179,14 +193,14 @@ export const toJobResult = (summary) => ({
   failed: summary.failed.map((f) => ({ message: `${f.apartment} (${f.message})` })),
 });
 
-/** Kế toán bấm "Tính phí" cả kỳ: ghi cron_runs (trigger MANUAL) để Admin theo dõi, trả kèm thống kê */
-export async function generateBatch(user, { period }, { now = new Date() } = {}) {
+/** Kế toán bấm "Lập tất cả" (cả kỳ / 1 tòa / các căn đã chọn): ghi cron_runs (trigger MANUAL) để Admin theo dõi, trả kèm thống kê */
+export async function generateBatch(user, { period, buildingId, apartmentIds }, { now = new Date() } = {}) {
   assertBillablePeriod(period, now);
   let summary = null;
   const run = await runTrackedJob(
     CRON_JOBS.INVOICE_GENERATE,
     async () => {
-      summary = await generateForPeriod({ period, user });
+      summary = await generateForPeriod({ period, user, buildingId, apartmentIds });
       return toJobResult(summary);
     },
     { trigger: CRON_TRIGGERS.MANUAL },
