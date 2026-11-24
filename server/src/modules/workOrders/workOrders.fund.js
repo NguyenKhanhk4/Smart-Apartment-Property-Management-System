@@ -31,7 +31,7 @@ const assetLabel = async (assetId) => {
   return a ? `${a.code} – ${a.name}` : 'thiết bị';
 };
 
-/** Phiếu đang có đề xuất chi quỹ chờ Ban quản trị biểu quyết */
+/** Phiếu đang có đề xuất chi quỹ chờ Ban quản trị (chọn nhà thầu, biểu quyết) */
 export async function hasPendingFundProposal(workOrderId, session = null) {
   return Boolean(await FundProposal.exists({ workOrderId, isOpen: true }).setOptions(LOOSE).session(session));
 }
@@ -45,9 +45,13 @@ export async function pendingFundProposals(workOrders) {
   if (!ids.length) return new Map();
   const docs = await FundProposal.find({ workOrderId: { $in: ids }, isOpen: true })
     .setOptions(LOOSE)
-    .select('code workOrderId status')
+    .select('code workOrderId status vendor.name votes.decision')
     .lean();
-  return new Map(docs.map((d) => [String(d.workOrderId), { _id: d._id, code: d.code, status: d.status }]));
+  // awaitingVendor: chờ Trưởng ban quản trị chọn nhà thầu (cùng quy tắc isAwaitingVendor ở fund.service)
+  return new Map(docs.map((d) => [String(d.workOrderId), {
+    _id: d._id, code: d.code, status: d.status,
+    awaitingVendor: !d.vendor && !d.votes?.some((v) => v.decision === 'AGREE'),
+  }]));
 }
 
 /** Số phiếu (trong `filter`) có đề xuất chi quỹ đang chờ Ban quản trị biểu quyết */
@@ -89,10 +93,10 @@ export async function fundPrefill(workOrderId) {
   return {
     workOrderId: wo._id,
     title: `Sửa chữa ${a ? `${a.code} – ${a.name}` : wo.title}`,
-    description: [wo.repair.faultDesc, wo.repair.vendorName && `Nhà thầu: ${wo.repair.vendorName}`, `Phương án: ${wo.repair.vendorProposal}`]
+    description: [wo.repair.faultDesc, `Phương án: ${wo.repair.vendorProposal}`]
       .filter(Boolean)
       .join('\n'),
-    amount: wo.repair.estimatedCost, // chi phí KTV dự kiến; Trưởng BQL được sửa theo báo giá thật
+    amount: wo.repair.estimatedCost, // chi phí KTV dự kiến; số tiền cuối theo giá nhà thầu Trưởng ban quản trị chọn
     estimatedCost: wo.repair.estimatedCost,
     attachmentUrls: wo.repair.faultImages ?? [],
     largeRepair: true,
@@ -129,19 +133,24 @@ export async function onFundDecision(workOrderId, decision, { user = null, propo
     refId: proposalId,
   };
 
+  // Nhà thầu Trưởng ban quản trị chọn ở đề xuất → ghi vào phiếu khi được duyệt
+  const contractorName = approved && proposalId
+    ? (await FundProposal.findById(proposalId).select('vendor.name').lean())?.vendor?.name ?? null
+    : null;
+  const contractor = contractorName ? { 'repair.contractorName': contractorName } : {};
   let wo;
   if (emergency) {
     // Chỉ ghi lịch sử, không đổi trạng thái
     wo = await WorkOrder.findOneAndUpdate(
       { _id: workOrderId, 'repair.costSource': REPAIR_COST_SOURCES.FUND },
-      { $push: { 'repair.history': step } },
+      { ...(contractorName && { $set: contractor }), $push: { 'repair.history': step } },
       { returnDocument: 'after' },
     ).lean();
   } else {
     wo = await WorkOrder.findOneAndUpdate(
       { _id: workOrderId, status: S.AWAITING_REPAIR_APPROVAL, 'repair.costSource': REPAIR_COST_SOURCES.FUND },
       approved
-        ? { $set: { status: S.UNDER_REPAIR }, $push: { 'repair.history': step } }
+        ? { $set: { status: S.UNDER_REPAIR, ...contractor }, $push: { 'repair.history': step } }
         : { $set: { 'repair.costSource': null }, $push: { 'repair.history': step } },
       { returnDocument: 'after' },
     ).lean();
@@ -181,7 +190,7 @@ export async function onFundDecision(workOrderId, decision, { user = null, propo
     await safely(() => notify(wo.assignedTo, {
       type: NOTIFICATION_TYPES.MAINTENANCE,
       title: 'Sửa chữa đã được duyệt',
-      content: `Sửa chữa ${label} đã được duyệt (Quỹ bảo trì). Khi nhà thầu sửa xong, tải biên bản nghiệm thu lên phiếu.`, // MSG-E07
+      content: `Sửa chữa ${label} đã được duyệt (Quỹ bảo trì).${contractorName ? ` Nhà thầu Ban quản trị chọn: ${contractorName}.` : ''} Khi nhà thầu sửa xong, tải biên bản nghiệm thu lên phiếu.`, // MSG-E07
       refId: wo._id,
       link: '/app/my-work-orders',
     }));
@@ -196,6 +205,27 @@ export async function onFundDecision(workOrderId, decision, { user = null, propo
     link: '/app/repair-approvals',
   }));
   return true;
+}
+
+/**
+ * Trưởng ban quản trị chọn (đổi) nhà thầu khi phiếu khẩn cấp đang sửa: ghi vào phiếu ngay, báo KTV phối hợp.
+ * Phiếu thường chưa sửa thì chờ đề xuất được duyệt (onFundDecision).
+ */
+export async function onVendorSelected(workOrderId, contractorName) {
+  const wo = await WorkOrder.findOneAndUpdate(
+    { _id: workOrderId, 'repair.isEmergency': true, 'repair.costSource': REPAIR_COST_SOURCES.FUND },
+    { $set: { 'repair.contractorName': contractorName } },
+    { returnDocument: 'after' },
+  ).lean();
+  if (!wo || wo.status !== S.UNDER_REPAIR) return;
+  const label = await assetLabel(wo.assetId);
+  await safely(() => notify(wo.assignedTo, {
+    type: NOTIFICATION_TYPES.MAINTENANCE,
+    title: 'Đã chọn nhà thầu sửa khẩn cấp',
+    content: `Sửa chữa khẩn cấp ${label}: Trưởng ban quản trị chọn nhà thầu ${contractorName}. Phối hợp với nhà thầu; sửa xong tải biên bản nghiệm thu lên phiếu.`,
+    refId: wo._id,
+    link: '/app/my-work-orders',
+  }));
 }
 
 /**

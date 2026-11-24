@@ -37,7 +37,12 @@ const proposalBody = Joi.object({
   urgentReason: Joi.string().trim().max(1000).allow('', null),
   largeRepair: Joi.boolean().default(false),
   workOrderId: objectId().allow('', null), // UC10: lập từ phiếu bảo trì duyệt sửa bằng Quỹ
-  contractNo: Joi.string().trim().max(100).allow('', null),
+});
+const vendorBody = Joi.object({
+  name: Joi.string().trim().min(2).max(150).required(),
+  phone: Joi.string().trim().max(30).pattern(/^[0-9+().\s-]*$/).allow('', null).messages({ 'string.pattern.base': 'Số điện thoại không hợp lệ' }),
+  amount: money().required(),
+  note: Joi.string().trim().max(1000).allow('', null),
 });
 const expenseBody = Joi.object({
   amount: money().required(),
@@ -123,7 +128,7 @@ router.get('/work-orders/:id/prefill', authorize('MANAGER'), validate({ params: 
  *     summary: Danh sách đề xuất chi quỹ (lọc trạng thái CSV)
  *   post:
  *     tags: [Quỹ bảo trì]
- *     summary: Trưởng BQL lập đề xuất chi (multipart; ảnh báo giá ở field images) → Chờ Ban quản trị biểu quyết, báo Ban quản trị. Kế hoạch năm phải có planRef, đột xuất phải có urgentReason; vượt số dư khả dụng → FUND_INSUFFICIENT_BALANCE. Có workOrderId (UC10) thì phiếu phải đang chờ đề xuất, đề xuất là sửa chữa lớn và kèm ảnh hư hỏng
+ *     summary: Trưởng BQL lập đề xuất chi (multipart; ảnh hồ sơ ở field images, không bắt buộc) → chờ Trưởng ban quản trị chọn nhà thầu. Kế hoạch năm phải có planRef, đột xuất phải có urgentReason; vượt số dư khả dụng → FUND_INSUFFICIENT_BALANCE. Có workOrderId (UC10) thì phiếu phải đang chờ đề xuất, đề xuất là sửa chữa lớn và kèm ảnh hư hỏng
  */
 router.get(
   '/proposals',
@@ -143,7 +148,7 @@ router.get(
 );
 router.post('/proposals', authorize('MANAGER'), uploadImages('images', 5), validate({ body: proposalBody }), async (req, res) => {
   const p = await service.createProposal(req.user, req.body, req.files);
-  return created(res, p, `Đã gửi đề xuất ${p.code} cho Ban quản trị biểu quyết`);
+  return created(res, p, `Đã gửi đề xuất ${p.code}, chờ Trưởng ban quản trị chọn nhà thầu`);
 });
 
 /**
@@ -166,6 +171,23 @@ router.get('/acceptances', authorize('BOARD', 'MANAGER'), async (_req, res) => o
 
 router.get('/proposals/:id', VIEWERS, validate({ params: idParams }), async (req, res) =>
   ok(res, await service.getProposal(req.user, req.params.id)),
+);
+
+/**
+ * @openapi
+ * /fund/proposals/{id}/select-vendor:
+ *   post:
+ *     tags: [Quỹ bảo trì]
+ *     summary: Trưởng ban quản trị chọn nhà thầu (multipart; bắt buộc ≥ 1 ảnh hợp đồng ở field images). Số tiền đề xuất = giá báo. Đã có phiếu Đồng ý → PROPOSAL_VENDOR_LOCKED
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ */
+router.post(
+  '/proposals/:id/select-vendor',
+  authorize('BOARD:CHAIRMAN'),
+  uploadImages('images', 5),
+  validate({ params: idParams, body: vendorBody }),
+  async (req, res) => ok(res, await service.selectVendor(req.user, req.params.id, req.body, req.files), 'Đã chọn nhà thầu, chờ Ban quản trị biểu quyết'),
 );
 
 /**

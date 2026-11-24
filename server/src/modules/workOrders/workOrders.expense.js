@@ -19,7 +19,7 @@ export const AWAITING_EXPENSE = Object.freeze({
 /** Danh sách chờ ghi chi, xong sớm nhất trước */
 export async function listAwaitingExpense() {
   return WorkOrder.find(AWAITING_EXPENSE)
-    .select('assetId title completedAt repair.estimatedCost repair.vendorName repair.faultDesc repair.decidedAt repair.acceptedAt')
+    .select('assetId title completedAt repair.estimatedCost repair.faultDesc repair.decidedAt repair.acceptedAt')
     .populate('assetId', 'code name location')
     .sort({ completedAt: 1 })
     .lean();

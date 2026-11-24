@@ -36,11 +36,12 @@ import { formatDate, formatDateTime, formatMoney, moneyInputProps } from '../../
 import { toFiles } from '../../utils/upload';
 
 // Mô đun 4 — UC33/UC34: chi tiết đề xuất chi quỹ.
-//   Trưởng BQL lập → Ban quản trị biểu quyết (1 phiếu, không sửa; đủ tỷ lệ và số dư khả dụng đủ thì tự chốt) → sửa chữa lớn: Trưởng BQL nghiệm thu kỹ thuật + Ban quản trị xác nhận
+//   Trưởng BQL lập → Trưởng ban quản trị chọn nhà thầu (giá báo thành số tiền đề xuất) → Ban quản trị biểu quyết (1 phiếu, không sửa; đủ tỷ lệ và số dư khả dụng đủ thì tự chốt) → sửa chữa lớn: Trưởng BQL nghiệm thu kỹ thuật + Ban quản trị xác nhận
 //   → Kế toán lập phiếu chi kèm hóa đơn. Đề xuất gắn phiếu bảo trì (UC10): nghiệm thu trên phiếu (biên bản nhà thầu, kiểm định).
 // RETURNED / RESUBMITTED / VERIFIED: chỉ còn ở lịch sử đề xuất cũ (luồng trước có bước Kế toán xác nhận)
 const HISTORY_LABEL = {
   SUBMITTED: 'Trưởng BQL gửi đề xuất',
+  VENDOR_SELECTED: 'Trưởng ban quản trị chọn nhà thầu',
   RETURNED: 'Kế toán trả lại',
   RESUBMITTED: 'Trưởng BQL sửa và gửi lại',
   VERIFIED: 'Kế toán xác nhận tài chính',
@@ -55,25 +56,26 @@ const HISTORY_LABEL = {
 };
 const HISTORY_COLOR = { RETURNED: 'orange', REJECTED: 'red', CANCELLED: 'gray', BOARD_RETURNED: 'red', APPROVAL_BLOCKED_BALANCE: 'orange', APPROVED: 'green', PAID: 'green', BOARD_ACCEPTED: 'green' };
 
-/** Thanh tiến trình 4 bước: Đề xuất → Biểu quyết → Nghiệm thu / chờ chi → Đã chi */
+/** Thanh tiến trình 5 bước: Đề xuất → Chọn nhà thầu → Biểu quyết → Nghiệm thu / chờ chi → Đã chi */
 function progressOf(p) {
   const { status } = p;
   const items = [
     { title: 'Đề xuất' },
+    { title: 'Trưởng ban chọn nhà thầu' },
     { title: 'Ban quản trị biểu quyết' },
     { title: p.largeRepair ? 'Nghiệm thu (BQL + Ban quản trị)' : 'Chờ chi' },
     { title: 'Đã chi' },
   ];
-  if (status === 'PENDING') return { items, current: 1, status: 'process' };
+  if (status === 'PENDING') return { items, current: p.awaitingVendor ? 1 : 2, status: 'process' };
   if (status === 'REJECTED') {
-    items[1] = { title: 'Ban quản trị không duyệt' };
-    return { items, current: 1, status: 'error' };
+    items[2] = { title: 'Ban quản trị không duyệt' };
+    return { items, current: 2, status: 'error' };
   }
   // Sửa chữa lớn: Ban quản trị đã xác nhận nghiệm thu → xong bước 3, đang chờ Kế toán chi
-  if (status === 'APPROVED') return { items, current: p.largeRepair && p.boardAcceptedAt ? 3 : 2, status: 'process' };
-  if (status === 'PAID') return { items, current: 3, status: 'finish' };
+  if (status === 'APPROVED') return { items, current: p.largeRepair && p.boardAcceptedAt ? 4 : 3, status: 'process' };
+  if (status === 'PAID') return { items, current: 4, status: 'finish' };
   // CANCELLED: Trưởng BQL rút — ghi rõ ở bước bị dừng (không để hiểu nhầm là Ban quản trị từ chối)
-  const at = p.finalizedAt ? 2 : 1;
+  const at = p.finalizedAt ? 3 : p.vendor ? 2 : 1;
   items[at] = { title: 'Trưởng BQL đã rút đề xuất', description: p.cancelReason ?? undefined };
   return { items, current: at, status: 'error' };
 }
@@ -97,6 +99,8 @@ export default function FundProposalPage() {
   const approved = p.status === 'APPROVED';
   const wo = p.workOrderId; // phiếu bảo trì gắn kèm (đã populate) hoặc null
   const canVote = isBoard && pending && !p.myVote;
+  // Trưởng ban chọn / đổi nhà thầu tới khi có phiếu Đồng ý đầu tiên
+  const canSelectVendor = hasRole('BOARD:CHAIRMAN') && pending && tally.agree === 0;
   const canAccept = isManager && approved && p.largeRepair && !p.workAcceptedAt && !wo;
   // BR-E09: Ban quản trị xác nhận nghiệm thu — phiếu gắn kèm đang chờ, hoặc đề xuất không gắn phiếu đã được Trưởng BQL nghiệm thu
   const boardAccepting = approved && p.largeRepair && !p.boardAcceptedAt
@@ -118,9 +122,12 @@ export default function FundProposalPage() {
         ]}
         extra={
           <Flex gap={8} wrap>
-            {canVote && <Button type="primary" onClick={() => setModal('vote')}>Biểu quyết</Button>}
+            {canSelectVendor && (
+              <Button type={p.vendor ? 'default' : 'primary'} onClick={() => setModal('vendor')}>{p.vendor ? 'Đổi nhà thầu' : 'Chọn nhà thầu'}</Button>
+            )}
+            {canVote && <Button type={p.awaitingVendor ? 'default' : 'primary'} onClick={() => setModal('vote')}>Biểu quyết</Button>}
             {canAccept && (
-              <Popconfirm title="Xác nhận đã nghiệm thu hạng mục sửa chữa?" onConfirm={() => acceptWork().catch(() => {})}>
+              <Popconfirm title="Xác nhận đã nghiệm thu hạng mục sửa chữa?" onConfirm={() => acceptWork().catch(() => { })}>
                 <Button type="primary" loading={accepting}>Nghiệm thu</Button>
               </Popconfirm>
             )}
@@ -139,6 +146,14 @@ export default function FundProposalPage() {
         <Card size="small">
           <Steps size="small" current={progress.current} status={progress.status} items={progress.items} responsive />
         </Card>
+        {p.awaitingVendor && (
+          <Alert
+            type="info"
+            showIcon
+            message="Chờ Trưởng ban quản trị chọn nhà thầu"
+            description="Chưa có nhà thầu thì chưa biểu quyết Đồng ý được (vẫn có thể Không đồng ý). Số tiền đề xuất sẽ là giá nhà thầu báo."
+          />
+        )}
         {pending && p.approvalBlockedAt && (
           <Alert
             type="warning"
@@ -178,8 +193,11 @@ export default function FundProposalPage() {
             <Descriptions.Item label="Trạng thái">
               <EnumTag map={FUND_PROPOSAL_STATUS} value={p.status} />
             </Descriptions.Item>
-            <Descriptions.Item label="Số tiền đề xuất">
+            <Descriptions.Item label={p.vendor ? 'Số tiền đề xuất (giá báo)' : 'Số tiền đề xuất'}>
               <b>{formatMoney(p.amount)}</b>
+              {p.vendor && p.estimatedAmount != null && p.estimatedAmount !== p.amount && (
+                <Typography.Text type="secondary">&nbsp;(dự kiến {formatMoney(p.estimatedAmount)})</Typography.Text>
+              )}
             </Descriptions.Item>
             <Descriptions.Item label="Loại">
               <EnumTag map={FUND_PLAN_TYPES} value={p.planType} />
@@ -230,13 +248,26 @@ export default function FundProposalPage() {
           <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{p.description}</Typography.Paragraph>
           {p.attachmentUrls?.length > 0 && (
             <>
-              <Typography.Text strong>Báo giá</Typography.Text>
+              <Typography.Text strong>Ảnh, hồ sơ kèm theo</Typography.Text>
               <div className="mt-2">
                 <EvidencePhotos urls={p.attachmentUrls} />
               </div>
             </>
           )}
         </Card>
+
+        {p.vendor && (
+          <Card title="Nhà thầu">
+            <Descriptions size="small" column={{ xs: 1, md: 2 }}>
+              <Descriptions.Item label="Tên nhà thầu"><b>{p.vendor.name}</b></Descriptions.Item>
+              <Descriptions.Item label="Giá báo"><b>{formatMoney(p.vendor.amount)}</b></Descriptions.Item>
+              <Descriptions.Item label="Điện thoại">{p.vendor.phone || 'Không ghi'}</Descriptions.Item>
+              <Descriptions.Item label="Trưởng ban quản trị chọn">{p.vendor.selectedBy?.fullName} · {formatDateTime(p.vendor.selectedAt)}</Descriptions.Item>
+              {p.vendor.note && <Descriptions.Item label="Lý do chọn">{p.vendor.note}</Descriptions.Item>}
+            </Descriptions>
+            {p.vendor.quoteUrls?.length > 0 && <div className="mt-2"><EvidencePhotos urls={p.vendor.quoteUrls} /></div>}
+          </Card>
+        )}
 
         {wo && (wo.repair?.acceptanceImages?.length > 0 || wo.repair?.inspectionCertUrls?.length > 0) && (
           <Card title="Biên bản nghiệm thu">
@@ -328,7 +359,8 @@ export default function FundProposalPage() {
         )}
       </Flex>
 
-      <VoteModal open={modal === 'vote'} id={id} onClose={() => setModal(null)} onDone={reload} />
+      <VendorModal open={modal === 'vendor'} proposal={p} onClose={() => setModal(null)} onDone={reload} />
+      <VoteModal open={modal === 'vote'} proposal={p} onClose={() => setModal(null)} onDone={reload} />
       <BoardAcceptModal open={modal === 'boardAccept'} proposal={p} onClose={() => setModal(null)} onDone={reload} />
       <ReasonModal
         open={modal === 'boardReturn'}
@@ -353,16 +385,75 @@ export default function FundProposalPage() {
   );
 }
 
-function VoteModal({ open, id, onClose, onDone }) {
+/** Trưởng ban quản trị chọn (đổi) nhà thầu: giá báo thành số tiền đề xuất */
+function VendorModal({ open, proposal, onClose, onDone }) {
+  const [form] = Form.useForm();
+  const { vendor } = proposal;
+  const [run, loading] = useAction(
+    ({ images, ...v }) => fundApi.selectVendor(proposal._id, v, toFiles(images)),
+    { success: (res) => res.message, onDone: async () => (onClose(), await onDone?.()) },
+  );
+  return (
+    <Modal open={open} title={vendor ? 'Đổi nhà thầu' : 'Chọn nhà thầu'} okText={vendor ? 'Đổi nhà thầu' : 'Chọn nhà thầu'} width="min(600px, 94vw)" confirmLoading={loading} onCancel={onClose} onOk={() => form.submit()} destroyOnHidden>
+      <Alert
+        className="mb-3"
+        type="info"
+        showIcon
+        message={`Dự kiến ${formatMoney(proposal.estimatedAmount ?? proposal.amount)} · số dư khả dụng ${formatMoney(proposal.available)}`}
+        description="Chọn xong, các thành viên biểu quyết theo nhà thầu và giá này. Đổi được tới khi có thành viên Đồng ý."
+      />
+      <Form
+        form={form}
+        layout="vertical"
+        preserve={false}
+        initialValues={{ name: vendor?.name, phone: vendor?.phone, amount: vendor?.amount, note: vendor?.note }}
+        onFinish={(v) => run(v).catch(() => { })}
+      >
+        <Form.Item name="name" label="Tên nhà thầu" rules={[{ required: true, whitespace: true, min: 2, message: 'Nhập tên nhà thầu' }]}>
+          <Input maxLength={150} />
+        </Form.Item>
+        <Form.Item name="phone" label="Điện thoại" rules={[{ pattern: /^[0-9+().\s-]*$/, message: 'Số điện thoại không hợp lệ' }]}>
+          <Input maxLength={30} />
+        </Form.Item>
+        <Form.Item
+          name="amount"
+          label="Giá báo"
+          rules={[
+            { required: true, message: 'Nhập giá báo' },
+            {
+              validator: (_, v) => (v == null || v <= proposal.available
+                ? Promise.resolve()
+                : Promise.reject(new Error(`Vượt số dư khả dụng ${formatMoney(proposal.available)}`))),
+            },
+          ]}
+        >
+          <InputNumber {...moneyInputProps} min={1} style={{ width: '100%' }} />
+        </Form.Item>
+        <EvidencePhotosField name="images" label="Ảnh hợp đồng" />
+        <Form.Item name="note" label="Lý do chọn">
+          <Input.TextArea rows={2} maxLength={1000} />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}
+
+function VoteModal({ open, proposal, onClose, onDone }) {
   const [form] = Form.useForm();
   const decision = Form.useWatch('decision', form);
-  const [run, loading] = useAction((v) => fundApi.vote(id, v), { onDone: async () => (onClose(), await onDone?.()) });
+  const [run, loading] = useAction((v) => fundApi.vote(proposal._id, v), { onDone: async () => (onClose(), await onDone?.()) });
   return (
     <Modal open={open} title="Biểu quyết đề xuất chi quỹ" okText="Gửi biểu quyết" confirmLoading={loading} onCancel={onClose} onOk={() => form.submit()} destroyOnHidden>
       <Alert className="mb-3" type="info" showIcon message="Mỗi thành viên bỏ 1 phiếu, gửi rồi không sửa được." />
-      <Form form={form} layout="vertical" preserve={false} initialValues={{ decision: 'AGREE' }} onFinish={(v) => run(v).catch(() => {})}>
-        <Form.Item name="decision" label="Quyết định">
-          <Radio.Group options={Object.entries(VOTE_DECISIONS).map(([value, m]) => ({ value, label: m.label }))} />
+      <Form form={form} layout="vertical" preserve={false} initialValues={{ decision: proposal.awaitingVendor ? 'DISAGREE' : 'AGREE' }} onFinish={(v) => run(v).catch(() => { })}>
+        <Form.Item
+          name="decision"
+          label="Quyết định"
+          extra={proposal.awaitingVendor
+            ? 'Chưa có nhà thầu nên chưa Đồng ý được.'
+            : proposal.vendor && `Đồng ý là đồng ý chi ${formatMoney(proposal.amount)} cho ${proposal.vendor.name}.`}
+        >
+          <Radio.Group options={Object.entries(VOTE_DECISIONS).map(([value, m]) => ({ value, label: m.label, disabled: value === 'AGREE' && proposal.awaitingVendor }))} />
         </Form.Item>
         <Form.Item
           name="comment"
@@ -390,7 +481,7 @@ function BoardAcceptModal({ open, proposal, onClose, onDone }) {
           ? 'Phiếu bảo trì hoàn thành, thiết bị hoạt động lại; Kế toán được lập phiếu chi.'
           : 'Kế toán được lập phiếu chi cho hạng mục này.'}
       />
-      <Form form={form} layout="vertical" preserve={false} onFinish={(v) => run(v).catch(() => {})}>
+      <Form form={form} layout="vertical" preserve={false} onFinish={(v) => run(v).catch(() => { })}>
         <Form.Item name="note" label="Ghi chú">
           <Input.TextArea rows={2} maxLength={1000} placeholder="Vd: đã xem biên bản kiểm định" />
         </Form.Item>
@@ -409,7 +500,7 @@ function ExpenseModal({ open, proposal, onClose, onDone }) {
   const lower = amount != null && amount < proposal.amount;
   return (
     <Modal open={open} title={`Lập phiếu chi — ${proposal.code ?? proposal.title}`} okText="Lập phiếu chi" confirmLoading={loading} onCancel={onClose} onOk={() => form.submit()} destroyOnHidden>
-      <Form form={form} layout="vertical" preserve={false} initialValues={{ amount: proposal.amount }} onFinish={(v) => run(v).catch(() => {})}>
+      <Form form={form} layout="vertical" preserve={false} initialValues={{ amount: proposal.amount }} onFinish={(v) => run(v).catch(() => { })}>
         <Form.Item
           name="amount"
           label="Số tiền chi thực tế"
