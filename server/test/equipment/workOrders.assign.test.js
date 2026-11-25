@@ -241,10 +241,53 @@ describe('workOrders UC-D03 — phân công / danh sách', () => {
 
       assert.deepEqual((await q({ q: 'thang máy' })).items.map((i) => String(i._id)), [String(wo2._id)]);
       assert.equal((await q({ q: 'không có' })).pagination.total, 0);
+      assert.deepEqual((await q({ q: a2.code.toLowerCase() })).items.map((i) => String(i._id)), [String(wo2._id)]); // tìm theo mã
 
       const page = await q({ limit: 2, page: 2 });
       assert.equal(page.items.length, 1);
       assertMatch(page.pagination, { page: 2, limit: 2, total: 3 });
+    });
+
+    it('sắp theo ngày lên lịch 2 chiều; nhiều phiếu cùng ngày: các trang không lặp, không sót', async () => {
+      const { mUser, building, wo } = await setup();
+      const day = (n) => new Date(new Date(wo.scheduledDate).getTime() + n * DAY_MS);
+      for (const n of [2, -1, 1, 1, 1, 1]) await makeWo(await makeAsset(building), { scheduledDate: day(n) });
+      const times = async (sort) => (await service.listWorkOrders(mUser, { page: 1, limit: 20, sort })).items.map((i) => i.scheduledDate.getTime());
+      const asc = [-1, 0, 1, 1, 1, 1, 2].map((n) => day(n).getTime());
+      assert.deepEqual(await times('scheduledDate'), asc);
+      assert.deepEqual(await times('-scheduledDate'), [...asc].reverse());
+      // Lọc theo ngày lên lịch, tính cả 2 đầu; kết hợp quá hạn vẫn giữ khoảng ngày
+      const inRange = async (extra) => (await service.listWorkOrders(mUser, { page: 1, limit: 20, sort: 'scheduledDate', ...extra })).items.map((i) => i.scheduledDate.getTime());
+      assert.deepEqual(await inRange({ from: day(0), to: day(1) }), asc.slice(1, 6));
+      assert.deepEqual(await inRange({ from: day(2) }), asc.slice(6));
+      assert.deepEqual(await inRange({ to: day(-1) }), asc.slice(0, 1));
+      assert.deepEqual(await inRange({ from: day(0), overdue: true }), []);
+      const ids = [];
+      for (const page of [1, 2, 3, 4]) ids.push(...(await service.listWorkOrders(mUser, { page, limit: 2, sort: '-scheduledDate' })).items.map((i) => String(i._id)));
+      assert.equal(ids.length, 7);
+      assert.equal(new Set(ids).size, 7);
+    });
+
+    it('sort=today: hôm nay (giờ VN) → đã qua gần nhất trước → sắp tới gần nhất trước → không có ngày; các trang không lặp, không sót; giữ bộ lọc', async () => {
+      const { mUser, building } = await setup();
+      await WorkOrder.deleteMany({});
+      const at = (d) => new Date(`2026-11-${d}T00:00:00+07:00`);
+      for (const d of [26, 24, 25, 23, 27, 25]) await makeWo(await makeAsset(building), { scheduledDate: at(d) });
+      const none = await makeWo(await makeAsset(building), { scheduledDate: null });
+      const now = new Date('2026-11-25T00:30:00+07:00'); // 17:30 UTC ngày 24
+      const list = (extra) => service.listWorkOrders(mUser, { page: 1, limit: 20, sort: 'today', ...extra }, now);
+      const days = (r) => r.items.map((i) => (i.scheduledDate ? new Date(i.scheduledDate.getTime() + 7 * 3600e3).getUTCDate() : null));
+      const all = await list();
+      assert.deepEqual(days(all), [25, 25, 24, 23, 26, 27, null]);
+      assert.equal(all.pagination.total, 7);
+      const paged = [];
+      for (const page of [1, 2, 3]) paged.push(...(await list({ page, limit: 3 })).items);
+      assert.deepEqual(paged.map((i) => String(i._id)), all.items.map((i) => String(i._id)));
+      assert.equal(String(paged.at(-1)._id), String(none._id));
+      assert.equal((await list({ page: 4, limit: 3 })).items.length, 0);
+      assert.ok(all.items[0].assetId.name && all.items[0].assetId.buildingId, 'vẫn kèm thiết bị');
+      assert.deepEqual(days(await list({ from: at(24), to: at(26) })), [25, 25, 24, 26]);
+      assert.equal((await list({ status: ['DONE'] })).pagination.total, 0);
     });
 
     it('quá hạn = chưa DONE và scheduledDate + 1 ngày < hiện tại; có cờ isOverdue mỗi dòng và bộ lọc overdue', async () => {

@@ -127,11 +127,13 @@ export const fundApi = {
   /** params: { page, limit, status (CSV), readyToPay? } */
   proposals: (params) => http.get('/fund/proposals', { params }),
   proposal: (id) => http.get(`/fund/proposals/${id}`),
-  /** Trưởng BQL — body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair?, workOrderId?, contractNo? } */
+  /** Trưởng BQL — body: { title, description, amount (dự kiến), planType, planRef?, urgentReason?, largeRepair?, workOrderId? } */
   createProposal: (body, files) => http.post('/fund/proposals', toMultipart(body, files)),
   /** UC10: phiếu bảo trì Trưởng BQL duyệt sửa bằng Quỹ, chờ lập đề xuất */
   awaitingWorkOrders: () => http.get('/fund/work-orders'),
   workOrderPrefill: (id) => http.get(`/fund/work-orders/${id}/prefill`),
+  /** Trưởng ban quản trị chọn nhà thầu — body: { name, phone?, amount, note? }; ảnh hợp đồng (≥ 1) */
+  selectVendor: (id, body, files) => http.post(`/fund/proposals/${id}/select-vendor`, toMultipart(body, files)),
   /** body: { decision: AGREE | DISAGREE, comment? } */
   vote: (id, body) => http.post(`/fund/proposals/${id}/votes`, body),
   cancel: (id, reason) => http.post(`/fund/proposals/${id}/cancel`, { reason }),

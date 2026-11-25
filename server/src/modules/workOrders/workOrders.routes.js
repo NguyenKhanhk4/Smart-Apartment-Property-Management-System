@@ -25,13 +25,15 @@ const VIEWERS = ['MANAGER', 'STAFF:TECHNICIAN'];
 
 const listQuery = Joi.object({
   ...paginationQuery,
-  sort: sortable('createdAt', 'scheduledDate', 'completedAt', 'status'),
+  sort: sortable('createdAt', 'scheduledDate', 'completedAt', 'status').valid('today'), // today: hôm nay lên đầu, rồi đã qua, rồi sắp tới
   status: csvEnum(values(WORK_ORDER_STATUS)),
   type: Joi.string().valid(...values(WORK_ORDER_TYPES)),
   buildingId: objectId(),
   assignedTo: objectId(),
   unassigned: Joi.boolean(),
   overdue: Joi.boolean(),
+  from: Joi.date().iso(), // ngày lên lịch, tính cả 2 đầu
+  to: Joi.date().iso().min(Joi.ref('from')),
   q: Joi.string().trim().max(100),
 });
 
@@ -56,7 +58,9 @@ const assignBody = Joi.object({
  *       - { in: query, name: assignedTo, schema: { type: string } }
  *       - { in: query, name: unassigned, schema: { type: boolean }, description: 'Chỉ work order chưa phân công' }
  *       - { in: query, name: overdue, schema: { type: boolean }, description: 'Chưa DONE và đã qua hết ngày lên lịch' }
- *       - { in: query, name: q, schema: { type: string }, description: 'Tìm theo tên tài sản' }
+ *       - { in: query, name: from, schema: { type: string, format: date-time }, description: 'Ngày lên lịch từ' }
+ *       - { in: query, name: to, schema: { type: string, format: date-time }, description: 'Ngày lên lịch đến' }
+ *       - { in: query, name: q, schema: { type: string }, description: 'Tìm theo mã hoặc tên tài sản' }
  */
 router.get(
   '/',
@@ -273,7 +277,6 @@ router.post(
  */
 const faultBody = Joi.object({
   faultDesc: Joi.string().trim().min(10).max(2000).required(),
-  vendorName: Joi.string().trim().max(150).allow('').default(''),
   vendorProposal: Joi.string().trim().min(5).max(2000).required(),
   estimatedCost: Joi.number().integer().min(1).max(1e12).required(),
 });

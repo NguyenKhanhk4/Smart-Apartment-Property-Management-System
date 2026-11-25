@@ -53,7 +53,8 @@ const workOrderSchema = new Schema(
     repair: {
       type: new Schema({
         faultDesc: String, // mô tả hư hỏng
-        vendorName: String, // nhà thầu đề xuất
+        vendorName: String, // phiếu cũ: nhà thầu KTV đề xuất (không còn nhập)
+        contractorName: { type: String, default: null }, // nguồn Quỹ: nhà thầu Trưởng ban quản trị chọn
         vendorProposal: String, // phương án sửa
         estimatedCost: Number, // VNĐ
         faultImages: { type: [String], default: [] },

@@ -103,34 +103,34 @@ export async function seedMaintenanceCasesExtra({ apply = false, log = console.l
       await inspection.submitInspection(tech, wo._id, { result: 'FAULTY', note, results: [{ ok: false }, { value: 85 }] }, PHOTOS, at(day, 9));
       return wo;
     };
-    const report = (tech, wo, day, faultDesc, estimatedCost, vendorName, vendorProposal) =>
-      repair.reportFault(tech, wo._id, { faultDesc, vendorName, vendorProposal, estimatedCost }, PHOTOS, at(day, 10));
+    const report = (tech, wo, day, faultDesc, estimatedCost, vendorProposal) =>
+      repair.reportFault(tech, wo._id, { faultDesc, vendorProposal, estimatedCost }, PHOTOS, at(day, 10));
 
     // TB-013: chờ quyết định, 150tr (test khẩn cấp)
     {
       const wo = await faulty('TB-013', t1, 1, 'Thang dừng đột ngột giữa tầng 12-13, cửa không mở');
-      await report(t1, wo, 1, 'Biến tần báo lỗi quá áp, động cơ kéo nóng bất thường', 150_000_000, 'Công ty Thang máy Thái Bình', 'Thay biến tần, kiểm tra và quấn lại động cơ kéo');
+      await report(t1, wo, 1, 'Biến tần báo lỗi quá áp, động cơ kéo nóng bất thường', 150_000_000, 'Thay biến tần, kiểm tra và quấn lại động cơ kéo');
     }
     // TB-014: vận hành 35tr đã xong + ghi chi; phiếu định kỳ kế tiếp báo 20tr → cộng dồn 55tr
     {
       const wo1 = await faulty('TB-014', t2, 13, 'Áp lực bơm giảm, rò nước ở phớt');
-      await report(t2, wo1, 13, 'Phớt cơ khí bơm chữa cháy mòn, rò nước, áp lực giảm còn 4 bar', 35_000_000, 'Công ty PCCC Hưng Phát', 'Thay phớt cơ khí và vòng bi');
+      await report(t2, wo1, 13, 'Phớt cơ khí bơm chữa cháy mòn, rò nước, áp lực giảm còn 4 bar', 35_000_000, 'Thay phớt cơ khí và vòng bi');
       await decision.decideRepair(manager, wo1._id, { decision: 'APPROVE', costSource: 'OPERATING', comment: 'Dưới ngưỡng, chi vận hành' }, at(12, 9));
       await repair.uploadAcceptance(t2, wo1._id, { note: 'Đã thay phớt và vòng bi, chạy thử đạt 6 bar' }, PHOTOS, at(10, 15));
       await repair.acceptRepair(manager, wo1._id, at(9, 9));
       await expense.recordOperatingExpense(accountant, wo1._id, { actualCost: 35_000_000, invoiceNo: 'HĐ-0093310', note: 'Chuyển khoản' }, PHOTOS, at(8, 10));
       const wo2 = await faulty('TB-014', t2, 1, 'Bơm khởi động chậm, tủ điều khiển báo lỗi');
-      await report(t2, wo2, 1, 'Khởi động từ tủ điều khiển bơm cháy tiếp điểm', 20_000_000, 'Công ty PCCC Hưng Phát', 'Thay khởi động từ và rơ le nhiệt');
+      await report(t2, wo2, 1, 'Khởi động từ tủ điều khiển bơm cháy tiếp điểm', 20_000_000, 'Thay khởi động từ và rơ le nhiệt');
     }
     // TB-015: còn bảo hành, chờ quyết định
     {
       const wo = await faulty('TB-015', t1, 2, '4 camera hầm mất tín hiệu');
-      await report(t1, wo, 2, 'Đầu ghi hình hỏng nguồn, 4 camera hầm B1 mất tín hiệu', 12_000_000, 'Công ty An ninh Sao Việt', 'Thay bộ nguồn đầu ghi');
+      await report(t1, wo, 2, 'Đầu ghi hình hỏng nguồn, 4 camera hầm B1 mất tín hiệu', 12_000_000, 'Thay bộ nguồn đầu ghi');
     }
     // TB-016: vận hành 8tr hoàn thành 5 ngày trước, chưa ghi chi
     {
       const wo = await faulty('TB-016', t2, 9, 'Bơm kêu to, rung');
-      await report(t2, wo, 9, 'Vòng bi động cơ bơm mòn gây rung và kêu to', 8_000_000, 'Công ty Cơ điện Đại Dương', 'Thay vòng bi động cơ');
+      await report(t2, wo, 9, 'Vòng bi động cơ bơm mòn gây rung và kêu to', 8_000_000, 'Thay vòng bi động cơ');
       await decision.decideRepair(manager, wo._id, { decision: 'APPROVE', costSource: 'OPERATING' }, at(8, 9));
       await repair.uploadAcceptance(t2, wo._id, { note: 'Đã thay vòng bi' }, PHOTOS, at(6, 15));
       await repair.acceptRepair(manager, wo._id, at(5, 9));

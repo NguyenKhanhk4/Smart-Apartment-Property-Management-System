@@ -22,8 +22,8 @@ export async function startApp() {
 }
 
 /** Access token đúng shape middleware authenticate yêu cầu */
-export function tokenFor({ id = '64b000000000000000000001', role, roleTitle = null }) {
-  return jwt.sign({ sub: id, role, roleTitle, boardTitle: null }, env.jwt.accessSecret, { expiresIn: '5m' });
+export function tokenFor({ id = '64b000000000000000000001', role, roleTitle = null, boardTitle = null }) {
+  return jwt.sign({ sub: id, role, roleTitle, boardTitle }, env.jwt.accessSecret, { expiresIn: '5m' });
 }
 
 export const USERS = {

@@ -20,7 +20,13 @@ const router = Router();
 const BILLING_ROLES = ['ACCOUNTANT', 'MANAGER'];
 
 const previewQuery = Joi.object({ period: period().required(), apartmentId: objectId(), buildingId: objectId() });
-const generateBody = Joi.object({ period: period().required(), apartmentId: objectId() });
+// apartmentId: 1 căn | apartmentIds: các căn đã chọn | buildingId: cả 1 tòa | không có gì: cả kỳ toàn bộ tòa
+const generateBody = Joi.object({
+  period: period().required(),
+  apartmentId: objectId(),
+  apartmentIds: Joi.array().items(objectId()).min(1).max(2000).unique(),
+  buildingId: objectId(),
+}).oxor('apartmentId', 'apartmentIds');
 const MAX_ITEM_AMOUNT = 10_000_000_000; // 10 tỷ: chặn gõ nhầm số
 const otherItemBody = Joi.object({
   description: Joi.string().trim().min(3).max(200).required(),
@@ -97,7 +103,7 @@ router.get('/preview', authenticate, authorize(...BILLING_ROLES), validate({ que
  * /invoices/generate:
  *   post:
  *     tags: [Phí & hóa đơn]
- *     summary: Tính phí tới kỳ hiện tại → thông báo phí NHÁP (chưa gửi cư dân, chưa có hạn đóng). Có apartmentId → 1 căn (đã có → INVOICE_ALREADY_EXISTS). Không có → cả kỳ (ghi cron_runs, trigger MANUAL), căn đã có thông báo được bỏ qua
+ *     summary: Tính phí tới kỳ hiện tại → thông báo phí NHÁP (chưa gửi cư dân, chưa có hạn đóng). Có apartmentId → 1 căn (đã có → INVOICE_ALREADY_EXISTS). Không có → lập tất cả (cả kỳ, hoặc giới hạn theo buildingId / apartmentIds; ghi cron_runs, trigger MANUAL), căn đã có thông báo được bỏ qua
  *     requestBody:
  *       content:
  *         application/json:
@@ -107,6 +113,8 @@ router.get('/preview', authenticate, authorize(...BILLING_ROLES), validate({ que
  *             properties:
  *               period: { type: string, example: '2026-10' }
  *               apartmentId: { type: string }
+ *               apartmentIds: { type: array, items: { type: string }, description: 'Lập tất cả các căn đã chọn' }
+ *               buildingId: { type: string, description: 'Lập tất cả căn của 1 tòa' }
  */
 router.post('/generate', authenticate, authorize(...BILLING_ROLES), validate({ body: generateBody }), async (req, res) => {
   if (req.body.apartmentId) {
@@ -298,7 +306,7 @@ router.post('/submit', authenticate, authorize('ACCOUNTANT'), validate({ body: s
  * /invoices/publish:
  *   post:
  *     tags: [Phí & hóa đơn]
- *     summary: Trưởng BQL Duyệt & Phát hành thông báo Chờ duyệt → đặt hạn đóng, chụp Nợ các kỳ trước, trừ Số dư trả trước, gửi Email + Web cho Người nộp phí
+ *     summary: Kế toán / Trưởng BQL phát hành thông báo phí (Nháp hoặc Chờ duyệt) → đặt hạn đóng, chụp Nợ các kỳ trước, trừ Số dư trả trước, gửi Email + Web cho Người nộp phí
  *     requestBody:
  *       content:
  *         application/json:
@@ -309,7 +317,7 @@ router.post('/submit', authenticate, authorize('ACCOUNTANT'), validate({ body: s
  *               period: { type: string, example: '2026-10' }
  *               buildingId: { type: string, description: 'Chỉ khi gửi period: chỉ xử lý thông báo của tòa này' }
  */
-router.post('/publish', authenticate, authorize('MANAGER'), validate({ body: selectorBody }), async (req, res) => {
+router.post('/publish', authenticate, authorize('ACCOUNTANT', 'MANAGER'), validate({ body: selectorBody }), async (req, res) => {
   const r = await approval.publishInvoices(req.user, req.body);
   const failed = r.failed.length ? `, lỗi ${r.failed.length}` : '';
   return ok(res, r, `Đã phát hành ${r.count} thông báo phí${failed}${skippedNote(r)}`);

@@ -1,15 +1,19 @@
 import { useState } from 'react';
-import { Alert, App, Button, Card, Empty, Flex, List, Tag, Typography } from 'antd';
+import { Alert, App, Button, Card, DatePicker, Empty, Flex, Input, List, Select, Tag, Typography } from 'antd';
 import { FileProtectOutlined, QrcodeOutlined, ReloadOutlined, WarningOutlined } from '@ant-design/icons';
 import { workOrderApi } from '../../api/equipment.api';
 import EnumTag from '../../components/EnumTag';
 import QrScanModal from '../../components/QrScanModal';
-import { WORK_ORDER_STATUS } from '../../constants/enums';
+import { WORK_ORDER_STATUS, enumOptions } from '../../constants/enums';
 import { useApi } from '../../hooks/useApi';
 import { formatDate } from '../../utils/format';
 import AssetCode from '../assets/AssetCode';
 import InspectionModal from './InspectionModal';
 import { AcceptanceUploadModal, FaultReportModal, RepairRequestModal } from './RepairModals';
+import { filterShiftItems, sortTodayFirst } from './shiftSearch';
+
+// Checklist ca chỉ có phiếu chưa xong
+const STATUS_OPTIONS = enumOptions(WORK_ORDER_STATUS).filter((o) => !['DONE', 'CLOSED'].includes(o.value));
 
 // UC08 (KTV): checklist ca → "Quét QR" → đúng thiết bị thì mở checklist. UC09: Có sự cố → báo hư hỏng; Đang sửa → tải biên bản
 export default function ShiftChecklist() {
@@ -20,7 +24,18 @@ export default function ShiftChecklist() {
   const [reporting, setReporting] = useState(null); // UC09: báo hư hỏng
   const [uploading, setUploading] = useState(null); // UC09: tải biên bản nghiệm thu
   const [requesting, setRequesting] = useState(null); // UC10: gửi yêu cầu sửa lại phiếu đang hoãn
+  const [keyword, setKeyword] = useState('');
+  const [statuses, setStatuses] = useState([]);
+  const [range, setRange] = useState(null); // [từ, đến] theo ngày lên lịch
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const data = shift.data;
+  const filtering = Boolean(keyword.trim() || statuses.length || range);
+  const items = sortTodayFirst(filterShiftItems(data?.items ?? [], {
+    keyword, statuses, from: range?.[0]?.format('YYYY-MM-DD'), to: range?.[1]?.format('YYYY-MM-DD'),
+  }));
+  // Làm xong phiếu thì danh sách ngắn lại: không để đứng ở trang không còn phiếu
+  const current = Math.min(page, Math.max(1, Math.ceil(items.length / pageSize)));
 
   // Lỗi (sai thiết bị MSG-E03, người khác đã nhận...) báo rồi cho quét tiếp; không ném ra ngoài
   const onScan = async (qrCode) => {
@@ -72,13 +87,61 @@ export default function ShiftChecklist() {
       )}
       <Card
         size="small"
-        title={`Checklist ca${data ? ` (${data.items.length} phiếu)` : ''}`}
+        title={`Checklist ca${data ? ` (${filtering ? `${items.length}/` : ''}${data.items.length} phiếu)` : ''}`}
         extra={<Button size="small" icon={<ReloadOutlined />} onClick={shift.reload} loading={shift.loading}>Làm mới</Button>}
       >
+        <Flex gap={8} wrap style={{ marginBottom: 8 }}>
+          <Input.Search
+            allowClear
+            placeholder="Tìm mã, tên, vị trí thiết bị, tòa"
+            style={{ width: 300, maxWidth: '100%' }}
+            value={keyword}
+            onChange={(e) => {
+              setKeyword(e.target.value);
+              setPage(1);
+            }}
+          />
+          <DatePicker.RangePicker
+            allowEmpty={[true, true]}
+            format="DD/MM/YYYY"
+            placeholder={['Ngày lên lịch từ', 'đến']}
+            value={range}
+            onChange={(v) => {
+              setRange(v?.[0] || v?.[1] ? v : null);
+              setPage(1);
+            }}
+          />
+          <Select
+            allowClear
+            mode="multiple"
+            maxTagCount="responsive"
+            placeholder="Trạng thái"
+            style={{ width: 220 }}
+            options={STATUS_OPTIONS}
+            value={statuses}
+            onChange={(v) => {
+              setStatuses(v);
+              setPage(1);
+            }}
+          />
+        </Flex>
         <List
           loading={shift.loading && !data}
-          dataSource={data?.items ?? []}
-          locale={{ emptyText: <Empty description="Không có phiếu bảo trì nào cần làm" /> }}
+          dataSource={items}
+          locale={{ emptyText: <Empty description={filtering ? 'Không tìm thấy phiếu phù hợp' : 'Không có phiếu bảo trì nào cần làm'} /> }}
+          pagination={items.length > 10 && {
+            current,
+            pageSize,
+            total: items.length,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50],
+            showTotal: (total, [from, to]) => `${from}–${to} / ${total} phiếu`,
+            onChange: (p, size) => {
+              setPage(size === pageSize ? p : 1);
+              setPageSize(size);
+            },
+          }}
+          rowKey="_id"
           renderItem={(wo) => (
             <List.Item actions={[action(wo)]}>
               <List.Item.Meta

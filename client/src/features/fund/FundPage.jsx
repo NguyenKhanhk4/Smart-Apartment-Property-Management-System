@@ -15,7 +15,6 @@ import {
   Popconfirm,
   Radio,
   Select,
-  Statistic,
   Table,
   Tabs,
   Tag,
@@ -40,6 +39,8 @@ import { ExportButton } from '../reports/components';
 // Mô đun 4 — Quỹ bảo trì 2% (UC33, UC34). Hệ thống chỉ theo dõi, quỹ thuộc Ban quản trị.
 // Trưởng BQL: lập / sửa / rút đề xuất chi (kể cả từ phiếu bảo trì duyệt bằng Quỹ). Kế toán: thu quỹ, xác nhận / trả lại đề xuất,
 // lập phiếu chi, ghi chi phí vận hành sửa chữa. Ban quản trị: biểu quyết, xác nhận nghiệm thu, xác nhận đổi tham số tài chính.
+/** Đề xuất chờ Trưởng ban quản trị chọn nhà thầu (cùng quy tắc isAwaitingVendor ở server) */
+const isAwaitingVendor = (p) => p.status === 'PENDING' && !p.vendor && !p.votes?.some((v) => v.decision === 'AGREE');
 const enumOpts = (map) => Object.entries(map).map(([value, m]) => ({ value, label: m.label }));
 
 export default function FundPage() {
@@ -111,24 +112,9 @@ export default function FundPage() {
         }
       />
       <Flex vertical gap={16}>
-        <Card loading={overview.loading && !o}>
-          {o && (
-            <Flex vertical gap={12}>
-              {o.lowBalance && (
-                <Alert type="warning" showIcon message={`Số dư quỹ dưới ngưỡng cảnh báo ${formatMoney(o.lowBalanceThreshold)}`} />
-              )}
-              <Flex gap={32} wrap>
-                <Statistic title="Số dư quỹ" value={formatMoney(o.balance)} />
-                <Statistic title="Đã duyệt chưa chi" value={formatMoney(o.committed)} />
-                <Statistic title="Còn có thể đề xuất chi" value={formatMoney(o.available)} />
-                <Statistic title="Thu từ đầu năm" value={formatMoney(o.yearIncome)} valueStyle={{ color: '#389e0d' }} />
-                <Statistic title="Chi từ đầu năm" value={formatMoney(o.yearExpense)} valueStyle={{ color: '#cf1322' }} />
-                <Statistic title="Chờ Ban quản trị biểu quyết" value={o.pendingCount} />
-                {o.emergencyCount > 0 && <Statistic title="Sửa khẩn cấp từ đầu năm" value={o.emergencyCount} valueStyle={{ color: '#cf1322' }} />}
-              </Flex>
-            </Flex>
-          )}
-        </Card>
+        {o?.lowBalance && (
+          <Alert type="warning" showIcon message={`Số dư quỹ dưới ngưỡng cảnh báo ${formatMoney(o.lowBalanceThreshold)}`} />
+        )}
 
         {awaiting.data?.length > 0 && (
           <Card
@@ -208,7 +194,6 @@ export default function FundPage() {
               dataSource={expenses.data}
               columns={[
                 { title: 'Thiết bị', render: (_, r) => (r.assetId ? `${r.assetId.code} – ${r.assetId.name}` : r.title) },
-                { title: 'Nhà thầu', render: (_, r) => r.repair?.vendorName || 'Chưa có' },
                 { title: 'Dự kiến', width: 140, align: 'right', render: (_, r) => formatMoney(r.repair?.estimatedCost) },
                 { title: 'Hoàn thành', width: 110, render: (_, r) => formatDate(r.completedAt) },
                 { title: '', width: 110, render: (_, r) => <Button size="small" type="primary" onClick={() => setExpenseOf(r)}>Ghi chi</Button> },
@@ -409,7 +394,7 @@ export default function FundPage() {
                         { title: 'Số tiền', dataIndex: 'amount', width: 150, align: 'right', render: (v) => <b>{formatMoney(v)}</b> },
                         { title: 'Phiếu', width: 90, align: 'center', render: (_, r) => r.votes?.length ?? 0 },
                         { title: 'Lập ngày', dataIndex: 'createdAt', width: 110, render: formatDate },
-                        { title: 'Trạng thái', dataIndex: 'status', width: 190, render: (v) => <EnumTag map={FUND_PROPOSAL_STATUS} value={v} /> },
+                        { title: 'Trạng thái', dataIndex: 'status', width: 210, render: (v, r) => (isAwaitingVendor(r) ? <Tag color="gold">Chờ Trưởng ban chọn nhà thầu</Tag> : <EnumTag map={FUND_PROPOSAL_STATUS} value={v} />) },
                       ]}
                     />
                   </Flex>
@@ -508,7 +493,7 @@ function OperatingExpenseModal({ workOrder, onClose, onDone }) {
 }
 
 /**
- * Trưởng BQL lập đề xuất → chờ Ban quản trị biểu quyết.
+ * Trưởng BQL lập đề xuất → chờ Trưởng ban quản trị chọn nhà thầu → Ban quản trị biểu quyết.
  * prefill (UC10): { workOrderId, title, description, amount, estimatedCost, attachmentUrls, isEmergency, planType?, urgentReason? }
  */
 function ProposalModal({ open, available, prefill, onClose, onDone }) {
@@ -532,7 +517,7 @@ function ProposalModal({ open, available, prefill, onClose, onDone }) {
     <Modal
       open={open}
       title="Lập đề xuất chi quỹ"
-      okText="Gửi Ban quản trị biểu quyết"
+      okText="Gửi Ban quản trị"
       width="min(640px, 94vw)"
       confirmLoading={loading}
       onCancel={onClose}
@@ -546,7 +531,7 @@ function ProposalModal({ open, available, prefill, onClose, onDone }) {
           type={prefill.isEmergency ? 'warning' : 'success'}
           showIcon
           message={prefill.isEmergency ? 'Hồ sơ cho sửa chữa khẩn cấp (đã sửa trước)' : 'Lập từ phiếu bảo trì đã chọn Quỹ bảo trì'}
-          description={`Chi phí kỹ thuật viên dự kiến ${formatMoney(prefill.estimatedCost)}, sửa theo báo giá thật nếu khác. ${prefill.attachmentUrls?.length ? `${prefill.attachmentUrls.length} ảnh hư hỏng tự đính kèm. ` : ''}Ban quản trị biểu quyết; nghiệm thu làm trên phiếu bảo trì.`}
+          description={`Chi phí kỹ thuật viên dự kiến ${formatMoney(prefill.estimatedCost)}, Trưởng ban quản trị chọn nhà thầu và nhập giá báo. ${prefill.attachmentUrls?.length ? `${prefill.attachmentUrls.length} ảnh hư hỏng tự đính kèm. ` : ''}Ban quản trị biểu quyết; nghiệm thu làm trên phiếu bảo trì.`}
         />
       )}
       <Form form={form} layout="vertical" preserve={false} initialValues={initialValues} onFinish={(v) => run(v).catch(() => {})}>
@@ -559,7 +544,7 @@ function ProposalModal({ open, available, prefill, onClose, onDone }) {
         <Form.Item name="description" label="Mô tả, lý do cần chi" rules={[{ required: true, min: 3, message: 'Mô tả tối thiểu 3 ký tự' }]}>
           <Input.TextArea rows={3} maxLength={2000} />
         </Form.Item>
-        <Form.Item name="amount" label="Số tiền đề xuất" rules={[{ required: true, message: 'Nhập số tiền' }]}>
+        <Form.Item name="amount" label="Chi phí dự kiến" extra="Số tiền cuối là giá báo của nhà thầu Trưởng ban quản trị chọn." rules={[{ required: true, message: 'Nhập số tiền' }]}>
           <InputNumber {...moneyInputProps} min={1} style={{ width: '100%' }} />
         </Form.Item>
         <Form.Item name="planType" label="Loại kế hoạch">
@@ -574,27 +559,10 @@ function ProposalModal({ open, available, prefill, onClose, onDone }) {
             <Input maxLength={200} placeholder="Vd: KH bảo trì 2026 — Nghị quyết Hội nghị 03/2026" />
           </Form.Item>
         )}
-        {/* Ban quản trị biểu quyết dựa trên hồ sơ: bắt buộc ảnh báo giá hoặc số hợp đồng / báo giá (server cũng chặn).
-            Ảnh hư hỏng tự đính kèm từ phiếu bảo trì không tính là báo giá. */}
-        <Form.Item
-          name="contractNo"
-          label="Số hợp đồng / báo giá nhà thầu"
-          dependencies={['images']}
-          extra="Bắt buộc ghi số này hoặc đính kèm ít nhất 1 ảnh báo giá bên dưới."
-          rules={[
-            ({ getFieldValue }) => ({
-              validator: (_, v) => (v?.trim() || getFieldValue('images')?.length
-                ? Promise.resolve()
-                : Promise.reject(new Error('Ghi số hợp đồng / báo giá hoặc đính kèm ảnh báo giá'))),
-            }),
-          ]}
-        >
-          <Input maxLength={100} />
-        </Form.Item>
         <Form.Item name="largeRepair" valuePropName="checked" extra="Sửa chữa lớn (thiết bị, kết cấu): Kế toán chỉ lập phiếu chi sau khi Trưởng BQL nghiệm thu và Ban quản trị xác nhận.">
           <Checkbox disabled={Boolean(prefill)}>Sửa chữa lớn</Checkbox>
         </Form.Item>
-        <EvidencePhotosField name="images" label="Ảnh báo giá" required={false} />
+        <EvidencePhotosField name="images" label="Ảnh hiện trạng, hồ sơ kèm theo" required={false} />
       </Form>
     </Modal>
   );

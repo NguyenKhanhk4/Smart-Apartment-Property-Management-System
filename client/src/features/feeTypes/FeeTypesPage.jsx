@@ -347,7 +347,7 @@ export default function FeeTypesPage({ embedded = false } = {}) {
       {!embedded && (
         <PageHeader
           title="Bảng phí & đơn giá"
-          subtitle="Cấu hình phí quản lý theo loại căn, phí vệ sinh và phí gửi xe. Mức giá mới áp dụng từ kỳ được chọn."
+          subtitle="Cấu hình phí quản lý theo loại căn, phí vệ sinh và phí gửi xe (đơn giá đã bao gồm thuế GTGT). Mức giá mới áp dụng từ kỳ được chọn."
           breadcrumb={[{ label: 'Trang chủ', path: '/app/home' }, { label: 'Bảng phí' }]}
           extra={
             canEdit && (

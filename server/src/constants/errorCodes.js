@@ -33,6 +33,8 @@ export const ERROR_CODES = Object.freeze({
     status: 409,
     message: 'Đề xuất đã được duyệt hoặc từ chối trước đó',
   },
+  PROPOSAL_VENDOR_REQUIRED: { status: 409, message: 'Trưởng ban quản trị chưa chọn nhà thầu, chưa đồng ý chi được' },
+  PROPOSAL_VENDOR_LOCKED: { status: 409, message: 'Đã có thành viên đồng ý, không đổi nhà thầu được' },
   PROPOSAL_ALREADY_VOTED: { status: 409, message: 'Bạn đã biểu quyết đề xuất này' },
   PROPOSAL_QUORUM_NOT_MET: { status: 409, message: 'Chưa đủ tỷ lệ biểu quyết để chốt' },
   BOOKING_SLOT_CONFLICT: { status: 409, message: 'Khung giờ đã đủ chỗ hoặc bị trùng lịch' },
@@ -72,7 +74,7 @@ export const ERROR_CODES = Object.freeze({
   WORKORDER_TAKEN: { status: 409, message: 'Phiếu bảo trì đã có kỹ thuật viên khác nhận' },
   WORKORDER_NOT_SCANNED: { status: 409, message: 'Cần quét mã QR trên thiết bị trước khi nộp kết quả kiểm tra' },
   // UC10 duyệt sửa chữa lớn
-  WORKORDER_FUND_PENDING: { status: 409, message: 'Phiếu đang có đề xuất chi quỹ chờ Ban quản trị biểu quyết, chưa quyết định lại được' },
+  WORKORDER_FUND_PENDING: { status: 409, message: 'Phiếu đang có đề xuất chi quỹ chờ Ban quản trị chọn nhà thầu / biểu quyết, chưa quyết định lại được' },
   WORKORDER_FUND_REQUIRED: { status: 422, message: 'Chi phí (cộng dồn 30 ngày) từ ngưỡng trở lên, bắt buộc dùng Quỹ bảo trì' }, // BR-E08
   WORKORDER_WARRANTY_REASON_REQUIRED: { status: 422, message: 'Thiết bị còn bảo hành, ghi lý do nếu không dùng bảo hành' }, // BR-E10
   WORKORDER_NOT_AWAITING_BOARD: { status: 409, message: 'Phiếu không chờ Ban quản trị xác nhận nghiệm thu' }, // BR-E09
