@@ -244,6 +244,7 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
       decision: v.decision,
       ...(v.decision === 'APPROVE' && {
         costSource: v.costSource,
+        ...(v.warrantyOverrideReason?.trim() && { warrantyOverrideReason: v.warrantyOverrideReason.trim() }),
         ...(v.costSource === 'FUND' && { emergency: Boolean(v.emergency) }),
         ...(v.costSource === 'FUND' && v.emergency && { emergencyReason: v.emergencyReason?.trim() }),
       }),
@@ -265,10 +266,9 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
   const assetId = workOrder.assetId?._id ?? workOrder.assetId;
   const fundRequired = Boolean(policy?.fundRequired);
   const warrantyActive = Boolean(policy?.warrantyActive);
-  // Còn bảo hành: chỉ chọn được Bảo hành (Vận hành, Quỹ bị mờ). Hết bảo hành: ngược lại
   const sourceOptions = [
-    { value: 'OPERATING', label: 'Chi phí vận hành', disabled: warrantyActive || fundRequired },
-    { value: 'FUND', label: 'Quỹ bảo trì (Ban quản trị biểu quyết)', disabled: warrantyActive },
+    { value: 'OPERATING', label: 'Chi phí vận hành', disabled: fundRequired },
+    { value: 'FUND', label: 'Quỹ bảo trì (Ban quản trị biểu quyết)' },
     { value: 'WARRANTY', label: 'Bảo hành', disabled: !warrantyActive },
   ];
   const defaultSource = warrantyActive ? 'WARRANTY' : fundRequired ? 'FUND' : 'OPERATING';
@@ -340,6 +340,15 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
         {picked === 'APPROVE' && (
           <Form.Item name="costSource" label="Nguồn chi phí" extra={sourceHint[costSource]}>
             <Radio.Group options={sourceOptions} />
+          </Form.Item>
+        )}
+        {picked === 'APPROVE' && warrantyActive && costSource !== 'WARRANTY' && (
+          <Form.Item
+            name="warrantyOverrideReason"
+            label="Lý do không dùng bảo hành"
+            rules={[{ required: true, whitespace: true, min: 5, message: 'Ghi lý do tối thiểu 5 ký tự' }]}
+          >
+            <Input.TextArea rows={2} maxLength={500} showCount placeholder="Lỗi ngoài phạm vi bảo hành, hãng từ chối…" />
           </Form.Item>
         )}
         {picked === 'APPROVE' && costSource === 'FUND' && (
