@@ -25,7 +25,7 @@ async function likeAtlas() {
   const accountant = await createUser('ACCOUNTANT');
   await createTechnician();
   await createTechnician();
-  await createUser('BOARD', { boardTitle: 'MEMBER' });
+  await createUser('BOARD', { boardTitle: 'CHAIRMAN' });
   await createUser('BOARD', { boardTitle: 'MEMBER' });
   const [a, b] = await Building.create([
     { code: 'A', name: 'Block A', floors: 20 }, { code: 'B', name: 'Block B', floors: 20 }, { code: 'T3', name: 'Block C', floors: 20 },
@@ -55,7 +55,7 @@ test('chế độ xem không ghi gì; --apply tạo đủ 10 trường hợp đ�
   assert.equal((await wo('TB-001')).status, 'DONE');
   const p1 = await prop('TB-001');
   assert.equal(p1.status, 'PAID');
-  assert.deepEqual(p1.history.map((h) => h.action), ['SUBMITTED', 'APPROVED', 'BOARD_ACCEPTED', 'PAID']);
+  assert.deepEqual(p1.history.map((h) => h.action), ['SUBMITTED', 'VENDOR_SELECTED', 'APPROVED', 'BOARD_ACCEPTED', 'PAID']);
   // 2
   assert.equal((await wo('TB-002')).status, 'AWAITING_BOARD_ACCEPTANCE');
   assert.equal((await prop('TB-002')).status, 'APPROVED');

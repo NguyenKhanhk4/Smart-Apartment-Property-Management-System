@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button, Skeleton } from 'antd';
-import { ExportOutlined, ReloadOutlined } from '@ant-design/icons';
+import { ExclamationCircleOutlined, ExportOutlined, ReloadOutlined } from '@ant-design/icons';
 import { QRCodeSVG } from 'qrcode.react';
 import { paymentApi } from '../../api/moduleB.api';
 import SurfaceCard from '../../components/resident/SurfaceCard';
@@ -23,6 +23,7 @@ function useCountdown(until) {
 /**
  * Mã VietQR của payOS hiện ngay trên trang (UC29): tạo / dùng lại link thanh toán (server dùng lại link còn hạn
  * cho đúng các thông báo phí này), quét bằng app ngân hàng; tự hỏi trạng thái và chuyển sang trang kết quả khi đã trả.
+ * Khi cổng thanh toán online bị lỗi / gián đoạn: hiển thị thông báo hướng dẫn cư dân giải pháp thay thế.
  */
 export default function PayosQrPanel({ invoiceIds, amount, className = '' }) {
   const navigate = useNavigate();
@@ -77,10 +78,41 @@ export default function PayosQrPanel({ invoiceIds, amount, className = '' }) {
       {loading ? (
         <Skeleton active paragraph={{ rows: 6 }} />
       ) : error ? (
-        <div className="text-center py-6">
-          <p className="text-r-warn-fg text-[13px] mb-3">{error}</p>
-          <Button icon={<ReloadOutlined />} onClick={regenerate}>
-            Thử lại
+        <div className="py-1 flex flex-col gap-3">
+          <div className="p-3.5 bg-r-warn-bg border border-r-border rounded-xl text-left">
+            <div className="flex items-start gap-2.5">
+              <ExclamationCircleOutlined className="text-r-warn-fg text-base mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-r-text text-[13.5px] leading-snug">
+                  Cổng thanh toán online đang gián đoạn
+                </div>
+                <div className="text-r-muted text-[12.5px] mt-1.5 leading-relaxed">
+                  Hệ thống kết nối PayOS hiện đang bảo trì hoặc gặp sự cố kỹ thuật tạm thời.
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-r-border/80 text-[12px] text-r-text space-y-1.5">
+              <div className="font-medium text-r-warn-fg">Giải pháp cho Quý cư dân:</div>
+              <div className="flex items-start gap-1.5">
+                <span className="shrink-0">•</span>
+                <span>Quý cư dân vui lòng quay lại <strong>thử lại sau 15 – 30 phút</strong>.</span>
+              </div>
+              <div className="flex items-start gap-1.5">
+                <span className="shrink-0">•</span>
+                <span>Hoặc đến thanh toán trực tiếp tại <strong>Văn phòng Ban Quản lý (Tầng 1)</strong> (tiền mặt / POS).</span>
+              </div>
+            </div>
+          </div>
+
+          <Button
+            type="primary"
+            icon={<ReloadOutlined />}
+            onClick={regenerate}
+            block
+            className="mt-0.5"
+          >
+            Thử kết nối lại
           </Button>
         </div>
       ) : (

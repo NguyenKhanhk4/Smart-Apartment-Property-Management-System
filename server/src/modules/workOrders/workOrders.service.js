@@ -12,8 +12,8 @@ import { Asset, User, WorkOrder } from '../../models/index.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { escapeRegex, paginate } from '../../utils/pagination.js';
-import { DAY_MS, fmtDateVn } from '../../utils/time.js';
+import { escapeRegex, getPagination, getSort, paginate } from '../../utils/pagination.js';
+import { DAY_MS, fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { repairPolicy, repairSettings } from './workOrders.decision.js';
 import { pendingFundProposals } from './workOrders.fund.js';
 
@@ -40,31 +40,61 @@ const dateVn = fmtDateVn;
 /** Manager thấy tất cả; KTV chỉ thấy work order được giao cho mình */
 const isTechnician = (user) => isRole(user, 'STAFF:TECHNICIAN');
 
+/**
+ * Trang danh sách theo ngày thực: hôm nay (giờ VN) → đã qua, gần nhất trước → sắp tới, gần nhất trước → chưa có ngày.
+ * Mỗi nhóm 1 truy vấn, ghép theo số lượng từng nhóm nên phân trang đúng qua ranh giới nhóm.
+ */
+async function paginateTodayFirst(filter, query, populate, now) {
+  const { page, limit, skip } = getPagination(query);
+  const today = startOfVnDay(now);
+  const tomorrow = new Date(today.getTime() + DAY_MS);
+  const groups = [
+    [{ scheduledDate: { $gte: today, $lt: tomorrow } }, { _id: -1 }],
+    [{ scheduledDate: { $lt: today } }, { scheduledDate: -1, _id: -1 }],
+    [{ scheduledDate: { $gte: tomorrow } }, { scheduledDate: 1, _id: -1 }],
+    [{ scheduledDate: null }, { _id: -1 }],
+  ].map(([extra, sort]) => ({ where: { $and: [filter, extra] }, sort }));
+  const counts = await Promise.all(groups.map((g) => WorkOrder.countDocuments(g.where)));
+  const items = [];
+  let offset = skip;
+  for (const [i, g] of groups.entries()) {
+    const room = limit - items.length;
+    if (room > 0 && offset < counts[i]) items.push(...(await WorkOrder.find(g.where).sort(g.sort).skip(offset).limit(room).populate(populate).lean()));
+    offset = Math.max(0, offset - counts[i]);
+  }
+  return { items, pagination: { page, limit, total: counts.reduce((a, b) => a + b, 0) } };
+}
+
 // ===== UC-D03 bước 1: danh sách work order =====
-export async function listWorkOrders(user, query) {
-  const now = new Date();
+export async function listWorkOrders(user, query, now = new Date()) {
   const filter = {};
   if (query.status) filter.status = { $in: query.status };
   if (query.type) filter.type = query.type;
   if (query.assignedTo) filter.assignedTo = query.assignedTo;
   if (query.unassigned) filter.assignedTo = null;
+  if (query.from || query.to) filter.scheduledDate = { ...(query.from && { $gte: query.from }), ...(query.to && { $lte: query.to }) };
   if (query.overdue) {
     // Chỉ work order chưa DONE; lọc thêm status=DONE thì kết quả rỗng là đúng
     filter.status = { $in: (query.status ?? WORK_ORDER_INSPECTING_STATUSES).filter((s) => WORK_ORDER_INSPECTING_STATUSES.includes(s)) };
     filter.result = null;
-    filter.scheduledDate = { $lt: new Date(now.getTime() - DAY_MS) };
+    filter.scheduledDate = { ...filter.scheduledDate, $lt: new Date(now.getTime() - DAY_MS) };
   }
   if (query.buildingId || query.q) {
     const assetFilter = {};
     if (query.buildingId) assetFilter.buildingId = query.buildingId;
-    if (query.q) assetFilter.name = new RegExp(escapeRegex(query.q), 'i');
+    if (query.q) {
+      const re = new RegExp(escapeRegex(query.q), 'i');
+      assetFilter.$or = [{ name: re }, { code: re }];
+    }
     filter.assetId = { $in: await Asset.find(assetFilter).distinct('_id') };
   }
   if (isTechnician(user)) filter.assignedTo = user.id;
 
-  const result = await paginate(WorkOrder, filter, query, {
-    populate: [ASSET_POPULATE, { path: 'assignedTo', select: 'fullName phone' }],
-  });
+  // Nhiều phiếu cùng ngày: thêm _id để thứ tự cố định, không lặp / sót phiếu giữa các trang
+  const populate = [ASSET_POPULATE, { path: 'assignedTo', select: 'fullName phone' }];
+  const result = query.sort === 'today'
+    ? await paginateTodayFirst(filter, query, populate, now)
+    : await paginate(WorkOrder, filter, { ...query, sort: { ...getSort(query.sort), _id: -1 } }, { populate });
   // UC10: phiếu chờ duyệt sửa nguồn Quỹ đang có đề xuất chờ biểu quyết → client khóa nút Quyết định
   const pendingFunds = await pendingFundProposals(result.items);
   // BR-E08, BR-E10: phiếu chờ quyết định kèm chính sách nguồn chi (cộng dồn, ngưỡng, bảo hành) như trang Duyệt sửa chữa,

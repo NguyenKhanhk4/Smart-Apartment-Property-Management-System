@@ -1,7 +1,8 @@
 // Mô đun 4 — Quỹ bảo trì 2% (UC33, UC34). Hệ thống chỉ theo dõi, quỹ thuộc Ban quản trị.
 //   • Kế toán ghi nhận thu quỹ có chứng từ (số dư ban đầu CĐT bàn giao, lãi tiền gửi — M4-7).
-//   • Trưởng BQL lập Đề xuất chi (hạng mục, số tiền, báo giá; Kế hoạch bảo trì năm hoặc Đột xuất kèm lý do) → Chờ Ban quản
-//     trị biểu quyết ngay, báo Ban quản trị. Không có bước Kế toán xác nhận: hệ thống tự kiểm số dư khả dụng lúc lập và lúc chốt.
+//   • Trưởng BQL lập Đề xuất chi (hạng mục, số tiền dự kiến; Kế hoạch bảo trì năm hoặc Đột xuất kèm lý do). Trưởng ban quản trị
+//     chọn nhà thầu (tên, giá báo, báo giá) → số tiền đề xuất = giá báo, cả ban biểu quyết. Chưa có nhà thầu thì chưa Đồng ý được
+//     (vẫn Không đồng ý được); đã có phiếu Đồng ý thì không đổi nhà thầu. Hệ thống tự kiểm số dư khả dụng lúc lập, lúc chọn, lúc chốt.
 //   • Mỗi thành viên Ban quản trị bỏ 1 phiếu kèm ý kiến. Đồng ý > FUND_APPROVAL_RATIO × số thành viên → Đã duyệt nếu số dư
 //     khả dụng còn đủ (BR-F16, kiểm lại lúc chốt; không đủ thì giữ chờ, báo Kế toán + Trưởng BQL); không còn khả năng đạt
 //     → Từ chối (báo Trưởng BQL chọn phương án khác — M10-2). Quá N ngày chỉ nhắc, không tự duyệt (X8).
@@ -13,6 +14,7 @@ import mongoose from 'mongoose';
 import {
   AUDIT_ACTIONS,
   AUDIT_TARGETS,
+  BOARD_TITLES,
   CONFIG_KEYS,
   FUND_PLAN_TYPES,
   FUND_PROPOSAL_OPEN_STATUSES,
@@ -35,10 +37,14 @@ import { paginate } from '../../utils/pagination.js';
 import { DAY_MS, fmtDateVn, periodStart, vnPeriod } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { formatVnd } from '../amenities/pricing.js';
-import { FUND_DECISIONS, assertAwaitingFund, fundPrefill, onFundDecision } from '../workOrders/workOrders.fund.js';
+import { FUND_DECISIONS, assertAwaitingFund, fundPrefill, onFundDecision, onVendorSelected } from '../workOrders/workOrders.fund.js';
 
 const { PENDING, APPROVED, REJECTED, PAID, CANCELLED } = FUND_PROPOSAL_STATUS;
 const oid = (id) => new mongoose.Types.ObjectId(String(id));
+/** Chờ Trưởng ban chọn nhà thầu. Đề xuất cũ đã có phiếu Đồng ý (trước khi có bước này) thì biểu quyết tiếp bình thường */
+const AWAITING_VENDOR = { status: PENDING, vendor: null, votes: { $not: { $elemMatch: { decision: VOTE_DECISIONS.AGREE } } } };
+export const isAwaitingVendor = (p) =>
+  p.status === PENDING && !p.vendor && !p.votes.some((v) => v.decision === VOTE_DECISIONS.AGREE);
 const proposalLink = (p) => `/app/fund/proposals/${p._id}`;
 
 /** Đổi status luôn đi kèm cờ isOpen (index "mỗi phiếu bảo trì 1 đề xuất đang xử lý" dựa vào cờ này) */
@@ -93,7 +99,7 @@ const insufficient = (available) =>
 export async function getOverview({ now = new Date() } = {}) {
   const fund = await getFund();
   const yearStart = periodStart(`${vnPeriod(now).slice(0, 4)}-01`);
-  const [totals, committed, pendingCount, threshold, readyToPayCount, emergencyCount] = await Promise.all([
+  const [totals, committed, pendingCount, threshold, readyToPayCount, emergencyCount, awaitingVendorCount] = await Promise.all([
     FundTransaction.aggregate([
       { $match: { fundId: fund._id, occurredAt: { $gte: yearStart } } },
       { $group: { _id: '$type', amount: { $sum: '$amount' }, count: { $sum: 1 } } },
@@ -106,6 +112,7 @@ export async function getOverview({ now = new Date() } = {}) {
       $or: [{ largeRepair: false }, { workAcceptedAt: { $ne: null }, boardAcceptedAt: { $ne: null } }],
     }),
     WorkOrder.countDocuments({ 'repair.isEmergency': true, 'repair.emergencyAt': { $gte: yearStart } }),
+    FundProposal.countDocuments({ fundId: fund._id, ...AWAITING_VENDOR }),
   ]);
   const t = Object.fromEntries(totals.map((x) => [x._id, x.amount]));
   return {
@@ -115,7 +122,8 @@ export async function getOverview({ now = new Date() } = {}) {
     available: fund.balance - committed,
     yearIncome: t[FUND_TX_TYPES.INCOME] ?? 0,
     yearExpense: t[FUND_TX_TYPES.EXPENSE] ?? 0,
-    pendingCount, // chờ Ban quản trị biểu quyết
+    pendingCount, // đang xử lý: chờ chọn nhà thầu + chờ biểu quyết
+    awaitingVendorCount, // trong đó: chờ Trưởng ban quản trị chọn nhà thầu
     readyToPayCount, // đã duyệt, đủ nghiệm thu, chờ Kế toán lập phiếu chi
     emergencyCount, // phiếu sửa khẩn cấp bằng Quỹ từ đầu năm (theo dõi lạm dụng nhánh khẩn cấp)
     lowBalanceThreshold: Number(threshold),
@@ -188,6 +196,7 @@ const PROPOSAL_POPULATE = [
   { path: 'finalizedBy', select: 'fullName' },
   { path: 'workAcceptedBy', select: 'fullName' },
   { path: 'boardAcceptedBy', select: 'fullName' },
+  { path: 'vendor.selectedBy', select: 'fullName' },
   { path: 'history.by', select: 'fullName role' },
   { path: 'expenseTxId', select: 'code amount occurredAt documentNo attachmentUrls description varianceReason' },
   {
@@ -255,24 +264,17 @@ function assertPlan({ planType, planRef, urgentReason }) {
 const planText = (p) => (p.planType === FUND_PLAN_TYPES.UNSCHEDULED ? `bảo trì đột xuất: ${p.urgentReason}` : `theo kế hoạch ${p.planRef}`);
 
 /**
- * Trưởng BQL lập đề xuất. body: { title, description, amount, planType, planRef?, urgentReason?, largeRepair?, workOrderId?, contractNo? }
- * + ảnh báo giá. Kiểm số dư khả dụng; đề xuất → Chờ Ban quản trị biểu quyết, báo Ban quản trị.
- * Bắt buộc chứng từ: ≥ 1 ảnh báo giá hoặc số hợp đồng / báo giá (không còn bước Kế toán kiểm hồ sơ trước khi Ban quản trị
- * biểu quyết). Ảnh hư hỏng tự đính kèm từ phiếu bảo trì không tính là báo giá.
+ * Trưởng BQL lập đề xuất. body: { title, description, amount (dự kiến), planType, planRef?, urgentReason?, largeRepair?, workOrderId? }
+ * + ảnh hồ sơ (không bắt buộc). Kiểm số dư khả dụng; đề xuất → chờ Trưởng ban quản trị chọn nhà thầu, báo Trưởng ban.
+ * Trưởng BQL không chọn nhà thầu: báo giá do Trưởng ban nhập ở bước chọn (selectVendor).
  */
 export async function createProposal(user, body, files = [], { now = new Date() } = {}) {
-  const { title, description, amount, planType, planRef = null, urgentReason = null, largeRepair = false, workOrderId = null, contractNo = null } = body;
+  const { title, description, amount, planType, planRef = null, urgentReason = null, largeRepair = false, workOrderId = null } = body;
   assertPlan({ planType, planRef, urgentReason });
-  if (!files.length && !contractNo?.trim()) {
-    throw ApiError.badRequest('Đính kèm ít nhất 1 ảnh báo giá hoặc ghi số hợp đồng / báo giá nhà thầu', [
-      { field: 'images', message: 'Đính kèm ảnh báo giá hoặc ghi số hợp đồng / báo giá' },
-      { field: 'contractNo', message: 'Ghi số hợp đồng / báo giá hoặc đính kèm ảnh báo giá' },
-    ]);
-  }
   const fund = await getFund();
   const available = await availableBalance(fund._id);
   if (amount > available) throw insufficient(available);
-  // UC10: phiếu phải đang chờ đề xuất chi quỹ; ảnh hư hỏng của phiếu đi kèm báo giá
+  // UC10: phiếu phải đang chờ đề xuất chi quỹ; ảnh hư hỏng của phiếu đi kèm hồ sơ
   const linked = workOrderId ? (await assertAwaitingFund(workOrderId), await fundPrefill(workOrderId)) : null;
   const attachmentUrls = [...(linked?.attachmentUrls ?? []), ...(await uploadToCloudinary(files, 'fund-quotations'))];
 
@@ -283,12 +285,12 @@ export async function createProposal(user, body, files = [], { now = new Date() 
       title,
       description,
       amount,
+      estimatedAmount: amount,
       planType,
       planRef: planType === FUND_PLAN_TYPES.ANNUAL_PLAN ? planRef : null,
       urgentReason: planType === FUND_PLAN_TYPES.UNSCHEDULED ? urgentReason : null,
       largeRepair: linked ? true : Boolean(largeRepair), // sửa chữa thiết bị luôn là sửa chữa lớn
       workOrderId: linked ? oid(workOrderId) : null,
-      contractNo: contractNo?.trim() || null,
       attachmentUrls,
       proposedBy: user.id,
       status: PENDING,
@@ -308,18 +310,78 @@ export async function createProposal(user, body, files = [], { now = new Date() 
     planType,
     ...(linked && { workOrderId: proposal.workOrderId }),
   });
-  const members = await boardMembers();
-  await safely(() => notify(members.map((m) => m._id), {
+  await safely(async () => notify(await vendorPickers(), {
     type: NOTIFICATION_TYPES.FUND_APPROVAL,
-    title: `Đề xuất chi quỹ bảo trì chờ biểu quyết: ${title}`,
+    title: `Đề xuất chi quỹ bảo trì chờ chọn nhà thầu: ${title}`,
     content:
-      `${proposal.code} — ${title}, số tiền ${formatVnd(amount)} (${planText(proposal)}). `
-      + `Số dư khả dụng hiện tại ${formatVnd(available)}. Vui lòng vào hệ thống để Đồng ý hoặc Không đồng ý.`,
+      `${proposal.code} — ${title}, dự kiến ${formatVnd(amount)} (${planText(proposal)}). `
+      + `Số dư khả dụng hiện tại ${formatVnd(available)}. Trưởng ban quản trị chọn nhà thầu và nhập báo giá, sau đó Ban quản trị biểu quyết.`,
     refId: proposal._id,
     link: proposalLink(proposal),
     email: true,
   }));
   return proposal;
+}
+
+/** Người nhận việc chọn nhà thầu: Trưởng ban; ban chưa có Trưởng ban thì báo cả ban để kiện toàn */
+async function vendorPickers() {
+  const members = await boardMembers();
+  const chairman = members.filter((m) => m.boardTitle === BOARD_TITLES.CHAIRMAN);
+  return (chairman.length ? chairman : members).map((m) => m._id);
+}
+
+/**
+ * Trưởng ban quản trị chọn nhà thầu. body: { name, phone?, amount, note? } + ảnh hợp đồng (bắt buộc ≥ 1).
+ * Số tiền đề xuất đổi thành giá báo (không vượt số dư khả dụng); cả ban biểu quyết trên số này. Chọn lại được tới khi có phiếu
+ * Đồng ý đầu tiên. Sửa khẩn cấp (đang sửa): ghi nhà thầu vào phiếu ngay, báo KTV. Phiếu thường: ghi khi đề xuất được duyệt.
+ */
+export async function selectVendor(user, id, { name, phone = null, amount, note = null }, files = [], { now = new Date() } = {}) {
+  // Đọc lại từ DB: token cũ có thể còn chức danh Trưởng ban sau khi đã đổi người
+  if (!(await User.exists({ _id: user.id, role: ROLES.BOARD, boardTitle: BOARD_TITLES.CHAIRMAN, isActive: true }))) throw ApiError.forbidden();
+  const p = await FundProposal.findById(id).lean();
+  if (!p) throw ApiError.notFound('Không tìm thấy đề xuất chi');
+  if (p.status !== PENDING) throw new ApiError('PROPOSAL_ALREADY_REVIEWED');
+  if (p.votes.some((v) => v.decision === VOTE_DECISIONS.AGREE)) throw new ApiError('PROPOSAL_VENDOR_LOCKED');
+  if (!files.length) throw ApiError.field('images', 'Đính kèm ít nhất 1 ảnh hợp đồng');
+  const available = await availableBalance(p.fundId);
+  if (amount > available) throw insufficient(available);
+  const quoteUrls = await uploadToCloudinary(files, 'fund-quotations');
+  const vendor = {
+    name: name.trim(), phone: phone?.trim() || null, quoteUrls, amount, note: note?.trim() || null,
+    selectedBy: user.id, selectedAt: now,
+  };
+  const text = `${vendor.name}, giá báo ${formatVnd(amount)}${p.vendor ? ` (thay ${p.vendor.name}, ${formatVnd(p.vendor.amount)})` : ''}`;
+  const updated = await FundProposal.findOneAndUpdate(
+    { _id: id, status: PENDING, votes: AWAITING_VENDOR.votes, 'vendor.selectedAt': p.vendor?.selectedAt ?? null },
+    { $set: { vendor, amount }, $push: { history: hist('VENDOR_SELECTED', user, now, text) } },
+    { new: true, runValidators: true },
+  ).lean();
+  if (!updated) throw new ApiError('CONCURRENT_UPDATE');
+  await audit(AUDIT_ACTIONS.FUND_VENDOR_SELECTED, user, AUDIT_TARGETS.FUND_PROPOSAL, p._id, {
+    code: p.code, vendor: vendor.name, amount, ...(p.vendor && { previousVendor: p.vendor.name, previousAmount: p.vendor.amount }),
+  });
+  await safely(async () => {
+    const voted = new Set(updated.votes.map((v) => String(v.memberId)));
+    const waiting = (await boardMembers()).filter((m) => !voted.has(String(m._id)));
+    await notify(waiting.map((m) => m._id), {
+      type: NOTIFICATION_TYPES.FUND_APPROVAL,
+      title: `Đề xuất chi quỹ bảo trì chờ biểu quyết: ${p.title}`,
+      content: `${p.code} — ${p.title}. Trưởng ban quản trị chọn nhà thầu ${text} (${planText(p)}). `
+        + `Số dư khả dụng hiện tại ${formatVnd(available)}. Vui lòng vào hệ thống để Đồng ý hoặc Không đồng ý.`,
+      refId: p._id,
+      link: proposalLink(p),
+      email: true,
+    });
+    await notifyRoles(['MANAGER'], {
+      type: NOTIFICATION_TYPES.FUND_APPROVAL,
+      title: `Đã chọn nhà thầu: ${p.title}`,
+      content: `${p.code}: Trưởng ban quản trị chọn ${text}. Đang chờ Ban quản trị biểu quyết.`,
+      refId: p._id,
+      link: proposalLink(p),
+    });
+  });
+  if (p.workOrderId) await safely(() => onVendorSelected(p.workOrderId, vendor.name));
+  return updated;
 }
 
 /** readyToPay: đề xuất Kế toán lập phiếu chi được ngay (đã duyệt; sửa chữa lớn thì đã qua nghiệm thu 2 lớp) */
@@ -363,6 +425,7 @@ export async function getProposal(user, id) {
       disagree: p.votes.filter((v) => v.decision === VOTE_DECISIONS.DISAGREE).length,
       notVoted: members.filter((m) => !voted.has(String(m._id))).map((m) => ({ _id: m._id, fullName: m.fullName })),
     },
+    awaitingVendor: isAwaitingVendor(p),
     myVote: p.votes.find((v) => String(v.memberId?._id ?? v.memberId) === user.id) ?? null,
     fundBalance: fund.balance,
     available: await availableBalance(fund._id, { excludeId: p.status === APPROVED ? p._id : null }),
@@ -517,20 +580,26 @@ async function nextStepAfterApproval(p) {
   };
 }
 
-/** Ban quản trị biểu quyết. body: { decision: AGREE | DISAGREE, comment } — Không đồng ý phải ghi ý kiến */
+/** Ban quản trị biểu quyết. body: { decision: AGREE | DISAGREE, comment } — Không đồng ý phải ghi ý kiến; Đồng ý cần có nhà thầu */
 export async function vote(user, id, { decision, comment = null }, { now = new Date() } = {}) {
   if (decision === VOTE_DECISIONS.DISAGREE && !comment?.trim()) throw ApiError.field('comment', 'Không đồng ý thì ghi rõ ý kiến');
-  const current = await FundProposal.findById(id).select('status votes code').lean();
+  const current = await FundProposal.findById(id).select('status votes code vendor').lean();
   if (!current) throw ApiError.notFound('Không tìm thấy đề xuất chi');
   if (current.status !== PENDING) throw new ApiError('PROPOSAL_ALREADY_REVIEWED');
   if (current.votes.some((v) => String(v.memberId) === user.id)) throw new ApiError('PROPOSAL_ALREADY_VOTED');
+  // Không đồng ý (không cần sửa) thì không cần nhà thầu; Đồng ý là đồng ý chi cho nhà thầu đã chọn
+  if (decision === VOTE_DECISIONS.AGREE && isAwaitingVendor(current)) throw new ApiError('PROPOSAL_VENDOR_REQUIRED');
 
+  // Kèm mốc chọn nhà thầu: Trưởng ban đổi nhà thầu giữa chừng thì phiếu này không tính cho nhà thầu mới
   const p = await FundProposal.findOneAndUpdate(
-    { _id: id, status: PENDING, 'votes.memberId': { $ne: oid(user.id) } },
+    { _id: id, status: PENDING, 'votes.memberId': { $ne: oid(user.id) }, 'vendor.selectedAt': current.vendor?.selectedAt ?? null },
     { $push: { votes: { memberId: user.id, decision, comment: comment || null, votedAt: now } } },
     { new: true },
   ).lean();
-  if (!p) throw new ApiError('PROPOSAL_ALREADY_VOTED');
+  if (!p) {
+    const voted = await FundProposal.exists({ _id: id, 'votes.memberId': oid(user.id) });
+    throw new ApiError(voted ? 'PROPOSAL_ALREADY_VOTED' : 'CONCURRENT_UPDATE');
+  }
   await audit(AUDIT_ACTIONS.FUND_VOTED, user, AUDIT_TARGETS.FUND_PROPOSAL, p._id, { code: p.code, decision });
 
   const t = await tallyOf(p);
@@ -757,6 +826,21 @@ export async function remindProposals(now = new Date()) {
     );
     if (!res.modifiedCount) continue;
     count += 1;
+    if (isAwaitingVendor(p)) {
+      const ageDays = Math.floor((now - new Date(p.createdAt)) / DAY_MS);
+      const msg = {
+        type: NOTIFICATION_TYPES.FUND_APPROVAL,
+        title: `Nhắc chọn nhà thầu: ${p.title}`,
+        content: `${p.code} — ${p.title} (dự kiến ${formatVnd(p.amount)}) đã chờ Trưởng ban quản trị chọn nhà thầu ${ageDays} ngày.`,
+        refId: p._id,
+        link: proposalLink(p),
+      };
+      await safely(async () => {
+        await notify(await vendorPickers(), { ...msg, email: true });
+        await notifyRoles(['MANAGER'], msg);
+      });
+      continue;
+    }
     const voted = new Set(p.votes.map((v) => String(v.memberId)));
     const waiting = members.filter((m) => !voted.has(String(m._id)));
     const age = Math.floor((now - new Date(p.createdAt)) / DAY_MS);

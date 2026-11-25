@@ -15,6 +15,7 @@ import {
   neededAgree,
   recordExpense,
   recordIncome,
+  selectVendor,
   remindProposals,
   vote,
 } from '../../src/modules/fund/fund.service.js';
@@ -46,8 +47,11 @@ async function setup({ boardSize = 3, balance = 500_000_000 } = {}) {
     await recordIncome(accountant, { incomeSource: 'INITIAL_HANDOVER', amount: balance, documentNo: 'BB-001' }, [], { now: NOW });
   }
   const manager = asUser(managerDoc);
-  /** Trưởng BQL lập → chờ biểu quyết ngay */
-  const submit = (extra = {}) => createProposal(manager, proposalBody(extra), [], { now: NOW });
+  /** Trưởng BQL lập → Trưởng ban quản trị chọn nhà thầu → chờ biểu quyết */
+  const submit = async (extra = {}) => {
+    const p = await createProposal(manager, proposalBody(extra), [], { now: NOW });
+    return selectVendor(board[0], p._id, vendorBody({ amount: p.amount }), [PHOTO], { now: NOW });
+  };
   const approve = async (p) => {
     await vote(board[0], p._id, { decision: 'AGREE' }, { now: NOW });
     return vote(board[1], p._id, { decision: 'AGREE' }, { now: NOW });
@@ -61,9 +65,10 @@ const proposalBody = (extra = {}) => ({
   amount: 100_000_000,
   planType: 'ANNUAL_PLAN',
   planRef: 'KH bảo trì 2026 (NQ Hội nghị 03/2026)',
-  contractNo: 'BG-2026-01', // chứng từ bắt buộc: số báo giá hoặc ảnh báo giá
   ...extra,
 });
+const vendorBody = (extra = {}) => ({ name: 'Công ty Cơ điện Đại Dương', phone: '0243 855 6677', amount: 100_000_000, ...extra });
+const PHOTO = { originalname: 'bao-gia.jpg', mimetype: 'image/jpeg', buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0]) };
 
 test('thu quỹ có chứng từ: phiếu thu PTQ, cộng số dư, ghi Audit Log', async () => {
   const { accountant } = await setup({ balance: 0 });
@@ -78,7 +83,7 @@ test('thu quỹ có chứng từ: phiếu thu PTQ, cộng số dư, ghi Audit Lo
   );
 });
 
-test('Trưởng BQL lập đề xuất → chờ Ban quản trị biểu quyết ngay, báo Ban quản trị kèm số dư khả dụng (Kế toán không được báo)', async () => {
+test('Trưởng BQL lập đề xuất (không cần báo giá) → báo Trưởng ban chọn nhà thầu kèm số dư khả dụng; thành viên khác, Kế toán chưa được báo', async () => {
   const { accountant, manager, board } = await setup({ balance: 150_000_000 });
   await assert.rejects(createProposal(manager, proposalBody({ planRef: '' }), [], { now: NOW }), /Kế hoạch bảo trì năm/);
   await assert.rejects(createProposal(manager, proposalBody({ planType: 'UNSCHEDULED' }), [], { now: NOW }), /lý do/);
@@ -86,30 +91,90 @@ test('Trưởng BQL lập đề xuất → chờ Ban quản trị biểu quyết
     errorCode: 'FUND_INSUFFICIENT_BALANCE',
   });
 
-  // Không có ảnh báo giá lẫn số hợp đồng / báo giá → chặn (không còn bước Kế toán kiểm hồ sơ)
-  await assert.rejects(createProposal(manager, proposalBody({ contractNo: '' }), [], { now: NOW }), (e) => {
-    assert.equal(e.errorCode, 'VALIDATION_ERROR');
-    assert.deepEqual(e.details.map((d) => d.field), ['images', 'contractNo']);
-    return true;
-  });
-  const photo = { originalname: 'bao-gia.jpg', mimetype: 'image/jpeg', buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0]) };
-  const withPhoto = await createProposal(manager, proposalBody({ title: 'Sửa cổng', contractNo: '', amount: 1_000_000 }), [photo], { now: NOW });
-  assert.equal(withPhoto.attachmentUrls.length, 1); // chỉ ảnh báo giá, không số hợp đồng → được
-  await cancelProposal(manager, withPhoto._id, { reason: 'Dùng để kiểm điều kiện chứng từ' });
-
-  const p = await createProposal(manager, proposalBody({ contractNo: 'HĐ-NT-07' }), [], { now: NOW });
-  assert.match(p.code, /^DXQ-202611-00002$/);
+  // Trưởng BQL không ghi được nhà thầu / số báo giá: gửi kèm cũng bị bỏ
+  const p = await createProposal(manager, proposalBody({ contractNo: 'HĐ-NT-07', vendor: vendorBody() }), [], { now: NOW });
+  assert.match(p.code, /^DXQ-202611-00001$/);
   assert.equal(p.status, 'PENDING');
   assert.equal(p.isOpen, true);
-  assert.equal(p.contractNo, 'HĐ-NT-07');
+  assert.equal(p.contractNo, null);
+  assert.equal(p.vendor, null);
+  assert.equal(p.estimatedAmount, 100_000_000);
   assert.deepEqual(p.history.map((h) => h.action), ['SUBMITTED']);
+  const n = await Notification.findOne({ userId: board[0].id, title: /chờ chọn nhà thầu: Thay bơm/ }).lean();
+  assert.match(n.content, /Số dư khả dụng hiện tại 150\.000\.000/);
+  for (const u of [board[1], board[2], accountant]) assert.equal(await Notification.countDocuments({ userId: u.id, title: /chờ (chọn nhà thầu|biểu quyết)/ }), 0);
+  const o = await getOverview({ now: NOW });
+  assert.equal(o.pendingCount, 1);
+  assert.equal(o.awaitingVendorCount, 1);
+});
+
+test('chọn nhà thầu: chỉ Trưởng ban; bắt buộc báo giá; giá báo thành số tiền, không vượt khả dụng; báo cả ban biểu quyết và Trưởng BQL', async () => {
+  const { accountant, manager, managerDoc, board } = await setup({ balance: 150_000_000 });
+  const p = await createProposal(manager, proposalBody(), [], { now: NOW });
+  for (const u of [board[1], manager, accountant]) {
+    await assert.rejects(selectVendor(u, p._id, vendorBody(), [], { now: NOW }), { errorCode: 'FORBIDDEN_ROLE' });
+  }
+  // Token cũ vẫn ghi CHAIRMAN nhưng DB đã đổi chức danh → chặn
+  await assert.rejects(selectVendor({ ...board[1], boardTitle: 'CHAIRMAN' }, p._id, vendorBody(), [], { now: NOW }), { errorCode: 'FORBIDDEN_ROLE' });
+  await assert.rejects(selectVendor(board[0], p._id, vendorBody(), [], { now: NOW }), (e) => {
+    assert.deepEqual(e.details.map((d) => d.field), ['images']);
+    return true;
+  });
+  await assert.rejects(selectVendor(board[0], p._id, vendorBody({ amount: 160_000_000 }), [PHOTO], { now: NOW }), { errorCode: 'FUND_INSUFFICIENT_BALANCE' });
+
+  // Chưa có nhà thầu: không Đồng ý được
+  await assert.rejects(vote(board[1], p._id, { decision: 'AGREE' }, { now: NOW }), { errorCode: 'PROPOSAL_VENDOR_REQUIRED' });
+  assert.equal((await getProposal(board[1], p._id)).awaitingVendor, true);
+
+  const picked = await selectVendor(board[0], p._id, vendorBody({ amount: 92_000_000 }), [PHOTO], { now: NOW });
+  assert.equal(picked.amount, 92_000_000);
+  assert.equal(picked.estimatedAmount, 100_000_000);
+  assert.equal(picked.vendor.name, 'Công ty Cơ điện Đại Dương');
+  assert.equal(picked.vendor.quoteUrls.length, 1);
+  assert.equal(String(picked.vendor.selectedBy), board[0].id);
   for (const m of board) {
     const n = await Notification.findOne({ userId: m.id, title: /chờ biểu quyết: Thay bơm/ }).lean();
-    assert.match(n.content, /Số dư khả dụng hiện tại 150\.000\.000/);
+    assert.match(n.content, /Công ty Cơ điện Đại Dương, giá báo 92\.000\.000/);
   }
-  assert.equal(await Notification.countDocuments({ userId: accountant.id, title: /chờ biểu quyết/ }), 0);
-  // Biểu quyết được ngay
-  assert.equal((await vote(board[0], p._id, { decision: 'AGREE' }, { now: NOW })).outcome, null);
+  assert.equal(await Notification.countDocuments({ userId: managerDoc._id, title: /Đã chọn nhà thầu/ }), 1);
+  assert.equal(await AuditLog.countDocuments({ action: 'FUND_VENDOR_SELECTED' }), 1);
+
+  // Đổi được tới khi có phiếu Đồng ý; lịch sử ghi cả nhà thầu cũ
+  const changed = await selectVendor(board[0], p._id, vendorBody({ name: 'Công ty Hưng Phát', amount: 88_000_000 }), [PHOTO], { now: NOW });
+  assert.equal(changed.amount, 88_000_000);
+  assert.match(changed.history.at(-1).note, /Hưng Phát.*thay Công ty Cơ điện Đại Dương, 92\.000\.000/);
+  await vote(board[1], p._id, { decision: 'AGREE' }, { now: NOW });
+  await assert.rejects(selectVendor(board[0], p._id, vendorBody(), [], { now: NOW }), { errorCode: 'PROPOSAL_VENDOR_LOCKED' });
+  assert.equal((await vote(board[2], p._id, { decision: 'AGREE' }, { now: NOW })).outcome, 'APPROVED');
+  await assert.rejects(selectVendor(board[0], p._id, vendorBody(), [], { now: NOW }), { errorCode: 'PROPOSAL_ALREADY_REVIEWED' });
+  // Phiếu chi không vượt giá nhà thầu đã duyệt
+  await assert.rejects(recordExpense(accountant, p._id, { amount: 92_000_000, documentNo: 'HĐ-1' }, [], { now: NOW }), /không vượt/);
+});
+
+test('chưa có nhà thầu vẫn Không đồng ý được (không cần sửa) → đủ thì từ chối; đề xuất cũ đã có phiếu Đồng ý thì biểu quyết tiếp; 2 lần chọn song song chỉ 1 thành công', async () => {
+  const { manager, board } = await setup();
+  const a = await createProposal(manager, proposalBody(), [], { now: NOW });
+  await vote(board[1], a._id, { decision: 'DISAGREE', comment: 'Chưa cần sửa' }, { now: NOW });
+  assert.equal((await vote(board[2], a._id, { decision: 'DISAGREE', comment: 'Chưa cần sửa' }, { now: NOW })).outcome, 'REJECTED');
+
+  const legacy = await createProposal(manager, proposalBody(), [], { now: NOW });
+  await FundProposal.updateOne({ _id: legacy._id }, { $push: { votes: { memberId: board[0].id, decision: 'AGREE', votedAt: NOW } } });
+  assert.equal((await getProposal(board[1], legacy._id)).awaitingVendor, false);
+  assert.equal((await vote(board[1], legacy._id, { decision: 'AGREE' }, { now: NOW })).outcome, 'APPROVED');
+
+  const c = await createProposal(manager, proposalBody(), [], { now: NOW });
+  const results = await Promise.allSettled([1, 2].map((i) => selectVendor(board[0], c._id, vendorBody({ name: `Nhà thầu ${i}` }), [PHOTO], { now: new Date(NOW.getTime() + i) })));
+  assert.ok(results.some((r) => r.status === 'fulfilled'));
+  const doc = await FundProposal.findById(c._id).lean();
+  assert.equal(doc.history.filter((h) => h.action === 'VENDOR_SELECTED').length, results.filter((r) => r.status === 'fulfilled').length);
+});
+
+test('nhắc: chờ chọn nhà thầu quá hạn thì nhắc Trưởng ban, không nhắc thành viên khác biểu quyết', async () => {
+  const { manager, board } = await setup();
+  await createProposal(manager, proposalBody(), [], { now: NOW });
+  assert.equal(await remindProposals(later(3)), 1);
+  assert.equal(await Notification.countDocuments({ userId: board[0].id, title: /Nhắc chọn nhà thầu/ }), 1);
+  assert.equal(await Notification.countDocuments({ userId: board[1].id, title: /Nhắc/ }), 0);
 });
 
 test('biểu quyết theo tỷ lệ: 3 thành viên, > 50% → cần 2 phiếu đồng ý; mỗi người 1 phiếu; Không đồng ý phải có ý kiến', async () => {

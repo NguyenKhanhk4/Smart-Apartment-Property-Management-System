@@ -203,7 +203,7 @@ async function approveDirect(user, wo, note, now, source, { warrantyNote, policy
   const label = await assetLabel(wo.assetId);
   await notifyTech(wo, 'Sửa chữa đã được duyệt', warranty
     ? `Sửa chữa ${label} đã được duyệt theo bảo hành. Liên hệ hãng bảo hành để sửa; sửa xong tải biên bản nghiệm thu lên phiếu.`
-    : `Sửa chữa ${label} đã được duyệt (chi phí vận hành). Khi nhà thầu sửa xong, tải biên bản nghiệm thu lên phiếu.`); // MSG-E07
+    : `Sửa chữa ${label} đã được duyệt (chi phí vận hành). Khi sửa xong, tải biên bản nghiệm thu lên phiếu.`); // MSG-E07
   return WorkOrder.findById(wo._id).lean();
 }
 
@@ -227,7 +227,7 @@ async function approveFund(user, wo, note, now, { warrantyNote }) {
     metadata: { assetId: wo.assetId, financial: true, ...(warrantyNote && { warrantyOverrideReason: warrantyNote }) },
   });
   await notifyTech(wo, 'Sửa chữa chờ duyệt chi quỹ',
-    `Sửa chữa ${await assetLabel(wo.assetId)} được duyệt bằng Quỹ bảo trì, đang chờ lập và duyệt đề xuất chi. Chưa liên hệ nhà thầu.`); // MSG-E07
+    `Sửa chữa ${await assetLabel(wo.assetId)} được duyệt bằng Quỹ bảo trì, đang chờ lập đề xuất, Trưởng ban quản trị chọn nhà thầu và Ban quản trị biểu quyết. Chưa sửa.`); // MSG-E07
   return { ...(await WorkOrder.findById(wo._id).lean()), nextStep: 'CREATE_PROPOSAL' };
 }
 
@@ -260,7 +260,7 @@ async function approveEmergency(user, wo, note, reason, now, { warrantyNote }) {
   });
   const label = await assetLabel(wo.assetId);
   await notifyTech(wo, 'Sửa chữa khẩn cấp: tiến hành ngay',
-    `Trưởng BQL duyệt sửa khẩn cấp ${label}: ${reason}. Liên hệ nhà thầu sửa ngay; sửa xong tải biên bản nghiệm thu lên phiếu.`); // MSG-E07
+    `Trưởng BQL duyệt sửa khẩn cấp ${label}: ${reason}. Trưởng ban quản trị chọn nhà thầu; phối hợp sửa ngay, sửa xong tải biên bản nghiệm thu lên phiếu.`); // MSG-E07
   await safely(async () => {
     const members = await User.find({ role: ROLES.BOARD, isActive: true }).select('_id').lean();
     if (!members.length) return;
@@ -268,7 +268,7 @@ async function approveEmergency(user, wo, note, reason, now, { warrantyNote }) {
       type: NOTIFICATION_TYPES.FUND_APPROVAL,
       title: `Sửa chữa khẩn cấp bằng Quỹ: ${label}`,
       content: `Trưởng BQL cho sửa ngay ${label} (dự kiến ${money(wo.repair?.estimatedCost)}) vì: ${reason}. `
-        + `Đề xuất chi quỹ sẽ được lập trong ${emergencyDossierDays} ngày để Ban quản trị biểu quyết.`,
+        + `Đề xuất chi quỹ sẽ được lập trong ${emergencyDossierDays} ngày: Trưởng ban quản trị chọn nhà thầu, Ban quản trị biểu quyết.`,
       refId: wo._id,
       link: '/app/fund',
       email: true,

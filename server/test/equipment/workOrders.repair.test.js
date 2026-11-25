@@ -23,7 +23,7 @@ const PHOTO = { originalname: 'anh.jpg', mimetype: 'image/jpeg', buffer: JPEG };
 const CHECKLIST = [{ label: 'Điện áp', unit: 'V', minValue: 370, maxValue: 400, required: true }];
 // Thang máy: biên bản nhà thầu + biên bản kiểm định
 const DOCS = { images: [PHOTO], certificates: [PHOTO] };
-const FAULT = { faultDesc: 'Biến áp tủ điều khiển cháy', vendorName: 'Công ty Toàn Phát', vendorProposal: 'Thay biến áp mới', estimatedCost: 12_500_000 };
+const FAULT = { faultDesc: 'Biến áp tủ điều khiển cháy', vendorProposal: 'Thay biến áp mới', estimatedCost: 12_500_000 };
 
 before(async () => {
   await connectTestDB();

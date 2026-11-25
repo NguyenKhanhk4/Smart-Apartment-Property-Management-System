@@ -105,6 +105,28 @@ test('tính phí cả kỳ chạy lại không tạo trùng (Nháp cũng đượ
   assert.equal(await Invoice.countDocuments({ period: PERIOD }), 1);
 });
 
+test('lập hóa đơn tất cả theo phạm vi: chỉ các căn đã chọn / chỉ 1 tòa', async () => {
+  const { user, apartment } = await setup();
+  const { user: owner2, apartment: apartment2 } = await createHousehold(); // tòa khác
+  await createContract({ apartment: apartment2, owner: owner2 });
+  const { user: owner3, apartment: apartment3 } = await createHousehold(); // tòa khác nữa
+  await createContract({ apartment: apartment3, owner: owner3 });
+
+  const picked = await generateForPeriod({ period: PERIOD, user, apartmentIds: [apartment2._id] });
+  assert.equal(picked.totalApartments, 1);
+  assert.equal(picked.created, 1);
+
+  const byBuilding = await generateForPeriod({ period: PERIOD, user, buildingId: apartment.buildingId });
+  assert.equal(byBuilding.totalApartments, 1);
+  assert.equal(byBuilding.created, 1);
+
+  // Căn thứ 3 chưa bị đụng tới; lập tất cả lần cuối chỉ tạo căn đó, bỏ qua 2 căn đã có
+  assert.equal(await Invoice.countDocuments({ period: PERIOD, apartmentId: apartment3._id }), 0);
+  const all = await generateForPeriod({ period: PERIOD, user });
+  assert.equal(all.created, 1);
+  assert.equal(all.existing, 2);
+});
+
 test('khoản thu khác: thêm cộng tổng, xóa trừ tổng, ghi Audit Log; không xóa được dòng tự động', async () => {
   const { user, apartment } = await setup();
   const inv = await generateForApartment(user, { period: PERIOD, apartmentId: apartment._id }, { now: NOW });

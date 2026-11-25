@@ -306,41 +306,43 @@ const fundCode = (prefix, at) => `${prefix}-${vnPeriod(at).replace('-', '')}-${S
 addTx('INCOME', 1500000000, daysAgo(270), 'Kinh phí bảo trì 2% bàn giao', {
   source: 'Kinh phí 2% bàn giao', incomeSource: 'INITIAL_HANDOVER', documentNo: 'BB-BG-001', code: fundCode('PTQ', daysAgo(270)),
 });
-// Luồng: Trưởng BQL lập → Ban quản trị biểu quyết → (sửa chữa lớn) nghiệm thu 2 lớp → Kế toán lập phiếu chi
+// Luồng: Trưởng BQL lập → Trưởng ban quản trị chọn nhà thầu → Ban quản trị biểu quyết → (sửa chữa lớn) nghiệm thu 2 lớp → Kế toán lập phiếu chi
 const step = (action, user, at, note = null) => ({ action, by: user._id, at, note });
+const vendor = (name, amount, at) => ({ name, amount, quoteUrls: [], selectedBy: U.chairman._id, selectedAt: at });
 const proposals = await M.FundProposal.insertMany([
   {
     code: 'DXQ-SEED-00001', fundId: fund._id, title: 'Thay cáp thang máy Block A', description: 'Cáp tải đã mòn theo biên bản kiểm định', amount: 180000000,
-    planType: 'ANNUAL_PLAN', planRef: 'Kế hoạch bảo trì năm (Hội nghị nhà chung cư)', largeRepair: true, contractNo: 'HĐ-TM-2026-01',
+    planType: 'ANNUAL_PLAN', planRef: 'Kế hoạch bảo trì năm (Hội nghị nhà chung cư)', largeRepair: true,
+    estimatedAmount: 180000000, vendor: vendor('Công ty Thang máy Thái Bình', 180000000, daysAgo(154)),
     proposedBy: U.manager._id, createdAt: daysAgo(155),
     workAcceptedBy: U.manager._id, workAcceptedAt: daysAgo(151), boardAcceptedBy: U.chairman._id, boardAcceptedAt: daysAgo(151),
     status: 'PAID', paidAt: daysAgo(150), boardSize: 3, finalizedBy: U.chairman._id, finalizedAt: daysAgo(152), finalNote: '3/3 thành viên đồng ý',
     votes: [U.chairman, U.bqt1, U.bqt2].map((u) => ({ memberId: u._id, decision: 'AGREE', votedAt: daysAgo(152) })),
     history: [
-      step('SUBMITTED', U.manager, daysAgo(155)), step('APPROVED', U.chairman, daysAgo(152), '3/3 thành viên đồng ý'),
+      step('SUBMITTED', U.manager, daysAgo(155)), step('VENDOR_SELECTED', U.chairman, daysAgo(154), 'Công ty Thang máy Thái Bình'), step('APPROVED', U.chairman, daysAgo(152), '3/3 thành viên đồng ý'),
       step('WORK_ACCEPTED', U.manager, daysAgo(151)), step('BOARD_ACCEPTED', U.chairman, daysAgo(151)), step('PAID', U.accountant, daysAgo(150)),
     ],
   },
   {
     code: 'DXQ-SEED-00002', fundId: fund._id, title: 'Sơn lại hành lang Block B', description: 'Tường hành lang bong tróc', amount: 95000000,
     planType: 'ANNUAL_PLAN', planRef: 'Kế hoạch bảo trì năm (Hội nghị nhà chung cư)',
-    proposedBy: U.manager._id, createdAt: daysAgo(66),
+    proposedBy: U.manager._id, createdAt: daysAgo(66), estimatedAmount: 95000000, vendor: vendor('Công ty Xây dựng An Phát', 95000000, daysAgo(64)),
     status: 'PAID', paidAt: daysAgo(60), boardSize: 3, finalizedBy: U.bqt1._id, finalizedAt: daysAgo(62), finalNote: '2/3 thành viên đồng ý',
     votes: [U.chairman, U.bqt1].map((u) => ({ memberId: u._id, decision: 'AGREE', votedAt: daysAgo(62) })),
     history: [
-      step('SUBMITTED', U.manager, daysAgo(66)), step('APPROVED', U.bqt1, daysAgo(62), '2/3 thành viên đồng ý'), step('PAID', U.accountant, daysAgo(60)),
+      step('SUBMITTED', U.manager, daysAgo(66)), step('VENDOR_SELECTED', U.chairman, daysAgo(64), 'Công ty Xây dựng An Phát'), step('APPROVED', U.bqt1, daysAgo(62), '2/3 thành viên đồng ý'), step('PAID', U.accountant, daysAgo(60)),
     ],
   },
   {
     code: 'DXQ-SEED-00003', fundId: fund._id, title: 'Nâng cấp hệ thống PCCC', description: 'Thay đầu báo khói tầng 1-5', amount: 120000000,
     planType: 'UNSCHEDULED', urgentReason: 'Đầu báo khói hỏng hàng loạt sau đợt kiểm tra PCCC',
-    proposedBy: U.manager._id, createdAt: daysAgo(3),
+    proposedBy: U.manager._id, createdAt: daysAgo(3), estimatedAmount: 120000000, vendor: vendor('Công ty PCCC Hưng Phát', 120000000, daysAgo(2)),
     status: 'PENDING', votes: [{ memberId: U.bqt1._id, decision: 'AGREE', votedAt: daysAgo(1) }],
-    history: [step('SUBMITTED', U.manager, daysAgo(3))],
+    history: [step('SUBMITTED', U.manager, daysAgo(3)), step('VENDOR_SELECTED', U.chairman, daysAgo(2), 'Công ty PCCC Hưng Phát')],
   },
   {
     code: 'DXQ-SEED-00004', fundId: fund._id, title: 'Thay bơm tăng áp Block A', description: 'Bơm số 2 rò rỉ phớt, áp lực nước tầng cao yếu', amount: 65000000,
-    planType: 'UNSCHEDULED', urgentReason: 'Áp lực nước tầng 15-20 không đạt', contractNo: 'BG-BOM-0711',
+    planType: 'UNSCHEDULED', urgentReason: 'Áp lực nước tầng 15-20 không đạt', estimatedAmount: 65000000, // chờ Trưởng ban quản trị chọn nhà thầu
     proposedBy: U.manager._id, createdAt: daysAgo(1), status: 'PENDING',
     history: [step('SUBMITTED', U.manager, daysAgo(1))],
   },

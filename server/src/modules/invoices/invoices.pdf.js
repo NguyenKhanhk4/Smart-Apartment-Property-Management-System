@@ -52,6 +52,9 @@ export async function buildInvoicePdf(user, id) {
         ],
         invoice.items.map((i, idx) => [idx + 1, i.description, fmtQty(i.quantity), fmtMoney(i.unitPrice), fmtMoney(i.amount)]),
       );
+      doc.moveDown(0.3).font('regular').fontSize(9).fillColor('#666');
+      doc.text('* Đơn giá các dịch vụ đã bao gồm thuế GTGT (VAT).', left, doc.y, { width, align: 'right' });
+      doc.fillColor('#000');
       doc.moveDown(0.5);
 
       const pairs = [['Tổng phí kỳ này', fmtMoney(invoice.totalAmount), { bold: true }]];

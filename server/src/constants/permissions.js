@@ -91,7 +91,7 @@ export const EXEMPT_PREFIXES = ['/auth', '/users/me', '/notifications', '/lookup
 export const CORE_PERMISSIONS = {
   TECHNICIAN: ['TICKETS:VIEW', 'TICKETS:UPDATE', 'WORK_ORDERS:VIEW', 'WORK_ORDERS:UPDATE', 'ASSETS:VIEW'],
   SECURITY: ['BOOKINGS:VIEW', 'BOOKINGS:UPDATE', 'PARKING_GATE:VIEW', 'PARKING_GATE:CREATE', 'PARKING_GATE:UPDATE', 'GUESTS:VIEW', 'GUESTS:CREATE', 'GUESTS:UPDATE'],
-  ACCOUNTANT: ['INVOICES:VIEW', 'INVOICES:CREATE', 'INVOICES:UPDATE', 'PAYMENTS:VIEW', 'PAYMENTS:CREATE'],
+  ACCOUNTANT: ['INVOICES:VIEW', 'INVOICES:CREATE', 'INVOICES:UPDATE', 'INVOICES:APPROVE', 'PAYMENTS:VIEW', 'PAYMENTS:CREATE'],
   RECEPTIONIST: ['RESIDENTS:VIEW', 'RESIDENTS:UPDATE', 'VEHICLES:VIEW', 'VEHICLES:UPDATE', 'ACTIVATION_CODES:VIEW', 'ACTIVATION_CODES:CREATE'],
   BOARD: ['FUND:VIEW', 'FUND:APPROVE', 'REPORTS:VIEW'],
   RESIDENT: ['INVOICES:VIEW', 'PAYMENTS:VIEW', 'PAYMENTS:CREATE', 'TICKETS:VIEW', 'TICKETS:CREATE', 'TICKETS:UPDATE'],
@@ -103,6 +103,7 @@ export const CORE_PERMISSIONS = {
 const APPROVE_WORDS = new Set([
   'approve', 'reject', 'publish', 'return', 'review', 'owner-decision', 'quote-decision', 'votes', 'accept-work',
   'repair-decision', 'accept', 'return-repair', // UC09, UC10: quyết định sửa chữa, nghiệm thu / yêu cầu sửa lại
+  'select-vendor', // Trưởng ban quản trị chọn nhà thầu cho đề xuất chi quỹ
   'board-accept', 'board-return', // Ban quản trị xác nhận / trả về nghiệm thu
 ]);
 /** Ngoại lệ: đường dẫn mà quy tắc chung đoán sai (khóa: 'PHƯƠNG_THỨC /chức-năng/đường/dẫn' với tham số là :id) */
