@@ -24,6 +24,20 @@ export const dateOr = (d, empty) => (d ? dayjs(d).format('DD/MM/YYYY') : empty);
 export const dateTimeOr = (d, empty) => (d ? dayjs(d).format('HH:mm DD/MM/YYYY') : empty);
 export const fromNow = (d) => (d ? dayjs(d).fromNow() : '');
 
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/**
+ * Chuyển mốc ngày lưu ở 00:00 giờ VN (vd "1988-06-14T17:00:00.000Z") thành đối tượng dayjs
+ * theo đúng ngày dương lịch VN ("1988-06-15"), an toàn cho DatePicker ở mọi múi giờ trình duyệt.
+ */
+export const parseVnDate = (d) => {
+  if (!d) return null;
+  const ms = new Date(d).getTime();
+  if (Number.isNaN(ms)) return null;
+  const parsed = dayjs(new Date(ms + VN_OFFSET_MS).toISOString().slice(0, 10));
+  return parsed.isValid() ? parsed : null;
+};
+
 /** Tên gọi thân mật theo thói quen người Việt: chữ cuối của họ tên ("Nguyễn Văn An" → "An") */
 export const givenName = (fullName) => String(fullName ?? '').trim().split(/\s+/).pop() ?? '';
 

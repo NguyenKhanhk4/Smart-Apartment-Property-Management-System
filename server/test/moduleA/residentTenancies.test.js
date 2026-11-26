@@ -82,6 +82,10 @@ test('UC17 liên kết tài khoản, xử lý phí, rời căn và giữ quyền
   const requests = await Promise.all([1, 2].map(() => app.request('POST', path, { user: asUser(owner), body: data })));
   assert.deepEqual(requests.map((row) => row.status).sort(), [201, 409]);
   const memberId = requests.find((row) => row.status === 201).body.data.residentId;
+  const pending = await app.request('GET', '/residents/me/apartments', { user: asUser(tenant) });
+  assert.equal(pending.body.data.find((row) => row.apartmentId === apartment.id).canUseServices, false);
+  const confirmation = await app.request('PATCH', `/apartments/${apartment.id}/confirm-move-in`, { user: USERS.manager, body: { moveInDate: new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10) } });
+  assert.equal(confirmation.status, 200, JSON.stringify(confirmation.body));
   assert.equal((await Apartment.findById(apartment._id)).occupancyStatus, 'RENTED');
   assert.equal(String((await getPayer(apartment._id)).userId), String(tenant._id));
   await assert.rejects(terminateContract(sale._id, USERS.receptionist), { status: 409 });
@@ -168,6 +172,8 @@ test('UC20 giữ lượt thuê, người ở cùng và thẻ của khách khi ch
   });
   assert.equal(start.status, 201, JSON.stringify(start.body));
   const tenantResidence = start.body.data.residentId;
+  const confirmation = await app.request('PATCH', `/apartments/${apartment.id}/confirm-move-in`, { user: USERS.manager, body: { moveInDate: new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10) } });
+  assert.equal(confirmation.status, 200, JSON.stringify(confirmation.body));
   const declared = await app.request('POST', '/residents/me/family', {
     user: asUser(tenant), body: { apartmentId: apartment.id, fullName: 'Người ở cùng khách thuê' },
   });
@@ -245,7 +251,7 @@ test('UC20 có thể xác nhận sau 2 ngày chờ và căn trống cho đến k
   assert.equal(await AuditLog.countDocuments({
     action: 'APARTMENT_OWNER_CHANGED', targetId: apartment.id, 'metadata.debtReviewOverdue': true,
   }), 1);
-  const movedIn = await app.request('PATCH', `/apartments/${apartment.id}/confirm-move-in`, { user: USERS.receptionist });
+  const movedIn = await app.request('PATCH', `/apartments/${apartment.id}/confirm-move-in`, { user: USERS.manager, body: { moveInDate: new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10) } });
   assert.equal(movedIn.status, 200, JSON.stringify(movedIn.body));
   assert.equal(movedIn.body.data.occupancyStatus, 'OWNER_OCCUPIED');
 });

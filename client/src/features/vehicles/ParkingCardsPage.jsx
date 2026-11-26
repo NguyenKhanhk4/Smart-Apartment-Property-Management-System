@@ -94,7 +94,8 @@ function IssueCardModal({ replacing, onClose, onDone }) {
                 placeholder="Chọn cư dân có tài khoản"
                 options={(residents ?? []).filter((resident) => resident.userId).map((resident) => ({
                   value: resident._id,
-                  label: [resident.fullName, resident.phone].filter(Boolean).join(' · '),
+                  label: [resident.fullName, resident.phone, resident.canUseServices === false ? 'Chưa xác nhận vào ở' : ''].filter(Boolean).join(' · '),
+                  disabled: resident.canUseServices === false,
                 }))}
               />
             </Form.Item>

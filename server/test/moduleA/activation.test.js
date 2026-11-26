@@ -286,7 +286,7 @@ test('UC22: chỉ Ban quản lý cấp quyền theo hồ sơ mua bán; chủ s�
     user: receptionist, body: { userId: created._id },
   })).status, 403);
   const moveInPath = `/apartments/${apartment.id}/confirm-move-in`;
-  assert.equal((await app.request('PATCH', moveInPath, { user: receptionist })).status, 409);
+  assert.equal((await app.request('PATCH', moveInPath, { user: receptionist })).status, 403);
 
   const path = `/apartments/${apartment.id}/owner-account`;
   const issue = (user, changes = {}) => app.request('POST', path, {
@@ -315,7 +315,7 @@ test('UC22: chỉ Ban quản lý cấp quyền theo hồ sơ mua bán; chủ s�
   await startActivation(identity);
   await confirmActivation({ phone: identity.phone, code: lastOtp(), password: PASSWORD, consent: 'ACCEPTED' });
   assert.ok((await login({ phone: identity.phone, password: PASSWORD })).accessToken);
-  assert.equal((await app.request('PATCH', moveInPath, { user: receptionist })).body.data.occupancyStatus, 'OWNER_OCCUPIED');
+  assert.equal((await app.request('PATCH', moveInPath, { user: manager, body: { moveInDate: new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10) } })).body.data.occupancyStatus, 'OWNER_OCCUPIED');
 });
 
 test('UC22: dùng lại tài khoản đã kích hoạt để liên kết thêm căn, chặn hồ sơ sai căn hoặc đổi chủ', async () => {

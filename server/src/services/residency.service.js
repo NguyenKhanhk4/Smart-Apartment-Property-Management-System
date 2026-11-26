@@ -1,5 +1,30 @@
 import { Apartment, Resident } from '../models/index.js';
+import { effectiveOccupancy, occupyingHeadRelation } from '../modules/residents/residentOccupancy.js';
 import { ApiError } from '../utils/ApiError.js';
+
+export const MOVE_IN_REQUIRED = 'Cần Ban quản lý xác nhận vào ở trước khi sử dụng dịch vụ, đăng ký xe, cấp thẻ hoặc gửi phản ánh';
+
+/** Hồ sơ cũ đã ở được giữ quyền; các lượt mới PENDING phải được BQL ghi nhận. */
+export function canUseResidentServices(apartment, resident, now = new Date()) {
+  if (!apartment || !resident?.isActive || resident.moveInStatus === 'PENDING'
+    || (resident.moveInDate && new Date(resident.moveInDate) > now)) return false;
+  const status = effectiveOccupancy(apartment);
+  if (!['OWNER_OCCUPIED', 'RENTED', 'UNDER_REPAIR'].includes(status)) return false;
+  if (status === 'RENTED' && resident.relationType === 'OWNER') return false;
+  if (status !== 'RENTED' && resident.relationType === 'TENANT') return false;
+  if (status === 'UNDER_REPAIR' && resident.moveInStatus !== 'CONFIRMED') return false;
+  return true;
+}
+
+export async function assertResidentServiceAccess(userId, apartmentId, session = null) {
+  const apartment = await Apartment.findById(apartmentId).session(session).lean();
+  const resident = await Resident.findOne({ userId, apartmentId, isActive: true }).session(session).lean();
+  const head = apartment && await Resident.findOne({ apartmentId, isActive: true,
+    relationType: occupyingHeadRelation(effectiveOccupancy(apartment)), userId: { $type: 'objectId' },
+  }).session(session).lean();
+  if (!canUseResidentServices(apartment, resident) || (head && !canUseResidentServices(apartment, head))) throw ApiError.forbidden(MOVE_IN_REQUIRED);
+  return { apartment, resident };
+}
 
 /** Các căn hộ cư dân đang ở (residents.isActive = true). */
 export async function getActiveApartmentIds(userId) {

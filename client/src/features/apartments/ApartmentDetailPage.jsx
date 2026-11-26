@@ -47,7 +47,7 @@ import {
   VEHICLE_STATUS,
   VEHICLE_TYPES,
 } from '../../constants/enums';
-import { formatDate, formatDateTime } from '../../utils/format';
+import { formatDate, formatDateTime, parseVnDate } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 import { useApi, useAction } from '../../hooks/useApi';
 import { apartmentsApi, contractsApi, residentsApi, vehicleApi } from '../../api/moduleA.api';
@@ -92,9 +92,14 @@ export default function ApartmentDetailPage() {
     .sort((a, b) => Number(b.occupancyRole === 'HEAD') - Number(a.occupancyRole === 'HEAD'));
   const showOccupants = residentView === 'occupants';
 
-  const [confirmMoveIn, confirmingMoveIn] = useAction(() => apartmentsApi.confirmMoveIn(id), {
-    success: 'Đã xác nhận cư dân vào ở',
+  const [moveInOpen, setMoveInOpen] = useState(false);
+  const [moveInForm] = Form.useForm();
+  const [confirmMoveIn, confirmingMoveIn] = useAction((values) => apartmentsApi.confirmMoveIn(id, {
+    moveInDate: values.moveInDate.format('YYYY-MM-DD'),
+  }), {
+    success: 'Đã ghi nhận cư dân vào ở',
     onDone: () => {
+      setMoveInOpen(false);
       reloadApt();
       reloadResidents();
     },
@@ -103,7 +108,9 @@ export default function ApartmentDetailPage() {
   const owner = activeSale?.ownerId;
   const ownerResidence = residents.find((resident) => resident.relationType === 'OWNER');
   const ownerLinked = owner && ownerResidence?.userId === owner._id;
-  const canConfirmMoveIn = isReceptionist && apartment?.handoverDate && activeSale && !activeSale.ownerAccountPending;
+  const moveInResident = residents.find((resident) => resident.relationType === 'TENANT') ?? ownerResidence;
+  const canConfirmMoveIn = isManager && apartment?.handoverDate && activeSale && !activeSale.ownerAccountPending
+    && ownerLinked && moveInResident && (moveInResident.moveInStatus === 'PENDING' || !occupants.length);
   const canIssueOwner = isManager && owner?.isActive && !loadingApt && !loadingResidents && !ownerResidence;
   const [ownerModalOpen, setOwnerModalOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -465,15 +472,10 @@ export default function ApartmentDetailPage() {
                 <Button onClick={() => setTransferOpen(true)}>Cập nhật chủ sở hữu</Button>
               )}
               {canConfirmMoveIn && (
-                <Popconfirm
-                  title="Xác nhận cư dân đã vào ở?"
-                  description="Đối chiếu hồ sơ và xác nhận cư dân đã vào ở. Hệ thống dùng hợp đồng đang có hiệu lực để xác định chủ nhà hoặc khách thuê."
-                  okText="Xác nhận"
-                  cancelText="Hủy"
-                  onConfirm={() => confirmMoveIn().catch(() => {})}
-                >
-                  <Button type="primary" loading={confirmingMoveIn}>Xác nhận vào ở</Button>
-                </Popconfirm>
+                <Button type="primary" onClick={() => {
+                  moveInForm.setFieldsValue({ moveInDate: parseVnDate(moveInResident.moveInRequest?.date) ?? dayjs() });
+                  setMoveInOpen(true);
+                }}>Ghi nhận vào ở</Button>
               )}
               <Button
                 icon={<ReloadOutlined />}
@@ -520,6 +522,23 @@ export default function ApartmentDetailPage() {
           )}
         </Card>
       )}
+
+      {isManager && moveInResident?.moveInRequest && <Alert className="mb-4" type="info" showIcon
+        title="Có thông báo bắt đầu ở đang chờ ghi nhận"
+        description={`${moveInResident.fullName} thông báo bắt đầu ở ngày ${formatDate(moveInResident.moveInRequest.date)}. Kiểm tra thông tin rồi bấm Ghi nhận vào ở.`} />}
+
+      <Modal open={moveInOpen} title="Ghi nhận cư dân vào ở" okText="Ghi nhận vào ở" cancelText="Hủy"
+        confirmLoading={confirmingMoveIn} cancelButtonProps={{ disabled: confirmingMoveIn }}
+        onCancel={() => { if (!confirmingMoveIn) setMoveInOpen(false); }} onOk={() => moveInForm.submit()} destroyOnHidden>
+        <Alert type="info" showIcon className="mb-4" title={`${apartment?.code} · ${moveInResident?.fullName ?? ''}`}
+          description="Ghi nhận ngày cư dân thực tế bắt đầu ở sau khi kiểm tra thông tin. Thao tác này mở quyền sử dụng dịch vụ; ngày tính phí quản lý vẫn theo bàn giao." />
+        <Form form={moveInForm} layout="vertical" disabled={confirmingMoveIn}
+          onFinish={(values) => confirmMoveIn(values).catch(() => {})}>
+          <Form.Item name="moveInDate" label="Ngày bắt đầu ở thực tế" rules={[{ required: true, message: 'Chọn ngày bắt đầu ở' }]}>
+            <DatePicker className="w-full" format="DD/MM/YYYY" minDate={parseVnDate(apartment?.handoverDate)} maxDate={dayjs()} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title="Cấp tài khoản chủ sở hữu"

@@ -47,7 +47,7 @@ export function isDeclaredBy(member, head, legacyDeclarations) {
 /** Trả chủ hộ đang ở trước, sau đó là người do chủ hộ đó khai báo. */
 export function currentOccupants(occupancy, residents, legacyDeclarations) {
   const headRelation = occupyingHeadRelation(occupancy);
-  const head = residents.find((resident) => resident.relationType === headRelation && resident.userId);
+  const head = residents.find((resident) => resident.relationType === headRelation && resident.userId && resident.moveInStatus !== 'PENDING');
   if (!head) return [];
 
   return [head, ...residents.filter((resident) =>

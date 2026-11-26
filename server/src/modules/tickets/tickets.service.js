@@ -36,6 +36,7 @@ import { normalizePhone } from "../../utils/validators.js";
 import { consentState } from "../../utils/consent.js";
 import { getConfig, getConfigs } from "../../services/systemConfig.service.js";
 import { uploadToCloudinary } from "../../services/upload.service.js";
+import { assertResidentServiceAccess } from '../../services/residency.service.js';
 import { ApiError } from "../../utils/ApiError.js";
 import {
   nextMonthlyCode,
@@ -291,6 +292,7 @@ async function placeTicket({
 // ===== UC-E02: Cư dân gửi sự cố / phản ánh kèm ảnh =====
 export async function createTicket(user, body, files) {
   const apartment = await resolveResidentApartment(user.id, body.apartmentId);
+  await assertResidentServiceAccess(user.id, apartment._id);
   // Liên hệ mặc định lấy từ tài khoản; cư dân sửa được SĐT / tên người cần gọi (vd người nhà đang ở căn)
   const me = await User.findById(user.id)
     .select("fullName phone consents")

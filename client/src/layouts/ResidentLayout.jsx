@@ -12,6 +12,7 @@ import { MobileHeader, WebHeader } from './resident/ResidentHeader';
 import BottomNav from './resident/BottomNav';
 import ConsentBanner from '../components/resident/ConsentBanner';
 import ConsentGate from '../components/resident/ConsentGate';
+import ResidentServiceGate from '../components/resident/ResidentServiceGate';
 
 // Khu cư dân chỉ có bản sáng theo thiết kế: bỏ class `dark` trên <html> khi ở đây (các trang cũ còn dùng `dark:`),
 // rời khu thì trả lại theo lựa chọn của người dùng.
@@ -43,7 +44,7 @@ export default function ResidentLayout() {
             <ConsentBanner />
             <Suspense fallback={<PageLoader />}>
               <PageTransition key={pathname}>
-                <Outlet />
+                <ResidentServiceGate><Outlet /></ResidentServiceGate>
               </PageTransition>
             </Suspense>
           </main>

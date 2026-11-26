@@ -237,7 +237,7 @@ export async function issueOwnerAccount(apartmentId, { contractId, phone, email 
       apartmentId,
       relationType: RELATION_TYPES.OWNER,
       contractId: contract._id,
-      moveInDate: contract.startDate,
+      moveInDate: contract.startDate, moveInStatus: 'PENDING',
       idNumber: decryptIdNumber(contract.ownerIdNumberEnc),
     }, session);
     await logAudit({
@@ -380,7 +380,7 @@ export async function transferApartmentOwner(apartmentId, data, actor, ip) {
     }, { session });
     await linkResident({
       apartmentId, userId: user._id, relationType: RELATION_TYPES.OWNER, contractId: newContract._id,
-      moveInDate: now, idNumber: owner.idNumber,
+      moveInDate: now, moveInStatus: 'PENDING', idNumber: owner.idNumber,
     }, session);
 
     apartment.status = retainedTenancy ? APARTMENT_STATUS.RENTED : APARTMENT_STATUS.OWNED;

@@ -1,6 +1,7 @@
 import { AUDIT_ACTIONS, AUDIT_TARGETS, NOTIFICATION_TYPES, PARKING_CARD_STATUS, VEHICLE_STATUS } from '../../constants/enums.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { notify } from '../../services/notification.service.js';
+import { assertResidentServiceAccess } from '../../services/residency.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { withTransaction } from '../../utils/transaction.js';
@@ -59,6 +60,7 @@ export async function issueResidentCard({ residentId, cardNumber, replacesId }, 
         _id: residentId, isActive: true, userId: { $type: 'objectId' },
       }).session(session).lean();
       if (!resident) throw ApiError.notFound('Không tìm thấy tài khoản cư dân đang có quyền tại căn hộ');
+      await assertResidentServiceAccess(resident.userId, resident.apartmentId, session);
 
       const currentId = resident.parkingCardId ?? null;
       if (String(currentId) !== String(replacesId ?? null)) {
@@ -115,6 +117,7 @@ export async function handOverResidentCard(id, receptionist, ip) {
       _id: card.residentId, parkingCardId: id, isActive: true,
     }).session(session).lean();
     if (!resident) throw new ApiError('STATUS_CONFLICT', 'Thẻ không còn hiệu lực cấp cho cư dân');
+    await assertResidentServiceAccess(resident.userId, card.apartmentId, session);
     const updated = card.handedOverAt ? card : await ParkingCard.findOneAndUpdate(
       { _id: id, handedOverAt: null, status: PARKING_CARD_STATUS.ACTIVE },
       { $set: { handedOverAt: new Date(), handedOverBy: receptionist.id } },

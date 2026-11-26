@@ -184,10 +184,10 @@ router.post(
 router.patch(
   '/:id/confirm-move-in',
   authenticate,
-  authorize('STAFF:RECEPTIONIST'),
-  validate({ params: idParams }),
+  authorize('MANAGER'),
+  validate({ params: idParams, body: Joi.object({ moveInDate: ymd() }) }),
   async (req, res) => {
-    ok(res, await service.confirmMoveIn(req.validated.params.id, req.user, req.ip));
+    ok(res, await service.confirmMoveIn(req.validated.params.id, req.user, req.ip, req.validated.body));
   },
 );
 

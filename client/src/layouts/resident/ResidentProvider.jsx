@@ -32,6 +32,7 @@ const readPicked = (userId) => {
 export function ResidentProvider({ children }) {
   const userId = useAuth().user?.id;
   const { data: cards = [], loading, reload: reloadCards } = useApi(() => memberCodeApi.mine(), []);
+  const { data: linkedApartments = [], loading: loadingApartments, reload: reloadApartments } = useApi(residentsApi.myApartments, []);
   const [pickedId, setPickedId] = useState(() => readPicked(userId));
   const pick = useCallback(
     (id) => {
@@ -45,25 +46,29 @@ export function ResidentProvider({ children }) {
     [userId],
   );
 
-  const card = cards.find((c) => c.apartment._id === pickedId) ?? cards[0] ?? null;
-  const apartmentId = card?.apartment._id ?? null;
+  const residency = linkedApartments.find((apartment) => apartment.apartmentId === pickedId) ?? linkedApartments[0] ?? null;
+  const apartmentId = residency?.apartmentId ?? null;
+  const card = cards.find((item) => item.apartment._id === apartmentId) ?? null;
+  const apartment = useMemo(() => card?.apartment ?? (residency ? { _id: apartmentId, code: residency.code, building: residency.building } : null), [card, residency, apartmentId]);
 
   const enabled = Boolean(apartmentId);
   const { data: members, reload: reloadMembers } = useApi(
     () => residentsApi.listByApartment(apartmentId), [apartmentId], { enabled },
   );
   const reloadResidency = useCallback(async () => {
-    const [cardsResult] = await Promise.all([reloadCards(), enabled && reloadMembers()]);
+    const [cardsResult] = await Promise.all([reloadCards(), enabled && reloadMembers(), reloadApartments()]);
     return cardsResult;
-  }, [enabled, reloadCards, reloadMembers]);
+  }, [enabled, reloadCards, reloadMembers, reloadApartments]);
   const vehicles = useApi(() => vehicleApi.listMine({ apartmentId }), [apartmentId], { enabled });
 
   const value = useMemo(
     () => ({
-      loading,
+      loading: loading || loadingApartments,
+      residency,
+      canUseServices: residency?.canUseServices,
       cards,
       card,
-      apartment: card?.apartment ?? null,
+      apartment,
       apartmentId,
       setApartmentId: pick,
       reloadResidency,
@@ -74,7 +79,7 @@ export function ResidentProvider({ children }) {
         ? vehicles.data?.filter((v) => COUNTED_VEHICLE_STATUS.includes(v.status)).length
         : undefined,
     }),
-    [loading, cards, card, apartmentId, pick, reloadResidency, enabled, members, vehicles.data],
+    [loading, loadingApartments, cards, card, apartment, residency, apartmentId, pick, reloadResidency, enabled, members, vehicles.data],
   );
 
   return <ResidentContext.Provider value={value}>{children}</ResidentContext.Provider>;

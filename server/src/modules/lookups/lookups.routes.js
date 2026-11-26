@@ -35,20 +35,22 @@ router.get('/buildings', authenticate, authorize(...INTERNAL), async (_req, res)
  *     parameters:
  *       - { in: query, name: q, schema: { type: string } }
  *       - { in: query, name: buildingId, schema: { type: string } }
+ *       - { in: query, name: floor, schema: { type: integer, minimum: 1 } }
  */
 router.get(
   '/apartments',
   authenticate,
   validate({
-    query: Joi.object({ q: Joi.string().trim().max(30).allow(''), buildingId: objectId() }),
+    query: Joi.object({ q: Joi.string().trim().max(30).allow(''), buildingId: objectId(), floor: Joi.number().integer().min(1) }),
   }),
   async (req, res) => {
-    const { q, buildingId } = req.validated.query;
+    const { q, buildingId, floor } = req.validated.query;
     const filter = {};
     if (req.user.role === ROLES.RESIDENT) {
       filter._id = { $in: await getActiveApartmentIds(req.user.id) };
     }
     if (buildingId) filter.buildingId = buildingId;
+    if (floor !== undefined) filter.floor = floor;
     if (q) filter.code = new RegExp(escapeRegex(q), 'i');
     const items = await Apartment.find(filter)
       .select('code floor status buildingId')

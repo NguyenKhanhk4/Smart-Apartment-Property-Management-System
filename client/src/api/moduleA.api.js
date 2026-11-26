@@ -40,7 +40,7 @@ export const apartmentsApi = {
   delete: (id, body) => http.delete(`/apartments/${id}`, { data: body }),
   correctCatalog: (id, body) => http.patch(`/apartments/${id}/catalog`, body),
   setOccupancy: (id, body) => http.patch(`/apartments/${id}/occupancy-status`, body),
-  confirmMoveIn: (id) => http.patch(`/apartments/${id}/confirm-move-in`),
+  confirmMoveIn: (id, body = {}) => http.patch(`/apartments/${id}/confirm-move-in`, body),
   issueOwnerAccount: (id, body) => http.post(`/apartments/${id}/owner-account`, body),
 };
 
@@ -85,7 +85,10 @@ export const residentsApi = {
   updateMember: (id, body) => http.patch(`/residents/${id}`, body),
   removeMember: (id) => http.patch(`/residents/${id}/remove`),
   myApartments: () => http.get('/residents/me/apartments'),
+  requestMoveIn: (body) => http.post('/residents/me/move-in', body),
+  moveInRequests: () => http.get('/residents/move-in-requests'),
   declareFamilyMember: (body) => http.post('/residents/me/family', body),
+  updateDeclaredFamilyMember: (id, body) => http.patch(`/residents/me/family/${id}`, body),
   tenancy: (apartmentId) => http.get(`/residents/me/tenancies/${apartmentId}`),
   lookupTenant: (apartmentId, phone) => http.get(`/residents/me/tenancies/${apartmentId}/lookup`, { params: { phone } }),
   startTenancy: (apartmentId, body) => http.post(`/residents/me/tenancies/${apartmentId}`, body),

@@ -1,6 +1,6 @@
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AuditLog, Contract } from '../../src/models/index.js';
+import { Apartment, AuditLog, Contract } from '../../src/models/index.js';
 import { endTenancy } from '../../src/modules/residents/residentTenancies.js';
 import { clearTestDB, closeTestDB, connectTestDB } from '../helpers/db.js';
 import { asUser, createApartment, createBuilding, createManager, createReceptionist, createResidentUser, linkResident } from '../helpers/fixtures.js';
@@ -94,7 +94,7 @@ test('UC13: căn cũ thiếu ngày bàn giao giữ dữ liệu gốc khi cập n
   assert.equal(result.body.data.occupancyStatus, undefined);
 });
 
-test('UC13: Lễ tân xác nhận vào ở, trạng thái tự động thắng điều chỉnh thủ công', async () => {
+test('UC13: chỉ BQL ghi nhận vào ở, không tự nhận thuê trong tương lai', async () => {
   const manager = asUser(await createManager());
   const receptionist = asUser(await createReceptionist());
   const apartment = await createApartment(null, {
@@ -103,31 +103,25 @@ test('UC13: Lễ tân xác nhận vào ở, trạng thái tự động thắng �
   const owner = await createResidentUser();
   const tenant = await createResidentUser();
   const path = `/apartments/${apartment._id}/confirm-move-in`;
-  const request = (user) => app.request('PATCH', path, { user });
-
-  assert.equal((await request(manager)).status, 403);
-  assert.equal((await request(receptionist)).status, 409);
-  const sale = await Contract.create({
-    apartmentId: apartment._id, type: 'SALE', ownerId: owner._id, startDate: new Date('2025-01-01'),
-  });
-  const ownerResult = await request(receptionist);
+  const request = (user) => app.request('PATCH', path, { user, body: { moveInDate: '2025-01-02' } });
+  assert.equal((await request(receptionist)).status, 403);
+  assert.equal((await request(manager)).status, 409);
+  const sale = await Contract.create({ apartmentId: apartment._id, type: 'SALE', ownerId: owner._id, startDate: new Date('2025-01-01') });
+  await linkResident(owner, apartment, { relationType: 'OWNER', contractId: sale.id, moveInStatus: 'PENDING' });
+  const ownerResult = await request(manager);
   assert.equal(ownerResult.status, 200, JSON.stringify(ownerResult.body));
   assert.equal(ownerResult.body.data.occupancyStatus, 'OWNER_OCCUPIED');
   const audit = await AuditLog.findOne({ targetId: apartment._id, 'metadata.action': 'CONFIRM_MOVE_IN' });
   assert.equal(String(audit.metadata.contractId), String(sale._id));
-  assert.equal(String(audit.performedBy), receptionist.id);
+  assert.equal(String(audit.performedBy), manager.id);
   assert.equal(audit.metadata.changes.occupancyStatus.from, 'UNDER_REPAIR');
-
-  const lease = await Contract.create({
-    apartmentId: apartment._id, type: 'LEASE', ownerId: owner._id, tenantId: tenant._id,
-    startDate: new Date('2099-01-01'), endDate: new Date('2099-12-31'),
-  });
-  const beforeLease = await request(receptionist);
-  assert.equal(beforeLease.status, 200, JSON.stringify(beforeLease.body));
-  assert.equal(beforeLease.body.data.occupancyStatus, 'OWNER_OCCUPIED');
-  lease.startDate = new Date('2025-01-01');
-  await lease.save();
-  const tenantResult = await request(receptionist);
+  const lease = await Contract.create({ apartmentId: apartment._id, type: 'LEASE', ownerId: owner._id, tenantId: tenant._id,
+    startDate: new Date('2099-01-01'), endDate: new Date('2099-12-31') });
+  assert.equal((await request(manager)).status, 409);
+  assert.equal((await Apartment.findById(apartment.id)).occupancyStatus, 'OWNER_OCCUPIED');
+  lease.startDate = new Date('2025-01-01'); await lease.save();
+  await linkResident(tenant, apartment, { relationType: 'TENANT', moveInStatus: 'PENDING', moveInDate: new Date('2025-01-01') });
+  const tenantResult = await request(manager);
   assert.equal(tenantResult.status, 200, JSON.stringify(tenantResult.body));
   assert.equal(tenantResult.body.data.occupancyStatus, 'RENTED');
 });
