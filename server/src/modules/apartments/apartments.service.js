@@ -1,8 +1,8 @@
-import { APARTMENT_OCCUPANCY, APARTMENT_STATUS, AUDIT_ACTIONS, AUDIT_TARGETS, CONTRACT_STATUS, CONTRACT_TYPES, RELATION_TYPES, VEHICLE_STATUS } from '../../constants/enums.js';
+import { APARTMENT_OCCUPANCY, APARTMENT_STATUS, AUDIT_ACTIONS, AUDIT_TARGETS, CONTRACT_STATUS, CONTRACT_TYPES, VEHICLE_STATUS } from '../../constants/enums.js';
 import { logAudit } from '../../services/auditLog.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
-import { startOfVnDay, toVnYmd, vnDayStart } from '../../utils/time.js';
+import { toVnYmd, vnDayStart } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { Apartment, Building, Contract, Resident, Vehicle } from '../../models/index.js';
 import { linkedRecords, touchInventory } from '../buildings/inventory.service.js';
@@ -284,6 +284,9 @@ async function changeOccupancy(id, resolveChange, actor, ip) {
     const { status, ...metadata } = await resolveChange(session);
     const previousStatus = apartment.occupancyStatus;
     if (previousStatus === status) return apartment;
+    if ([APARTMENT_OCCUPANCY.OWNER_OCCUPIED, APARTMENT_OCCUPANCY.RENTED].includes(status)) {
+      throw new ApiError('STATUS_CONFLICT', 'Dùng Ghi nhận vào ở để xác nhận người ở và ngày bắt đầu ở thực tế');
+    }
 
     apartment.occupancyStatus = status;
     await apartment.save({ session });
@@ -303,34 +306,7 @@ export function setOccupancyStatus(id, { status, reason }, managerUser, ip) {
   return changeOccupancy(id, () => ({ status, reason, action: 'SET_OCCUPANCY_STATUS' }), managerUser, ip);
 }
 
-export function confirmMoveIn(id, receptionist, ip) {
-  return changeOccupancy(id, async (session) => {
-    const today = startOfVnDay();
-    const contracts = await Contract.find({
-      apartmentId: id,
-      status: CONTRACT_STATUS.ACTIVE,
-      $or: [
-        { type: CONTRACT_TYPES.SALE, startDate: { $lte: new Date() } },
-        { type: CONTRACT_TYPES.LEASE, startDate: { $lte: today } },
-      ],
-    }).select('type ownerAccountPending').session(session).lean();
-    const owner = contracts.find((contract) => contract.type === CONTRACT_TYPES.SALE);
-    if (!owner) {
-      throw new ApiError('STATUS_CONFLICT', 'Cần hợp đồng mua bán đang hiệu lực để xác nhận vào ở');
-    }
-    if (owner.ownerAccountPending) {
-      throw new ApiError('STATUS_CONFLICT', 'Ban quản lý cần cấp tài khoản chủ sở hữu trước khi xác nhận vào ở');
-    }
-    const lease = contracts.find((contract) => contract.type === CONTRACT_TYPES.LEASE);
-    const currentTenant = await Resident.exists({ apartmentId: id, relationType: RELATION_TYPES.TENANT,
-      isActive: true, contractId: null, tenantPaysFees: { $type: 'bool' } }).session(session);
-    return {
-      action: 'CONFIRM_MOVE_IN',
-      status: lease || currentTenant ? APARTMENT_OCCUPANCY.RENTED : APARTMENT_OCCUPANCY.OWNER_OCCUPIED,
-      contractId: (lease ?? owner)._id,
-    };
-  }, receptionist, ip);
-}
+export { confirmMoveIn } from './moveIn.service.js';
 
 /**
  * Xóa căn hộ (Trưởng BQL) — BR-A4

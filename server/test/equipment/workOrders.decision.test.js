@@ -25,7 +25,7 @@ const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(
 const PHOTO = { originalname: 'anh.jpg', mimetype: 'image/jpeg', buffer: JPEG };
 const CHECKLIST = [{ label: 'Điện áp', unit: 'V', minValue: 370, maxValue: 400, required: true }];
 const DOCS = { images: [PHOTO], certificates: [PHOTO] }; // thang máy: biên bản nhà thầu + kiểm định
-const FAULT = { faultDesc: 'Biến áp tủ điều khiển cháy', vendorName: 'Công ty Toàn Phát', vendorProposal: 'Thay biến áp mới', estimatedCost: 12_500_000 };
+const FAULT = { faultDesc: 'Biến áp tủ điều khiển cháy', vendorProposal: 'Thay biến áp mới', estimatedCost: 12_500_000 };
 const inDays = (n, base = new Date()) => new Date(startOfVnDay(base).getTime() + n * DAY_MS);
 
 before(async () => {

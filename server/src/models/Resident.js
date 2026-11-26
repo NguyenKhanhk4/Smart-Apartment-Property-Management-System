@@ -18,6 +18,10 @@ const residentSchema = new Schema(
     tenantPaysFees: Boolean, // Có giá trị trên lượt thuê do chủ sở hữu khai báo (UC17).
     isActive: { type: Boolean, default: true }, // false khi đã chuyển đi
     moveInDate: Date,
+    moveInStatus: { type: String, enum: ['PENDING', 'CONFIRMED'] },
+    moveInConfirmedAt: Date,
+    moveInConfirmedBy: { type: ObjectId, ref: 'User' },
+    moveInRequest: { type: new Schema({ date: Date, requestedAt: Date }, { _id: false }), default: undefined },
     moveOutDate: Date,
   },
   schemaOptions('residents'),

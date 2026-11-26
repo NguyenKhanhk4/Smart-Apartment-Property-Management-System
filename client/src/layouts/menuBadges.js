@@ -28,7 +28,7 @@ function useRepairApprovalBadge(enabled) {
 /**
  * Quỹ bảo trì, theo vai trò:
  *   Kế toán: đề xuất chờ xác nhận + đề xuất chờ lập phiếu chi + sửa chữa vận hành chờ ghi chi.
- *   Ban quản trị: đề xuất chờ biểu quyết + chờ xác nhận nghiệm thu + thay đổi tham số chờ xác nhận.
+ *   Ban quản trị: (Trưởng ban) đề xuất chờ chọn nhà thầu + đề xuất chờ biểu quyết + chờ xác nhận nghiệm thu + thay đổi tham số chờ xác nhận.
  *   Trưởng BQL: phiếu bảo trì chờ lập đề xuất.
  */
 function useFundBadge(enabled) {
@@ -52,7 +52,8 @@ function useFundBadge(enabled) {
   if (board) {
     const a = acceptances.data;
     return badge([
-      [o.pendingCount ?? 0, 'đề xuất chờ biểu quyết'],
+      [hasRole('BOARD:CHAIRMAN') ? o.awaitingVendorCount ?? 0 : 0, 'đề xuất chờ chọn nhà thầu'],
+      [(o.pendingCount ?? 0) - (o.awaitingVendorCount ?? 0), 'đề xuất chờ biểu quyết'],
       [a?.readyCount ?? 0, 'chờ xác nhận nghiệm thu'],
       [configs.data?.length ?? 0, 'thay đổi tham số chờ xác nhận'],
     ]);

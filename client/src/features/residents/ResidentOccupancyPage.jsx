@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Alert, App, Button, Card, Modal, Select, Space, Spin, Statistic, Table, Tabs, Tag } from 'antd';
 import { EyeOutlined, FileExcelOutlined, ReloadOutlined } from '@ant-design/icons';
 import { residentsApi } from '../../api/moduleA.api';
@@ -72,6 +73,8 @@ function OccupancyExcelPreview({ filters, onClose }) {
 
 export default function ResidentOccupancyPage() {
   const { message } = App.useApp();
+  const navigate = useNavigate();
+  const { data: moveInRequests = [], reload: reloadRequests } = useApi(residentsApi.moveInRequests, []);
   const { data: buildings = [], loading, error, reload } = useApi(residentsApi.listOccupancy, []);
   const [buildingId, setBuildingId] = useState('');
   const [floor, setFloor] = useState('');
@@ -129,7 +132,7 @@ export default function ResidentOccupancyPage() {
         subtitle="Danh sách người đang ở theo tòa nhà và căn hộ để Ban quản lý phối hợp rà soát cư trú"
         extra={
           <Space wrap>
-            <Button icon={<ReloadOutlined />} onClick={reload}>Làm mới</Button>
+            <Button icon={<ReloadOutlined />} onClick={() => { reload(); reloadRequests(); }}>Làm mới</Button>
             <Button icon={<EyeOutlined />} disabled={reportDisabled} onClick={() => setPreviewOpen(true)}>
               Xem trước
             </Button>
@@ -140,6 +143,18 @@ export default function ResidentOccupancyPage() {
           </Space>
         }
       />
+
+      {moveInRequests.length > 0 && <Card size="small" title={`Thông báo bắt đầu ở chờ ghi nhận (${moveInRequests.length})`}>
+        <Table size="small" rowKey="_id" dataSource={moveInRequests} pagination={{ pageSize: 5 }} scroll={{ x: 'max-content' }} columns={[
+          { title: 'Tòa nhà', render: (_, row) => row.apartmentId?.buildingId?.name || '—' },
+          { title: 'Căn hộ', render: (_, row) => row.apartmentId?.code || '—' },
+          { title: 'Người thông báo', render: (_, row) => row.userId?.fullName || '—' },
+          { title: 'Số điện thoại', render: (_, row) => row.userId?.phone || '—' },
+          { title: 'Ngày bắt đầu ở', render: (_, row) => formatDate(row.moveInRequest.date) },
+          { title: 'Thao tác', render: (_, row) => <Button type="primary" disabled={!row.apartmentId}
+            onClick={() => navigate(`/app/apartments/${row.apartmentId._id}`)}>Kiểm tra và ghi nhận</Button> },
+        ]} />
+      </Card>}
 
       <Card size="small">
         <Space size="large" wrap>

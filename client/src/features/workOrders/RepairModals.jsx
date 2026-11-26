@@ -52,10 +52,10 @@ export function RepairInfo({ workOrder, showHistory = true }) {
     <>
       <Descriptions column={1} size="small" bordered style={{ marginBottom: 12 }}>
         <Descriptions.Item label="Mô tả hư hỏng"><span style={{ whiteSpace: 'pre-wrap' }}>{r.faultDesc}</span></Descriptions.Item>
-        <Descriptions.Item label="Nhà thầu đề xuất">{r.vendorName || 'Chưa có'}</Descriptions.Item>
         <Descriptions.Item label="Phương án sửa"><span style={{ whiteSpace: 'pre-wrap' }}>{r.vendorProposal}</span></Descriptions.Item>
         <Descriptions.Item label="Chi phí dự kiến">{formatMoney(r.estimatedCost)}</Descriptions.Item>
         <Descriptions.Item label="Ảnh hư hỏng">{r.faultImages?.length ? <EvidencePhotos urls={r.faultImages} /> : 'Không có ảnh'}</Descriptions.Item>
+        {r.contractorName && <Descriptions.Item label="Nhà thầu (Ban quản trị chọn)">{r.contractorName}</Descriptions.Item>}
         {r.costSource && (
           <Descriptions.Item label="Nguồn chi phí">
             <EnumTag map={REPAIR_COST_SOURCES} value={r.costSource} />
@@ -124,7 +124,7 @@ export function FaultReportModal({ workOrder, open, onClose, onDone }) {
   const [save, saving] = useAction(
     (v) => workOrderApi.reportFault(
       workOrder._id,
-      { faultDesc: v.faultDesc.trim(), vendorName: v.vendorName?.trim(), vendorProposal: v.vendorProposal.trim(), estimatedCost: v.estimatedCost },
+      { faultDesc: v.faultDesc.trim(), vendorProposal: v.vendorProposal.trim(), estimatedCost: v.estimatedCost },
       toFiles(v.images),
     ),
     { success: (res) => res.message, onDone: done(onClose, onDone) },
@@ -132,14 +132,11 @@ export function FaultReportModal({ workOrder, open, onClose, onDone }) {
   return (
     <Modal title="Báo cáo hư hỏng" open={open} onCancel={onClose} onOk={() => form.submit()} okText="Gửi Trưởng BQL" cancelText="Để sau" confirmLoading={saving} destroyOnHidden width="min(640px, 94vw)">
       <Typography.Paragraph type="secondary">
-        {assetText(workOrder)}. Báo cáo gửi Trưởng BQL duyệt sửa chữa; Trưởng BQL tự liên hệ nhà thầu.
+        {assetText(workOrder)}. Báo cáo gửi Trưởng BQL duyệt sửa chữa. Nếu dùng Quỹ bảo trì, Trưởng ban quản trị chọn nhà thầu.
       </Typography.Paragraph>
       <Form form={form} layout="vertical" initialValues={{ faultDesc: workOrder.note ?? '' }} onFinish={(v) => save(v).catch(() => {})}>
         <Form.Item name="faultDesc" label="Mô tả hư hỏng" rules={[{ required: true, whitespace: true, min: 10, message: 'Mô tả tối thiểu 10 ký tự' }]}>
           <Input.TextArea rows={3} maxLength={2000} showCount />
-        </Form.Item>
-        <Form.Item name="vendorName" label="Nhà thầu đề xuất">
-          <Input maxLength={150} placeholder="Tên đơn vị sửa chữa (nếu có)" />
         </Form.Item>
         <Form.Item name="vendorProposal" label="Phương án sửa chữa" rules={[{ required: true, whitespace: true, min: 5, message: 'Phương án sửa tối thiểu 5 ký tự' }]}>
           <Input.TextArea rows={2} maxLength={2000} showCount placeholder="Thay thế / sửa gì, vật tư cần dùng…" />
@@ -275,11 +272,13 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
     { value: 'WARRANTY', label: 'Bảo hành', disabled: !warrantyActive },
   ];
   const defaultSource = warrantyActive ? 'WARRANTY' : fundRequired ? 'FUND' : 'OPERATING';
+  // So với ngưỡng chỉ có nghĩa với Vận hành / Quỹ: chọn Bảo hành (không phát sinh chi) thì ẩn
+  const showPolicy = picked === 'APPROVE' && Boolean(policy) && (costSource ?? defaultSource) !== 'WARRANTY';
   const sourceHint = {
-    OPERATING: 'Phiếu chuyển Đang sửa; bạn liên hệ nhà thầu ngoài hệ thống. Kế toán ghi chi thực tế khi xong.',
+    OPERATING: 'Phiếu chuyển Đang sửa. Kế toán ghi chi thực tế khi xong.',
     FUND: emergency
-      ? `Phiếu chuyển Đang sửa ngay. Lập đề xuất chi quỹ trong ${settings?.emergencyDossierDays ?? 3} ngày; Ban quản trị được báo ngay.`
-      : 'Phiếu giữ Chờ duyệt sửa; bạn lập đề xuất chi quỹ ngay sau bước này. Ban quản trị biểu quyết duyệt thì mới sửa.',
+      ? `Phiếu chuyển Đang sửa ngay. Lập đề xuất chi quỹ trong ${settings?.emergencyDossierDays ?? 3} ngày để Trưởng ban quản trị chọn nhà thầu; Ban quản trị được báo ngay.`
+      : 'Phiếu giữ Chờ duyệt sửa; bạn lập đề xuất chi quỹ ngay sau bước này. Trưởng ban quản trị chọn nhà thầu, Ban quản trị biểu quyết duyệt thì mới sửa.',
     WARRANTY: 'Phiếu chuyển Đang sửa; KTV liên hệ hãng bảo hành, không phát sinh chi.',
   };
   return (
@@ -301,7 +300,7 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
           showIcon
           style={{ marginBottom: 12 }}
           title="Đã chọn Quỹ bảo trì, chưa có đề xuất chi quỹ"
-          description="Lập đề xuất ở trang Quỹ bảo trì. Khi đề xuất đang chờ Ban quản trị biểu quyết thì không quyết định lại được; chưa lập thì bạn vẫn đổi được quyết định."
+          description="Lập đề xuất ở trang Quỹ bảo trì. Khi đề xuất đang chờ Ban quản trị (chọn nhà thầu, biểu quyết) thì không quyết định lại được; chưa lập thì bạn vẫn đổi được quyết định."
         />
       )}
       <RepairInfo workOrder={workOrder} showHistory={false} />
@@ -317,7 +316,7 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
             <Radio.Group optionType="button" buttonStyle="solid" options={DECISION_OPTIONS} />
           </Form.Item>
         )}
-        {picked === 'APPROVE' && policy && (
+        {showPolicy && (
           <Descriptions column={1} size="small" bordered style={{ marginBottom: 12 }} title="Nguồn chi phí">
             <Descriptions.Item label="Chi phí dự kiến">{formatMoney(policy.estimatedCost)}</Descriptions.Item>
             <Descriptions.Item label={`Đã chi vận hành cho thiết bị trong ${policy.windowDays} ngày`}>{formatMoney(policy.spentInWindow)}</Descriptions.Item>
@@ -327,7 +326,7 @@ export function RepairDecisionModal({ workOrder, open, onClose, onDone, only, se
             </Descriptions.Item>
           </Descriptions>
         )}
-        {picked === 'APPROVE' && fundRequired && (
+        {showPolicy && fundRequired && (
           <Alert
             type="warning"
             showIcon

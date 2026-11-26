@@ -116,10 +116,10 @@ export default function ResidentHomePage() {
   const wide = useMediaQuery('(min-width: 768px)');
   const { canSee } = useAuth();
   const showNews = canSee({ key: 'announcements' }); // UC04: bị tắt quyền Xem Bảng tin thì ẩn khung
-  const { apartment, apartmentId } = useResident();
+  const { apartment, apartmentId, canUseServices } = useResident();
   const enabled = Boolean(apartmentId);
 
-  const booking = useApi(() => bookingApi.mine({ scope: 'upcoming', limit: 1, apartmentId }), [apartmentId], { enabled });
+  const booking = useApi(() => bookingApi.mine({ scope: 'upcoming', limit: 1, apartmentId }), [apartmentId], { enabled: enabled && Boolean(canUseServices) });
   const tickets = useApi(() => ticketApi.list({ status: OPEN_TICKET_STATUS, limit: 1, sort: '-createdAt' }), []);
   const guests = useApi(() => guestApi.list({ date: new Date().toISOString(), status: 'EXPECTED,CHECKED_IN', limit: 5, sort: 'expectedTime' }), []);
   const news = useApi(() => announcementApi.list({ limit: 3 }), [], { enabled: showNews });

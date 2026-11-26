@@ -90,9 +90,11 @@ export async function startTenancy(actor, apartmentId, data, ip) {
     const account = await findOrCreateResidentUser(data, session);
     if (String(account.user._id) === String(actor.id)) throw ApiError.field('phone', 'Khách thuê phải khác chủ sở hữu');
     if (!account.user.isActive) throw new ApiError('STATUS_CONFLICT', 'Tài khoản khách thuê đang bị khóa');
+    // Yêu cầu vào ở của chủ cũ không còn phù hợp khi căn chuyển sang lượt thuê mới.
+    await Resident.updateMany({ apartmentId, relationType: 'OWNER', isActive: true }, { $unset: { moveInRequest: 1 } }, { session });
     const [member] = await Resident.create([{
       apartmentId, userId: account.user._id, relationType: RELATION_TYPES.TENANT,
-      tenantPaysFees: Boolean(data.tenantPaysFees), moveInDate: now,
+      tenantPaysFees: Boolean(data.tenantPaysFees), moveInDate: now, moveInStatus: 'PENDING',
     }], { session });
     await setTenancyStatus(apartment, APARTMENT_STATUS.RENTED, APARTMENT_OCCUPANCY.RENTED, session);
     await logTenancy(actor, member, AUDIT_ACTIONS.RESIDENT_ASSIGNED, ip, session);

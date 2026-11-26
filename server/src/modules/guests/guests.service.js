@@ -9,6 +9,7 @@ import { withTransaction } from '../../utils/transaction.js';
 import { getConfig } from '../../services/systemConfig.service.js';
 import { getOnDuty, isUserOnDuty } from '../dutyShifts/dutyShifts.service.js';
 import { getActiveApartmentIds, resolveResidentApartment } from '../../services/residency.service.js';
+import { assertResidentServiceAccess } from '../../services/residency.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { DAY_MS, HOUR_MS, endOfVnDay, fmtTimeVn, startOfVnDay } from '../../utils/time.js';
@@ -42,6 +43,7 @@ async function findOr404(id) {
 // ===== UC-E07: Cư dân đăng ký khách trước =====
 export async function registerGuest(user, data) {
   const apartment = await resolveResidentApartment(user.id, data.apartmentId);
+  await assertResidentServiceAccess(user.id, apartment._id);
   if (data.expectedTime.getTime() < Date.now() - HOUR_MS) {
     throw ApiError.badRequest('Thời gian dự kiến không được ở quá khứ');
   }

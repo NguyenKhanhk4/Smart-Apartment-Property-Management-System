@@ -5,7 +5,7 @@ import { ticketApi } from '../../api/moduleE.api';
 import { useAction, useApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import EnumTag from '../../components/EnumTag';
-import { PRIORITIES, TICKET_SCOPES } from '../../constants/enums';
+import { PRIORITIES, TICKET_SCOPES, TICKET_TYPES } from '../../constants/enums';
 import { formatDateTime, fromNow } from '../../utils/format';
 
 // Hàng chờ sự cố theo ca (Người 4): KTV bấm "Nhận" — chỉ 1 người nhận được; thẻ dọc cho điện thoại
@@ -28,12 +28,13 @@ export default function TicketQueue({ onClaimed }) {
         {data?.hasSchedule && !data.onDuty && (
           <Alert type="warning" showIcon title="Bạn không trong ca trực hiện tại, chỉ người đang trực mới nhận được sự cố." />
         )}
-        {!loading && !items.length && <Empty description="Không có sự cố nào đang chờ nhận" />}
+        {!loading && !items.length && <Empty description="Không có sự cố / phản ánh nào đang chờ nhận" />}
         {items.map((t) => (
           <Card key={t._id} size="small" hoverable onClick={() => navigate(`/app/tickets/${t._id}`)}>
             <Flex justify="space-between" align="center" gap={12} wrap>
               <Flex vertical gap={4} style={{ minWidth: 0, flex: 1 }}>
                 <Flex gap={6} wrap align="center">
+                  <EnumTag map={TICKET_TYPES} value={t.type} />
                   <EnumTag map={PRIORITIES} value={t.priority} />
                   <EnumTag map={TICKET_SCOPES} value={t.scope} />
                   {t.isOverdue && <Tag color="red">Quá hạn</Tag>}

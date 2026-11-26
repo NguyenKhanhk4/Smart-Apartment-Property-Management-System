@@ -7,6 +7,7 @@ import { created, ok } from '../../utils/response.js';
 import { idParams, objectId, phoneVn, ymd } from '../../utils/validators.js';
 import * as occupantReportsService from '../occupantReports/occupantReports.service.js';
 import * as service from './residents.service.js';
+import { requestMoveIn, listMoveInRequests } from '../apartments/moveIn.service.js';
 import * as tenancies from './residentTenancies.js';
 
 // Module A — Vũ Việt. UC-A07, UC-A08: Quản lý cư dân & Căn hộ của tôi
@@ -66,6 +67,12 @@ router.patch('/me/tenancies/:apartmentId/:residentId/end', authenticate, authori
   await tenancies.endTenancy(req.user, apartmentId, residentId, req.ip);
   return ok(res, null, 'Đã kết thúc cho thuê');
 });
+
+router.post('/me/move-in', authenticate, authorize('RESIDENT'), validate({ body: Joi.object({
+  apartmentId: objectId().required(), moveInDate: ymd().required(),
+}) }), async (req, res) => created(res, await requestMoveIn(req.user, req.validated.body, req.ip)));
+
+router.get('/move-in-requests', authenticate, authorize('MANAGER'), async (_req, res) => ok(res, await listMoveInRequests()));
 
 /** UC21 — Danh sách người đang ở theo tòa nhà và tầng. */
 router.get(
@@ -154,6 +161,17 @@ router.post(
     const member = await service.declareFamilyMember(req.user, req.validated.body, req.ip);
     created(res, member);
   },
+);
+
+// UC15 — chỉnh sửa thành viên đã khai báo, quyền được kiểm tra theo lượt ở hiện tại.
+router.patch(
+  '/me/family/:id',
+  authenticate,
+  authorize('RESIDENT'),
+  validate({ params: idParams, body: familyDeclarationBody }),
+  async (req, res) => ok(res, await service.updateDeclaredFamilyMember(
+    req.user, req.validated.params.id, req.validated.body, req.ip,
+  )),
 );
 
 /**

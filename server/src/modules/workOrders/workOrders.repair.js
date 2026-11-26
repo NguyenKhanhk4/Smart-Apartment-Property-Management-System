@@ -15,6 +15,7 @@ import { withTransaction } from '../../utils/transaction.js';
 import { fmtDateVn, startOfVnDay } from '../../utils/time.js';
 import { computeNextMaintenance } from '../assets/assets.service.js';
 import { markFundWorkAccepted } from './workOrders.fund.js';
+import { syncTicketOnEnd } from './workOrders.ticketLink.js';
 
 const S = WORK_ORDER_STATUS;
 const sameId = (a, b) => a != null && b != null && String(a) === String(b);
@@ -43,7 +44,7 @@ const noImages = (field = 'images') => ApiError.badRequest('Cần ít nhất 1 �
 
 // ===== UC09 bước 1–3: KTV báo cáo hư hỏng =====
 /** Chỉ phiếu của mình, đã nộp kết quả Có sự cố ở UC08. Chuyển Chờ duyệt sửa, báo Trưởng BQL (MSG-E06) */
-export async function reportFault(user, id, { faultDesc, vendorName, vendorProposal, estimatedCost }, files = [], now = new Date()) {
+export async function reportFault(user, id, { faultDesc, vendorProposal, estimatedCost }, files = [], now = new Date()) {
   const wo = await load(id);
   if (!sameId(wo.assignedTo, user.id)) throw ApiError.forbidden();
   if (wo.status !== S.IN_PROGRESS || wo.result !== WORK_ORDER_RESULTS.FAULTY) {
@@ -52,7 +53,7 @@ export async function reportFault(user, id, { faultDesc, vendorName, vendorPropo
   if (!files.length) throw noImages();
   const faultImages = await uploadToCloudinary(files, 'work-orders');
   const repair = {
-    faultDesc, vendorName, vendorProposal, estimatedCost, faultImages, reportedBy: user.id, reportedAt: now,
+    faultDesc, vendorProposal, estimatedCost, faultImages, reportedBy: user.id, reportedAt: now,
     history: [step('REPORTED', user, now, { note: faultDesc, images: faultImages })],
   };
   const res = await WorkOrder.updateOne(
@@ -198,6 +199,7 @@ export async function acceptRepair(user, id, now = new Date()) {
     });
     return WorkOrder.findById(id).lean();
   }
+  await syncTicketOnEnd({ ticketId: wo.ticketId, status: S.DONE }, now);
   await safely(async () => notify(wo.assignedTo, {
     type: NOTIFICATION_TYPES.MAINTENANCE,
     title: 'Sửa chữa đã được nghiệm thu',

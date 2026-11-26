@@ -3,6 +3,7 @@ import { ParkingCard } from '../../models/ParkingCard.js';
 import { PARKING_KINDS, ParkingSession } from '../../models/ParkingSession.js';
 import { Resident } from '../../models/Resident.js';
 import { Vehicle } from '../../models/Vehicle.js';
+import { assertResidentServiceAccess } from '../../services/residency.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { paginate } from '../../utils/pagination.js';
 import { DAY_MS, vnDayStart } from '../../utils/time.js';
@@ -68,6 +69,7 @@ async function findVehicleForCard(card, rawPlate, vehicleId) {
     _id: card.residentId, isActive: true, parkingCardId: card._id, apartmentId: card.apartmentId,
   }).select('userId').lean();
   if (!resident?.userId) throw ApiError.badRequest('Thẻ chưa bàn giao hoặc đã mất hiệu lực');
+  await assertResidentServiceAccess(resident.userId, card.apartmentId);
 
   const plateNumber = normalizePlate(rawPlate, VEHICLE_TYPES.BICYCLE);
   const vehicles = await Vehicle.find({

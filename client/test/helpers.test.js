@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readErrorPayload } from '../src/api/errorPayload.js';
 import { createSequencer } from '../src/hooks/requestSequence.js';
-import { moneyInputProps } from '../src/utils/format.js';
+import { moneyInputProps, parseVnDate } from '../src/utils/format.js';
 import {
   isTicketFinal,
   isTicketOpen,
@@ -61,4 +61,16 @@ test('keysOf: bảng nhãn enum → hằng giá trị để so sánh, không gõ
   const R = keysOf({ A: { label: 'a' }, B: { label: 'b' } });
   assert.deepEqual(R, { A: 'A', B: 'B' });
   assert.ok(Object.isFrozen(R));
+});
+
+test('parseVnDate: chuyển mốc 00:00 giờ VN sang dayjs đúng ngày dương lịch và xử lý giá trị không hợp lệ', () => {
+  const dob = parseVnDate('1988-06-14T17:00:00.000Z');
+  assert.ok(dob);
+  assert.equal(dob.isValid(), true);
+  assert.equal(dob.format('YYYY-MM-DD'), '1988-06-15');
+
+  assert.equal(parseVnDate(null), null);
+  assert.equal(parseVnDate(undefined), null);
+  assert.equal(parseVnDate(''), null);
+  assert.equal(parseVnDate('invalid-date'), null);
 });

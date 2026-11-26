@@ -15,6 +15,7 @@ import { logAudit } from '../../services/auditLog.service.js';
 import { notify, notifyRoles } from '../../services/notification.service.js';
 import { getActiveApartmentIds, resolveResidentApartment } from '../../services/residency.service.js';
 import { getConfig } from '../../services/systemConfig.service.js';
+import { assertResidentServiceAccess } from '../../services/residency.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginate } from '../../utils/pagination.js';
 import { withTransaction } from '../../utils/transaction.js';
@@ -76,6 +77,7 @@ async function assertCapacity(type, session = null) {
 export async function register(body, viewer) {
   const userId = viewer.id;
   const apartment = await resolveResidentApartment(userId, body.apartmentId);
+  await assertResidentServiceAccess(userId, apartment._id);
 
   const resident = await Resident.findOne({
     userId,

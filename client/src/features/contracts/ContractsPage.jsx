@@ -139,6 +139,12 @@ export default function ContractsPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createForm] = Form.useForm();
   const check = usePhoneAccount(Form.useWatch('ownerPhone', createForm));
+  const createBuildingId = Form.useWatch('buildingId', createForm);
+  const createFloor = Form.useWatch('floor', createForm);
+  const createBuilding = buildings.find((building) => building._id === createBuildingId);
+  const createFloorOptions = Array.from({ length: createBuilding?.totalFloors ?? 0 }, (_, index) => ({
+    value: index + 1, label: `Tầng ${index + 1}`,
+  }));
   const [contractFileList, setContractFileList] = useState([]);
 
   // Modal Detail state
@@ -175,6 +181,8 @@ export default function ContractsPage() {
     check.reset();
     createForm.setFieldsValue({
       startDate: dayjs(),
+      buildingId: filters.buildingId,
+      floor: filters.buildingId ? filters.floor : undefined,
     });
     setContractFileList([]);
     setCreateModalOpen(true);
@@ -466,6 +474,22 @@ export default function ContractsPage() {
       >
         <Form form={createForm} layout="vertical" className="mt-4">
           <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item name="buildingId" label="Tòa nhà">
+                <Select placeholder="Tất cả tòa nhà" allowClear
+                  options={buildings.map((building) => ({ value: building._id, label: `${building.name} (${building.code})` }))}
+                  onChange={() => createForm.setFieldsValue({ floor: undefined, apartmentId: undefined })} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="floor" label="Tầng">
+                <Select placeholder={createBuildingId ? 'Tất cả tầng' : 'Chọn tòa nhà trước'} allowClear
+                  disabled={!createBuildingId} options={createFloorOptions}
+                  onChange={() => createForm.setFieldValue('apartmentId', undefined)} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
             <Col span={12}>
               <Form.Item
                 name="apartmentId"
@@ -473,6 +497,9 @@ export default function ContractsPage() {
                 rules={[{ required: true, message: 'Vui lòng chọn căn hộ' }]}
               >
                 <ApartmentSelect
+                  key={`${createBuildingId ?? 'all'}-${createFloor ?? 'all'}`}
+                  buildingId={createBuildingId}
+                  floor={createFloor}
                   placeholder="Gõ mã căn để tìm"
                   renderLabel={(a) => `${a.code} (${a.buildingId?.name || ''}) — ${a.status}`}
                 />

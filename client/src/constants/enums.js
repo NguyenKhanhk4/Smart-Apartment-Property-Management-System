@@ -118,6 +118,8 @@ export const TICKET_HISTORY_ACTIONS = {
   RECLASSIFIED: { label: 'Đổi phân loại', color: 'purple' },
   MERGED: { label: 'Gộp phiếu trùng', color: 'gray' },
   EMERGENCY_ACKED: { label: 'Đã tiếp nhận cảnh báo khẩn', color: 'red' },
+  MAINTENANCE_LINKED: { label: 'Tạo phiếu bảo trì thiết bị', color: 'blue' },
+  MAINTENANCE_DONE: { label: 'Kỹ thuật đã xử lý xong', color: 'green' },
 };
 
 // ===== Sự cố & tiện ích (Người 4) =====

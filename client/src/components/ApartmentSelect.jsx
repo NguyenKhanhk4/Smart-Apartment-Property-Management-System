@@ -9,11 +9,13 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
  * Giữ thông tin căn đã chọn để nhãn không mất khi kết quả tìm kiếm đổi.
  * `renderLabel(apartment)` tùy chọn; mặc định "A101 (Tòa A)".
  */
-export default function ApartmentSelect({ renderLabel, onChange, ...props }) {
+export default function ApartmentSelect({ renderLabel, onChange, buildingId, floor, ...props }) {
   const [search, setSearch] = useState('');
   const [picked, setPicked] = useState({}); // _id → căn đã chọn
   const q = useDebouncedValue(search.trim());
-  const { data: found = [], loading } = useApi(() => lookupApi.apartments({ q: q || undefined }), [q]);
+  const { data: found = [], loading } = useApi(
+    () => lookupApi.apartments({ q: q || undefined, buildingId, floor }), [q, buildingId, floor],
+  );
 
   const label = renderLabel ?? ((a) => (a.buildingId?.name ? `${a.code} (${a.buildingId.name})` : a.code));
   const selected = [props.value].flat().filter(Boolean);

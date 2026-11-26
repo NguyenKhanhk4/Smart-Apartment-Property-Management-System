@@ -44,7 +44,8 @@ export async function ensureCodes(apartmentId) {
 
 async function syncCodes(apartmentId) {
   const household = await getHousehold(apartmentId);
-  const { apartment, members } = household;
+  const { apartment } = household;
+  const members = household.members.filter((member) => member.canUseServices);
   const building = apartment.buildingId;
   const now = new Date();
 

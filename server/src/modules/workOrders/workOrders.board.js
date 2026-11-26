@@ -12,6 +12,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { fmtDateVn } from '../../utils/time.js';
 import { withTransaction } from '../../utils/transaction.js';
 import { finishRepair } from './workOrders.repair.js';
+import { syncTicketOnEnd } from './workOrders.ticketLink.js';
 
 const S = WORK_ORDER_STATUS;
 const { APPROVED } = FUND_PROPOSAL_STATUS;
@@ -79,6 +80,7 @@ export async function boardAccept(user, workOrderId, { note = null } = {}, now =
     before: { status: wo.status }, after: { status: S.DONE },
     metadata: { assetId: wo.assetId, proposalId: proposal._id, proposal: proposal.code, financial: true },
   });
+  await syncTicketOnEnd({ ticketId: wo.ticketId, status: S.DONE }, now);
   const label = await assetLabel(wo.assetId);
   await safely(async () => {
     await notifyRoles(['ACCOUNTANT'], {

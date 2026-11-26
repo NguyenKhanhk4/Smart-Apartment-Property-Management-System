@@ -20,6 +20,7 @@ import {
   ComplaintCategory,
   Ticket,
   User,
+  WorkOrder,
 } from "../../models/index.js";
 import { logAudit } from "../../services/auditLog.service.js";
 import {
@@ -35,6 +36,7 @@ import { normalizePhone } from "../../utils/validators.js";
 import { consentState } from "../../utils/consent.js";
 import { getConfig, getConfigs } from "../../services/systemConfig.service.js";
 import { uploadToCloudinary } from "../../services/upload.service.js";
+import { assertResidentServiceAccess } from '../../services/residency.service.js';
 import { ApiError } from "../../utils/ApiError.js";
 import {
   nextMonthlyCode,
@@ -161,7 +163,6 @@ async function assertCanView(user, ticket) {
   // KTV xem được sự cố đang chờ nhận trong hàng chờ (đọc mô tả trước khi bấm Nhận)
   if (
     isTechnician(user) &&
-    ticket.type === INCIDENT &&
     ticket.status === NEW &&
     !ticket.assignedTo
   )
@@ -279,10 +280,10 @@ async function placeTicket({
     link: ticketLink(ticket, false),
   };
   await notifyRoles(["MANAGER"], payload);
-  if (type === INCIDENT && ackFrom.getTime() === now.getTime()) {
+  if (ackFrom.getTime() === now.getTime()) {
     await notify(await technicianRecipients(now), {
       ...payload,
-      title: `Sự cố mới cần nhận ${ticket.code}`,
+      title: `${type === COMPLAINT ? "Phản ánh" : "Sự cố"} mới cần nhận ${ticket.code}`,
     });
   }
   return ticket;
@@ -291,6 +292,7 @@ async function placeTicket({
 // ===== UC-E02: Cư dân gửi sự cố / phản ánh kèm ảnh =====
 export async function createTicket(user, body, files) {
   const apartment = await resolveResidentApartment(user.id, body.apartmentId);
+  await assertResidentServiceAccess(user.id, apartment._id);
   // Liên hệ mặc định lấy từ tài khoản; cư dân sửa được SĐT / tên người cần gọi (vd người nhà đang ở căn)
   const me = await User.findById(user.id)
     .select("fullName phone consents")
@@ -398,6 +400,15 @@ export async function getTicket(user, id) {
     status: c.status,
     apartmentCode: c.apartmentId?.code ?? null,
   }));
+  // Phiếu bảo trì tạo từ phản ánh này (cư dân không cần thấy chi tiết kỹ thuật)
+  if (!isRole(user, "RESIDENT")) {
+    ticket.maintenance = await WorkOrder.find({ ticketId: ticket._id })
+      .select("status title assetId assignedTo createdAt")
+      .populate("assetId", "code name")
+      .populate("assignedTo", "fullName")
+      .sort({ createdAt: -1 })
+      .lean();
+  }
   return ticket;
 }
 
@@ -424,8 +435,8 @@ export async function listAssignees() {
   return techs.map((t) => ({ ...t, openTickets: loadMap[String(t._id)] ?? 0 }));
 }
 
-// ===== Hàng chờ sự cố theo ca =====
-const QUEUE_FILTER = { type: INCIDENT, status: NEW, assignedTo: null };
+// ===== Hàng chờ theo ca: sự cố và phản ánh mới chưa ai nhận (phản ánh cũng do KTV lên kiểm tra) =====
+const QUEUE_FILTER = { status: NEW, assignedTo: null };
 
 /** Sự cố mới chưa ai nhận, khẩn cấp lên đầu rồi cũ trước; kèm cờ KTV hiện tại có đang trong ca không */
 export async function listQueue(user, { now = new Date() } = {}) {
@@ -482,6 +493,10 @@ export async function claimTicket(user, id, { now = new Date() } = {}) {
     assertNotFinal(current);
     throw ApiError.badRequest("Chỉ nhận được sự cố mới trong hàng chờ");
   }
+  // Phản ánh đã có KTV tiếp nhận → tính là đã phản hồi, dừng SLA phản hồi
+  if (ticket.type === COMPLAINT && !ticket.respondedAt) {
+    await Ticket.updateOne({ _id: ticket._id, respondedAt: null }, { $set: { respondedAt: now } });
+  }
 
   await logAudit({
     action: AUDIT_ACTIONS.TICKET_CLAIMED,
@@ -506,7 +521,6 @@ export async function getBoard(
   { buildingId, categoryId, assignedTo, now = new Date() } = {},
 ) {
   const items = await Ticket.find({
-    type: INCIDENT,
     status: { $in: BOARD_STATUSES },
     ...(buildingId && { buildingId }),
     ...(categoryId && { category: categoryId }),
@@ -534,11 +548,6 @@ export async function assignTicket(user, id, { assignedTo, priority, note }) {
       "Phản ánh đang chờ cư dân xác nhận, không thể phân công lại",
     );
   }
-  if (ticket.type === COMPLAINT) {
-    throw ApiError.badRequest(
-      "Phản ánh do Trưởng BQL xử lý, không giao cho kỹ thuật viên",
-    );
-  }
 
   const tech = await User.findOne({
     _id: assignedTo,
@@ -561,6 +570,7 @@ export async function assignTicket(user, id, { assignedTo, priority, note }) {
   ticket.assignedTo = tech._id;
   ticket.assignedBy = user.id;
   ticket.assignedAt = now;
+  if (ticket.type === COMPLAINT) ticket.respondedAt ??= now; // phản ánh đã có KTV tiếp nhận → dừng SLA phản hồi
   // Giao lại giữa chừng giữ nguyên tiến độ (vd đang chờ linh kiện); chỉ phiếu mới chuyển sang Đã nhận
   ticket.status = fromStatus === NEW ? ASSIGNED : fromStatus;
   ticket.history.push({

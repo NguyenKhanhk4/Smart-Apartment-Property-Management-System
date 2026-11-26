@@ -8,6 +8,7 @@
 //  - Thành viên còn lại (FAMILY_MEMBER, hoặc TENANT/OWNER không phải chủ hộ) là tài khoản con.
 import { APARTMENT_STATUS, RELATION_TYPES } from '../../constants/enums.js';
 import { Apartment, MemberCode, Resident } from '../../models/index.js';
+import { assertResidentServiceAccess, canUseResidentServices } from '../../services/residency.service.js';
 import { ApiError } from '../../utils/ApiError.js';
 
 const USER_FIELDS = 'fullName avatarUrl phone isActive dateOfBirth';
@@ -62,6 +63,7 @@ export async function getHousehold(apartmentId, session = null) {
     .map((r) => ({
       ...personOf(r),
       relationType: r.relationType,
+      canUseServices: Boolean(headRow) && canUseResidentServices(apartment, headRow) && canUseResidentServices(apartment, r),
       // Nguồn chính: users.dateOfBirth; member_codes.dateOfBirth chỉ còn ở dữ liệu cũ
       dateOfBirth: r.userId.dateOfBirth ?? dobs.get(String(r.userId._id)) ?? null,
       isHead: Boolean(headRow) && sameId(r._id, headRow._id),
@@ -90,13 +92,14 @@ export async function getMyHouseholds(userId) {
   for (const { apartmentId } of rows) {
     const household = await getHousehold(apartmentId);
     const me = household.members.find((m) => m.userId === String(userId));
-    if (me) out.push({ apartment: household.apartment, relationType: me.relationType, isHead: me.isHead });
+    if (me?.canUseServices) out.push({ apartment: household.apartment, relationType: me.relationType, isHead: me.isHead });
   }
   return out;
 }
 
 /** Thành viên có quyền của căn → trả về household; không phải thành viên → 403 */
 export async function assertMember(userId, apartmentId) {
+  await assertResidentServiceAccess(userId, apartmentId);
   const household = await getHousehold(apartmentId);
   const me = household.members.find((m) => m.userId === String(userId));
   if (!me) throw ApiError.forbidden('Bạn không có quyền sử dụng tiện ích trong căn hộ này');
